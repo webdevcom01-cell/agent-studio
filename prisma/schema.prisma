@@ -1,0 +1,141 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [vector]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  agents    Agent[]
+}
+
+model Agent {
+  id            String         @id @default(cuid())
+  name          String
+  description   String?
+  systemPrompt  String?        @db.Text
+  model         String         @default("gpt-4o-mini")
+  temperature   Float          @default(0.7)
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  flow          Flow?
+  knowledgeBase KnowledgeBase?
+  conversations Conversation[]
+
+  @@index([userId])
+}
+
+model Flow {
+  id        String   @id @default(cuid())
+  name      String   @default("Main Flow")
+  content   Json     @default("{\"nodes\":[],\"edges\":[],\"variables\":[]}")
+  agentId   String   @unique
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model KnowledgeBase {
+  id        String     @id @default(cuid())
+  name      String     @default("Knowledge Base")
+  agentId   String     @unique
+  agent     Agent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  sources   KBSource[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+enum KBSourceType {
+  FILE
+  URL
+  SITEMAP
+  TEXT
+}
+
+enum KBSourceStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model KBSource {
+  id              String         @id @default(cuid())
+  type            KBSourceType
+  name            String
+  url             String?
+  rawContent      String?        @db.Text
+  status          KBSourceStatus @default(PENDING)
+  errorMsg        String?
+  charCount       Int            @default(0)
+  knowledgeBaseId String
+  knowledgeBase   KnowledgeBase  @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunks          KBChunk[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([knowledgeBaseId])
+}
+
+model KBChunk {
+  id        String                       @id @default(cuid())
+  content   String                       @db.Text
+  embedding Unsupported("vector(1536)")
+  tokens    Int
+  metadata  Json?
+  sourceId  String
+  source    KBSource                     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  createdAt DateTime                     @default(now())
+
+  @@index([sourceId])
+}
+
+enum ConversationStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+}
+
+model Conversation {
+  id            String             @id @default(cuid())
+  status        ConversationStatus @default(ACTIVE)
+  currentNodeId String?
+  variables     Json               @default("{}")
+  agentId       String
+  agent         Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  messages      Message[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([agentId])
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  role           MessageRole
+  content        String       @db.Text
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+}
