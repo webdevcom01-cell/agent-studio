@@ -47,6 +47,7 @@ export async function executeFlow(
 
   if (userMessage) {
     context.messageHistory.push({ role: "user", content: userMessage });
+    context.variables["last_message"] = userMessage;
   }
 
   const MAX_HISTORY = 100;

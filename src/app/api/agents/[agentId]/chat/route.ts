@@ -28,10 +28,9 @@ export async function POST(
 
   try {
     const context = await loadContext(agentId, conversationId);
-    context.messageHistory.push({ role: "user", content: message });
 
     if (isStreaming) {
-      const stream = executeFlowStreaming(context);
+      const stream = executeFlowStreaming(context, message);
       return new Response(stream, {
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
@@ -42,7 +41,7 @@ export async function POST(
       });
     }
 
-    const result = await executeFlow(context);
+    const result = await executeFlow(context, message);
 
     return NextResponse.json({
       success: true,
