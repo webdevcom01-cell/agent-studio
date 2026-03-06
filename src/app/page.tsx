@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Bot, MessageSquare, Database, Trash2, MoreVertical } from "lucide-react";
+import { Plus, Bot, MessageSquare, Database, Trash2, MoreVertical, Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -49,6 +49,7 @@ export default function DashboardPage() {
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchAgents();
@@ -99,6 +100,34 @@ export default function DashboardPage() {
     }
   }
 
+  function handleExport(agentId: string, agentName: string): void {
+    const link = document.createElement("a");
+    link.href = `/api/agents/${agentId}/export`;
+    link.download = `${agentName.replace(/[^a-zA-Z0-9-_]/g, "_")}.agent.json`;
+    link.click();
+  }
+
+  async function handleImport(file: File): Promise<void> {
+    try {
+      const text = await file.text();
+      const data: unknown = JSON.parse(text);
+      const res = await fetch("/api/agents/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Agent imported");
+        fetchAgents();
+      } else {
+        toast.error(json.error || "Failed to import agent");
+      }
+    } catch {
+      toast.error("Invalid agent file");
+    }
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
       <div className="flex items-center justify-between mb-8">
@@ -108,10 +137,27 @@ export default function DashboardPage() {
             Build and manage your AI agents
           </p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>
-          <Plus className="mr-2 size-4" />
-          New Agent
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => importInputRef.current?.click()}>
+            <Upload className="mr-2 size-4" />
+            Import
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImport(file);
+              e.target.value = "";
+            }}
+          />
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="mr-2 size-4" />
+            New Agent
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -156,6 +202,12 @@ export default function DashboardPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => handleExport(agent.id, agent.name)}
+                      >
+                        <Download className="size-4" />
+                        Export
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         variant="destructive"
                         onClick={() => handleDelete(agent.id)}
