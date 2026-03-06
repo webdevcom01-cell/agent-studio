@@ -1,0 +1,51 @@
+import { z } from "zod";
+
+const envSchema = z.object({
+  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  DIRECT_URL: z.string().min(1, "DIRECT_URL is required"),
+  OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
+  DEEPSEEK_API_KEY: z.string().min(1, "DEEPSEEK_API_KEY is required"),
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
+});
+
+export type Env = z.infer<typeof envSchema>;
+
+export function validateEnv(
+  source: Record<string, string | undefined> = process.env
+): Env {
+  const result = envSchema.safeParse(source);
+
+  if (!result.success) {
+    const missing = result.error.issues
+      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+      .join("\n");
+
+    const message = `Missing or invalid environment variables:\n${missing}\n\nSee .env.example for required variables.`;
+    console.error(message);
+    throw new Error(message);
+  }
+
+  if (!result.data.ANTHROPIC_API_KEY) {
+    console.warn(
+      "ANTHROPIC_API_KEY not set — Anthropic models will be unavailable"
+    );
+  }
+
+  return result.data;
+}
+
+let cached: Env | null = null;
+
+export function getEnv(): Env {
+  if (!cached) {
+    cached = validateEnv();
+  }
+  return cached;
+}
+
+export function resetEnvCache(): void {
+  cached = null;
+}
