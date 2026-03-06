@@ -44,7 +44,7 @@ src/
     layout.tsx                        ← Root layout (dark mode, Sonner)
     globals.css                       ← Tailwind v4 theme + React Flow overrides
     builder/[agentId]/page.tsx        ← Flow editor page
-    chat/[agentId]/page.tsx           ← Chat interface
+    chat/[agentId]/page.tsx           ← Chat interface (streaming via useStreamingChat)
     knowledge/[agentId]/page.tsx      ← Knowledge base management
     api/
       agents/route.ts                           ← GET list, POST create
@@ -57,6 +57,8 @@ src/
 
   components/
     ui/               ← 12 Radix UI primitives (button, card, dialog, input, etc.)
+    chat/
+      use-streaming-chat.ts ← Client hook for consuming NDJSON chat stream
     builder/
       flow-builder.tsx    ← Main ReactFlow editor
       node-picker.tsx     ← Node type selector dropdown
@@ -68,13 +70,17 @@ src/
     prisma.ts         ← Prisma client singleton
     utils.ts          ← cn() utility (clsx + tailwind-merge)
     runtime/
-      engine.ts       ← Main execution loop (MAX_ITERATIONS=50, MAX_HISTORY=100)
-      context.ts      ← Load/save conversation context from DB
-      template.ts     ← {{variable}} interpolation
-      types.ts        ← RuntimeContext, ExecutionResult, NodeHandler, OutputMessage
+      engine.ts            ← Synchronous execution loop (MAX_ITERATIONS=50, MAX_HISTORY=100)
+      engine-streaming.ts  ← Streaming execution loop (NDJSON ReadableStream output)
+      stream-protocol.ts   ← StreamChunk encode/decode/writer helpers
+      context.ts           ← Load/save conversation context from DB
+      template.ts          ← {{variable}} interpolation
+      types.ts             ← RuntimeContext, ExecutionResult, NodeHandler, StreamChunk, StreamWriter
       handlers/
-        index.ts      ← Handler registry (16 handlers)
-        message-handler.ts, ai-response-handler.ts, condition-handler.ts, ...
+        index.ts           ← Handler registry (16 handlers)
+        ai-response-handler.ts          ← Non-streaming AI (generateText)
+        ai-response-streaming-handler.ts ← Streaming AI (streamText → NDJSON)
+        message-handler.ts, condition-handler.ts, ...
     knowledge/
       index.ts        ← Main search entry point
       chunker.ts      ← Text chunking (400 tokens, 20% overlap)
@@ -125,7 +131,7 @@ User (optional)
 | `/api/agents` | GET, POST | List all agents (with conversation/source counts), create agent + flow + KB |
 | `/api/agents/[agentId]` | GET, PATCH, DELETE | Full agent detail, update fields, delete |
 | `/api/agents/[agentId]/flow` | GET, PUT | Get/upsert flow content (nodes, edges, variables) |
-| `/api/agents/[agentId]/chat` | POST | Send user message, execute flow engine, return response |
+| `/api/agents/[agentId]/chat` | POST | Send user message; `{ stream: true }` for NDJSON streaming, otherwise JSON response |
 | `/api/agents/[agentId]/knowledge/sources` | GET, POST | List sources with chunk counts, create + trigger background ingest |
 | `/api/agents/[agentId]/knowledge/sources/[sourceId]` | DELETE | Delete source and all its chunks |
 | `/api/agents/[agentId]/knowledge/search` | POST | Test hybrid search (semantic + BM25 + optional reranking) |
@@ -142,6 +148,16 @@ User (optional)
 - Safety limits: MAX_ITERATIONS=50, MAX_HISTORY=100
 - Handlers return `ExecutionResult` with messages, nextNodeId, waitForInput, updatedVariables
 - Handlers never throw — always return graceful fallback
+
+### Streaming Chat
+- Two engine variants: `executeFlow` (synchronous JSON) and `executeFlowStreaming` (NDJSON ReadableStream)
+- Chat API: `{ stream: true }` in request body switches to streaming mode (backwards compatible)
+- NDJSON wire protocol chunks: `message`, `stream_start`, `stream_delta`, `stream_end`, `done`, `error`
+- `StreamChunk` discriminated union type in `src/lib/runtime/types.ts`
+- Only `ai_response` nodes stream tokens; all other nodes emit instant `message` chunks
+- `stream-protocol.ts` has `encodeChunk()`, `parseChunk()`, `createStreamWriter()` — shared between server and client
+- Client hook `useStreamingChat` in `src/components/chat/use-streaming-chat.ts` handles line-buffered parsing
+- Context and messages are always saved in `finally` block, even on client disconnect
 
 ### Knowledge/RAG Pipeline
 - Ingest: scrape URL → parse HTML (cheerio, removes nav/footer/script/style) → chunk (400 tokens, 20% overlap) → embed (OpenAI text-embedding-3-small) → store in pgvector
@@ -240,7 +256,7 @@ pnpm db:seed          # Seed dev data
 ### Testing
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - Run: `pnpm test`
-- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler
+- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler
 - Test behavior, not implementation details
 
 ### AI Model Config
