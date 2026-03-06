@@ -44,8 +44,11 @@ src/
     layout.tsx                        ← Root layout (dark mode, Sonner)
     globals.css                       ← Tailwind v4 theme + React Flow overrides
     builder/[agentId]/page.tsx        ← Flow editor page
+    builder/[agentId]/error.tsx       ← Error boundary (Flow Editor Error)
     chat/[agentId]/page.tsx           ← Chat interface (streaming via useStreamingChat)
+    chat/[agentId]/error.tsx          ← Error boundary (Chat Error)
     knowledge/[agentId]/page.tsx      ← Knowledge base management
+    knowledge/[agentId]/error.tsx     ← Error boundary (Knowledge Base Error)
     api/
       agents/route.ts                           ← GET list, POST create
       agents/[agentId]/route.ts                 ← GET, PATCH, DELETE agent
@@ -60,6 +63,8 @@ src/
 
   components/
     ui/               ← 12 Radix UI primitives (button, card, dialog, input, etc.)
+      error-display.tsx ← Shared error boundary UI component
+      __tests__/        ← UI component tests
     chat/
       use-streaming-chat.ts ← Client hook for consuming NDJSON chat stream
     builder/
@@ -187,6 +192,13 @@ User (optional)
 - `{{variable}}` syntax in node messages, resolved at runtime via `resolveTemplate()`
 - Supports nested paths (`{{user.address.city}}`) and bracket notation (`{{items[0]}}`)
 
+### Error Boundaries
+- Next.js `error.tsx` in builder, chat, and knowledge routes
+- Shared `ErrorDisplay` component in `src/components/ui/error-display.tsx`
+- Shows error details (message + digest) only in development mode
+- "Try Again" button calls Next.js `reset()`, "Back to Dashboard" links to `/`
+- Each route provides a context-specific title (e.g. "Flow Editor Error")
+
 ### UI Components
 - cva (class-variance-authority) for component variants
 - `cn()` utility combining clsx + tailwind-merge
@@ -276,7 +288,7 @@ pnpm db:seed          # Seed dev data
 ### Testing
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - Run: `pnpm test`
-- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, PDF/DOCX parsing, file type routing, agent export schema validation
+- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component
 - Test behavior, not implementation details
 
 ### AI Model Config
