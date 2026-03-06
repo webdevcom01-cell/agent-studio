@@ -27,8 +27,8 @@ model Agent {
   systemPrompt  String?        @db.Text
   model         String         @default("gpt-4o-mini")
   temperature   Float          @default(0.7)
-  userId        String
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   flow          Flow?
