@@ -6,11 +6,7 @@ import { ArrowLeft, Send, Bot, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
+import { useStreamingChat } from "@/components/chat/use-streaming-chat";
 
 export default function ChatPage({
   params,
@@ -18,12 +14,17 @@ export default function ChatPage({
   params: Promise<{ agentId: string }>;
 }) {
   const { agentId } = use(params);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [conversationId, setConversationId] = useState<string | undefined>();
   const [agentName, setAgentName] = useState("Agent");
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const {
+    messages,
+    input,
+    setInput,
+    isLoading,
+    sendMessage,
+    resetChat,
+  } = useStreamingChat({ agentId });
 
   useEffect(() => {
     fetch(`/api/agents/${agentId}`)
@@ -41,54 +42,6 @@ export default function ChatPage({
     });
   }, [messages]);
 
-  async function handleSend() {
-    const text = input.trim();
-    if (!text || isLoading) return;
-
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
-    setIsLoading(true);
-
-    try {
-      const res = await fetch(`/api/agents/${agentId}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, conversationId }),
-      });
-      const json = await res.json();
-
-      if (json.success) {
-        if (json.data.conversationId) {
-          setConversationId(json.data.conversationId);
-        }
-        const assistantMessages = (
-          json.data.messages as { role: string; content: string }[]
-        ).map((m) => ({
-          role: "assistant" as const,
-          content: m.content,
-        }));
-        setMessages((prev) => [...prev, ...assistantMessages]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "Sorry, something went wrong." },
-        ]);
-      }
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Failed to connect to the server." },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  function handleNewChat() {
-    setMessages([]);
-    setConversationId(undefined);
-  }
-
   return (
     <div className="flex h-screen flex-col">
       <div className="flex items-center gap-2 border-b px-4 py-2">
@@ -98,7 +51,7 @@ export default function ChatPage({
           </Link>
         </Button>
         <h2 className="text-sm font-semibold flex-1">{agentName}</h2>
-        <Button variant="outline" size="sm" onClick={handleNewChat}>
+        <Button variant="outline" size="sm" onClick={resetChat}>
           New Chat
         </Button>
       </div>
@@ -141,12 +94,14 @@ export default function ChatPage({
                   : "bg-muted"
               )}
             >
-              {msg.content}
+              {msg.content || (
+                <span className="text-muted-foreground italic">...</span>
+              )}
             </div>
           </div>
         ))}
 
-        {isLoading && (
+        {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
           <div className="flex gap-3">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
               <Bot className="size-4" />
@@ -166,7 +121,7 @@ export default function ChatPage({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            handleSend();
+            sendMessage();
           }}
           className="mx-auto flex max-w-2xl gap-2"
         >

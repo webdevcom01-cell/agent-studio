@@ -29,3 +29,16 @@ export type NodeHandler = (
 ) => Promise<ExecutionResult>;
 
 export type HandlerRegistry = Record<string, NodeHandler>;
+
+export type StreamChunk =
+  | { type: "message"; role: "assistant" | "system"; content: string }
+  | { type: "stream_start" }
+  | { type: "stream_delta"; content: string }
+  | { type: "stream_end"; content: string }
+  | { type: "done"; conversationId: string; waitForInput: boolean }
+  | { type: "error"; content: string };
+
+export interface StreamWriter {
+  write(chunk: StreamChunk): void;
+  close(): void;
+}

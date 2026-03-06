@@ -3,7 +3,7 @@ import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
 import type { FlowNode } from "@/types";
 
-function findNextNode(
+export function findNextNode(
   context: RuntimeContext,
   sourceNodeId: string,
   sourceHandle?: string
@@ -16,7 +16,7 @@ function findNextNode(
   return edge?.target ?? null;
 }
 
-function findStartNode(context: RuntimeContext): FlowNode | null {
+export function findStartNode(context: RuntimeContext): FlowNode | null {
   const { nodes, edges } = context.flowContent;
   if (nodes.length === 0) return null;
 
