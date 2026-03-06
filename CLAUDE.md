@@ -51,7 +51,8 @@ src/
       agents/[agentId]/route.ts                 ← GET, PATCH, DELETE agent
       agents/[agentId]/flow/route.ts            ← GET, PUT flow content
       agents/[agentId]/chat/route.ts            ← POST send message
-      agents/[agentId]/knowledge/sources/route.ts         ← GET, POST sources
+      agents/[agentId]/knowledge/sources/route.ts         ← GET, POST sources (URL/TEXT)
+      agents/[agentId]/knowledge/sources/upload/route.ts     ← POST file upload (PDF/DOCX, multipart/form-data)
       agents/[agentId]/knowledge/sources/[sourceId]/route.ts  ← DELETE source
       agents/[agentId]/knowledge/search/route.ts          ← POST hybrid search
 
@@ -84,7 +85,7 @@ src/
     knowledge/
       index.ts        ← Main search entry point
       chunker.ts      ← Text chunking (400 tokens, 20% overlap)
-      parsers.ts      ← HTML/text parsing (cheerio)
+      parsers.ts      ← PDF (pdf-parse), DOCX (mammoth), HTML (cheerio), text parsing
       embeddings.ts   ← OpenAI embedding generation
       search.ts       ← Hybrid search (semantic + BM25 via pgvector)
       reranker.ts     ← LLM-based result re-ranking
@@ -94,6 +95,7 @@ src/
   types/
     index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType
     pdf-parse.d.ts    ← Type declaration for pdf-parse
+    mammoth.d.ts      ← Type declaration for mammoth
 
   generated/prisma/   ← AUTO-GENERATED — never edit
 ```
@@ -132,7 +134,8 @@ User (optional)
 | `/api/agents/[agentId]` | GET, PATCH, DELETE | Full agent detail, update fields, delete |
 | `/api/agents/[agentId]/flow` | GET, PUT | Get/upsert flow content (nodes, edges, variables) |
 | `/api/agents/[agentId]/chat` | POST | Send user message; `{ stream: true }` for NDJSON streaming, otherwise JSON response |
-| `/api/agents/[agentId]/knowledge/sources` | GET, POST | List sources with chunk counts, create + trigger background ingest |
+| `/api/agents/[agentId]/knowledge/sources` | GET, POST | List sources with chunk counts, create URL/TEXT + trigger background ingest |
+| `/api/agents/[agentId]/knowledge/sources/upload` | POST | File upload (multipart/form-data, PDF/DOCX, max 10 MB) |
 | `/api/agents/[agentId]/knowledge/sources/[sourceId]` | DELETE | Delete source and all its chunks |
 | `/api/agents/[agentId]/knowledge/search` | POST | Test hybrid search (semantic + BM25 + optional reranking) |
 
@@ -160,8 +163,11 @@ User (optional)
 - Context and messages are always saved in `finally` block, even on client disconnect
 
 ### Knowledge/RAG Pipeline
-- Ingest: scrape URL → parse HTML (cheerio, removes nav/footer/script/style) → chunk (400 tokens, 20% overlap) → embed (OpenAI text-embedding-3-small) → store in pgvector
+- Ingest: scrape URL / parse file / accept text → chunk (400 tokens, 20% overlap) → embed (OpenAI text-embedding-3-small) → store in pgvector
+- File upload: PDF (pdf-parse) and DOCX (mammoth) — `parseSource()` routes by file extension
+- URL parsing: HTML (cheerio, removes nav/footer/script/style), plain text passthrough
 - Search: hybrid (semantic cosine similarity + BM25 keyword) → Reciprocal Rank Fusion → optional LLM re-ranking
+- UI: Add Source dialog has URL, Text, and File tabs with client-side 10 MB validation
 
 ### Template Variables
 - `{{variable}}` syntax in node messages, resolved at runtime via `resolveTemplate()`
@@ -256,7 +262,7 @@ pnpm db:seed          # Seed dev data
 ### Testing
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - Run: `pnpm test`
-- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler
+- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, PDF/DOCX parsing, file type routing
 - Test behavior, not implementation details
 
 ### AI Model Config
