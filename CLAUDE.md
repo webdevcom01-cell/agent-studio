@@ -40,7 +40,7 @@ prisma/
 
 src/
   app/
-    page.tsx                          ← Dashboard (agent list, create/delete)
+    page.tsx                          ← Dashboard (agent list, create/delete, export/import)
     layout.tsx                        ← Root layout (dark mode, Sonner)
     globals.css                       ← Tailwind v4 theme + React Flow overrides
     builder/[agentId]/page.tsx        ← Flow editor page
@@ -55,6 +55,8 @@ src/
       agents/[agentId]/knowledge/sources/upload/route.ts     ← POST file upload (PDF/DOCX, multipart/form-data)
       agents/[agentId]/knowledge/sources/[sourceId]/route.ts  ← DELETE source
       agents/[agentId]/knowledge/search/route.ts          ← POST hybrid search
+      agents/[agentId]/export/route.ts            ← GET download agent as JSON
+      agents/import/route.ts                      ← POST import agent from JSON
 
   components/
     ui/               ← 12 Radix UI primitives (button, card, dialog, input, etc.)
@@ -70,6 +72,8 @@ src/
     ai.ts             ← AI model routing (DeepSeek/OpenAI/Anthropic)
     prisma.ts         ← Prisma client singleton
     utils.ts          ← cn() utility (clsx + tailwind-merge)
+    schemas/
+      agent-export.ts  ← Zod schema + AgentExportData type for agent export/import
     runtime/
       engine.ts            ← Synchronous execution loop (MAX_ITERATIONS=50, MAX_HISTORY=100)
       engine-streaming.ts  ← Streaming execution loop (NDJSON ReadableStream output)
@@ -138,6 +142,8 @@ User (optional)
 | `/api/agents/[agentId]/knowledge/sources/upload` | POST | File upload (multipart/form-data, PDF/DOCX, max 10 MB) |
 | `/api/agents/[agentId]/knowledge/sources/[sourceId]` | DELETE | Delete source and all its chunks |
 | `/api/agents/[agentId]/knowledge/search` | POST | Test hybrid search (semantic + BM25 + optional reranking) |
+| `/api/agents/[agentId]/export` | GET | Download agent as versioned JSON (config + flow, no conversations/KB) |
+| `/api/agents/import` | POST | Import agent from exported JSON, Zod-validated with `z.literal(1)` version |
 
 **Response format:** `{ success: true, data: T }` or `{ success: false, error: string }`
 
@@ -168,6 +174,14 @@ User (optional)
 - URL parsing: HTML (cheerio, removes nav/footer/script/style), plain text passthrough
 - Search: hybrid (semantic cosine similarity + BM25 keyword) → Reciprocal Rank Fusion → optional LLM re-ranking
 - UI: Add Source dialog has URL, Text, and File tabs with client-side 10 MB validation
+
+### Agent Export/Import
+- Export format: `{ version: 1, exportedAt, agent: { name, description, systemPrompt, model }, flow: { nodes, edges, variables } }`
+- Zod schema in `src/lib/schemas/agent-export.ts` — version validated with `z.literal(1)`, not `z.number()`
+- Export excludes: conversations, messages, knowledge base sources/chunks
+- Import creates new agent with `(imported)` suffix + empty knowledge base
+- Dashboard UI: Export option in agent card dropdown menu, Import button with file picker
+- Max import size: 5 MB
 
 ### Template Variables
 - `{{variable}}` syntax in node messages, resolved at runtime via `resolveTemplate()`
@@ -262,7 +276,7 @@ pnpm db:seed          # Seed dev data
 ### Testing
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - Run: `pnpm test`
-- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, PDF/DOCX parsing, file type routing
+- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, PDF/DOCX parsing, file type routing, agent export schema validation
 - Test behavior, not implementation details
 
 ### AI Model Config
