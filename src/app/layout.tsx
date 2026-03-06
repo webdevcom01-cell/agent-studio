@@ -13,8 +13,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-zinc-950 text-zinc-100 antialiased">
+    <html lang="en" className="dark">
+      <body className="min-h-screen antialiased">
         {children}
         <Toaster richColors position="bottom-right" />
       </body>
