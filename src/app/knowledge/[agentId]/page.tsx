@@ -7,6 +7,7 @@ import {
   Plus,
   Globe,
   FileText,
+  Upload,
   Trash2,
   Loader2,
   CheckCircle2,
@@ -63,10 +64,11 @@ export default function KnowledgePage({
   const [sources, setSources] = useState<KBSource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [addType, setAddType] = useState<"TEXT" | "URL">("URL");
+  const [addType, setAddType] = useState<"TEXT" | "URL" | "FILE">("URL");
   const [addName, setAddName] = useState("");
   const [addUrl, setAddUrl] = useState("");
   const [addContent, setAddContent] = useState("");
+  const [addFile, setAddFile] = useState<File | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -92,26 +94,48 @@ export default function KnowledgePage({
   async function handleAdd() {
     setIsAdding(true);
     try {
-      const body: Record<string, string> = {
-        type: addType,
-        name: addName || (addType === "URL" ? addUrl : "Text source"),
-      };
-      if (addType === "URL") body.url = addUrl;
-      if (addType === "TEXT") body.content = addContent;
+      let res: Response;
 
-      const res = await fetch(`/api/agents/${agentId}/knowledge/sources`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      if (addType === "FILE") {
+        if (!addFile) {
+          toast.error("Please select a file");
+          setIsAdding(false);
+          return;
+        }
+        const formData = new FormData();
+        formData.append("file", addFile);
+        if (addName) formData.append("name", addName);
+
+        res = await fetch(
+          `/api/agents/${agentId}/knowledge/sources/upload`,
+          { method: "POST", body: formData }
+        );
+      } else {
+        const body: Record<string, string> = {
+          type: addType,
+          name: addName || (addType === "URL" ? addUrl : "Text source"),
+        };
+        if (addType === "URL") body.url = addUrl;
+        if (addType === "TEXT") body.content = addContent;
+
+        res = await fetch(`/api/agents/${agentId}/knowledge/sources`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      }
+
       const json = await res.json();
       if (json.success) {
         setShowAdd(false);
         setAddName("");
         setAddUrl("");
         setAddContent("");
+        setAddFile(null);
         toast.success("Source added — ingesting in background");
         fetchSources();
+      } else {
+        toast.error(json.error || "Failed to add source");
       }
     } catch {
       toast.error("Failed to add source");
@@ -305,7 +329,7 @@ export default function KnowledgePage({
           <DialogHeader>
             <DialogTitle>Add Source</DialogTitle>
           </DialogHeader>
-          <Tabs value={addType} onValueChange={(v) => setAddType(v as "TEXT" | "URL")}>
+          <Tabs value={addType} onValueChange={(v) => setAddType(v as "TEXT" | "URL" | "FILE")}>
             <TabsList className="w-full">
               <TabsTrigger value="URL" className="flex-1">
                 <Globe className="mr-1.5 size-4" />
@@ -314,6 +338,10 @@ export default function KnowledgePage({
               <TabsTrigger value="TEXT" className="flex-1">
                 <FileText className="mr-1.5 size-4" />
                 Text
+              </TabsTrigger>
+              <TabsTrigger value="FILE" className="flex-1">
+                <Upload className="mr-1.5 size-4" />
+                File
               </TabsTrigger>
             </TabsList>
 
@@ -353,6 +381,38 @@ export default function KnowledgePage({
                   placeholder="Paste your text content here..."
                   rows={8}
                 />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="FILE" className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label>Name (optional)</Label>
+                <Input
+                  value={addName}
+                  onChange={(e) => setAddName(e.target.value)}
+                  placeholder="Uses filename if empty"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>File (PDF or DOCX, max 10 MB)</Label>
+                <Input
+                  type="file"
+                  accept=".pdf,.docx"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    if (file && file.size > 10 * 1024 * 1024) {
+                      toast.error("File exceeds 10 MB limit");
+                      e.target.value = "";
+                      return;
+                    }
+                    setAddFile(file);
+                  }}
+                />
+                {addFile && (
+                  <p className="text-xs text-muted-foreground">
+                    {addFile.name} ({(addFile.size / 1024).toFixed(0)} KB)
+                  </p>
+                )}
               </div>
             </TabsContent>
           </Tabs>

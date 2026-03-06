@@ -1,0 +1,99 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { parseSource } from "@/lib/knowledge/parsers";
+import { ingestSource } from "@/lib/knowledge/ingest";
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = [".pdf", ".docx"];
+
+interface RouteParams {
+  params: Promise<{ agentId: string }>;
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: RouteParams
+): Promise<NextResponse> {
+  const { agentId } = await params;
+
+  const agent = await prisma.agent.findUnique({
+    where: { id: agentId },
+    select: { knowledgeBase: { select: { id: true } } },
+  });
+
+  if (!agent?.knowledgeBase) {
+    return NextResponse.json(
+      { success: false, error: "Knowledge base not found" },
+      { status: 404 }
+    );
+  }
+
+  const formData = await request.formData();
+  const file = formData.get("file");
+  const nameField = formData.get("name");
+
+  if (!file || !(file instanceof File)) {
+    return NextResponse.json(
+      { success: false, error: "File is required" },
+      { status: 400 }
+    );
+  }
+
+  if (file.size > MAX_FILE_SIZE) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `File size (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds 10 MB limit`,
+      },
+      { status: 400 }
+    );
+  }
+
+  const fileName = file.name;
+  const ext = fileName.lastIndexOf(".") >= 0
+    ? fileName.slice(fileName.lastIndexOf(".")).toLowerCase()
+    : "";
+
+  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+    return NextResponse.json(
+      { success: false, error: `Unsupported file type: ${ext || "unknown"}. Allowed: PDF, DOCX` },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const extractedText = await parseSource({
+      type: "FILE",
+      fileBuffer: buffer,
+      fileName,
+    });
+
+    const name = typeof nameField === "string" && nameField.trim()
+      ? nameField.trim()
+      : fileName;
+
+    const source = await prisma.kBSource.create({
+      data: {
+        name,
+        type: "FILE",
+        rawContent: extractedText.length < 1_000_000 ? extractedText : null,
+        knowledgeBaseId: agent.knowledgeBase.id,
+        status: "PENDING",
+      },
+    });
+
+    ingestSource(source.id, extractedText).catch(() => {});
+
+    return NextResponse.json(
+      { success: true, data: source },
+      { status: 201 }
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to process file";
+    return NextResponse.json(
+      { success: false, error: message },
+      { status: 422 }
+    );
+  }
+}

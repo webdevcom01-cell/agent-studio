@@ -16,6 +16,24 @@ export async function parsePDF(buffer: Buffer): Promise<string> {
   return text;
 }
 
+export async function parseDOCX(buffer: Buffer): Promise<string> {
+  if (buffer.length > MAX_FILE_SIZE) {
+    throw new Error(`File size (${(buffer.length / 1024 / 1024).toFixed(1)} MB) exceeds 10 MB limit`);
+  }
+
+  const mammoth = await import("mammoth");
+  const result = await mammoth.extractRawText({ buffer });
+  const text = result.value?.trim();
+
+  if (!text) throw new Error("DOCX contains no extractable text");
+  return text;
+}
+
+function getFileExtension(fileName: string): string {
+  const dot = fileName.lastIndexOf(".");
+  return dot >= 0 ? fileName.slice(dot).toLowerCase() : "";
+}
+
 export function parseHTML(html: string): string {
   const $ = cheerio.load(html);
   $("script, style, nav, footer, header, noscript").remove();
@@ -52,11 +70,16 @@ export async function parseSource(source: {
   content?: string | null;
   url?: string | null;
   fileBuffer?: Buffer | null;
+  fileName?: string | null;
 }): Promise<string> {
   switch (source.type) {
-    case "FILE":
+    case "FILE": {
       if (!source.fileBuffer) throw new Error("File buffer required");
-      return parsePDF(source.fileBuffer);
+      const ext = getFileExtension(source.fileName ?? "");
+      if (ext === ".docx") return parseDOCX(source.fileBuffer);
+      if (ext === ".pdf" || !ext) return parsePDF(source.fileBuffer);
+      throw new Error(`Unsupported file type: ${ext}`);
+    }
     case "URL":
       if (!source.url) throw new Error("URL required");
       return fetchAndParseURL(source.url);
