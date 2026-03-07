@@ -8,6 +8,7 @@ interface ChatMessage {
 
 interface UseStreamingChatOptions {
   agentId: string;
+  persistKey?: string;
 }
 
 interface UseStreamingChatReturn {
@@ -22,12 +23,16 @@ interface UseStreamingChatReturn {
 
 export function useStreamingChat({
   agentId,
+  persistKey,
 }: UseStreamingChatOptions): UseStreamingChatReturn {
+  const savedId = persistKey && typeof window !== "undefined"
+    ? sessionStorage.getItem(persistKey) ?? undefined
+    : undefined;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const conversationIdRef = useRef<string | undefined>(undefined);
-  const [conversationId, setConversationId] = useState<string | undefined>();
+  const conversationIdRef = useRef<string | undefined>(savedId);
+  const [conversationId, setConversationId] = useState<string | undefined>(savedId);
 
   const sendMessage = useCallback(async () => {
     const text = input.trim();
@@ -119,6 +124,9 @@ export function useStreamingChat({
               if (chunk.conversationId) {
                 conversationIdRef.current = chunk.conversationId;
                 setConversationId(chunk.conversationId);
+                if (persistKey) {
+                  sessionStorage.setItem(persistKey, chunk.conversationId);
+                }
               }
               break;
 
@@ -139,13 +147,16 @@ export function useStreamingChat({
     } finally {
       setIsLoading(false);
     }
-  }, [agentId, input, isLoading]);
+  }, [agentId, input, isLoading, persistKey]);
 
   const resetChat = useCallback(() => {
     setMessages([]);
     conversationIdRef.current = undefined;
     setConversationId(undefined);
-  }, []);
+    if (persistKey) {
+      sessionStorage.removeItem(persistKey);
+    }
+  }, [persistKey]);
 
   return {
     messages,

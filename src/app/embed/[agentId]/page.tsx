@@ -1,27 +1,29 @@
 "use client";
 
-import { useState, useRef, useEffect, use } from "react";
-import { Send, Bot, RotateCcw } from "lucide-react";
+import { Suspense, useState, useRef, useEffect, use, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import { Send, Bot, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStreamingChat } from "@/components/chat/use-streaming-chat";
 
-export default function EmbedChatPage({
-  params,
-}: {
-  params: Promise<{ agentId: string }>;
-}) {
-  const { agentId } = use(params);
-  const [agentName, setAgentName] = useState("Assistant");
+function EmbedChatContent({ agentId }: { agentId: string }) {
+  const searchParams = useSearchParams();
+  const customColor = searchParams.get("color");
+  const customTitle = searchParams.get("title");
+  const welcomeMessage = searchParams.get("welcome") || "How can I help you?";
+
+  const [agentName, setAgentName] = useState(customTitle || "Assistant");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const prevMessageCountRef = useRef(0);
 
   const { messages, input, setInput, isLoading, sendMessage, resetChat } =
-    useStreamingChat({ agentId });
+    useStreamingChat({ agentId, persistKey: `as-conv-${agentId}` });
 
   useEffect(() => {
     fetch(`/api/agents/${agentId}`)
       .then((r) => r.json())
-      .then((json) => {
+      .then((json: { success: boolean; data: { name: string } }) => {
         if (json.success) setAgentName(json.data.name);
       })
       .catch(() => {});
@@ -32,17 +34,55 @@ export default function EmbedChatPage({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
+
+    const lastMsg = messages[messages.length - 1];
+    if (
+      messages.length > prevMessageCountRef.current &&
+      lastMsg?.role === "assistant" &&
+      lastMsg.content
+    ) {
+      window.parent?.postMessage({ type: "agent-studio-new-message", count: 1 }, "*");
+    }
+    prevMessageCountRef.current = messages.length;
   }, [messages]);
 
-  // Notify parent window about widget state
   useEffect(() => {
     window.parent?.postMessage({ type: "agent-studio-ready" }, "*");
   }, []);
 
+  const handleProactive = useCallback(
+    (e: MessageEvent) => {
+      if (
+        e.data?.type === "agent-studio-proactive" &&
+        typeof e.data.message === "string" &&
+        messages.length === 0
+      ) {
+        window.parent?.postMessage({ type: "agent-studio-new-message", count: 1 }, "*");
+      }
+    },
+    [messages.length]
+  );
+
+  useEffect(() => {
+    window.addEventListener("message", handleProactive);
+    return () => window.removeEventListener("message", handleProactive);
+  }, [handleProactive]);
+
+  const headerStyle = customColor
+    ? { backgroundColor: customColor } as React.CSSProperties
+    : undefined;
+
+  const sendButtonStyle = customColor
+    ? { backgroundColor: customColor } as React.CSSProperties
+    : undefined;
+
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
+    <div className="flex h-dvh flex-col bg-background text-foreground">
       {/* Header */}
-      <div className="flex items-center gap-2 border-b px-4 py-2.5 bg-primary text-primary-foreground">
+      <div
+        className="flex items-center gap-2 border-b px-4 py-2.5 bg-primary text-primary-foreground"
+        style={headerStyle}
+      >
         <div className="flex size-7 items-center justify-center rounded-full bg-primary-foreground/20">
           <Bot className="size-4" />
         </div>
@@ -54,6 +94,13 @@ export default function EmbedChatPage({
         >
           <RotateCcw className="size-3.5" />
         </button>
+        <button
+          onClick={() => window.parent?.postMessage({ type: "agent-studio-close" }, "*")}
+          className="p-1.5 rounded-md hover:bg-primary-foreground/20 transition-colors sm:hidden"
+          title="Close"
+        >
+          <X className="size-3.5" />
+        </button>
       </div>
 
       {/* Messages */}
@@ -61,7 +108,7 @@ export default function EmbedChatPage({
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center px-4">
             <Bot className="size-10 mb-3 opacity-50" />
-            <p className="text-sm">How can I help you?</p>
+            <p className="text-sm">{welcomeMessage}</p>
           </div>
         )}
 
@@ -85,6 +132,7 @@ export default function EmbedChatPage({
                   ? "bg-primary text-primary-foreground rounded-br-sm"
                   : "bg-muted rounded-bl-sm"
               )}
+              style={msg.role === "user" ? sendButtonStyle : undefined}
             >
               {msg.content || (
                 <span className="text-muted-foreground italic text-xs">...</span>
@@ -132,6 +180,7 @@ export default function EmbedChatPage({
             type="submit"
             disabled={isLoading || !input.trim()}
             className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-50 hover:bg-primary/90 transition-colors"
+            style={sendButtonStyle}
           >
             <Send className="size-4" />
           </button>
@@ -143,5 +192,19 @@ export default function EmbedChatPage({
         Powered by Agent Studio
       </div>
     </div>
+  );
+}
+
+export default function EmbedChatPage({
+  params,
+}: {
+  params: Promise<{ agentId: string }>;
+}) {
+  const { agentId } = use(params);
+
+  return (
+    <Suspense fallback={<div className="flex h-dvh items-center justify-center">Loading...</div>}>
+      <EmbedChatContent agentId={agentId} />
+    </Suspense>
   );
 }
