@@ -1,119 +1,119 @@
-# Node tipovi — AI
+# Node Types — AI
 
-## AI Response nod
+## AI Response Node
 
-**Kategorija:** AI  
-**Opis:** Generiše AI odgovor na osnovu konteksta razgovora i system prompta. Najvažniji nod za konverzacijske agente.
+Category: AI
+Description: Generates an AI response based on conversation context and a system prompt. The most important node for conversational agents.
 
-**Polja:**
-- `Label` — interno ime noda
-- `System Prompt` — instrukcije za AI (ko je agent, kako se ponaša, šta smije/ne smije)
-- `Model` — AI model koji se koristi (deepseek-chat, gpt-4o-mini, claude-3-haiku itd.)
-- `Max Tokens` — maksimalni broj tokena u odgovoru (default: 500)
-- `Output Variable` — naziv varijable gdje se sprema odgovor (npr. `ai_response`)
+Fields:
+- Label — internal node name
+- System Prompt — instructions for the AI (who the agent is, how it behaves, what it can/cannot do)
+- Model — AI model to use (deepseek-chat, gpt-4o-mini, claude-haiku-4-5-20251001, etc.)
+- Max Tokens — maximum number of tokens in the response (default: 500)
+- Output Variable — name of the variable where the response is stored (e.g. ai_response)
 
-**Primjer System Prompta:**
+Example System Prompt:
 ```
-Ti si customer support asistent za [Naziv kompanije].
-Odgovaraj na osnovu dostavljenog konteksta iz knowledge base-a.
-Budi koncizan, profesionalan i koristi jezik kojim korisnik piše.
-Ako nemaš dovoljno informacija, uputi korisnika na support@kompanija.com.
+You are a customer support assistant for [Company Name].
+Answer based on the provided knowledge base context.
+Be concise, professional, and respond in the same language the user writes in.
+If you don't have enough information, direct the user to support@company.com.
 ```
 
-**Važno:** AI Response nod automatski koristi cijelu historiju razgovora i `{{kb_context}}` varijablu (ako je KB Search bio izvršen ranije u flow-u).
+Important: The AI Response node automatically uses the entire conversation history and the kb_context variable (if KB Search was executed earlier in the flow).
 
-**Kada koristiti:** Na kraju flow-a ili petlje, nakon KB Search noda, za generisanje odgovora na korisnikova pitanja.
+When to use: At the end of the flow or loop, after a KB Search node, to generate answers to user questions.
 
-**Tipična veza:** KB Search → AI Response → End (ili nazad na Capture za loop)
+Typical connection: KB Search → AI Response → End (or back to Capture for a loop)
 
 ---
 
-## KB Search nod
+## KB Search Node
 
-**Kategorija:** AI / Integracije  
-**Opis:** Pretražuje Knowledge Base agenta i vraća relevantne odlomke koji se koriste kao kontekst za AI odgovor.
+Category: AI / Integrations
+Description: Searches the agent's Knowledge Base and returns relevant passages used as context for AI responses.
 
-**Polja:**
-- `Label` — interno ime noda
-- `Query Variable` — naziv varijable čija se vrijednost koristi kao query (npr. `user_question` ili `last_message`). Unosi se samo ime varijable, BEZ `{{}}`.
-- `Top K Results` — broj rezultata koji se vraćaju (default: 5)
+Fields:
+- Label — internal node name
+- Query Variable — name of the variable whose value is used as the search query (e.g. user_question or last_message). Enter only the variable name, WITHOUT {{}}.
+- Top K Results — number of results to return (default: 5)
 
-Rezultati pretrage se uvijek automatski spremaju u varijablu `{{kb_context}}` koja se koristi u AI Response nodu.
+Search results are always automatically saved to the kb_context variable, which is used by the AI Response node.
 
-**Kako radi:**
-1. Uzima vrijednost iz navedene varijable (npr. korisnikovo pitanje)
-2. Pretvara je u vektor (embedding)
-3. Traži najsličnije odlomke u Knowledge Base-u
-4. Vraća top K rezultata spojenih kao tekst u `kb_context`
+How it works:
+1. Takes the value from the specified variable (e.g. the user's question)
+2. Converts it to a vector (embedding)
+3. Finds the most similar passages in the Knowledge Base
+4. Returns the top K results combined as text in kb_context
 
-**Primjer:**
+Example:
 ```
 Query Variable: user_question
 Top K Results: 5
 ```
 
-**Napomena:** Varijabla `last_message` uvijek sadrži posljednju poruku korisnika i može se koristiti kao Query Variable bez Capture noda.
+Note: The last_message variable always contains the user's most recent message and can be used as a Query Variable without a Capture node.
 
-**Kada koristiti:** Uvijek prije AI Response noda kada želiš da AI odgovara na osnovu tvoje baze znanja.
+When to use: Always before an AI Response node when you want the AI to answer based on your knowledge base.
 
-**Tipična veza:** Capture → KB Search → AI Response
+Typical connection: Capture → KB Search → AI Response
 
 ---
 
-## AI Classify nod
+## AI Classify Node
 
-**Kategorija:** AI  
-**Opis:** Klasificira korisnički unos u jednu od unaprijed definiranih kategorija. Koristi se za usmjeravanje flow-a.
+Category: AI
+Description: Classifies user input into one of several predefined categories. Used for routing the flow.
 
-**Polja:**
-- `Input Variable` — naziv varijable čija se vrijednost klasificira (npr. `last_message`). Bez `{{}}`.
-- `Categories` — lista kategorija (jedna po jedna, unosi se tekst i pritisne Enter ili klikne +)
-- `Model` — AI model koji klasificira (default: `deepseek-chat`)
+Fields:
+- Input Variable — name of the variable whose value is classified (e.g. last_message). Without {{}}.
+- Categories — list of categories (added one by one, type the text and press Enter or click +)
+- Model — AI model for classification (default: deepseek-chat)
 
-Rezultat klasifikacije se sprema u varijablu `{{intent}}` koja se može koristiti u Condition nodu.
+The classification result is saved to a variable that can be used in a Condition node.
 
-**Primjer:**
+Example:
 ```
 Input Variable: last_message
-Kategorije: complaint, inquiry, order
+Categories: complaint, inquiry, order
 ```
 
-**Kada koristiti:** Za inteligentno usmjeravanje razgovora — npr. žalbe idi na jedan flow, narudžbe na drugi.
+When to use: For intelligent conversation routing — e.g. complaints go to one flow, orders to another.
 
-**Tipična veza:** AI Classify → Condition (provjera varijable) → različiti grani
+Typical connection: AI Classify → Condition (check variable) → different branches
 
 ---
 
-## AI Extract nod
+## AI Extract Node
 
-**Kategorija:** AI  
-**Opis:** Izvlači strukturirane podatke iz slobodnog teksta. Korisno za parsiranje korisničkih unosa.
+Category: AI
+Description: Extracts structured data from free-form text. Useful for parsing user inputs.
 
-**Polja:**
-- `Fields to Extract` — lista polja koja treba izvući. Za svako polje unosi se: ime, tip (`string`, `number`, `boolean`) i opis
-- `Model` — AI model koji ekstraktuje (default: `deepseek-chat`)
+Fields:
+- Fields to Extract — list of fields to extract. For each field, enter: Name, Type (string, number, or boolean), and Description
+- Model — AI model for extraction (default: deepseek-chat)
 
-**Primjer:**
+Example:
 ```
-Polje 1: ime (string) — "Puno ime osobe"
-Polje 2: email (string) — "Email adresa"
-Polje 3: grad (string) — "Grad stanovanja"
+Field 1: name (string) — "Person's full name"
+Field 2: email (string) — "Email address"
+Field 3: city (string) — "City of residence"
 ```
 
-Rezultat se sprema kao JSON objekat i dostupan je kroz varijable `{{ime}}`, `{{email}}`, `{{grad}}`.
+The result is saved as a JSON object and accessible through variables like {{name}}, {{email}}, {{city}}.
 
-**Kada koristiti:** Kada korisnik u slobodnom tekstu navede podatke koje trebaš strukturirano sačuvati.
+When to use: When the user provides data in free text that you need to save in a structured format.
 
 ---
 
-## AI Summarize nod
+## AI Summarize Node
 
-**Kategorija:** AI  
-**Opis:** Sažima dugi tekst u kratki pregled.
+Category: AI
+Description: Summarizes long text into a short overview.
 
-**Polja:**
-- `Input` — tekst koji se sažima (može biti varijabla)
-- `Max Length` — maksimalna dužina sažetka
-- `Output Variable` — gdje se sprema sažetak
+Fields:
+- Output Variable — name of the variable where the summary is stored (default: summary)
+- Max Length (chars) — maximum summary length in characters (default: 200)
+- Model — AI model for summarization (default: deepseek-chat)
 
-**Kada koristiti:** Kada imaš dugačak KB kontekst ili historiju razgovora koju trebaš sažeti za dalju obradu.
+When to use: When you have a long KB context or conversation history that needs to be condensed for further processing.

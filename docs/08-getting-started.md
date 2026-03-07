@@ -1,144 +1,144 @@
-# Vodič za početnike — Tvoj prvi agent
+# Beginner's Guide — Your First Agent
 
-## Korak 1: Kreiraj agenta
+## Step 1: Create an Agent
 
-1. Otvori Agent Studio na `http://localhost:3000`
-2. Klikni **"New Agent"** dugme na dashboardu
-3. Unesi ime agenta (npr. "Moj Customer Support Bot")
-4. Dodaj kratak opis šta agent radi
-5. Agent se automatski kreira sa praznim flow-om i Knowledge Base-om
-
----
-
-## Korak 2: Dodaj Knowledge Base (URL scraping)
-
-Knowledge Base je baza znanja tvog agenta. Dodaj URL-ove stranica čiji sadržaj želiš da agent koristi za odgovore.
-
-1. Klikni **"Edit Flow"** na kartici agenta (otvara se Builder)
-2. U Builder-u klikni **"Knowledge Base"** dugme (gore desno, pored "Test Chat")
-3. Klikni **"Add Source"** dugme
-4. Odaberi tab **"URL"**
-5. Unesi URL stranice (npr. `https://tvoja-stranica.com/faq`)
-6. Klikni **"Add"**
-
-Agent Studio će automatski:
-   - Scrapati sadržaj stranice
-   - Podijeliti tekst na chunk-ove (400 tokena, 20% overlap)
-   - Generisati embedding vektore (OpenAI text-embedding-3-small)
-   - Sačuvati sve u bazu za pretragu
-
-Status izvora možeš pratiti na Knowledge stranici:
-- **PENDING** — čeka na obradu
-- **PROCESSING** — scraping i indeksiranje u toku
-- **READY** — spreman za pretragu
-- **FAILED** — greška pri obradi (provjeri URL)
+1. Open Agent Studio at `http://localhost:3000`
+2. Click the **"New Agent"** button on the dashboard
+3. Enter the agent name (e.g. "My Customer Support Bot")
+4. Add a short description of what the agent does
+5. The agent is automatically created with an empty flow and Knowledge Base
 
 ---
 
-## Korak 3: Napravi osnovni flow
+## Step 2: Add Knowledge Base (URL Scraping)
 
-Idi na Builder (klikni **"Builder"** link na kartici agenta) i napravi ovaj jednostavan flow:
+The Knowledge Base is your agent's knowledge store. Add URLs of pages whose content you want the agent to use for answers.
 
-### Najjednostavniji Q&A flow (4 noda)
+1. Click **"Edit Flow"** on the agent card (opens the Builder)
+2. In the Builder, click the **"Knowledge Base"** button (top right, next to "Test Chat")
+3. Click the **"Add Source"** button
+4. Select the **"URL"** tab
+5. Enter the page URL (e.g. `https://your-site.com/faq`)
+6. Click **"Add"**
+
+Agent Studio will automatically:
+   - Scrape the page content
+   - Split the text into chunks (400 tokens, 20% overlap)
+   - Generate embedding vectors (OpenAI text-embedding-3-small)
+   - Save everything to the database for search
+
+You can track source status on the Knowledge page:
+- **PENDING** — waiting to be processed
+- **PROCESSING** — scraping and indexing in progress
+- **READY** — ready for search
+- **FAILED** — processing error (check the URL)
+
+---
+
+## Step 3: Build a Basic Flow
+
+Go to the Builder (click **"Edit Flow"** on the agent card) and create this simple flow:
+
+### Simplest Q&A Flow (4 nodes)
 
 ```
-Message (pozdrav)
+Message (greeting)
     ↓
-Capture (spremi pitanje u user_question)
+Capture (save question to user_question)
     ↓
 KB Search (Query Variable: user_question)
     ↓
-AI Response (automatski koristi kb_context)
+AI Response (automatically uses kb_context)
 ```
 
-**VAŽNO:** Capture nod je OBAVEZAN prije KB Search noda. Capture prikuplja korisnikovo pitanje i sprema ga u varijablu (npr. user_question). KB Search zatim koristi tu varijablu za pretragu. Bez Capture noda, KB Search nema šta da pretražuje.
+**IMPORTANT:** The Capture node is REQUIRED before the KB Search node. Capture collects the user's question and saves it to a variable (e.g. user_question). KB Search then uses that variable for retrieval. Without a Capture node, KB Search has nothing to search for.
 
-**Kako dodati nodove:**
+**How to add nodes:**
 
-1. Klikni **"Add Node"** dugme u Builder-u
-2. Odaberi tip noda iz dropdown menija
-3. Klikni na nod da otvoriš Property Panel (desni sidebar)
-4. Popuni polja za svaki nod
+1. Click the **"Add Node"** button in the Builder
+2. Select the node type from the dropdown menu
+3. Click on a node to open the Property Panel (right sidebar)
+4. Fill in the fields for each node
 
-**Podešavanje svakog noda:**
+**Configuring each node:**
 
-### Message nod
-- **Text:** `Zdravo! Ja sam tvoj asistent. Postavi mi pitanje.`
+### Message Node
+- **Message:** `Hello! I'm your assistant. Ask me a question.`
 
-### Capture nod
-- **Prompt:** `Šta te zanima?`
+### Capture Node
+- **Prompt:** `What would you like to know?`
 - **Variable Name:** `user_question`
 
-### KB Search nod
-- **Query Variable:** `user_question` (samo ime varijable, bez `{{}}`)
-- Rezultati se automatski spremaju u `{{kb_context}}`
+### KB Search Node
+- **Query Variable:** `user_question` (just the variable name, without `{{}}`)
+- Results are automatically saved to `{{kb_context}}`
 
-### AI Response nod
+### AI Response Node
 - **System Prompt:**
 ```
-Ti si helpdesk asistent. Odgovaraj isključivo na osnovu dostavljenog konteksta.
-Ako odgovor nije u kontekstu, reci korisniku da nemaš tu informaciju.
-Odgovaraj na jeziku kojim korisnik piše.
+You are a helpdesk assistant. Answer only based on the provided context.
+If the answer is not in the context, tell the user you don't have that information.
+Always respond in the same language the user writes in.
 ```
-- **Model:** `deepseek-chat` (default, brz i jeftin)
+- **Model:** `deepseek-chat` (default, fast and affordable)
 
-**Povezivanje nodova:**
+**Connecting nodes:**
 
-Povuci liniju od izlazne tačke jednog noda do ulazne tačke sljedećeg. Redoslijed je bitan — flow ide odozgo prema dolje.
-
----
-
-## Korak 4: Testiraj agenta
-
-1. U Builder-u klikni **"Test Chat"** dugme (gore desno)
-2. Postavi pitanje koje se odnosi na sadržaj iz tvog Knowledge Base-a
-3. Agent treba da:
-   - Prikaže pozdravnu poruku
-   - Zatraži pitanje (Capture nod)
-   - Pretraži KB i generiše odgovor
-
-**Šta ako agent ne daje dobre odgovore?**
-
-- Provjeri da je KB Source u statusu **READY**
-- Testiraj pretragu na Knowledge stranici (Search tab)
-- Dodaj više URL-ova za bolju pokrivenost
-- Poboljšaj System Prompt sa konkretnijim instrukcijama
+Drag a line from the output point of one node to the input point of the next. Order matters — the flow runs top to bottom.
 
 ---
 
-## Korak 5: Podijeli chat link
+## Step 4: Test Your Agent
 
-Svaki agent ima javni chat link koji je odmah spreman za dijeljenje — nema posebnog koraka objavljivanja:
+1. In the Builder, click the **"Test Chat"** button (top right)
+2. Ask a question related to the content in your Knowledge Base
+3. The agent should:
+   - Display the greeting message
+   - Ask for a question (Capture node)
+   - Search the KB and generate an answer
+
+**What if the agent doesn't give good answers?**
+
+- Check that the KB Source status is **READY**
+- Test the search on the Knowledge page (Search tab)
+- Add more URLs for better coverage
+- Improve the System Prompt with more specific instructions
+
+---
+
+## Step 5: Share the Chat Link
+
+Every agent has a public chat link that is immediately ready for sharing — no publishing step required:
 
 ```
 http://localhost:3000/chat/[agentId]
 ```
 
-Taj link možeš poslati kome god treba pristup agentu. Korisnik ne treba nikakav login — samo otvori link i počne razgovor.
+You can send this link to anyone who needs access to the agent. No login is required — just open the link and start chatting.
 
-Brz pristup: Na dashboardu klikni **"Chat"** dugme na kartici agenta da otvoriš chat link direktno.
+Quick access: On the dashboard, click the **"Chat"** button on the agent card to open the chat link directly.
 
 ---
 
-## Korak 6: Exportuj i importuj agente
+## Step 6: Export and Import Agents
 
 ### Export
-1. Na dashboardu klikni tri tačke (menu) na kartici agenta
-2. Odaberi **"Export"**
-3. Preuzima se JSON fajl sa konfiguracijom agenta i flow-om
+1. On the dashboard, click the three dots (menu) on the agent card
+2. Select **"Export"**
+3. A JSON file with the agent configuration and flow is downloaded
 
 ### Import
-1. Na dashboardu klikni **"Import Agent"** dugme
-2. Odaberi JSON fajl prethodno exportovanog agenta
-3. Novi agent se kreira sa sufiksom **(imported)**
+1. On the dashboard, click the **"Import Agent"** button
+2. Select a JSON file from a previously exported agent
+3. A new agent is created with the suffix **(imported)**
 
-Export ne uključuje Knowledge Base ni razgovore — samo konfiguraciju i flow.
+Export does not include the Knowledge Base or conversations — only the configuration and flow.
 
 ---
 
-## Sljedeći koraci
+## Next Steps
 
-- Dodaj više izvora u Knowledge Base → [09-knowledge-base-guide.md](./09-knowledge-base-guide.md)
-- Prouči sve tipove nodova → [02-nodes-osnovno.md](./02-nodes-osnovno.md), [03-nodes-ai.md](./03-nodes-ai.md)
-- Pogledaj napredne flow patterns → [06-flow-patterns.md](./06-flow-patterns.md)
-- Rješavanje problema → [07-faq-troubleshooting.md](./07-faq-troubleshooting.md)
+- Add more sources to the Knowledge Base → [09-knowledge-base-guide.md](./09-knowledge-base-guide.md)
+- Learn about all node types → [02-nodes-osnovno.md](./02-nodes-osnovno.md), [03-nodes-ai.md](./03-nodes-ai.md)
+- Check out advanced flow patterns → [06-flow-patterns.md](./06-flow-patterns.md)
+- Troubleshooting → [07-faq-troubleshooting.md](./07-faq-troubleshooting.md)

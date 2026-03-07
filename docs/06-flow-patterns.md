@@ -1,51 +1,51 @@
-# Česti flow patterns (recepti)
+# Common Flow Patterns (Recipes)
 
-## Obavezno pravilo: Capture prije KB Search
+## Required Rule: Capture Before KB Search
 
-Svaki flow koji koristi Knowledge Base MORA imati Capture nod PRIJE KB Search noda. Capture nod prikuplja korisnikovo pitanje i sprema ga u varijablu (npr. user_question). KB Search nod zatim koristi tu varijablu (polje Query Variable) za pretragu baze znanja. Rezultati pretrage se automatski spremaju u varijablu kb_context. AI Response nod automatski koristi kb_context — ne treba ništa ručno podešavati.
+Every flow that uses the Knowledge Base MUST have a Capture node BEFORE the KB Search node. The Capture node collects the user's question and saves it into a variable (e.g. user_question). The KB Search node then uses that variable (Query Variable field) to search the knowledge base. Search results are automatically saved to the kb_context variable. The AI Response node automatically uses kb_context — no manual setup needed.
 
-Dakle, minimalni KB flow uvijek ima tri noda u ovom redoslijedu: Capture (prikuplja pitanje) → KB Search (pretražuje bazu) → AI Response (generiše odgovor). Bez Capture noda, KB Search nema varijablu za pretragu i neće vratiti rezultate.
+The minimum KB flow always has three nodes in this order: Capture (collects question) → KB Search (searches the knowledge base) → AI Response (generates answer). Without a Capture node, KB Search has no variable to search with and will return no results.
 
-## Pattern 1: Osnovni Customer Support Bot
+## Pattern 1: Basic Customer Support Bot
 
-**Opis:** Korisnik postavlja pitanje, agent pretražuje KB i generiše odgovor, pa pita ima li još pitanja.
+Description: The user asks a question, the agent searches the KB and generates a response, then asks if there are more questions.
 
-**Flow:**
+Flow:
 ```
-Message (pozdrav)
+Message (greeting)
     ↓
-Capture (spremi pitanje u user_question)
+Capture (save question to user_question)
     ↓
 KB Search (Query Variable: user_question)
     ↓
-AI Response (system prompt: customer support instrukcije)
+AI Response (system prompt: customer support instructions)
     ↓
-Goto → Capture (petlja: opet čeka pitanje)
+Goto → Capture (loop: waits for next question)
 ```
 
-**System Prompt za AI Response:**
+System Prompt for AI Response:
 ```
-Ti si customer support asistent za [Kompanija].
-Odgovaraj profesionalno i koncizno na osnovu dostavljenog konteksta.
-Ako informacija nije u kontekstu, reci da ne znaš i uputi na support@kompanija.com.
-Uvijek odgovaraj na jeziku kojim korisnik piše.
+You are a customer support assistant for [Company].
+Respond professionally and concisely based on the provided context.
+If the information is not in the context, say you don't know and direct the user to support@company.com.
+Always respond in the same language the user writes in.
 ```
 
 ---
 
-## Pattern 2: FAQ Bot sa kategorijama
+## Pattern 2: FAQ Bot with Categories
 
-**Opis:** Korisnik bira kategoriju, pa postavlja pitanje unutar te kategorije.
+Description: The user chooses a category, then asks a question within that category.
 
-**Flow:**
+Flow:
 ```
-Message (pozdrav)
+Message (greeting)
     ↓
-Button (odaberi kategoriju: Proizvodi / Dostava / Cijene / Kontakt)
-    → sprema u: user_category
+Button (choose category: Products / Shipping / Pricing / Contact)
+    → saves to: user_category
     ↓
-Capture (šta konkretno te zanima?)
-    → sprema u: user_question
+Capture (what specifically interests you?)
+    → saves to: user_question
     ↓
 KB Search (Query Variable: user_question)
     ↓
@@ -54,84 +54,84 @@ AI Response
 End
 ```
 
-**Napomena:** Kombinovanje kategorije i pitanja u KB Search query-ju poboljšava relevantnost rezultata.
+Note: Combining the category and question in the KB Search query improves result relevance.
 
 ---
 
 ## Pattern 3: Lead Capture Bot
 
-**Opis:** Agent prikuplja kontakt podatke od potencijalnog klijenta.
+Description: The agent collects contact information from a potential client.
 
-**Flow:**
+Flow:
 ```
-Message (predstavi se i objasni zašto prikupljaš podatke)
+Message (introduce yourself and explain why you're collecting data)
     ↓
-Capture (ime i prezime → spremi u: user_name)
+Capture (full name → save to: user_name)
     ↓
-Capture (email → spremi u: user_email, validacija: email)
+Capture (email → save to: user_email)
     ↓
-Capture (naziv kompanije → spremi u: company_name)
+Capture (company name → save to: company_name)
     ↓
-Capture (šta te zanima? → spremi u: interest)
+Capture (what are you interested in? → save to: interest)
     ↓
-API Call (pošalji podatke u CRM)
+API Call (send data to CRM)
     ↓
-Message (Hvala {{user_name}}! Javit ćemo vam se na {{user_email}}.)
+Message (Thank you {{user_name}}! We'll contact you at {{user_email}}.)
     ↓
 End
 ```
 
 ---
 
-## Pattern 4: Inteligentno usmjeravanje (Routing)
+## Pattern 4: Intelligent Routing
 
-**Opis:** AI klasificira namjeru korisnika i usmjerava na pravi tim/odgovor.
+Description: AI classifies the user's intent and routes to the right team/response.
 
-**Flow:**
+Flow:
 ```
-Message (pozdrav)
+Message (greeting)
     ↓
-Capture (šta te zanima? → user_question)
+Capture (what interests you? → user_question)
     ↓
-AI Classify (Input Variable: user_question, kategorije: complaint / inquiry / order / other)
-    → sprema u: intent
+AI Classify (Input Variable: user_question, categories: complaint / inquiry / order / other)
+    → saves to: intent
     ↓
-Condition (provjera: intent)
-    ├── equals "complaint" → Complaint Handler grana
-    ├── equals "order" → Order Handler grana
+Condition (check: intent)
+    ├── equals "complaint" → Complaint Handler branch
+    ├── equals "order" → Order Handler branch
     ├── equals "inquiry" → KB Search → AI Response
     └── default → General Response
 ```
 
 ---
 
-## Pattern 5: Escalacija na ljudski agent
+## Pattern 5: Escalation to Human Agent
 
-**Opis:** Bot pokušava odgovoriti, ali ako ne može, eskalira na čovjeka.
+Description: The bot tries to answer, but if it can't, it escalates to a human.
 
-**Flow:**
+Flow:
 ```
-Capture (pitanje → user_question)
+Capture (question → user_question)
     ↓
 KB Search
     ↓
 Condition (kb_context is_empty)
-    ├── DA (nema konteksta) → Message "Preusmjeravam vas..." → API Call (notifikacija timu) → End
-    └── NE (ima konteksta) → AI Response → Capture (je li odgovor pomogao?)
-                                               ├── "da" → End
-                                               └── "ne" → API Call → End
+    ├── YES (no context) → Message "Redirecting you..." → API Call (notify team) → End
+    └── NO (has context) → AI Response → Capture (did the answer help?)
+                                               ├── "yes" → End
+                                               └── "no" → API Call → End
 ```
 
 ---
 
-## Greške koje treba izbjegavati
+## Mistakes to Avoid
 
-1. **Zaboravljeni Start nod** — flow mora imati jedan nod bez ulaznih veza (start). Provjeri da Message ili prvi Capture nod nema veza koje dolaze u njega.
+1. Forgotten Start node — the flow must have one node without incoming connections (start). Check that the Message or first Capture node has no edges coming into it.
 
-2. **KB Search bez Query Variable** — uvijek postavi `Query Variable` polje na `user_question` ili `last_message` (samo ime varijable, bez `{{}}`). Prazno polje neće vratiti rezultate.
+2. KB Search without Query Variable — always set the Query Variable field to user_question or last_message (just the variable name, without {{}}). An empty field will return no results.
 
-3. **AI Response bez System Prompta** — bez system prompta AI neće znati ko je i šta treba raditi. Uvijek dodaj system prompt.
+3. AI Response without System Prompt — without a system prompt, the AI won't know who it is or what to do. Always add a system prompt.
 
-4. **Beskonačna petlja** — ako koristiš Goto za petlju, uvijek osiguraj izlaz (Condition koji može ići na End).
+4. Infinite loop — if you use Goto for looping, always ensure there is an exit (a Condition that can lead to End).
 
-5. **Varijable bez inicijalizacije** — ako koristiš varijablu u Message nodu (npr. `{{user_name}}`), ona mora biti prethodno postavljena kroz Capture ili Set Variable nod.
+5. Uninitialized variables — if you use a variable in a Message node (e.g. {{user_name}}), it must have been previously set through a Capture or Set Variable node.

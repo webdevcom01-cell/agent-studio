@@ -1,75 +1,73 @@
-# Node tipovi — Osnovno
+# Node Types — Basic
 
-## Message nod
+## Message Node
 
-**Kategorija:** Osnovno  
-**Opis:** Šalje statičku tekstualnu poruku korisniku. Koristi se za pozdravne poruke, upute, potvrde i slično.
+Category: Basic
+Description: Sends a static text message to the user. Use it for greeting messages, instructions, confirmations, and similar.
 
-**Polja:**
-- `Label` — interno ime noda (nije vidljivo korisniku)
-- `Message` — tekst koji se šalje korisniku. Može sadržavati varijable u formatu `{{naziv_varijable}}`
+Fields:
+- Label — internal node name (not visible to the user)
+- Message — text sent to the user. Can contain variables in the format {{variable_name}}
 
-**Primjer upotrebe:**
+Example usage:
 ```
-Zdravo! Ja sam vaš asistent. Mogu vam pomoći sa informacijama o 
-našim proizvodima, dostavi i cijenama.
+Hello! I'm your assistant. I can help you with information about 
+our products, shipping, and pricing.
 ```
 
-**Kada koristiti:** Na početku flow-a kao pozdrav, ili u sredini flow-a za informativne poruke između koraka.
+When to use: At the beginning of the flow as a greeting, or in the middle of the flow for informational messages between steps.
 
-**Tipična veza:** Message → Capture (da pitaš korisnika nešto) ili Message → End
+Typical connection: Message → Capture (to ask the user something) or Message → End
 
 ---
 
-## Button nod
+## Button Node
 
-**Kategorija:** Osnovno  
-**Opis:** Prikazuje korisniku skup dugmadi za odabir. Korisnik klikne dugme i odabrana vrijednost se sprema kao varijabla.
+Category: Basic
+Description: Displays a set of buttons for the user to choose from. The user clicks a button and the selected value is saved as a variable.
 
-**Polja:**
-- `Label` — interno ime noda
-- `Prompt` — tekst iznad dugmadi (npr. "Šta te zanima?")
-- `Buttons` — lista dugmadi, svako sa tekstom i vrijednošću
-- `Variable Name` — naziv varijable gdje se sprema odabir
+Fields:
+- Label — internal node name
+- Message — text above the buttons (e.g. "What interests you?")
+- Buttons — list of buttons, each with a label and a value
+- Variable Name — name of the variable where the selection is stored
 
-**Primjer upotrebe:**
+Example usage:
 ```
-Prompt: "Odaberi temu:"
-Dugmad:
-  - "Proizvodi" → vrijednost: "proizvodi"
-  - "Dostava" → vrijednost: "dostava"
-  - "Cijene" → vrijednost: "cijene"
-  - "Kontakt" → vrijednost: "kontakt"
-Variable: user_choice
+Message: "Choose a topic:"
+Buttons:
+  - "Products" → value: "products"
+  - "Shipping" → value: "shipping"
+  - "Pricing" → value: "pricing"
+  - "Contact" → value: "contact"
+Variable Name: user_choice
 ```
 
-**Kada koristiti:** Kada želiš ograničiti opcije korisnika na unaprijed definirani skup izbora.
-
-**Napomena:** Ako Button nod nije dostupan u tvojoj verziji, koristi Capture nod kao zamjenu.
+When to use: When you want to limit user options to a predefined set of choices.
 
 ---
 
-## Capture nod
+## Capture Node
 
-**Kategorija:** Osnovno  
-**Opis:** Pauzira flow i čeka da korisnik unese tekst. Unos se sprema u varijablu.
+Category: Basic
+Description: Pauses the flow and waits for the user to enter text. The input is saved to a variable.
 
-**Polja:**
-- `Label` — interno ime noda
-- `Variable Name` — naziv varijable gdje se sprema unos (npr. `user_question`)
-- `Prompt` — poruka koja se prikazuje korisniku (npr. "Šta te zanima?")
+Fields:
+- Label — internal node name
+- Variable Name — name of the variable where the input is stored (e.g. user_question)
+- Prompt — message displayed to the user (e.g. "What would you like to know?")
 
-**Primjer upotrebe:**
+Example usage:
 ```
 Variable Name: user_question
-Prompt: Šta te zanima?
+Prompt: What would you like to know?
 ```
 
-**Kada koristiti:** 
-- Za hvatanje slobodnog teksta od korisnika (pitanja, ime, email)
-- Kao zamjena za Button nod kada nemaš unaprijed definirane opcije
-- Za multi-step forme
+When to use:
+- To capture free-form text from the user (questions, name, email)
+- As an alternative to the Button node when you don't have predefined options
+- For multi-step forms
 
-**Varijabla se koristi:** U KB Search nodu kao query (`{{user_question}}`), ili u Message nodu za personalizaciju.
+The variable is used: In the KB Search node as the query variable (e.g. user_question), or in a Message node for personalization.
 
-**Tipična veza:** Message → Capture → KB Search → AI Response
+Typical connection: Message → Capture → KB Search → AI Response

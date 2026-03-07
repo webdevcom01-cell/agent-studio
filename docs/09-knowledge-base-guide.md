@@ -1,186 +1,186 @@
-# Knowledge Base — Kompletan vodič
+# Knowledge Base — Complete Guide
 
-## Šta je Knowledge Base?
+## What is the Knowledge Base?
 
-Knowledge Base (KB) je baza znanja tvog agenta. Umjesto da AI odgovara samo iz svog općeg znanja, KB omogućava agentu da koristi **tvoje specifične podatke** — dokumentaciju, FAQ stranice, blog postove, priručnike.
+The Knowledge Base (KB) is your agent's knowledge store. Instead of the AI answering only from its general knowledge, the KB allows the agent to use your specific data — documentation, FAQ pages, blog posts, manuals.
 
-### Kako radi (RAG pipeline)
+### How it Works (RAG Pipeline)
 
 ```
-Dodaj izvor (URL / tekst / fajl)
+Add source (URL / text / file)
     ↓
-Scraping / parsiranje sadržaja
+Scraping / parsing content
     ↓
-Chunking (dijeljenje teksta na dijelove od ~400 tokena)
+Chunking (splitting text into ~400 token pieces)
     ↓
-Embedding (pretvaranje svakog chunk-a u vektor od 1536 dimenzija)
+Embedding (converting each chunk to a 1536-dimension vector)
     ↓
-Spremanje u PostgreSQL (pgvector)
+Saving to PostgreSQL (pgvector)
 ```
 
-Kada korisnik postavi pitanje, agent:
-1. Pretvori pitanje u embedding vektor
-2. Pronađe najsličnije chunk-ove (semantic search + BM25 keyword search)
-3. Spoji rezultate (Reciprocal Rank Fusion)
-4. Opcionalno re-rankira pomoću LLM-a
-5. Proslijedi kontekst AI Response nodu
+When a user asks a question, the agent:
+1. Converts the question into an embedding vector
+2. Finds the most similar chunks (semantic search + BM25 keyword search)
+3. Merges results (Reciprocal Rank Fusion)
+4. Optionally re-ranks using an LLM
+5. Passes the context to the AI Response node
 
 ---
 
-## Tipovi izvora
+## Source Types
 
-### URL izvor
-Scrapaj sadržaj bilo koje web stranice. Agent Studio koristi Cheerio parser koji automatski uklanja navigaciju, footer, script i style tagove — ostaje samo koristan tekst.
+### URL Source
+Scrape content from any web page. Agent Studio uses the Cheerio parser which automatically removes navigation, footer, script, and style tags — only useful text remains.
 
-### Text izvor
-Direktno unesi tekst. Korisno za interne dokumente, FAQ odgovore, ili bilo šta što nije dostupno kao URL.
+### Text Source
+Directly enter text. Useful for internal documents, FAQ answers, or anything not available as a URL.
 
-### File izvor (upload)
-Upload PDF ili DOCX fajlova (max 10 MB). Podržani formati:
-- **PDF** — parsira se pomoću `pdf-parse` biblioteke
-- **DOCX** — parsira se pomoću `mammoth` biblioteke
-
----
-
-## Kako dodati URL izvore
-
-1. Idi na **Knowledge** stranicu agenta
-2. Klikni **"Add Source"**
-3. Odaberi **"URL"** tab
-4. Unesi puni URL (sa `https://`)
-5. Klikni **"Add"**
-
-### Primjeri dobrih URL-ova
-
-| Tip | Primjer | Zašto je dobar |
-|-----|---------|---------------|
-| FAQ stranica | `https://kompanija.com/faq` | Strukturirana pitanja i odgovori |
-| Dokumentacija | `https://docs.kompanija.com/getting-started` | Detaljan sadržaj |
-| Blog post | `https://kompanija.com/blog/kako-koristiti-x` | Specifična tema |
-| Help centar | `https://help.kompanija.com/artikl-123` | Korisničke instrukcije |
-
-### URL-ovi koje treba izbjegavati
-
-| Tip | Primjer | Zašto je loš |
-|-----|---------|-------------|
-| Početna stranica | `https://kompanija.com` | Previše navigacije, malo sadržaja |
-| Login stranica | `https://app.kompanija.com/login` | Nema korisnog teksta |
-| SPA aplikacija | `https://app.kompanija.com/dashboard` | JavaScript rendering — scraper ne vidi sadržaj |
-| Stranica sa slikama | `https://kompanija.com/galerija` | Slike se ne indeksiraju |
+### File Source (upload)
+Upload PDF or DOCX files (max 10 MB). Supported formats:
+- PDF — parsed using the pdf-parse library
+- DOCX — parsed using the mammoth library
 
 ---
 
-## Koliko URL-ova dodati?
+## How to Add URL Sources
 
-Nema striktnog limita, ali evo smjernica:
+1. Go to the agent's Knowledge page
+2. Click "Add Source"
+3. Select the "URL" tab
+4. Enter the full URL (with https://)
+5. Click "Add"
 
-| Broj URL-ova | Primjer upotrebe |
-|-------------|-----------------|
-| 3–10 | Mali FAQ bot, jedna tema |
-| 10–30 | Customer support bot sa više kategorija |
-| 30–100 | Kompletna dokumentacija proizvoda |
-| 100+ | Enterprise help desk (pazi na kvalitet) |
+### Examples of Good URLs
 
-### Kvalitet > kvantitet
+| Type | Example | Why it's good |
+|------|---------|--------------|
+| FAQ page | https://company.com/faq | Structured questions and answers |
+| Documentation | https://docs.company.com/getting-started | Detailed content |
+| Blog post | https://company.com/blog/how-to-use-x | Specific topic |
+| Help center | https://help.company.com/article-123 | User instructions |
 
-Bolje je imati 10 URL-ova sa čistim, relevantnim sadržajem nego 100 URL-ova sa šumom. Svaki URL koji dodaš prolazi kroz chunking i indeksiranje — irelevantni chunk-ovi mogu smanjiti kvalitet odgovora.
+### URLs to Avoid
+
+| Type | Example | Why it's bad |
+|------|---------|-------------|
+| Home page | https://company.com | Too much navigation, little content |
+| Login page | https://app.company.com/login | No useful text |
+| SPA application | https://app.company.com/dashboard | JavaScript rendering — scraper can't see content |
+| Image gallery | https://company.com/gallery | Images are not indexed |
 
 ---
 
-## Kako provjeriti da li je ingesting uspio
+## How Many URLs to Add?
 
-### Status izvora
+There is no strict limit, but here are guidelines:
 
-Na Knowledge stranici svaki izvor prikazuje status:
+| Number of URLs | Example use case |
+|---------------|-----------------|
+| 3-10 | Small FAQ bot, single topic |
+| 10-30 | Customer support bot with multiple categories |
+| 30-100 | Complete product documentation |
+| 100+ | Enterprise help desk (watch quality) |
 
-| Status | Značenje | Akcija |
+### Quality > Quantity
+
+It's better to have 10 URLs with clean, relevant content than 100 URLs with noise. Every URL you add goes through chunking and indexing — irrelevant chunks can reduce answer quality.
+
+---
+
+## How to Check if Ingesting Succeeded
+
+### Source Status
+
+On the Knowledge page, each source displays a status:
+
+| Status | Meaning | Action |
 |--------|---------|--------|
-| **PENDING** | Čeka na obradu | Sačekaj — obrađuje se po redu |
-| **PROCESSING** | Scraping i indeksiranje u toku | Sačekaj — može trajati 10–60 sekundi |
-| **READY** | Uspješno indeksiran | Spreman za pretragu |
-| **FAILED** | Greška pri obradi | Provjeri URL i pokušaj ponovo |
+| PENDING | Waiting to be processed | Wait — it's being processed in order |
+| PROCESSING | Scraping and indexing in progress | Wait — can take 10-60 seconds |
+| READY | Successfully indexed | Ready for search |
+| FAILED | Processing error | Check the URL and try again |
 
-### Broj chunk-ova
+### Chunk Count
 
-Pored svakog izvora prikazan je broj chunk-ova (npr. "24 chunks"). Ako izvor ima **0 chunk-ova** a status je READY, stranica vjerovatno nema dovoljno teksta.
+Next to each source, the number of chunks is displayed (e.g. "24 chunks"). If a source has 0 chunks but its status is READY, the page probably doesn't have enough text.
 
-### Test pretraga
+### Test Search
 
-Najbolji način za provjeru je testiranje pretrage:
+The best way to verify is to test the search:
 
-1. Na Knowledge stranici koristi **Search** funkcionalnost
-2. Unesi upit koji se odnosi na sadržaj izvora
-3. Provjeri da li rezultati vraćaju relevantne chunk-ove
-4. Obrati pažnju na **score** — viši score znači veća relevantnost
-
----
-
-## Tips za bolju pretragu
-
-### 1. Dodaj URL-ove sa strukturiranim sadržajem
-
-Stranice sa jasnim naslovima, paragrafima i listama daju bolje chunk-ove nego stranice sa mnogo navigacije i reklama.
-
-### 2. Koristi specifične URL-ove umjesto generalnih
-
-```
-Loše:  https://kompanija.com
-Dobro: https://kompanija.com/docs/instalacija
-Dobro: https://kompanija.com/faq/placanje
-```
-
-### 3. Dodaj tekst izvore za ključne informacije
-
-Ako imaš informacije koje nisu na webu (radno vrijeme, cijene, politike), dodaj ih kao Text izvor. Formatiraš ih kako želiš — to daje najčistije chunk-ove.
-
-### 4. Obrati pažnju na jezik
-
-Ako korisnici pitaju na bosanskom/srpskom/hrvatskom, a KB sadržaj je na engleskom, kvalitet pretrage će biti niži. Pokušaj da KB sadržaj bude na istom jeziku kao i očekivana pitanja.
-
-### 5. Kombiniraj KB Search sa dobrim System Promptom
-
-System Prompt u AI Response nodu treba da kaže agentu:
-- Koristi samo informacije iz konteksta
-- Ako nema odgovora u kontekstu, kaži to korisniku
-- Odgovaraj na jeziku korisnika
-
-Primjer:
-```
-Ti si asistent kompanije X. Odgovaraj isključivo na osnovu dostavljenog konteksta.
-Ako kontekst ne sadrži traženu informaciju, reci korisniku da nemaš taj podatak
-i uputi ga na support@kompanija.com.
-Budi koncizan — odgovaraj u 2-3 rečenice kada je moguće.
-```
-
-### 6. Testiraj i iteruj
-
-1. Dodaj izvore
-2. Testiraj sa realnim pitanjima
-3. Ako odgovori nisu dovoljno dobri:
-   - Dodaj više specifičnih URL-ova
-   - Dodaj Text izvore sa nedostajućim informacijama
-   - Poboljšaj System Prompt
-4. Ponovi dok ne budeš zadovoljan
+1. On the Knowledge page, use the Search functionality
+2. Enter a query related to the source content
+3. Check if results return relevant chunks
+4. Pay attention to the score — higher score means greater relevance
 
 ---
 
-## Brisanje izvora
+## Tips for Better Search
 
-Ako neki izvor nije koristan ili sadrži zastarjele informacije:
+### 1. Add URLs with Structured Content
 
-1. Na Knowledge stranici pronađi izvor
-2. Klikni **Delete** dugme
-3. Izvor i svi njegovi chunk-ovi se brišu iz baze
+Pages with clear headings, paragraphs, and lists produce better chunks than pages with lots of navigation and ads.
 
-Brisanje je trajno — moraš ponovo dodati URL ako ga želiš nazad.
+### 2. Use Specific URLs Instead of General Ones
+
+```
+Bad:  https://company.com
+Good: https://company.com/docs/installation
+Good: https://company.com/faq/payment
+```
+
+### 3. Add Text Sources for Key Information
+
+If you have information that's not on the web (business hours, prices, policies), add it as a Text source. Format it however you want — this produces the cleanest chunks.
+
+### 4. Pay Attention to Language
+
+If users ask questions in one language but KB content is in another, search quality will be lower. Try to have KB content in the same language as the expected questions.
+
+### 5. Combine KB Search with a Good System Prompt
+
+The System Prompt in the AI Response node should tell the agent:
+- Use only information from the context
+- If there's no answer in the context, tell the user
+- Respond in the user's language
+
+Example:
+```
+You are an assistant for Company X. Answer only based on the provided context.
+If the context does not contain the requested information, tell the user you 
+don't have that information and direct them to support@company.com.
+Be concise — respond in 2-3 sentences when possible.
+```
+
+### 6. Test and Iterate
+
+1. Add sources
+2. Test with real questions
+3. If answers aren't good enough:
+   - Add more specific URLs
+   - Add Text sources with missing information
+   - Improve the System Prompt
+4. Repeat until satisfied
 
 ---
 
-## Tehnički detalji
+## Deleting Sources
 
-- **Chunk veličina:** ~400 tokena sa 20% overlap-a između chunk-ova
-- **Embedding model:** OpenAI `text-embedding-3-small` (1536 dimenzija)
-- **Pretraga:** Hybrid (semantic cosine similarity + BM25 keyword search)
-- **Ranking:** Reciprocal Rank Fusion + opcionalni LLM re-ranking
-- **Skladištenje:** PostgreSQL sa pgvector ekstenzijom
-- **Max upload:** 10 MB po fajlu (PDF/DOCX)
+If a source is not useful or contains outdated information:
+
+1. On the Knowledge page, find the source
+2. Click the Delete button
+3. The source and all its chunks are deleted from the database
+
+Deletion is permanent — you'll need to re-add the URL if you want it back.
+
+---
+
+## Technical Details
+
+- Chunk size: ~400 tokens with 20% overlap between chunks
+- Embedding model: OpenAI text-embedding-3-small (1536 dimensions)
+- Search: Hybrid (semantic cosine similarity + BM25 keyword search)
+- Ranking: Reciprocal Rank Fusion + optional LLM re-ranking
+- Storage: PostgreSQL with pgvector extension
+- Max upload: 10 MB per file (PDF/DOCX)

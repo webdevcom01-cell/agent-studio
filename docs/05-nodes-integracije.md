@@ -1,72 +1,65 @@
-# Node tipovi — Integracije
+# Node Types — Integrations
 
-## API Call nod
+## API Call Node
 
-**Kategorija:** Integracije  
-**Opis:** Šalje HTTP zahtjev prema vanjskom API-u i sprema odgovor u varijablu.
+Category: Integrations
+Description: Sends an HTTP request to an external API and saves the response to a variable.
 
-**Polja:**
-- `URL` — endpoint URL (može sadržavati varijable: `https://api.com/user/{{user_id}}`)
-- `Method` — HTTP metoda: GET, POST, PUT, DELETE
-- `Headers` — HTTP zaglavlja (npr. Authorization, Content-Type)
-- `Body` — tijelo zahtjeva za POST/PUT (JSON format, može sadržavati varijable)
-- `Output Variable` — varijabla gdje se sprema odgovor
+Fields:
+- Label — internal node name
+- Method — HTTP method: GET, POST, PUT, PATCH, DELETE
+- URL — endpoint URL (can contain variables: https://api.com/user/{{user_id}})
+- Body — request body for POST/PUT (JSON format, can contain variables)
+- Output Variable — variable where the response is stored
 
-**Primjer:**
+Example:
 ```
-URL: https://api.mojkompanija.com/orders/{{order_id}}
+URL: https://api.mycompany.com/orders/{{order_id}}
 Method: GET
-Headers: 
-  Authorization: Bearer {{api_token}}
-Output: order_data
+Output Variable: order_data
 ```
 
-**Kada koristiti:** Za dohvaćanje podataka iz vlastitog sistema (narudžbe, korisnici, inventar), slanje notifikacija, integraciju sa CRM-om.
+When to use: For fetching data from your own system (orders, users, inventory), sending notifications, CRM integration.
 
 ---
 
-## Webhook nod
+## Webhook Node
 
-**Kategorija:** Integracije  
-**Opis:** Prima dolazne HTTP zahtjeve od vanjskih sistema i pokreće flow.
+Category: Integrations
+Description: Sends an HTTP request as a notification to an external service. It has the same fields as the API Call node.
 
-**Polja:**
-- `Path` — URL putanja na kojoj webhook sluša
-- `Secret` — opcionalni tajni ključ za verifikaciju zahtjeva
-- `Output Variable` — varijabla gdje se sprema primljeni payload
+Fields:
+- Label — internal node name
+- Method — HTTP method (GET, POST, PUT, PATCH, DELETE)
+- URL — the webhook endpoint URL
+- Body — JSON request body (can contain variables)
+- Output Variable — variable where the response is stored
 
-**Primjer:**
-```
-Path: /webhook/nova-narudzba
-Secret: moj_tajni_kljuc
-Output: webhook_data
-```
-
-**Kada koristiti:** Kada vanjski sistem (e-commerce platforma, payment processor) treba pokrenuti agenta — npr. nova narudžba, plaćanje primljeno.
+When to use: When an external system needs to be notified — e.g. new order placed, payment received.
 
 ---
 
-## Function nod
+## Function Node
 
-**Kategorija:** Integracije  
-**Opis:** Izvršava JavaScript kod unutar flow-a. Najfleksibilniji nod za custom logiku.
+Category: Integrations
+Description: Executes JavaScript code within the flow. The most flexible node for custom logic.
 
-**Polja:**
-- `Code` — JavaScript kod koji se izvršava
-- `Input Variables` — varijable iz contexta koje su dostupne u kodu
-- `Output Variable` — naziv varijable gdje se sprema rezultat
+Fields:
+- Label — internal node name
+- Code — JavaScript code to execute. Access flow variables through the variables object.
+- Output Variable — name of the variable where the result is stored
 
-**Primjer:**
+Example:
 ```javascript
-// Formatiranje datuma
+// Format a date
 const today = new Date();
-const formatted = today.toLocaleDateString('bs-BA');
+const formatted = today.toLocaleDateString('en-US');
 return { formatted_date: formatted };
 ```
 
-**Primjer sa varijablama:**
+Example with variables:
 ```javascript
-// Provjera da li je narudžba velika
+// Check if order is large
 const amount = parseFloat(variables.order_amount);
 const isLarge = amount > 10000;
 return { 
@@ -75,6 +68,6 @@ return {
 };
 ```
 
-**Kada koristiti:** Za kalkulacije, formatiranje podataka, custom validaciju, transformaciju API odgovora.
+When to use: For calculations, data formatting, custom validation, transforming API responses.
 
-**Napomena:** Kod se izvršava u sandboxed okruženju. Nema pristupa vanjskim servisima direktno — za to koristi API Call nod.
+Note: Code runs in a sandboxed environment. No direct access to external services — use the API Call node for that.

@@ -1,103 +1,103 @@
-# Referenca svih nodova — kompletna polja
+# Node Reference — All Fields
 
-Ovaj dokument opisuje svaki nod u Agent Studio sa svim poljima koja se mogu podesiti u Properties panelu. Properties panel se otvara klikom na nod u Builder-u.
+This document describes every node type in Agent Studio with all configurable fields in the Properties panel. The Properties panel opens when you click on a node in the Builder.
 
-Svaki nod ima zajedničko polje Label koje služi kao naziv noda u flow-u.
+Every node has a shared Label field used as the node's display name in the flow.
 
-## Message nod
+## Message Node
 
-Message nod prikazuje tekstualnu poruku korisniku. Koristi se za pozdrave, obavijesti i informacije.
+The Message node displays a text message to the user. Use it for greetings, notifications, and informational text.
 
-Polja: Label i Message. U polje Message upiši tekst koji će korisnik vidjeti. Možeš koristiti varijable u tekstu sa dvostrukim vitičastim zagradama, npr. Zdravo {{user_name}}, kako ti mogu pomoći?
+Fields: Label and Message. Enter the text the user will see in the Message field. You can use variables with double curly braces, for example: Hello {{user_name}}, how can I help you?
 
-## Capture nod
+## Capture Node
 
-Capture nod čeka da korisnik upiše odgovor i sprema ga u varijablu. Koristi se za prikupljanje pitanja, imena, emaila ili bilo kojeg korisničkog unosa.
+The Capture node waits for the user to type a response and saves it into a variable. Use it to collect questions, names, emails, or any user input.
 
-Polja: Label, Variable Name i Prompt. U polje Variable Name upiši ime varijable u koju će se spremiti korisnikov odgovor (npr. user_question, user_name, user_email). U polje Prompt upiši tekst koji će korisnik vidjeti kao pitanje (npr. Šta te zanima? ili Unesite vaš email). Prompt polje je opcionalno — ako ga ostaviš praznim, nod će čekati unos bez prikazivanja poruke.
+Fields: Label, Variable Name, and Prompt. In the Variable Name field, enter the name of the variable where the user's response will be stored (e.g. user_question, user_name, user_email). In the Prompt field, enter the text the user will see as a question (e.g. What would you like to know? or Enter your email). The Prompt field is optional — if left empty, the node will wait for input without displaying a message.
 
-Capture nod je obavezan prije KB Search noda jer prikuplja korisnikovo pitanje u varijablu koju KB Search koristi za pretragu.
+The Capture node is required before the KB Search node because it collects the user's question into a variable that KB Search uses for retrieval.
 
-## KB Search nod
+## KB Search Node
 
-KB Search nod pretražuje Knowledge Base i vraća relevantne rezultate. Koristi se za RAG (Retrieval-Augmented Generation) — pronalaženje informacija iz baze znanja prije generisanja AI odgovora.
+The KB Search node searches the Knowledge Base and returns relevant results. Use it for RAG (Retrieval-Augmented Generation) — finding information from the knowledge base before generating an AI response.
 
-Polja: Label, Query Variable i Top K Results. U polje Query Variable upiši samo ime varijable bez vitičastih zagrada (npr. user_question, a NE {{user_question}}). Top K Results je broj rezultata koje želiš dobiti iz baze znanja (default je 5).
+Fields: Label, Query Variable, and Top K Results. In the Query Variable field, enter only the variable name without curly braces (e.g. user_question, NOT {{user_question}}). Top K Results is the number of results to retrieve from the knowledge base (default is 5).
 
-Rezultati pretrage se AUTOMATSKI spremaju u varijablu kb_context. Ne postoji polje Output Variable jer je izlaz uvijek kb_context. KB Search nod se uvijek povezuje linijom sa AI Response nodom koji automatski koristi kb_context za generisanje odgovora.
+Search results are AUTOMATICALLY saved to the kb_context variable. There is no Output Variable field because the output is always kb_context. The KB Search node should always be connected with a line to an AI Response node, which automatically uses kb_context to generate answers.
 
-## AI Response nod
+## AI Response Node
 
-AI Response nod koristi AI model da generiše odgovor na osnovu konteksta i system prompta. Ako je prije njega bio KB Search nod, automatski koristi kb_context varijablu — ne treba ništa ručno dodavati.
+The AI Response node uses an AI model to generate a response based on context and a system prompt. If a KB Search node was connected before it, the node automatically uses the kb_context variable — no manual configuration needed.
 
-Polja: Label, System Prompt, Model, Max Tokens i Output Variable. System Prompt je instrukcija za AI model koja definiše ponašanje i ton odgovora. Model je AI model koji se koristi (npr. deepseek-chat, claude-haiku-4-5-20251001). Max Tokens je maksimalan broj tokena u odgovoru (default 500). Output Variable je opcionalno polje — ako uneseš ime varijable, AI odgovor će se spremiti u tu varijablu za kasniju upotrebu u flow-u.
+Fields: Label, System Prompt, Model, Max Tokens, and Output Variable. System Prompt is the instruction for the AI model that defines behavior and tone. Model is the AI model to use (e.g. deepseek-chat, claude-haiku-4-5-20251001). Max Tokens is the maximum number of tokens in the response (default 500). Output Variable is an optional field — if you enter a variable name, the AI response will be saved to that variable for later use in the flow.
 
-## Condition nod
+## Condition Node
 
-Condition nod provjerava uslov i usmjerava flow na osnovu rezultata. Ima dva izlaza: true i false granu.
+The Condition node checks a condition and routes the flow based on the result. It has two outputs: a true branch and a false branch.
 
-Polja: Label. Uslovi se podešavaju kroz edges (veze) između nodova u Builder-u, a ne kroz Properties panel.
+Fields: Label. Conditions are configured through edges (connections) between nodes in the Builder, not through the Properties panel.
 
-## Set Variable nod
+## Set Variable Node
 
-Set Variable nod postavlja vrijednost varijable bez korisničke interakcije. Koristi se za inicijalizaciju varijabli, računanje ili transformaciju podataka.
+The Set Variable node assigns a value to a variable without user interaction. Use it to initialize variables, perform calculations, or transform data.
 
-Polja: Label, Variable Name i Value. Variable Name je ime varijable koju postavljaš (npr. user_score). Value je vrijednost — može biti statički tekst, broj ili referenca na drugu varijablu sa dvostrukim vitičastim zagradama (npr. {{last_message}}).
+Fields: Label, Variable Name, and Value. Variable Name is the name of the variable you are setting (e.g. user_score). Value is the content — it can be static text, a number, or a reference to another variable with double curly braces (e.g. {{last_message}}).
 
-## End nod
+## End Node
 
-End nod završava flow i opcionalno prikazuje završnu poruku korisniku.
+The End node terminates the flow and optionally displays a closing message to the user.
 
-Polja: Label i End Message. End Message je opcionalan tekst koji se prikaže korisniku kad flow završi (npr. Hvala na razgovoru!). Ako ostaviš prazno, flow će se završiti bez poruke.
+Fields: Label and End Message. End Message is optional text shown to the user when the flow ends (e.g. Thank you for chatting!). If left empty, the flow ends without a message.
 
-## Goto nod
+## Goto Node
 
-Goto nod preusmjerava flow na drugi nod, omogućavajući petlje i skokove. Koristi se za vraćanje na Capture nod nakon odgovora (petlja) ili preskakanje dijelova flow-a.
+The Goto node redirects the flow to another node, enabling loops and jumps. Use it to loop back to a Capture node after a response or to skip parts of the flow.
 
-Polja: Label i Target Node. Target Node je dropdown lista svih nodova u flow-u — odaberi nod na koji želiš preusmjeriti flow.
+Fields: Label and Target Node. Target Node is a dropdown list of all nodes in the flow — select the node you want to redirect to.
 
-## Wait nod
+## Wait Node
 
-Wait nod pauzira flow na određeno vrijeme. Koristi se za simulaciju razmišljanja ili pauze između poruka.
+The Wait node pauses the flow for a set duration. Use it to simulate thinking time or add pauses between messages.
 
-Polja: Label i Duration (seconds). Duration je broj sekundi koliko flow čeka (minimum 1, maksimum 5 sekundi).
+Fields: Label and Duration (seconds). Duration is the number of seconds to wait (minimum 1, maximum 5 seconds).
 
-## Button nod
+## Button Node
 
-Button nod prikazuje poruku sa dugmadima koje korisnik može kliknuti. Koristi se za menije, odabir kategorija ili potvrde.
+The Button node displays a message with clickable buttons for the user. Use it for menus, category selection, or confirmations.
 
-Polja: Label, Message, Variable Name i Buttons. Message je tekst koji se prikazuje iznad dugmadi (npr. Odaberi opciju:). Variable Name je ime varijable u koju se sprema odabir korisnika (npr. user_choice). Buttons se dodaju klikom na Add dugme — svako dugme ima Label (tekst na dugmetu) i Value (vrijednost koja se sprema u varijablu).
+Fields: Label, Message, Variable Name, and Buttons. Message is the text displayed above the buttons (e.g. Choose an option:). Variable Name is the name of the variable where the user's selection is stored (e.g. user_choice). Buttons are added by clicking the Add button — each button has a Label (button text) and a Value (the value saved to the variable).
 
-## API Call nod
+## API Call Node
 
-API Call nod šalje HTTP zahtjev na eksterni API. Koristi se za integraciju sa CRM-ovima, bazama podataka i vanjskim servisima.
+The API Call node sends an HTTP request to an external API. Use it to integrate with CRMs, databases, and external services.
 
-Polja: Label, Method, URL, Body i Output Variable. Method je HTTP metoda (GET, POST, PUT, PATCH, DELETE). URL je adresa API endpointa. Body je JSON tijelo zahtjeva — možeš koristiti varijable (npr. {"name": "{{user_name}}"}). Output Variable je ime varijable u koju se sprema API odgovor.
+Fields: Label, Method, URL, Body, and Output Variable. Method is the HTTP method (GET, POST, PUT, PATCH, DELETE). URL is the API endpoint address. Body is the JSON request body — you can use variables (e.g. {"name": "{{user_name}}"}). Output Variable is the name of the variable where the API response is stored.
 
-## Webhook nod
+## Webhook Node
 
-Webhook nod šalje HTTP zahtjev kao obavijest vanjskom servisu. Ima ista polja kao API Call nod: Label, Method, URL, Body i Output Variable.
+The Webhook node sends an HTTP request as a notification to an external service. It has the same fields as the API Call node: Label, Method, URL, Body, and Output Variable.
 
-## Function nod
+## Function Node
 
-Function nod izvršava JavaScript kod unutar flow-a. Koristi se za custom logiku, računanje i transformaciju podataka.
+The Function node executes JavaScript code within the flow. Use it for custom logic, calculations, and data transformations.
 
-Polja: Label, Code i Output Variable. U polje Code piši JavaScript kod koji ima pristup flow varijablama preko objekta variables (npr. return variables.x + variables.y;). Output Variable je ime varijable u koju se sprema rezultat funkcije.
+Fields: Label, Code, and Output Variable. In the Code field, write JavaScript code that has access to flow variables through the variables object (e.g. return variables.x + variables.y;). Output Variable is the name of the variable where the function result is stored.
 
-## AI Classify nod
+## AI Classify Node
 
-AI Classify nod koristi AI model da klasificira korisnikov unos u jednu od predefinisanih kategorija. Koristi se za routing — usmjeravanje flow-a na osnovu namjere korisnika.
+The AI Classify node uses an AI model to classify user input into one of several predefined categories. Use it for routing — directing the flow based on user intent.
 
-Polja: Label, Input Variable, Categories i Model. Input Variable je ime varijable čiji sadržaj AI klasificira (npr. user_question). Categories se dodaju jedna po jedna — upiši naziv kategorije i klikni Add ili pritisni Enter (npr. complaint, inquiry, order). Model je AI model koji vrši klasifikaciju (default je deepseek-chat). Rezultat klasifikacije (ime kategorije) se sprema u varijablu sa imenom noda.
+Fields: Label, Input Variable, Categories, and Model. Input Variable is the name of the variable whose content the AI will classify (e.g. user_question). Categories are added one by one — type a category name and click Add or press Enter (e.g. complaint, inquiry, order). Model is the AI model used for classification (default is deepseek-chat). The classification result (category name) is saved to a variable named after the node.
 
-## AI Extract nod
+## AI Extract Node
 
-AI Extract nod koristi AI model da izvuče strukturirane podatke iz teksta. Koristi se za ekstrakciju imena, emailova, brojeva i drugih informacija iz korisnikovog unosa.
+The AI Extract node uses an AI model to extract structured data from text. Use it to pull out names, emails, numbers, and other information from user input.
 
-Polja: Label, Fields to Extract i Model. Fields to Extract se dodaju klikom na Add dugme — svako polje ima Name (ime polja, npr. email), Type (tip podatka: string, number ili boolean) i Description (opis šta treba izvući). Model je AI model koji vrši ekstrakciju (default je deepseek-chat).
+Fields: Label, Fields to Extract, and Model. Fields to Extract are added by clicking the Add button — each field has a Name (field name, e.g. email), Type (data type: string, number, or boolean), and Description (what to extract). Model is the AI model used for extraction (default is deepseek-chat).
 
-## AI Summarize nod
+## AI Summarize Node
 
-AI Summarize nod koristi AI model da sažme tekst. Koristi se za kreiranje kratkih sažetaka razgovora ili dugih tekstova.
+The AI Summarize node uses an AI model to summarize text. Use it to create short summaries of conversations or long texts.
 
-Polja: Label, Output Variable, Max Length (chars) i Model. Output Variable je ime varijable u koju se sprema sažetak (default je summary). Max Length je maksimalan broj karaktera u sažetku (default 200). Model je AI model koji pravi sažetak (default je deepseek-chat).
+Fields: Label, Output Variable, Max Length (chars), and Model. Output Variable is the name of the variable where the summary is stored (default is summary). Max Length is the maximum number of characters in the summary (default 200). Model is the AI model used for summarization (default is deepseek-chat).

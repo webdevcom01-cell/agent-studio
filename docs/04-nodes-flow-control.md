@@ -1,101 +1,98 @@
-# Node tipovi — Flow Control
+# Node Types — Flow Control
 
-## Condition nod
+## Condition Node
 
-**Kategorija:** Flow Control  
-**Opis:** Grananje flow-a na osnovu uvjeta. Provjerava vrijednost varijable i usmjerava flow na različite grane.
+Category: Flow Control
+Description: Branches the flow based on a condition. Checks a variable value and routes the flow to different branches.
 
-**Polja:**
-- `Label` — interno ime noda
-- `Variable` — varijabla koja se provjerava (npr. `{{user_choice}}`)
-- `Conditions` — lista uvjeta sa odgovarajućim granama
-  - Operator: `equals`, `contains`, `greater_than`, `less_than`, `is_empty`
-  - Vrijednost: tekst ili broj za usporedbu
-- `Default` — grana koja se izvršava ako nijedan uvjet nije zadovoljen
+Fields:
+- Label — internal node name
 
-**Primjer:**
+Conditions are configured through edges (connections) between nodes in the Builder. The Condition node has two outputs: a true branch and a false branch.
+
+Example:
 ```
-Varijabla: {{intent}}
-Uvjeti:
-  - ako equals "complaint" → idi na Complaint Handler
-  - ako equals "order" → idi na Order Handler
-Default → idi na General Info
+Check variable: intent
+  - if equals "complaint" → go to Complaint Handler
+  - if equals "order" → go to Order Handler
+  - default → go to General Info
 ```
 
-**Kada koristiti:** Kada flow treba ići u različitim smjerovima ovisno o korisnikovom odabiru ili AI klasifikaciji.
+When to use: When the flow needs to go in different directions depending on the user's choice or AI classification result.
 
 ---
 
-## Set Variable nod
+## Set Variable Node
 
-**Kategorija:** Flow Control  
-**Opis:** Postavlja ili mijenja vrijednost varijable bez čekanja na korisnički unos.
+Category: Flow Control
+Description: Sets or changes a variable value without waiting for user input.
 
-**Polja:**
-- `Variable Name` — naziv varijable
-- `Value` — vrijednost (statički tekst ili izraz sa drugim varijablama)
+Fields:
+- Label — internal node name
+- Variable Name — name of the variable
+- Value — the value (static text, a number, or an expression with other variables using {{variable_name}})
 
-**Primjer:**
+Example:
 ```
-Variable: greeting_shown
+Variable Name: greeting_shown
 Value: true
 ```
 
-**Kada koristiti:** Za postavljanje flag-ova, računanje vrijednosti, inicijalizaciju varijabli.
+When to use: For setting flags, computing values, initializing variables.
 
 ---
 
-## End nod
+## End Node
 
-**Kategorija:** Flow Control  
-**Opis:** Završava razgovor. Flow se ne može nastaviti nakon End noda.
+Category: Flow Control
+Description: Terminates the conversation. The flow cannot continue after an End node.
 
-**Polja:**
-- `Label` — interno ime noda
-- `End Message` — opcionalna završna poruka korisniku
+Fields:
+- Label — internal node name
+- End Message — optional closing message to the user
 
-**Primjer završne poruke:**
+Example End Message:
 ```
-Hvala što ste koristili našu podršku! Ako imate još pitanja, slobodno 
-se javite. Lijepo!
+Thank you for using our support! If you have more questions, feel free 
+to reach out. Have a great day!
 ```
 
-**Kada koristiti:** Na kraju flow-a ili kao završna tačka jedne grane. Nije obavezno — flow može završiti i bez End noda, ali je dobra praksa ga dodati.
+When to use: At the end of the flow or as the terminal point of a branch. Not required — a flow can end without an End node, but it's good practice to add one.
 
 ---
 
-## Goto nod
+## Goto Node
 
-**Kategorija:** Flow Control  
-**Opis:** Preusmjerava flow na drugi nod bez direktne veze. Korisno za kreiranje petlji.
+Category: Flow Control
+Description: Redirects the flow to another node without a direct connection. Useful for creating loops.
 
-**Polja:**
-- `Target Node` — ID noda na koji treba ići
+Fields:
+- Label — internal node name
+- Target Node — dropdown list of all nodes in the flow, select the node to redirect to
 
-**Primjer upotrebe:**
+Example usage:
 ```
-AI Response → Goto → Capture (petlja: bot odgovori, pa opet pita)
+AI Response → Goto → Capture (loop: bot answers, then asks again)
 ```
 
-**Kada koristiti:** Za kreiranje petlji u flow-u bez crtanja veza unatrag koje bi zbunjivale vizualni prikaz.
+When to use: For creating loops in the flow without drawing backward connections that would clutter the visual layout.
 
-**Napomena:** Goto može uzrokovati beskonačne petlje ako nije pravilno konfigurisan. Engine ima zaštitu — ako nod posjeti isti nod više od 5 puta, flow će se prekinuti.
+Note: Goto can cause infinite loops if not properly configured. The engine has protection — if a node is visited more than 5 times, the flow will be terminated.
 
 ---
 
-## Wait nod
+## Wait Node
 
-**Kategorija:** Flow Control  
-**Opis:** Pauzira izvršavanje flow-a na određeno vrijeme.
+Category: Flow Control
+Description: Pauses flow execution for a set duration.
 
-**Polja:**
-- `Duration` — trajanje čekanja u sekundama
-- `Message` — opcionalna poruka koja se prikazuje tokom čekanja
+Fields:
+- Label — internal node name
+- Duration (seconds) — wait time in seconds (minimum 1, maximum 5)
 
-**Primjer:**
+Example:
 ```
 Duration: 2
-Message: "Tražim informacije za vas..."
 ```
 
-**Kada koristiti:** Za simulaciju "tipkanja" efekta, ili kada trebaš sačekati rezultat asinhrone operacije.
+When to use: To simulate a "typing" effect, or when you need to wait for an asynchronous operation result.

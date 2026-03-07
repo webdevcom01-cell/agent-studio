@@ -1,62 +1,62 @@
-# Agent Studio — Pregled platforme
+# Agent Studio — Platform Overview
 
-## Šta je Agent Studio?
+## What is Agent Studio?
 
-Agent Studio je vizuelni builder za kreiranje AI agenata i chatbotova bez pisanja koda. Pomoću drag-and-drop interfejsa možeš kreirati pametne konverzacijske agente koji koriste tvoju vlastitu bazu znanja (Knowledge Base) i generišu odgovore koristeći AI modele.
+Agent Studio is a visual builder for creating AI agents and chatbots without writing code. Using a drag-and-drop interface, you can create intelligent conversational agents that use your own Knowledge Base and generate responses using AI models.
 
-## Glavne komponente
+## Main Components
 
 ### 1. Flow Builder
-Vizuelni editor gdje spajate nodove (čvorove) da definišete tok razgovora. Svaki agent ima jedan flow koji se izvršava kada korisnik pošalje poruku.
+A visual editor where you connect nodes to define the conversation flow. Each agent has one flow that executes when a user sends a message.
 
 ### 2. Knowledge Base (KB)
-Baza znanja agenta. Možeš dodati URL-ove web stranica koje će biti automatski scrapane, chunkovane i indeksirane za pretragu. Agent koristi ovu bazu da daje tačne odgovore.
+The agent's knowledge store. You can add URLs of web pages that will be automatically scraped, chunked, and indexed for search. The agent uses this knowledge base to give accurate answers.
 
 ### 3. Chat Interface
-Svaki agent ima javni chat link koji možeš podijeliti sa korisnicima. Dostupan je na `/chat/[agentId]`.
+Every agent has a public chat link you can share with users. It is available at `/chat/[agentId]`.
 
 ### 4. Test Chat
-Dugme u gornjem desnom uglu Builder-a koje otvara chat za testiranje agenta u realnom vremenu.
+A button in the top right corner of the Builder that opens a chat for testing the agent in real time.
 
 ---
 
-## Osnovni workflow
+## Basic Workflow
 
-1. **Kreiraj agenta** — daj mu ime i opis
-2. **Dodaj Knowledge Base** — unesi URL-ove koji sadrže relevantne informacije
-3. **Napravi flow** — dodaj i poveži nodove u Builder-u
-4. **Testiraj** — koristi Test Chat da provjeriš radi li agent ispravno
-5. **Podijeli** — pošalji chat link korisnicima
-
----
-
-## Kako funkcionira flow izvršavanje?
-
-Kada korisnik pošalje poruku:
-1. Flow počinje od prvog noda (onaj koji nema ulaznih veza)
-2. Svaki nod se izvršava redom
-3. Ako nod čeka na korisnički unos (npr. Capture), flow se pauzira i čeka
-4. Nakon korisnikovog odgovora, flow se nastavlja od tog noda
-5. Flow završava kada dođe do End noda ili nema više nodova
+1. Create an agent — give it a name and description
+2. Add Knowledge Base — enter URLs containing relevant information
+3. Build a flow — add and connect nodes in the Builder
+4. Test — use Test Chat to verify the agent works correctly
+5. Share — send the chat link to users
 
 ---
 
-## AI modeli koji su dostupni
+## How Flow Execution Works
 
-- **deepseek-chat** — brz i jeftin, dobar za opće upite
-- **gpt-4o** — najmoćniji OpenAI model
-- **gpt-4o-mini** — brži i jeftiniji OpenAI model
-- **claude-3-5-sonnet** — Anthropic model, odličan za složene upite
-- **claude-3-haiku** — brži Anthropic model
+When a user sends a message:
+1. The flow starts from the first node (the one with no incoming connections)
+2. Each node executes in order
+3. If a node waits for user input (e.g. Capture), the flow pauses and waits
+4. After the user responds, the flow continues from that node
+5. The flow ends when it reaches an End node or there are no more nodes
 
 ---
 
-## Varijable u flow-u
+## Available AI Models
 
-Varijable se koriste za čuvanje i prenošenje podataka između nodova. Pišu se u formatu `{{naziv_varijable}}`.
+- deepseek-chat — fast and affordable, good for general queries
+- gpt-4o — most powerful OpenAI model
+- gpt-4o-mini — faster and cheaper OpenAI model
+- claude-sonnet-4-5-20250929 — Anthropic model, excellent for complex queries
+- claude-haiku-4-5-20251001 — faster Anthropic model
 
-Automatski dostupne varijable:
-- `{{last_message}}` — posljednja poruka korisnika
-- `{{kb_context}}` — rezultati pretrage Knowledge Base (nakon KB Search noda)
+---
 
-Vlastite varijable kreiraš kroz Capture nod ili Set Variable nod.
+## Variables in the Flow
+
+Variables are used to store and pass data between nodes. They are written in the format {{variable_name}}.
+
+Automatically available variables:
+- {{last_message}} — the user's last message
+- {{kb_context}} — Knowledge Base search results (after a KB Search node)
+
+You create custom variables through the Capture node or Set Variable node.

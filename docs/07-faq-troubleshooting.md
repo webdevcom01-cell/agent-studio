@@ -1,125 +1,125 @@
-# FAQ i Rješavanje problema
+# FAQ and Troubleshooting
 
-## Česta pitanja (FAQ)
+## Frequently Asked Questions (FAQ)
 
-### Kako dodati Knowledge Base?
+### How do I add a Knowledge Base?
 
-1. Na dashboardu klikni **"Edit Flow"** na kartici agenta
-2. U Builder-u klikni **"Knowledge Base"** dugme (gore desno, pored "Test Chat")
-3. Klikni **"Add Source"** i unesi URL web stranice
-4. Sačekaj da se scraping završi (status postane **READY**)
-5. Sada KB Search nod može koristiti ovu bazu
+1. On the dashboard, click "Edit Flow" on the agent card
+2. In the Builder, click the "Knowledge Base" button (top right, next to "Test Chat")
+3. Click "Add Source" and enter a web page URL
+4. Wait for scraping to finish (status becomes READY)
+5. Now the KB Search node can use this knowledge base
 
-**Savjet:** Dodaj više URL-ova za bolje pokriće. Npr. za kompaniju dodaj: početna stranica, /about, /products, /contact, /faq.
-
----
-
-### Zašto bot ne odgovara tačno?
-
-Najčešći razlozi:
-1. **KB nema relevantne informacije** — dodaj više URL-ova ili provjeri da li su stranice uspješno ingestirane
-2. **KB Search Query Variable nije dobra** — u polju `Query Variable` unesi `user_question` ako imaš Capture nod, ili `last_message` za direktno preuzimanje poruke
-3. **System Prompt nije jasan** — precizno opiši što agent treba raditi
-4. **Model nije prikladan** — za složenije upite koristi gpt-4o ili claude-3-5-sonnet
+Tip: Add multiple URLs for better coverage. For example, for a company add: home page, /about, /products, /contact, /faq.
 
 ---
 
-### Kako da bot govori određenim jezikom?
+### Why doesn't the bot answer correctly?
 
-U System Promptu napiši:
+Most common reasons:
+1. KB doesn't have relevant information — add more URLs or check if pages were successfully ingested
+2. KB Search Query Variable is wrong — in the Query Variable field, enter user_question if you have a Capture node, or last_message for directly using the latest message
+3. System Prompt is unclear — precisely describe what the agent should do
+4. Model isn't suitable — for more complex queries use gpt-4o or claude-sonnet-4-5-20250929
+
+---
+
+### How do I make the bot speak a specific language?
+
+In the System Prompt, write:
 ```
-Uvijek odgovaraj na bosanskom/srpskom/hrvatskom jeziku, bez obzira na jezik korisnika.
+Always respond in English, regardless of the user's language.
 ```
-Ili za automatsku detekciju:
+Or for automatic detection:
 ```
-Odgovaraj na jeziku kojim korisnik piše.
+Always respond in the same language the user writes in.
 ```
 
 ---
 
-### Mogu li koristiti varijable u Message nodu?
+### Can I use variables in the Message node?
 
-Da! Sintaksa je `{{naziv_varijable}}`. Primjer:
+Yes! The syntax is {{variable_name}}. Example:
 ```
-Hvala {{user_name}}! Vaša narudžba {{order_id}} je potvrđena.
+Thank you {{user_name}}! Your order {{order_id}} has been confirmed.
 ```
-Varijabla mora biti prethodno postavljena kroz Capture, Set Variable ili API Call nod.
+The variable must have been previously set through a Capture, Set Variable, or API Call node.
 
 ---
 
-### Koliko URL-ova mogu dodati u Knowledge Base?
+### How many URLs can I add to the Knowledge Base?
 
-Nema tehničkog ograničenja, ali za optimalne performanse preporučujemo do 20-30 URL-ova po agentu. Za veće baze znanja razmisli o podijeli agenta po temama.
-
----
-
-### Kako testirati flow bez da objavljujem agenta?
-
-Koristi "Test Chat" dugme u gornjem desnom uglu Builder-a. Svaki Test Chat klik otvara novi razgovor, tako da možeš testirati čiste scenarije.
+There is no technical limit, but for optimal performance we recommend up to 20-30 URLs per agent. For larger knowledge bases, consider splitting the agent by topics.
 
 ---
 
-### Zašto flow stane i ne nastavlja?
+### How do I test the flow without publishing the agent?
 
-Mogući razlozi:
-1. **Capture nod čeka unos** — flow čeka korisnikovu poruku, to je normalno ponašanje
-2. **Nema veze između nodova** — provjeri da su svi nodovi spojeni
-3. **AI Response greška** — provjeri da li je API ključ validan i model dostupan
-4. **Beskonačna petlja** — engine zaustavlja flow nakon 50 iteracija ili 5 posjeta istom nodu
+Use the "Test Chat" button in the top right corner of the Builder. Each Test Chat click opens a new conversation, so you can test clean scenarios.
 
 ---
 
-## Rješavanje problema
+### Why does the flow stop and not continue?
 
-### Problem: Bot samo ponavlja Capture prompt, ne generiše odgovor
-
-**Uzrok:** Flow ne izvršava KB Search i AI Response nakon Capture unosa.
-
-**Rješenje:**
-1. Provjeri da su nodovi pravilno spojeni: Capture → KB Search → AI Response
-2. Provjeri da `Query Variable` polje u KB Search nodu sadrži `user_question` ili `last_message` (bez vitičastih zagrada)
-3. Otvori novi Test Chat (stari može imati pogrešno stanje)
+Possible reasons:
+1. Capture node is waiting for input — the flow is waiting for the user's message, this is normal behavior
+2. No connection between nodes — check that all nodes are connected
+3. AI Response error — check that the API key is valid and the model is available
+4. Infinite loop — the engine stops the flow after 50 iterations or 5 visits to the same node
 
 ---
 
-### Problem: KB Search ne vraća rezultate
+## Troubleshooting
 
-**Uzrok:** Knowledge Base nije ingestirana ili query varijabla je prazna.
+### Problem: Bot only repeats the Capture prompt, doesn't generate a response
 
-**Rješenje:**
-1. Idi na Knowledge Base tab i provjeri status izvora (treba biti zeleno)
-2. Provjeri da `Query Variable` polje u KB Search nodu nije prazno (unesi `last_message` ili naziv varijable iz Capture noda)
-3. Probaj sa `last_message` kao Query Variable — ovo uvijek ima vrijednost
+Cause: The flow is not executing KB Search and AI Response after the Capture input.
 
----
-
-### Problem: AI Response vraća grešku ili prazan odgovor
-
-**Uzrok:** Problem sa API ključem ili modelom.
-
-**Rješenje:**
-1. Provjeri .env.local da li su API ključevi ispravni
-2. Promijeni model na `gpt-4o-mini` ili `deepseek-chat` i probaj ponovo
-3. Provjeri Max Tokens — povećaj na 1000 ako su odgovori odsječeni
+Solution:
+1. Check that nodes are properly connected: Capture → KB Search → AI Response
+2. Check that the Query Variable field in the KB Search node contains user_question or last_message (without curly braces)
+3. Open a new Test Chat (the old one may have incorrect state)
 
 ---
 
-### Problem: "This flow is empty" poruka
+### Problem: KB Search returns no results
 
-**Uzrok:** Agent nema kreiran flow ili flow nema nodova.
+Cause: Knowledge Base is not ingested or the query variable is empty.
 
-**Rješenje:**
-1. Idi u Builder tab agenta
-2. Dodaj barem Message nod i klikni Save
-3. Ako postoje nodovi ali dobijаš ovu grešku, provjeri da li je flow sačuvan (Save dugme)
+Solution:
+1. Go to the Knowledge Base tab and check the source status (should be READY)
+2. Check that the Query Variable field in the KB Search node is not empty (enter last_message or the variable name from the Capture node)
+3. Try using last_message as the Query Variable — this always has a value
 
 ---
 
-### Problem: Varijabla je prazna u poruci (prikazuje `{{user_name}}` kao tekst)
+### Problem: AI Response returns an error or empty response
 
-**Uzrok:** Varijabla nije postavljena u flow-u prije korištenja.
+Cause: Issue with the API key or model.
 
-**Rješenje:**
-1. Provjeri da Capture nod sa `Variable Name: user_name` dolazi PRIJE Message noda koji koristi tu varijablu
-2. Provjeri naziv varijable — mora biti identičan (case-sensitive)
-3. Koristi Set Variable nod za testiranje: postavi `user_name` na "Test Korisnik"
+Solution:
+1. Check .env.local to make sure API keys are correct
+2. Change the model to gpt-4o-mini or deepseek-chat and try again
+3. Check Max Tokens — increase to 1000 if responses are being cut off
+
+---
+
+### Problem: "This flow is empty" message
+
+Cause: The agent doesn't have a created flow or the flow has no nodes.
+
+Solution:
+1. Go to the agent's Builder tab
+2. Add at least a Message node and click Save
+3. If nodes exist but you still get this error, check if the flow is saved (Save button)
+
+---
+
+### Problem: Variable is empty in the message (displays {{user_name}} as text)
+
+Cause: The variable was not set in the flow before being used.
+
+Solution:
+1. Check that a Capture node with Variable Name: user_name comes BEFORE the Message node that uses that variable
+2. Check the variable name — it must be identical (case-sensitive)
+3. Use a Set Variable node for testing: set user_name to "Test User"
