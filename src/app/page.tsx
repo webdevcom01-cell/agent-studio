@@ -2,8 +2,10 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Plus, Bot, MessageSquare, Database, Trash2, MoreVertical, Download, Upload } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
+import { Plus, Bot, MessageSquare, Database, Trash2, MoreVertical, Download, Upload, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -43,6 +45,7 @@ interface Agent {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -138,6 +141,30 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {session?.user && (
+            <div className="flex items-center gap-2 mr-2">
+              {session.user.image && (
+                <Image
+                  src={session.user.image}
+                  alt=""
+                  width={28}
+                  height={28}
+                  className="rounded-full"
+                />
+              )}
+              <span className="text-sm text-muted-foreground hidden sm:inline">
+                {session.user.name ?? session.user.email}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => signOut()}
+                title="Sign out"
+              >
+                <LogOut className="size-4" />
+              </Button>
+            </div>
+          )}
           <Button variant="outline" onClick={() => importInputRef.current?.click()}>
             <Upload className="mr-2 size-4" />
             Import

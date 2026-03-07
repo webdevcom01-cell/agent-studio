@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { agentExportSchema } from "@/lib/schemas/agent-export";
 
 const MAX_IMPORT_SIZE = 5 * 1024 * 1024;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
   const contentLength = parseInt(
     request.headers.get("content-length") ?? "0",
     10
@@ -46,6 +55,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       description: agentData.description,
       systemPrompt: agentData.systemPrompt,
       model: agentData.model,
+      userId: session.user.id,
       flow: {
         create: {
           content: flowData as unknown as Prisma.InputJsonValue,

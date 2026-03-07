@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, use } from "react";
-import { Send, Bot, User, RotateCcw } from "lucide-react";
+import { Send, Bot, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStreamingChat } from "@/components/chat/use-streaming-chat";
 

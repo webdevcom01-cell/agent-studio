@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 
 export async function GET(): Promise<NextResponse> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
   const agents = await prisma.agent.findMany({
+    where: {
+      OR: [{ userId: session.user.id }, { userId: null }],
+    },
     orderBy: { updatedAt: "desc" },
     include: {
       flow: { select: { id: true } },
@@ -15,6 +27,14 @@ export async function GET(): Promise<NextResponse> {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
   const body = await request.json();
   const name = typeof body.name === "string" ? body.name.trim() : "";
 
@@ -31,6 +51,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       description: typeof body.description === "string" ? body.description : "",
       systemPrompt: typeof body.systemPrompt === "string" ? body.systemPrompt : "You are a helpful assistant.",
       model: typeof body.model === "string" ? body.model : "deepseek-chat",
+      userId: session.user.id,
       flow: {
         create: {
           content: {
