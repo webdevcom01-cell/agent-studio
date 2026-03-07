@@ -2,6 +2,7 @@ import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { prisma } from "@/lib/prisma";
 import { hybridSearch, computeDynamicTopK, expandChunksWithContext } from "@/lib/knowledge/search";
+import { trackKBSearch } from "@/lib/analytics";
 
 export const kbSearchHandler: NodeHandler = async (node, context) => {
   const configuredTopK = (node.data.topK as number) ?? 7;
@@ -42,6 +43,14 @@ export const kbSearchHandler: NodeHandler = async (node, context) => {
     const results = await hybridSearch(query, kb.id, { topK });
     const expanded = await expandChunksWithContext(results, 1);
     const kbContext = expanded.map((r) => r.content).join("\n---\n");
+
+    trackKBSearch({
+      agentId: context.agentId,
+      conversationId: context.conversationId,
+      query,
+      resultCount: expanded.length,
+      topScore: expanded.length > 0 ? expanded[0].relevanceScore : null,
+    }).catch(() => {});
 
     return {
       messages: [],

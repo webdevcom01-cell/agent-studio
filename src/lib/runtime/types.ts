@@ -8,6 +8,7 @@ export interface RuntimeContext {
   variables: Record<string, unknown>;
   messageHistory: { role: "user" | "assistant" | "system"; content: string }[];
   isResuming?: boolean;
+  isNewConversation: boolean;
 }
 
 export interface ExecutionResult {

@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { Plus, Bot, MessageSquare, Database, Trash2, MoreVertical, Download, Upload, LogOut } from "lucide-react";
+import { Plus, Bot, MessageSquare, Database, Trash2, MoreVertical, Download, Upload, LogOut, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -165,6 +165,12 @@ export default function DashboardPage() {
               </Button>
             </div>
           )}
+          <Button variant="outline" asChild>
+            <Link href="/analytics">
+              <BarChart3 className="mr-2 size-4" />
+              Analytics
+            </Link>
+          </Button>
           <Button variant="outline" onClick={() => importInputRef.current?.click()}>
             <Upload className="mr-2 size-4" />
             Import

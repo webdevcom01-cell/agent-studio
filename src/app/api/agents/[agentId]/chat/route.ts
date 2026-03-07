@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { executeFlow } from "@/lib/runtime/engine";
 import { executeFlowStreaming } from "@/lib/runtime/engine-streaming";
 import { loadContext } from "@/lib/runtime/context";
+import { trackChatResponse } from "@/lib/analytics";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -27,10 +28,21 @@ export async function POST(
   }
 
   try {
+    const startTime = Date.now();
     const context = await loadContext(agentId, conversationId);
 
     if (isStreaming) {
       const stream = executeFlowStreaming(context, message);
+      const timeToFirstTokenMs = Date.now() - startTime;
+
+      trackChatResponse({
+        agentId,
+        conversationId: context.conversationId,
+        timeToFirstTokenMs,
+        totalResponseTimeMs: timeToFirstTokenMs,
+        isNewConversation: context.isNewConversation,
+      }).catch(() => {});
+
       return new Response(stream, {
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
@@ -42,6 +54,15 @@ export async function POST(
     }
 
     const result = await executeFlow(context, message);
+    const totalResponseTimeMs = Date.now() - startTime;
+
+    trackChatResponse({
+      agentId,
+      conversationId: context.conversationId,
+      timeToFirstTokenMs: totalResponseTimeMs,
+      totalResponseTimeMs,
+      isNewConversation: context.isNewConversation,
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

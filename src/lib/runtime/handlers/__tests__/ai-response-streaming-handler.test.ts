@@ -33,6 +33,7 @@ function createContext(): RuntimeContext {
     variables: {},
     currentNodeId: "ai-1",
     messageHistory: [{ role: "user", content: "Hello" }],
+    isNewConversation: false,
   };
 }
 

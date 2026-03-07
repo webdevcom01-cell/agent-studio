@@ -35,6 +35,7 @@ export async function loadContext(
         role: m.role.toLowerCase() as "user" | "assistant" | "system",
         content: m.content,
       })),
+      isNewConversation: false,
     };
   }
 
@@ -53,6 +54,7 @@ export async function loadContext(
     currentNodeId: null,
     variables: {},
     messageHistory: [],
+    isNewConversation: true,
   };
 }
 

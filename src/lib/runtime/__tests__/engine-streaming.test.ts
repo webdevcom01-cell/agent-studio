@@ -34,6 +34,7 @@ function createContext(overrides?: Partial<RuntimeContext>): RuntimeContext {
     variables: {},
     currentNodeId: null,
     messageHistory: [],
+    isNewConversation: false,
     ...overrides,
   };
 }

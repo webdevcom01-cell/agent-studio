@@ -20,6 +20,7 @@ function createContext(): RuntimeContext {
     variables: {},
     currentNodeId: "msg-1",
     messageHistory: [],
+    isNewConversation: false,
   };
 }
 

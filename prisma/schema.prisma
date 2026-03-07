@@ -75,7 +75,8 @@ model Agent {
   updatedAt     DateTime       @updatedAt
   flow          Flow?
   knowledgeBase KnowledgeBase?
-  conversations Conversation[]
+  conversations   Conversation[]
+  analyticsEvents AnalyticsEvent[]
 
   @@index([userId])
 }
@@ -143,6 +144,24 @@ model KBChunk {
   createdAt DateTime                     @default(now())
 
   @@index([sourceId])
+}
+
+enum AnalyticsEventType {
+  CHAT_RESPONSE
+  KB_SEARCH
+}
+
+model AnalyticsEvent {
+  id        String             @id @default(cuid())
+  type      AnalyticsEventType
+  agentId   String
+  agent     Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  metadata  Json               @default("{}")
+  createdAt DateTime           @default(now())
+
+  @@index([agentId])
+  @@index([type, createdAt])
+  @@index([createdAt])
 }
 
 enum ConversationStatus {
