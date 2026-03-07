@@ -14,12 +14,14 @@
 
 Knowledge Base je baza znanja tvog agenta. Dodaj URL-ove stranica čiji sadržaj želiš da agent koristi za odgovore.
 
-1. Na dashboardu klikni **"Knowledge"** link na kartici agenta
-2. Klikni **"Add Source"** dugme
-3. Odaberi tab **"URL"**
-4. Unesi URL stranice (npr. `https://tvoja-stranica.com/faq`)
-5. Klikni **"Add"**
-6. Agent Studio će automatski:
+1. Klikni **"Edit Flow"** na kartici agenta (otvara se Builder)
+2. U Builder-u klikni **"Knowledge Base"** dugme (gore desno, pored "Test Chat")
+3. Klikni **"Add Source"** dugme
+4. Odaberi tab **"URL"**
+5. Unesi URL stranice (npr. `https://tvoja-stranica.com/faq`)
+6. Klikni **"Add"**
+
+Agent Studio će automatski:
    - Scrapati sadržaj stranice
    - Podijeliti tekst na chunk-ove (400 tokena, 20% overlap)
    - Generisati embedding vektore (OpenAI text-embedding-3-small)
@@ -63,10 +65,10 @@ AI Response (system prompt + kontekst iz KB)
 
 ### Capture nod
 - **Prompt:** `Šta te zanima?`
-- **Variable:** `user_question`
+- **Variable Name:** `user_question`
 
 ### KB Search nod
-- **Query:** `{{user_question}}`
+- **Query Variable:** `user_question` (samo ime varijable, bez `{{}}`)
 - Rezultati se automatski spremaju u `{{kb_context}}`
 
 ### AI Response nod
@@ -102,15 +104,17 @@ Povuci liniju od izlazne tačke jednog noda do ulazne tačke sljedećeg. Redosli
 
 ---
 
-## Korak 5: Podijeli agenta
+## Korak 5: Podijeli chat link
 
-Svaki agent ima javni chat link:
+Svaki agent ima javni chat link koji je odmah spreman za dijeljenje — nema posebnog koraka objavljivanja:
 
 ```
 http://localhost:3000/chat/[agentId]
 ```
 
 Taj link možeš poslati kome god treba pristup agentu. Korisnik ne treba nikakav login — samo otvori link i počne razgovor.
+
+Brz pristup: Na dashboardu klikni **"Chat"** dugme na kartici agenta da otvoriš chat link direktno.
 
 ---
 

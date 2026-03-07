@@ -58,13 +58,11 @@ Variable: user_choice
 - `Label` — interno ime noda
 - `Variable Name` — naziv varijable gdje se sprema unos (npr. `user_question`)
 - `Prompt` — poruka koja se prikazuje korisniku (npr. "Šta te zanima?")
-- `Validation Type` — tip validacije: `text` (bilo koji tekst), `number` (samo broj), `email` (email format)
 
 **Primjer upotrebe:**
 ```
-Variable Name: user_email
-Prompt: Unesite vašu email adresu za kontakt:
-Validation: email
+Variable Name: user_question
+Prompt: Šta te zanima?
 ```
 
 **Kada koristiti:** 

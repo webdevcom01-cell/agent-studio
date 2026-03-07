@@ -10,13 +10,11 @@ Message (pozdrav)
     ↓
 Capture (spremi pitanje u user_question)
     ↓
-KB Search (query: {{user_question}})
+KB Search (Query Variable: user_question)
     ↓
 AI Response (system prompt: customer support instrukcije)
     ↓
-Capture (ima li još pitanja? spremi u follow_up)
-    ↓
-[ponavlja se od KB Search]
+Goto → Capture (petlja: opet čeka pitanje)
 ```
 
 **System Prompt za AI Response:**
@@ -43,7 +41,7 @@ Button (odaberi kategoriju: Proizvodi / Dostava / Cijene / Kontakt)
 Capture (šta konkretno te zanima?)
     → sprema u: user_question
     ↓
-KB Search (query: {{user_category}} {{user_question}})
+KB Search (Query Variable: user_question)
     ↓
 AI Response
     ↓
@@ -89,7 +87,7 @@ Message (pozdrav)
     ↓
 Capture (šta te zanima? → user_question)
     ↓
-AI Classify (klasificiraj: complaint / inquiry / order / other)
+AI Classify (Input Variable: user_question, kategorije: complaint / inquiry / order / other)
     → sprema u: intent
     ↓
 Condition (provjera: intent)
@@ -124,7 +122,7 @@ Condition (kb_context is_empty)
 
 1. **Zaboravljeni Start nod** — flow mora imati jedan nod bez ulaznih veza (start). Provjeri da Message ili prvi Capture nod nema veza koje dolaze u njega.
 
-2. **KB Search bez query-ja** — uvijek postavi Query polje na `{{user_question}}` ili `{{last_message}}`. Prazan query neće vratiti rezultate.
+2. **KB Search bez Query Variable** — uvijek postavi `Query Variable` polje na `user_question` ili `last_message` (samo ime varijable, bez `{{}}`). Prazno polje neće vratiti rezultate.
 
 3. **AI Response bez System Prompta** — bez system prompta AI neće znati ko je i šta treba raditi. Uvijek dodaj system prompt.
 

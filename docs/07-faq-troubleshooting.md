@@ -4,10 +4,11 @@
 
 ### Kako dodati Knowledge Base?
 
-1. Otvori agenta i klikni "Knowledge Base" (gore desno u Builder-u)
-2. Klikni "Add Source" i unesi URL web stranice
-3. Sačekaj da se scraping završi (zelena ikona = uspješno)
-4. Sada KB Search nod može koristiti ovu bazu
+1. Na dashboardu klikni **"Edit Flow"** na kartici agenta
+2. U Builder-u klikni **"Knowledge Base"** dugme (gore desno, pored "Test Chat")
+3. Klikni **"Add Source"** i unesi URL web stranice
+4. Sačekaj da se scraping završi (status postane **READY**)
+5. Sada KB Search nod može koristiti ovu bazu
 
 **Savjet:** Dodaj više URL-ova za bolje pokriće. Npr. za kompaniju dodaj: početna stranica, /about, /products, /contact, /faq.
 
@@ -17,7 +18,7 @@
 
 Najčešći razlozi:
 1. **KB nema relevantne informacije** — dodaj više URL-ova ili provjeri da li su stranice uspješno ingestirane
-2. **KB Search query nije dobar** — koristi `{{user_question}}` umjesto `{{last_message}}` ako imaš Capture nod
+2. **KB Search Query Variable nije dobra** — u polju `Query Variable` unesi `user_question` ako imaš Capture nod, ili `last_message` za direktno preuzimanje poruke
 3. **System Prompt nije jasan** — precizno opiši što agent treba raditi
 4. **Model nije prikladan** — za složenije upite koristi gpt-4o ili claude-3-5-sonnet
 
@@ -76,7 +77,7 @@ Mogući razlozi:
 
 **Rješenje:**
 1. Provjeri da su nodovi pravilno spojeni: Capture → KB Search → AI Response
-2. Provjeri da KB Search Query sadrži `{{user_question}}` ili `{{last_message}}`
+2. Provjeri da `Query Variable` polje u KB Search nodu sadrži `user_question` ili `last_message` (bez vitičastih zagrada)
 3. Otvori novi Test Chat (stari može imati pogrešno stanje)
 
 ---
@@ -87,8 +88,8 @@ Mogući razlozi:
 
 **Rješenje:**
 1. Idi na Knowledge Base tab i provjeri status izvora (treba biti zeleno)
-2. Provjeri da Query polje u KB Search nodu sadrži varijablu sa vrijednošću
-3. Probaj sa `{{last_message}}` kao query — ovo uvijek ima vrijednost
+2. Provjeri da `Query Variable` polje u KB Search nodu nije prazno (unesi `last_message` ili naziv varijable iz Capture noda)
+3. Probaj sa `last_message` kao Query Variable — ovo uvijek ima vrijednost
 
 ---
 

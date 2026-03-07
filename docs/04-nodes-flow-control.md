@@ -52,7 +52,7 @@ Value: true
 
 **Polja:**
 - `Label` — interno ime noda
-- `Message` — opcionalna završna poruka korisniku
+- `End Message` — opcionalna završna poruka korisniku
 
 **Primjer završne poruke:**
 ```

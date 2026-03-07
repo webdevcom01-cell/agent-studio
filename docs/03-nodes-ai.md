@@ -35,24 +35,24 @@ Ako nemaš dovoljno informacija, uputi korisnika na support@kompanija.com.
 
 **Polja:**
 - `Label` — interno ime noda
-- `Query` — šta se traži. Može biti varijabla (`{{user_question}}`) ili statički tekst
-- `Top K` — broj rezultata koji se vraćaju (default: 5)
-- `Output Variable` — gdje se sprema kontekst (default: `kb_context`)
+- `Query Variable` — naziv varijable čija se vrijednost koristi kao query (npr. `user_question` ili `last_message`). Unosi se samo ime varijable, BEZ `{{}}`.
+- `Top K Results` — broj rezultata koji se vraćaju (default: 5)
+
+Rezultati pretrage se uvijek automatski spremaju u varijablu `{{kb_context}}` koja se koristi u AI Response nodu.
 
 **Kako radi:**
-1. Uzima query (npr. korisnikovo pitanje)
-2. Pretvara ga u vektor (embedding)
+1. Uzima vrijednost iz navedene varijable (npr. korisnikovo pitanje)
+2. Pretvara je u vektor (embedding)
 3. Traži najsličnije odlomke u Knowledge Base-u
-4. Vraća top K rezultata spojenih kao tekst
+4. Vraća top K rezultata spojenih kao tekst u `kb_context`
 
 **Primjer:**
 ```
-Query: {{user_question}}
-Top K: 5
-Output Variable: kb_context
+Query Variable: user_question
+Top K Results: 5
 ```
 
-**Napomena:** Varijabla `{{last_message}}` uvijek sadrži posljednju poruku korisnika i može se koristiti kao query bez Capture noda.
+**Napomena:** Varijabla `last_message` uvijek sadrži posljednju poruku korisnika i može se koristiti kao Query Variable bez Capture noda.
 
 **Kada koristiti:** Uvijek prije AI Response noda kada želiš da AI odgovara na osnovu tvoje baze znanja.
 
@@ -66,18 +66,16 @@ Output Variable: kb_context
 **Opis:** Klasificira korisnički unos u jednu od unaprijed definiranih kategorija. Koristi se za usmjeravanje flow-a.
 
 **Polja:**
-- `Input` — tekst koji se klasificira (npr. `{{user_question}}`)
-- `Categories` — lista kategorija sa opisima
-- `Output Variable` — gdje se sprema klasifikacija
+- `Input Variable` — naziv varijable čija se vrijednost klasificira (npr. `last_message`). Bez `{{}}`.
+- `Categories` — lista kategorija (jedna po jedna, unosi se tekst i pritisne Enter ili klikne +)
+- `Model` — AI model koji klasificira (default: `deepseek-chat`)
+
+Rezultat klasifikacije se sprema u varijablu `{{intent}}` koja se može koristiti u Condition nodu.
 
 **Primjer:**
 ```
-Input: {{last_message}}
-Kategorije:
-  - "complaint" — korisnik se žali na problem
-  - "inquiry" — korisnik traži informacije
-  - "order" — korisnik želi naručiti
-Output: intent
+Input Variable: last_message
+Kategorije: complaint, inquiry, order
 ```
 
 **Kada koristiti:** Za inteligentno usmjeravanje razgovora — npr. žalbe idi na jedan flow, narudžbe na drugi.
@@ -92,16 +90,17 @@ Output: intent
 **Opis:** Izvlači strukturirane podatke iz slobodnog teksta. Korisno za parsiranje korisničkih unosa.
 
 **Polja:**
-- `Input` — tekst iz kojeg se ekstraktuju podaci
-- `Schema` — JSON schema koja opisuje što treba izvući
-- `Output Variable` — varijabla gdje se sprema ekstrahovani JSON
+- `Fields to Extract` — lista polja koja treba izvući. Za svako polje unosi se: ime, tip (`string`, `number`, `boolean`) i opis
+- `Model` — AI model koji ekstraktuje (default: `deepseek-chat`)
 
 **Primjer:**
 ```
-Input: {{last_message}}
-Schema: { "ime": "string", "email": "string", "grad": "string" }
-Output: user_data
+Polje 1: ime (string) — "Puno ime osobe"
+Polje 2: email (string) — "Email adresa"
+Polje 3: grad (string) — "Grad stanovanja"
 ```
+
+Rezultat se sprema kao JSON objekat i dostupan je kroz varijable `{{ime}}`, `{{email}}`, `{{grad}}`.
 
 **Kada koristiti:** Kada korisnik u slobodnom tekstu navede podatke koje trebaš strukturirano sačuvati.
 
