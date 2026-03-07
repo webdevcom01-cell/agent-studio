@@ -1,10 +1,10 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { prisma } from "@/lib/prisma";
-import { hybridSearch } from "@/lib/knowledge/search";
+import { hybridSearch, computeDynamicTopK, expandChunksWithContext } from "@/lib/knowledge/search";
 
 export const kbSearchHandler: NodeHandler = async (node, context) => {
-  const topK = (node.data.topK as number) ?? 5;
+  const configuredTopK = (node.data.topK as number) ?? 7;
   const queryVariable = (node.data.queryVariable as string) || "last_message";
   const outputVariable = (node.data.outputVariable as string) || "kb_context";
 
@@ -38,15 +38,17 @@ export const kbSearchHandler: NodeHandler = async (node, context) => {
       };
     }
 
+    const topK = computeDynamicTopK(query, configuredTopK);
     const results = await hybridSearch(query, kb.id, { topK });
-    const kbContext = results.map((r) => r.content).join("\n---\n");
+    const expanded = await expandChunksWithContext(results, 1);
+    const kbContext = expanded.map((r) => r.content).join("\n---\n");
 
     return {
       messages: [],
       nextNodeId: null,
       waitForInput: false,
       updatedVariables: {
-        kb_results: results.map((r) => ({
+        kb_results: expanded.map((r) => ({
           content: r.content,
           similarity: r.similarity,
           sourceDocument: r.sourceDocument ?? null,

@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 import { generateEmbedding } from "./embeddings";
+import { estimateTokens } from "./chunker";
+
+const MIN_RELEVANCE_SCORE = 0.25;
+const MAX_CONTEXT_TOKENS = 4000;
 
 export interface SearchResult {
   chunkId: string;
@@ -155,6 +159,128 @@ export function reciprocalRankFusion(
     .map(({ score, result }) => ({ ...result, relevanceScore: score }));
 }
 
+export function computeDynamicTopK(query: string, configuredTopK: number): number {
+  const wordCount = query.split(/\s+/).filter(Boolean).length;
+  if (wordCount <= 3) return Math.min(3, configuredTopK);
+  if (wordCount <= 8) return Math.min(5, configuredTopK);
+  return Math.min(7, configuredTopK);
+}
+
+interface NeighborChunkRow {
+  id: string;
+  content: string;
+  sourceId: string;
+  metadata: string | Record<string, unknown> | null;
+}
+
+export async function expandChunksWithContext(
+  results: SearchResult[],
+  contextWindow: number = 1
+): Promise<SearchResult[]> {
+  if (results.length === 0) return [];
+
+  const grouped = new Map<string, SearchResult[]>();
+  for (const result of results) {
+    if (result.chunkIndex === undefined) continue;
+    const existing = grouped.get(result.sourceId) ?? [];
+    existing.push(result);
+    grouped.set(result.sourceId, existing);
+  }
+
+  const expandedMap = new Map<string, SearchResult>();
+
+  for (const [sourceId, chunks] of grouped) {
+    const indexSet = new Set<number>();
+    for (const chunk of chunks) {
+      const idx = chunk.chunkIndex!;
+      for (let offset = -contextWindow; offset <= contextWindow; offset++) {
+        const target = idx + offset;
+        if (target >= 0) indexSet.add(target);
+      }
+    }
+
+    const indices = Array.from(indexSet).sort((a, b) => a - b);
+    if (indices.length === 0) continue;
+
+    const indicesJson = JSON.stringify(indices);
+    const neighbors = await prisma.$queryRaw<NeighborChunkRow[]>(
+      Prisma.sql`
+        SELECT c."id", c."content", c."sourceId", c."metadata"
+        FROM "KBChunk" c
+        WHERE c."sourceId" = ${sourceId}
+          AND (c."metadata"->>'index')::int = ANY(${indicesJson}::jsonb::int[])
+        ORDER BY (c."metadata"->>'index')::int ASC
+      `
+    );
+
+    const neighborsByIndex = new Map<number, NeighborChunkRow>();
+    for (const n of neighbors) {
+      const meta = parseMetadata(n.metadata);
+      const idx = typeof meta.index === "number" ? meta.index : -1;
+      if (idx >= 0) neighborsByIndex.set(idx, n);
+    }
+
+    const ranges: { start: number; end: number }[] = [];
+    let rangeStart = indices[0];
+    let rangeEnd = indices[0];
+    for (let i = 1; i < indices.length; i++) {
+      if (indices[i] === rangeEnd + 1) {
+        rangeEnd = indices[i];
+      } else {
+        ranges.push({ start: rangeStart, end: rangeEnd });
+        rangeStart = indices[i];
+        rangeEnd = indices[i];
+      }
+    }
+    ranges.push({ start: rangeStart, end: rangeEnd });
+
+    for (const range of ranges) {
+      const parts: string[] = [];
+      let bestScore = 0;
+      let bestChunk: SearchResult | undefined;
+
+      for (let idx = range.start; idx <= range.end; idx++) {
+        const neighbor = neighborsByIndex.get(idx);
+        if (neighbor) parts.push(neighbor.content);
+
+        const matchedChunk = chunks.find((c) => c.chunkIndex === idx);
+        if (matchedChunk && matchedChunk.relevanceScore > bestScore) {
+          bestScore = matchedChunk.relevanceScore;
+          bestChunk = matchedChunk;
+        }
+      }
+
+      if (bestChunk && parts.length > 0) {
+        const key = `${sourceId}:${range.start}-${range.end}`;
+        expandedMap.set(key, {
+          ...bestChunk,
+          content: parts.join("\n"),
+        });
+      }
+    }
+  }
+
+  for (const result of results) {
+    if (result.chunkIndex === undefined) {
+      expandedMap.set(result.chunkId, result);
+    }
+  }
+
+  const expanded = Array.from(expandedMap.values())
+    .sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+  let totalTokens = 0;
+  const trimmed: SearchResult[] = [];
+  for (const result of expanded) {
+    const tokens = estimateTokens(result.content);
+    if (totalTokens + tokens > MAX_CONTEXT_TOKENS && trimmed.length > 0) break;
+    trimmed.push(result);
+    totalTokens += tokens;
+  }
+
+  return trimmed;
+}
+
 export async function hybridSearch(
   query: string,
   knowledgeBaseId: string,
@@ -162,8 +288,8 @@ export async function hybridSearch(
 ): Promise<SearchResult[]> {
   const {
     topK = 5,
-    semanticWeight = 0.5,
-    keywordWeight = 0.5,
+    semanticWeight = 0.7,
+    keywordWeight = 0.3,
     rerank = false,
   } = options ?? {};
 
@@ -185,5 +311,7 @@ export async function hybridSearch(
     }
   }
 
-  return fused.slice(0, topK);
+  return fused
+    .filter((r) => r.relevanceScore >= MIN_RELEVANCE_SCORE)
+    .slice(0, topK);
 }

@@ -103,7 +103,7 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
     icon: Database,
     color: "teal",
     category: "AI",
-    defaultData: { label: "KB Search", queryVariable: "last_message", topK: 5 },
+    defaultData: { label: "KB Search", queryVariable: "last_message", topK: 7 },
   },
   {
     type: "capture",
