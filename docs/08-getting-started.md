@@ -46,10 +46,12 @@ Message (pozdrav)
     ↓
 Capture (spremi pitanje u user_question)
     ↓
-KB Search (query: {{user_question}})
+KB Search (Query Variable: user_question)
     ↓
-AI Response (system prompt + kontekst iz KB)
+AI Response (automatski koristi kb_context)
 ```
+
+**VAŽNO:** Capture nod je OBAVEZAN prije KB Search noda. Capture prikuplja korisnikovo pitanje i sprema ga u varijablu (npr. user_question). KB Search zatim koristi tu varijablu za pretragu. Bez Capture noda, KB Search nema šta da pretražuje.
 
 **Kako dodati nodove:**
 

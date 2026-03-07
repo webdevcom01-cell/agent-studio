@@ -47,6 +47,7 @@ export function getAvailableModels() {
     { id: "gpt-4o", name: "GPT-4o", provider: "openai" },
     ...(env.ANTHROPIC_API_KEY
       ? [
+          { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", provider: "anthropic" },
           { id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5", provider: "anthropic" },
         ]
       : []),

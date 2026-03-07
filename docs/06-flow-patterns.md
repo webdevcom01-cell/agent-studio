@@ -1,5 +1,11 @@
 # Česti flow patterns (recepti)
 
+## Obavezno pravilo: Capture prije KB Search
+
+Svaki flow koji koristi Knowledge Base MORA imati Capture nod PRIJE KB Search noda. Capture nod prikuplja korisnikovo pitanje i sprema ga u varijablu (npr. user_question). KB Search nod zatim koristi tu varijablu (polje Query Variable) za pretragu baze znanja. Rezultati pretrage se automatski spremaju u varijablu kb_context. AI Response nod automatski koristi kb_context — ne treba ništa ručno podešavati.
+
+Dakle, minimalni KB flow uvijek ima tri noda u ovom redoslijedu: Capture (prikuplja pitanje) → KB Search (pretražuje bazu) → AI Response (generiše odgovor). Bez Capture noda, KB Search nema varijablu za pretragu i neće vratiti rezultate.
+
 ## Pattern 1: Osnovni Customer Support Bot
 
 **Opis:** Korisnik postavlja pitanje, agent pretražuje KB i generiše odgovor, pa pita ima li još pitanja.
