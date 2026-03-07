@@ -98,13 +98,13 @@ async function keywordSearch(
     Prisma.sql`
       SELECT
         c."id", c."content",
-        ts_rank(to_tsvector('english', c."content"), plainto_tsquery('english', ${query})) as rank,
+        ts_rank(to_tsvector('simple', c."content"), plainto_tsquery('simple', ${query})) as rank,
         c."sourceId", s."name" as "sourceName", c."metadata"
       FROM "KBChunk" c
       INNER JOIN "KBSource" s ON c."sourceId" = s."id"
       WHERE s."knowledgeBaseId" = ${knowledgeBaseId}
         AND s."status" = 'READY'
-        AND to_tsvector('english', c."content") @@ plainto_tsquery('english', ${query})
+        AND to_tsvector('simple', c."content") @@ plainto_tsquery('simple', ${query})
       ORDER BY rank DESC
       LIMIT ${topK}
     `
