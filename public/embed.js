@@ -30,7 +30,8 @@
     ".as-widget-frame{position:fixed;bottom:88px;" + position + ":20px;width:380px;height:560px;max-height:calc(100vh - 110px);border:none;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.3);z-index:999999;opacity:0;transform:translateY(16px) scale(0.95);transition:opacity .2s,transform .2s;pointer-events:none;overflow:hidden}",
     ".as-widget-frame.as-open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}",
     "@media(max-width:480px){.as-widget-frame{width:100vw;height:100vh;max-height:100vh;bottom:0;" + position + ":0;border-radius:0}}",
-    ".as-widget-badge{position:absolute;top:-2px;right:-2px;width:12px;height:12px;background:#22c55e;border-radius:50%;border:2px solid #fff}"
+    ".as-widget-badge{position:absolute;top:-2px;right:-2px;width:12px;height:12px;background:#22c55e;border-radius:50%;border:2px solid #fff}",
+    ".as-widget-label{position:fixed;bottom:6px;" + position + ":20px;width:56px;text-align:center;font-size:11px;font-weight:600;font-family:system-ui,sans-serif;color:" + color + ";z-index:999997;pointer-events:none;opacity:.9}"
   ].join("\n");
   document.head.appendChild(style);
 
@@ -44,6 +45,12 @@
   bubble.setAttribute("aria-label", "Open chat");
   bubble.innerHTML = chatIconSvg + '<span class="as-widget-badge"></span>';
   document.body.appendChild(bubble);
+
+  // Create label
+  var label = document.createElement("div");
+  label.className = "as-widget-label";
+  label.textContent = "Help";
+  document.body.appendChild(label);
 
   // Create iframe
   var iframe = document.createElement("iframe");
@@ -59,6 +66,7 @@
     iframe.classList.toggle("as-open", isOpen);
     bubble.innerHTML = isOpen ? closeIconSvg : chatIconSvg + '<span class="as-widget-badge"></span>';
     bubble.setAttribute("aria-label", isOpen ? "Close chat" : "Open chat");
+    label.style.display = isOpen ? "none" : "";
   }
 
   bubble.addEventListener("click", toggleChat);

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { SessionProvider } from "next-auth/react";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -20,6 +21,11 @@ export default function RootLayout({
           {children}
         </SessionProvider>
         <Toaster richColors position="bottom-right" />
+        <Script
+          src="/embed.js"
+          data-agent-id="cmmfxpb97000cpbgy3w15p8ue"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );
