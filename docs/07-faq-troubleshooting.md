@@ -69,6 +69,56 @@ Possible reasons:
 
 ---
 
+### How do I embed the chat widget on my website?
+
+Add this script tag to your website:
+```html
+<script
+  src="http://localhost:3000/embed.js"
+  data-agent-id="YOUR_AGENT_ID"
+  data-color="#6366f1"
+  data-title="Chat with us"
+  data-welcome-message="Hello! How can I help?"
+  data-proactive-message="Need help? Click here to chat!"
+></script>
+```
+
+Replace `YOUR_AGENT_ID` with the actual agent ID from the URL. In production, replace `localhost:3000` with your deployment URL. All `data-*` attributes are optional.
+
+---
+
+### Does the embed widget remember conversations?
+
+Yes. The widget uses `sessionStorage` to persist the conversation ID. If the user closes the widget and reopens it within the same browser tab/session, the conversation continues where it left off. Opening a new tab starts a fresh conversation.
+
+---
+
+### How does the proactive message work?
+
+If you set `data-proactive-message` on the embed script, a tooltip appears next to the chat bubble after 30 seconds — but only once per session. It nudges the user to start a conversation. Once they open the widget or dismiss it, it won't show again until a new session.
+
+---
+
+### The widget looks broken on mobile
+
+The widget is designed for both desktop and mobile:
+- On mobile, it opens full-screen (`100dvh`) instead of a floating panel
+- The chat bubble hides when the widget is open to save screen space
+- A close button appears on mobile (hidden on desktop where the bubble toggles)
+
+If you see layout issues, make sure your page's viewport meta tag is set correctly:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1">
+```
+
+---
+
+### How do I show an unread badge on the chat bubble?
+
+The badge appears automatically. When the agent sends a new message while the widget is closed, a red counter badge shows on the chat bubble. It clears when the user opens the widget. This works through `postMessage` communication between the iframe and the parent page.
+
+---
+
 ## Troubleshooting
 
 ### Problem: Bot only repeats the Capture prompt, doesn't generate a response

@@ -176,11 +176,53 @@ Deletion is permanent — you'll need to re-add the URL if you want it back.
 
 ---
 
+## Advanced RAG: Why Answers Are Better
+
+Agent Studio uses several techniques beyond basic vector search to deliver more accurate and complete answers.
+
+### Parent Document Retrieval
+
+When a search finds a relevant chunk, the system automatically expands the context by including neighboring chunks from the same source. This means even if the answer spans multiple chunks, the AI sees the full picture.
+
+For example, if chunk #5 of a page is the best match, the system will also retrieve chunks #4 and #6 to provide surrounding context. This prevents answers from being cut off mid-thought.
+
+### Similarity Threshold
+
+Results with a relevance score below 0.25 are filtered out automatically. This prevents low-quality chunks from polluting the context and confusing the AI. If none of the chunks meet the threshold, the agent receives empty context — which is better than irrelevant context.
+
+### Dynamic Top-K
+
+The number of results retrieved adapts to the query complexity:
+
+| Query Length | Results Retrieved |
+|-------------|-------------------|
+| Short (1-3 words) | 3 results |
+| Medium (4-8 words) | 5 results |
+| Long (9+ words) | 7 results |
+
+Short queries are usually specific (e.g. "pricing"), so fewer results are needed. Longer queries benefit from more context.
+
+### Weighted Hybrid Search
+
+Search combines two methods with weighted scoring:
+- **Semantic search (70%)** — finds content with similar meaning, even if different words are used
+- **BM25 keyword search (30%)** — finds exact keyword matches, good for technical terms and proper nouns
+
+This weighted approach means semantic similarity drives most results, but exact matches still get a boost.
+
+### Context Token Budget
+
+Retrieved chunks are capped at 4000 tokens total. This prevents overloading the AI's context window with too much KB content, leaving room for conversation history and system prompt instructions.
+
+---
+
 ## Technical Details
 
 - Chunk size: ~400 tokens with 20% overlap between chunks
 - Embedding model: OpenAI text-embedding-3-small (1536 dimensions)
 - Search: Hybrid (semantic cosine similarity + BM25 keyword search)
-- Ranking: Reciprocal Rank Fusion + optional LLM re-ranking
+- Ranking: Reciprocal Rank Fusion (70/30 semantic/keyword) + optional LLM re-ranking
+- Parent retrieval: Automatic expansion to neighboring chunks within 4000 token budget
+- Similarity threshold: 0.25 minimum relevance score
 - Storage: PostgreSQL with pgvector extension
 - Max upload: 10 MB per file (PDF/DOCX)

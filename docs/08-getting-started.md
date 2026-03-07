@@ -136,9 +136,41 @@ Export does not include the Knowledge Base or conversations — only the configu
 
 ---
 
+## Step 7: Embed the Chat Widget
+
+You can embed your agent as a chat widget on any website. Add this script tag:
+
+```html
+<script
+  src="http://localhost:3000/embed.js"
+  data-agent-id="YOUR_AGENT_ID"
+  data-color="#6366f1"
+  data-title="Chat with us"
+></script>
+```
+
+The widget supports customizable colors, welcome messages, proactive messages, persistent conversations, and mobile-friendly layout. See [07-faq-troubleshooting.md](./07-faq-troubleshooting.md) for details on all widget options.
+
+---
+
+## Step 8: Monitor with Analytics
+
+Click the **"Analytics"** button on the dashboard to see how your agents are performing:
+
+- **Conversation volume** — daily trends and total counts
+- **Response times** — track if your agent is fast enough
+- **Top agents** — which agents get the most usage
+- **Common questions** — what users ask most frequently
+- **KB search hit rate** — how often the knowledge base returns useful results
+
+Use these insights to improve your agent's knowledge base and flow. See [11-analytics.md](./11-analytics.md) for a full guide.
+
+---
+
 ## Next Steps
 
 - Add more sources to the Knowledge Base → [09-knowledge-base-guide.md](./09-knowledge-base-guide.md)
 - Learn about all node types → [02-nodes-osnovno.md](./02-nodes-osnovno.md), [03-nodes-ai.md](./03-nodes-ai.md)
 - Check out advanced flow patterns → [06-flow-patterns.md](./06-flow-patterns.md)
+- Monitor agent usage → [11-analytics.md](./11-analytics.md)
 - Troubleshooting → [07-faq-troubleshooting.md](./07-faq-troubleshooting.md)
