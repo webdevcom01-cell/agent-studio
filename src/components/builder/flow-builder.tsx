@@ -35,6 +35,7 @@ import { FunctionNode } from "./nodes/function-node";
 import { AIClassifyNode } from "./nodes/ai-classify-node";
 import { AIExtractNode } from "./nodes/ai-extract-node";
 import { AISummarizeNode } from "./nodes/ai-summarize-node";
+import { FlowErrorBoundary } from "./flow-error-boundary";
 import { Button } from "@/components/ui/button";
 import { Save } from "lucide-react";
 import type { FlowContent, FlowNode } from "@/types";
@@ -217,6 +218,7 @@ function FlowBuilderCanvas({
 
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1">
+          <FlowErrorBoundary>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -243,6 +245,7 @@ function FlowBuilderCanvas({
               className="!bg-background !border-border"
             />
           </ReactFlow>
+          </FlowErrorBoundary>
         </div>
 
         {selectedNode && (

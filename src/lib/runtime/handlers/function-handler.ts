@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import type { NodeHandler } from "../types";
 
 const BLOCKED_PATTERNS = [
@@ -69,7 +70,7 @@ export const functionHandler: NodeHandler = async (node, context) => {
       updatedVariables: outputVariable ? { [outputVariable]: result } : undefined,
     };
   } catch (error) {
-    console.error("Function execution error:", error);
+    logger.error("Function execution failed", error, { agentId: context.agentId });
     return {
       messages: [{ role: "assistant", content: "Error executing function." }],
       nextNodeId: null,

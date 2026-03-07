@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 import { getModel, DEFAULT_MODEL } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import type { NodeHandler } from "../types";
 
 interface ExtractField {
@@ -55,7 +56,7 @@ Respond with a JSON object containing the extracted fields. Use null for missing
         extracted = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
       }
     } catch (parseError) {
-      console.error("Failed to parse AI extraction result:", parseError);
+      logger.error("Failed to parse AI extraction result", parseError, { agentId: context.agentId });
     }
 
     const updatedVariables: Record<string, unknown> = {};
@@ -67,7 +68,7 @@ Respond with a JSON object containing the extracted fields. Use null for missing
 
     return { messages: [], nextNodeId: null, waitForInput: false, updatedVariables };
   } catch (error) {
-    console.error("AI Extract error:", error);
+    logger.error("AI extract failed", error, { agentId: context.agentId });
     return { messages: [], nextNodeId: null, waitForInput: false };
   }
 };

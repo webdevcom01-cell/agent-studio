@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ingestSource } from "@/lib/knowledge/ingest";
+import { logger } from "@/lib/logger";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -77,7 +78,7 @@ export async function POST(
   });
 
   ingestSource(source.id, type === "TEXT" ? body.content : undefined).catch(
-    (err) => console.error("Ingest error:", err)
+    (err) => logger.error("Background ingest failed", err)
   );
 
   return NextResponse.json({ success: true, data: source }, { status: 201 });

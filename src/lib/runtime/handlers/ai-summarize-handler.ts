@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 import { getModel, DEFAULT_MODEL } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import type { NodeHandler } from "../types";
 
 export const aiSummarizeHandler: NodeHandler = async (node, context) => {
@@ -44,7 +45,7 @@ Summary:`;
       updatedVariables: { [outputVariable]: result.text.trim() },
     };
   } catch (error) {
-    console.error("AI Summarize error:", error);
+    logger.error("AI summarize failed", error, { agentId: context.agentId });
     return {
       messages: [],
       nextNodeId: null,

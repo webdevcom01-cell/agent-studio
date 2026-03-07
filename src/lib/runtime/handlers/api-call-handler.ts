@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 
@@ -49,7 +50,7 @@ export const apiCallHandler: NodeHandler = async (node, context) => {
       clearTimeout(timeout);
     }
   } catch (error) {
-    console.error("API Call error:", error);
+    logger.error("API call failed", error, { agentId: context.agentId });
     return {
       messages: [{ role: "assistant", content: "Error making API request." }],
       nextNodeId: null,

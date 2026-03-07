@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 import { getModel, DEFAULT_MODEL } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import type { NodeHandler } from "../types";
 
 export const aiClassifyHandler: NodeHandler = async (node, context) => {
@@ -53,7 +54,7 @@ Respond with ONLY the category name, nothing else.`;
       updatedVariables: { [`${node.id}_classification`]: matchedCategory ?? classification },
     };
   } catch (error) {
-    console.error("AI Classify error:", error);
+    logger.error("AI classify failed", error, { agentId: context.agentId });
     return { messages: [], nextNodeId: null, waitForInput: false };
   }
 };

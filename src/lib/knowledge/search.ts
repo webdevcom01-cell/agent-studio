@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 import { generateEmbedding } from "./embeddings";
 import { estimateTokens } from "./chunker";
+import { logger } from "@/lib/logger";
 
 const MIN_RELEVANCE_SCORE = 0.25;
 const MAX_CONTEXT_TOKENS = 4000;
@@ -306,8 +307,8 @@ export async function hybridSearch(
     try {
       const { rerankResults } = await import("./reranker");
       fused = await rerankResults(query, fused, topK);
-    } catch (error) {
-      console.error("Re-ranking failed, using RRF order:", error);
+    } catch {
+      logger.warn("Re-ranking failed, using RRF order", { knowledgeBaseId });
     }
   }
 

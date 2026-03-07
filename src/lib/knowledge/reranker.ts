@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 import { getModel } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import type { SearchResult } from "./search";
 
 export async function rerankResults(
@@ -40,7 +41,7 @@ Respond with ONLY a JSON array: [{"index": 0, "score": 0.95}, ...]`;
     scored.sort((a, b) => (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0));
     return scored.slice(0, topK);
   } catch (error) {
-    console.error("LLM re-ranking failed:", error);
+    logger.error("LLM re-ranking failed", error);
     return candidates.slice(0, topK);
   }
 }

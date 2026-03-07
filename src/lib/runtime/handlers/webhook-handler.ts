@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 
@@ -52,7 +53,7 @@ export const webhookHandler: NodeHandler = async (node, context) => {
         : undefined,
     };
   } catch (error) {
-    console.error("Webhook error:", error);
+    logger.error("Webhook failed", error, { agentId: context.agentId });
     return {
       messages: [],
       nextNodeId: null,

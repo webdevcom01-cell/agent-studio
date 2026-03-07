@@ -3,6 +3,7 @@ import { resolveTemplate } from "../template";
 import { prisma } from "@/lib/prisma";
 import { hybridSearch, computeDynamicTopK, expandChunksWithContext } from "@/lib/knowledge/search";
 import { trackKBSearch } from "@/lib/analytics";
+import { logger } from "@/lib/logger";
 
 export const kbSearchHandler: NodeHandler = async (node, context) => {
   const configuredTopK = (node.data.topK as number) ?? 7;
@@ -67,7 +68,7 @@ export const kbSearchHandler: NodeHandler = async (node, context) => {
       },
     };
   } catch (error) {
-    console.error("KB Search error:", error);
+    logger.error("KB Search failed", error, { agentId: context.agentId });
     return {
       messages: [],
       nextNodeId: null,

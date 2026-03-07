@@ -4,6 +4,7 @@ const SESSION_COOKIE = "authjs.session-token";
 const SECURE_SESSION_COOKIE = "__Secure-authjs.session-token";
 
 function isPublicPath(pathname: string): boolean {
+  if (pathname === "/api/health") return true;
   if (pathname === "/login") return true;
   if (pathname.startsWith("/embed")) return true;
   if (pathname.startsWith("/chat/")) return true;

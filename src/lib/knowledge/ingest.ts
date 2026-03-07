@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { parseSource } from "./parsers";
 import { chunkText, estimateTokens } from "./chunker";
 import { generateEmbeddings } from "./embeddings";
+import { logger } from "@/lib/logger";
 
 export async function ingestSource(
   sourceId: string,
@@ -67,7 +68,7 @@ export async function ingestSource(
     return { chunksCreated: chunks.length };
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
-    console.error("Ingest error:", err);
+    logger.error("Source ingestion failed", err, { sourceId });
     await prisma.kBSource.update({
       where: { id: sourceId },
       data: { status: "FAILED", errorMsg: err.message },

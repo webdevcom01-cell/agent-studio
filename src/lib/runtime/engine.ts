@@ -1,6 +1,7 @@
 import type { RuntimeContext, ExecutionResult, OutputMessage } from "./types";
 import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
+import { logger } from "@/lib/logger";
 import type { FlowNode } from "@/types";
 
 export function findNextNode(
@@ -73,9 +74,7 @@ export async function executeFlow(
 
     const visitCount = visitedNodes.get(node.id) ?? 0;
     if (visitCount > 5) {
-      console.warn(
-        `Circular flow detected: node ${node.id} visited ${visitCount} times. Breaking loop.`
-      );
+      logger.warn("Circular flow detected", { nodeId: node.id, agentId: context.agentId, visitCount });
       allMessages.push({
         role: "assistant",
         content: "I seem to be stuck in a loop. Let me end this conversation.",
@@ -99,7 +98,7 @@ export async function executeFlow(
     try {
       result = await handler(node, context);
     } catch (error) {
-      console.error(`Node handler error [${node.type}]:`, error);
+      logger.error("Node handler error", error, { agentId: context.agentId, nodeType: node.type });
       allMessages.push({
         role: "assistant",
         content: "Something went wrong. Let me try to continue.",

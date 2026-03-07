@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 import { getModel, DEFAULT_MODEL } from "@/lib/ai";
+import { logger } from "@/lib/logger";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 
@@ -43,7 +44,7 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
         : undefined,
     };
   } catch (error) {
-    console.error("AI Response error:", error);
+    logger.error("AI response failed", error, { agentId: context.agentId });
     return {
       messages: [
         {

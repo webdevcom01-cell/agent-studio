@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { logger } from "@/lib/logger";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_URL_RESPONSE_SIZE = 5 * 1024 * 1024;
@@ -104,7 +105,7 @@ async function parseSitemapContent(sitemapUrl: string): Promise<string> {
       const content = await fetchAndParseURL(url);
       contentParts.push(`\n\n--- ${url} ---\n\n${content}`);
     } catch (error) {
-      console.error(`Failed to fetch ${url}:`, error);
+      logger.error("URL fetch failed", error, { url });
     }
   }
 
