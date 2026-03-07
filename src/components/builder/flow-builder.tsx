@@ -25,6 +25,16 @@ import { ConditionNode } from "./nodes/condition-node";
 import { EndNode } from "./nodes/end-node";
 import { AIResponseNode } from "./nodes/ai-response-node";
 import { KBSearchNode } from "./nodes/kb-search-node";
+import { GotoNode } from "./nodes/goto-node";
+import { SetVariableNode } from "./nodes/set-variable-node";
+import { WaitNode } from "./nodes/wait-node";
+import { ButtonNode } from "./nodes/button-node";
+import { ApiCallNode } from "./nodes/api-call-node";
+import { WebhookNode } from "./nodes/webhook-node";
+import { FunctionNode } from "./nodes/function-node";
+import { AIClassifyNode } from "./nodes/ai-classify-node";
+import { AIExtractNode } from "./nodes/ai-extract-node";
+import { AISummarizeNode } from "./nodes/ai-summarize-node";
 import { Button } from "@/components/ui/button";
 import { Save } from "lucide-react";
 import type { FlowContent, FlowNode } from "@/types";
@@ -42,6 +52,16 @@ const NODE_TYPES: NodeTypes = {
   end: EndNode,
   ai_response: AIResponseNode,
   kb_search: KBSearchNode,
+  goto: GotoNode,
+  set_variable: SetVariableNode,
+  wait: WaitNode,
+  button: ButtonNode,
+  api_call: ApiCallNode,
+  webhook: WebhookNode,
+  function: FunctionNode,
+  ai_classify: AIClassifyNode,
+  ai_extract: AIExtractNode,
+  ai_summarize: AISummarizeNode,
 };
 
 export function FlowBuilder(props: FlowBuilderProps) {
