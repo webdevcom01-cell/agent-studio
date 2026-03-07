@@ -248,6 +248,7 @@ function FlowBuilderCanvas({
         {selectedNode && (
           <PropertyPanel
             node={selectedNode}
+            allNodes={nodes}
             onUpdateData={updateNodeData}
             onDeleteNode={deleteNode}
             onClose={() => setSelectedNodeId(null)}

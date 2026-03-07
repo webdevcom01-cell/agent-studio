@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 
 interface PropertyPanelProps {
   node: Node;
+  allNodes: Node[];
   onUpdateData: (nodeId: string, data: Record<string, unknown>) => void;
   onDeleteNode: (nodeId: string) => void;
   onClose: () => void;
@@ -16,6 +17,7 @@ interface PropertyPanelProps {
 
 export function PropertyPanel({
   node,
+  allNodes,
   onUpdateData,
   onDeleteNode,
   onClose,
@@ -150,15 +152,25 @@ export function PropertyPanel({
 
         {node.type === "goto" && (
           <div className="space-y-2">
-            <Label>Target Node ID</Label>
-            <Input
+            <Label>Target Node</Label>
+            <select
               value={(data.targetNodeId as string) ?? ""}
               onChange={(e) => update("targetNodeId", e.target.value)}
-              placeholder="e.g. message-1234567890"
-            />
-            <p className="text-xs text-muted-foreground">
-              Click a node to see its ID in the label field
-            </p>
+              className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+            >
+              <option value="">Select a node...</option>
+              {allNodes
+                .filter((n) => n.id !== node.id)
+                .map((n) => {
+                  const nodeData = n.data as Record<string, unknown>;
+                  const label = (nodeData.label as string) || n.id;
+                  return (
+                    <option key={n.id} value={n.id}>
+                      {label} ({n.type})
+                    </option>
+                  );
+                })}
+            </select>
           </div>
         )}
 
