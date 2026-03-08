@@ -98,6 +98,31 @@ export async function testMCPConnection(
   }
 }
 
+export async function callMCPTool(
+  serverId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const server = await prisma.mCPServer.findUniqueOrThrow({
+    where: { id: serverId },
+  });
+
+  const headers = parseHeaders(server.headers);
+  const client = await getOrCreate(serverId, server.url, server.transport, headers);
+  const tools = await client.tools();
+  const tool = tools[toolName];
+
+  if (!tool) {
+    throw new Error(`Tool "${toolName}" not found on server "${server.name}"`);
+  }
+
+  const result = await tool.execute(args, {
+    toolCallId: `call_${Date.now()}`,
+    messages: [],
+  });
+  return result;
+}
+
 export async function refreshToolsCache(serverId: string): Promise<string[]> {
   const server = await prisma.mCPServer.findUniqueOrThrow({
     where: { id: serverId },

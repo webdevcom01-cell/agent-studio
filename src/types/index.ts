@@ -41,4 +41,5 @@ export type NodeType =
   | "api_call"
   | "function"
   | "kb_search"
-  | "webhook";
+  | "webhook"
+  | "mcp_tool";

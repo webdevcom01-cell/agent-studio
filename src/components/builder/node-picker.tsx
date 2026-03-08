@@ -18,6 +18,7 @@ import {
   Tags,
   FileOutput,
   FileText,
+  Plug,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -185,6 +186,15 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
     color: "orange",
     category: "Integrations",
     defaultData: { label: "Function", code: "", outputVariable: "" },
+  },
+  {
+    type: "mcp_tool",
+    label: "MCP Tool",
+    description: "Call a tool from an MCP server",
+    icon: Plug,
+    color: "teal",
+    category: "Integrations",
+    defaultData: { label: "MCP Tool", mcpServerId: "", toolName: "", inputMapping: {}, outputVariable: "" },
   },
 ];
 

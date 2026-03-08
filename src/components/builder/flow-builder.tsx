@@ -35,6 +35,7 @@ import { FunctionNode } from "./nodes/function-node";
 import { AIClassifyNode } from "./nodes/ai-classify-node";
 import { AIExtractNode } from "./nodes/ai-extract-node";
 import { AISummarizeNode } from "./nodes/ai-summarize-node";
+import { MCPToolNode } from "./nodes/mcp-tool-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { Button } from "@/components/ui/button";
 import { Save } from "lucide-react";
@@ -63,6 +64,7 @@ const NODE_TYPES: NodeTypes = {
   ai_classify: AIClassifyNode,
   ai_extract: AIExtractNode,
   ai_summarize: AISummarizeNode,
+  mcp_tool: MCPToolNode,
 };
 
 export function FlowBuilder(props: FlowBuilderProps) {

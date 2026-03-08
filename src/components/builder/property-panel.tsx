@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { type Node } from "@xyflow/react";
 import { Trash2, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -281,6 +282,10 @@ export function PropertyPanel({
             </div>
           </>
         )}
+
+        {node.type === "mcp_tool" && (
+          <MCPToolProperties data={data} update={update} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -500,6 +505,152 @@ function AIClassifyProperties({ data, update }: SubPanelProps) {
         <Input
           value={(data.model as string) ?? "deepseek-chat"}
           onChange={(e) => update("model", e.target.value)}
+        />
+      </div>
+    </>
+  );
+}
+
+interface MCPServerOption {
+  id: string;
+  name: string;
+  toolsCache: string[] | null;
+}
+
+function MCPToolProperties({ data, update }: SubPanelProps) {
+  const [servers, setServers] = useState<MCPServerOption[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const selectedServerId = (data.mcpServerId as string) ?? "";
+  const selectedTool = (data.toolName as string) ?? "";
+  const inputMapping = (data.inputMapping as Record<string, string>) ?? {};
+  const selectedServer = servers.find((s) => s.id === selectedServerId);
+  const availableTools = (selectedServer?.toolsCache as string[]) ?? [];
+
+  useEffect(() => {
+    setIsLoading(true);
+    fetch("/api/mcp-servers")
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.success) setServers(res.data);
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  function handleServerChange(serverId: string) {
+    const server = servers.find((s) => s.id === serverId);
+    update("mcpServerId", serverId);
+    update("serverName", server?.name ?? "");
+    update("toolName", "");
+    update("inputMapping", {});
+  }
+
+  function addMapping() {
+    update("inputMapping", { ...inputMapping, "": "" });
+  }
+
+  function updateMappingKey(oldKey: string, newKey: string) {
+    const entries = Object.entries(inputMapping);
+    const updated = Object.fromEntries(
+      entries.map(([k, v]) => (k === oldKey ? [newKey, v] : [k, v])),
+    );
+    update("inputMapping", updated);
+  }
+
+  function updateMappingValue(key: string, value: string) {
+    update("inputMapping", { ...inputMapping, [key]: value });
+  }
+
+  function removeMapping(key: string) {
+    const { [key]: _removed, ...rest } = inputMapping;
+    void _removed;
+    update("inputMapping", rest);
+  }
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>MCP Server</Label>
+        <select
+          value={selectedServerId}
+          onChange={(e) => handleServerChange(e.target.value)}
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+          disabled={isLoading}
+        >
+          <option value="">{isLoading ? "Loading..." : "Select a server..."}</option>
+          {servers.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Tool</Label>
+        <select
+          value={selectedTool}
+          onChange={(e) => update("toolName", e.target.value)}
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+          disabled={!selectedServerId || availableTools.length === 0}
+        >
+          <option value="">
+            {!selectedServerId
+              ? "Select a server first..."
+              : availableTools.length === 0
+                ? "No tools cached — test connection first"
+                : "Select a tool..."}
+          </option>
+          {availableTools.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Input Mapping</Label>
+          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={addMapping}>
+            <Plus className="mr-1 size-3" /> Add
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Map tool parameters to template values
+        </p>
+        {Object.entries(inputMapping).map(([key, value]) => (
+          <div key={key} className="flex gap-1">
+            <Input
+              value={key}
+              onChange={(e) => updateMappingKey(key, e.target.value)}
+              placeholder="param"
+              className="flex-1"
+            />
+            <Input
+              value={value}
+              onChange={(e) => updateMappingValue(key, e.target.value)}
+              placeholder="{{variable}}"
+              className="flex-1"
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0"
+              onClick={() => removeMapping(key)}
+            >
+              <X className="size-3" />
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? ""}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="e.g. mcp_result"
         />
       </div>
     </>

@@ -15,6 +15,7 @@ import { apiCallHandler } from "./api-call-handler";
 import { functionHandler } from "./function-handler";
 import { kbSearchHandler } from "./kb-search-handler";
 import { webhookHandler } from "./webhook-handler";
+import { mcpToolHandler } from "./mcp-tool-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -33,6 +34,7 @@ const handlers: Record<string, NodeHandler> = {
   function: functionHandler,
   kb_search: kbSearchHandler,
   webhook: webhookHandler,
+  mcp_tool: mcpToolHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {
