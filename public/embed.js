@@ -1,6 +1,9 @@
 (function () {
   "use strict";
 
+  // Never run inside an iframe - prevents recursive loading
+  if (window !== window.top) return;
+
   var script =
     document.currentScript ||
     document.querySelector("script[data-agent-id]");
