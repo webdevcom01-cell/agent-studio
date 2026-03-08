@@ -110,7 +110,7 @@ export function useStreamingChat({
               setMessages((prev) => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
-                if (last?.role === "assistant") {
+                if (last?.role === "assistant" && chunk.content.length > last.content.length) {
                   updated[updated.length - 1] = {
                     ...last,
                     content: chunk.content,
