@@ -13,16 +13,17 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
+  id            String      @id @default(cuid())
+  email         String      @unique
   name          String?
   image         String?
   emailVerified DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   agents        Agent[]
   accounts      Account[]
   sessions      Session[]
+  mcpServers    MCPServer[]
 }
 
 model Account {
@@ -77,6 +78,7 @@ model Agent {
   knowledgeBase KnowledgeBase?
   conversations   Conversation[]
   analyticsEvents AnalyticsEvent[]
+  mcpServers      AgentMCPServer[]
 
   @@index([userId])
 }
@@ -199,4 +201,39 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
+}
+
+enum MCPTransport {
+  STREAMABLE_HTTP
+  SSE
+}
+
+model MCPServer {
+  id         String         @id @default(cuid())
+  name       String
+  url        String
+  transport  MCPTransport   @default(STREAMABLE_HTTP)
+  headers    Json?
+  toolsCache Json?
+  enabled    Boolean        @default(true)
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agents     AgentMCPServer[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([userId])
+}
+
+model AgentMCPServer {
+  id           String    @id @default(cuid())
+  agentId      String
+  mcpServerId  String
+  enabledTools Json?
+  agent        Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  mcpServer    MCPServer @relation(fields: [mcpServerId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, mcpServerId])
+  @@index([agentId])
+  @@index([mcpServerId])
 }
