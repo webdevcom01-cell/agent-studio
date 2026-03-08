@@ -5,7 +5,7 @@
 Personal/local AI agent builder. Build AI agents visually via a flow editor (XyFlow),
 manage knowledge bases with RAG (chunking + embeddings + hybrid search), and chat with agents.
 Simplified extraction from the enterprise "direct-solutions" project — no multi-tenancy,
-no billing, no SSO, no plugins, no collaboration. Single-user, local-first.
+no billing, no plugins, no collaboration. OAuth login (GitHub + Google), embeddable chat widget.
 
 ---
 
@@ -23,7 +23,9 @@ no billing, no SSO, no plugins, no collaboration. Single-user, local-first.
 - **Validation:** Zod v3
 - **UI primitives:** Radix UI (individual packages) + lucide-react icons
 - **Flow editor:** @xyflow/react v12
-- **Data fetching:** SWR (client-side hooks)
+- **Auth:** NextAuth v5 (next-auth@5) + PrismaAdapter, JWT sessions, GitHub + Google OAuth
+- **Data fetching:** SWR (client-side hooks, analytics dashboard)
+- **Charts:** recharts (analytics dashboard)
 - **Markdown:** react-markdown
 - **Toasts:** Sonner
 - **Unit tests:** Vitest + @vitest/coverage-v8
@@ -35,25 +37,38 @@ no billing, no SSO, no plugins, no collaboration. Single-user, local-first.
 
 ```
 prisma/
-  schema.prisma         ← DB schema (8 models, pgvector)
+  schema.prisma         ← DB schema (12 models, pgvector)
   migrations/           ← auto-generated — never edit manually
 
+public/
+  embed.js              ← Embeddable widget script (bubble + iframe)
+
 src/
+  instrumentation.ts    ← Startup env validation (critical vars check)
+  middleware.ts         ← Auth middleware (cookie-based session check)
+
   app/
     page.tsx                          ← Dashboard (agent list, create/delete, export/import)
-    layout.tsx                        ← Root layout (dark mode, Sonner)
+    layout.tsx                        ← Root layout (dark mode, Sonner, SessionProvider)
     globals.css                       ← Tailwind v4 theme + React Flow overrides
+    login/page.tsx                    ← Login page (GitHub + Google OAuth)
+    analytics/page.tsx                ← Analytics dashboard (charts, response times, KB stats)
     builder/[agentId]/page.tsx        ← Flow editor page
     builder/[agentId]/error.tsx       ← Error boundary (Flow Editor Error)
     chat/[agentId]/page.tsx           ← Chat interface (streaming via useStreamingChat)
     chat/[agentId]/error.tsx          ← Error boundary (Chat Error)
+    embed/[agentId]/page.tsx          ← Embed chat widget page
+    embed/layout.tsx                  ← Dedicated embed layout (no embed.js, no SessionProvider)
     knowledge/[agentId]/page.tsx      ← Knowledge base management
     knowledge/[agentId]/error.tsx     ← Error boundary (Knowledge Base Error)
     api/
-      agents/route.ts                           ← GET list, POST create
-      agents/[agentId]/route.ts                 ← GET, PATCH, DELETE agent
-      agents/[agentId]/flow/route.ts            ← GET, PUT flow content
-      agents/[agentId]/chat/route.ts            ← POST send message
+      auth/[...nextauth]/route.ts              ← NextAuth API route (GET, POST)
+      health/route.ts                          ← Health check endpoint (DB connectivity + uptime)
+      analytics/route.ts                       ← Analytics dashboard data (response times, KB stats, conversations)
+      agents/route.ts                          ← GET list, POST create
+      agents/[agentId]/route.ts                ← GET, PATCH, DELETE agent
+      agents/[agentId]/flow/route.ts           ← GET, PUT flow content
+      agents/[agentId]/chat/route.ts           ← POST send message
       agents/[agentId]/knowledge/sources/route.ts         ← GET, POST sources (URL/TEXT)
       agents/[agentId]/knowledge/sources/upload/route.ts     ← POST file upload (PDF/DOCX, multipart/form-data)
       agents/[agentId]/knowledge/sources/[sourceId]/route.ts  ← DELETE source
@@ -75,7 +90,12 @@ src/
 
   lib/
     ai.ts             ← AI model routing (DeepSeek/OpenAI/Anthropic)
+    auth.ts           ← NextAuth config (GitHub + Google providers, PrismaAdapter, JWT)
+    analytics.ts      ← Fire-and-forget analytics tracking
+    env.ts            ← Environment variable validation (Zod schema)
+    logger.ts         ← Structured JSON logger (server-only, info/warn/error)
     prisma.ts         ← Prisma client singleton
+    rate-limit.ts     ← In-memory sliding window rate limiter
     utils.ts          ← cn() utility (clsx + tailwind-merge)
     schemas/
       agent-export.ts  ← Zod schema + AgentExportData type for agent export/import
@@ -96,7 +116,7 @@ src/
       chunker.ts      ← Text chunking (400 tokens, 20% overlap)
       parsers.ts      ← PDF (pdf-parse), DOCX (mammoth), HTML (cheerio), text parsing
       embeddings.ts   ← OpenAI embedding generation
-      search.ts       ← Hybrid search (semantic + BM25 via pgvector)
+      search.ts       ← Hybrid search (semantic + BM25 via pgvector) + parent document retrieval
       reranker.ts     ← LLM-based result re-ranking
       scraper.ts      ← URL content fetching
       ingest.ts       ← Source ingestion pipeline (scrape → parse → chunk → embed → store)
@@ -114,23 +134,30 @@ src/
 ## 4. PRISMA MODELS & RELATIONS
 
 ```
-User (optional)
+User
+  ├── Account[] (1:N, OAuth account linking, @@unique([provider, providerAccountId]))
+  ├── Session[] (1:N, database sessions)
   └── Agent[] (1:N, userId is optional)
         ├── Flow (1:1, cascade delete)
         ├── KnowledgeBase (1:1, cascade delete)
         │     └── KBSource[] (1:N, cascade delete)
         │           └── KBChunk[] (1:N, cascade delete, has vector(1536) embedding)
+        ├── AnalyticsEvent[] (1:N, cascade delete — timeToFirstTokenMs, totalResponseTimeMs, isNewConversation)
         └── Conversation[] (1:N, cascade delete)
               └── Message[] (1:N, cascade delete)
+
+VerificationToken — NextAuth email verification (standalone, no relations)
 ```
 
-**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM)
+**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE)
 
 **Key details:**
-- Agent.userId is `String?` — no auth required, personal use
+- Agent.userId is `String?` — optional, linked when user is authenticated
+- Account model enables OAuth account linking (GitHub + Google on same email)
 - KBChunk.embedding uses `Unsupported("vector(1536)")` for pgvector
 - Flow.content is `Json` storing `FlowContent` (nodes, edges, variables)
 - Conversation.variables is `Json` storing runtime variable state
+- AnalyticsEvent.metadata is `Json` storing response timing and conversation data
 - All child models cascade delete from their parent
 
 ---
@@ -149,6 +176,9 @@ User (optional)
 | `/api/agents/[agentId]/knowledge/search` | POST | Test hybrid search (semantic + BM25 + optional reranking) |
 | `/api/agents/[agentId]/export` | GET | Download agent as versioned JSON (config + flow, no conversations/KB) |
 | `/api/agents/import` | POST | Import agent from exported JSON, Zod-validated with `z.literal(1)` version |
+| `/api/auth/*` | GET, POST | NextAuth authentication endpoints |
+| `/api/health` | GET | Health check (DB connectivity + uptime + version) |
+| `/api/analytics` | GET | Analytics dashboard data (response times, KB stats, conversations) |
 
 **Response format:** `{ success: true, data: T }` or `{ success: false, error: string }`
 
@@ -172,12 +202,18 @@ User (optional)
 - `stream-protocol.ts` has `encodeChunk()`, `parseChunk()`, `createStreamWriter()` — shared between server and client
 - Client hook `useStreamingChat` in `src/components/chat/use-streaming-chat.ts` handles line-buffered parsing
 - Context and messages are always saved in `finally` block, even on client disconnect
+- Each save operation (saveMessages, saveContext, writer.close) is in its own try/catch to prevent cascading failures
+- User messages are persisted to DB via `prisma.message.create` in both engine.ts and engine-streaming.ts
+- AbortController with 60s timeout on the client side
 
 ### Knowledge/RAG Pipeline
 - Ingest: scrape URL / parse file / accept text → chunk (400 tokens, 20% overlap) → embed (OpenAI text-embedding-3-small) → store in pgvector
 - File upload: PDF (pdf-parse) and DOCX (mammoth) — `parseSource()` routes by file extension
 - URL parsing: HTML (cheerio, removes nav/footer/script/style), plain text passthrough
-- Search: hybrid (semantic cosine similarity + BM25 keyword) → Reciprocal Rank Fusion → optional LLM re-ranking
+- Search: hybrid (semantic cosine similarity + BM25 keyword) → weighted RRF (semantic 70% + BM25 30%) → optional LLM re-ranking
+- Similarity threshold 0.25 — chunks with lower scores are discarded
+- Dynamic topK: 5 for short queries, 8 for longer queries
+- Parent document retrieval — returns broader context around matched chunks
 - UI: Add Source dialog has URL, Text, and File tabs with client-side 10 MB validation
 
 ### Agent Export/Import
@@ -204,10 +240,27 @@ User (optional)
 - `cn()` utility combining clsx + tailwind-merge
 - Dark mode by default (`<html className="dark">`)
 
-### No Auth
-- No authentication layer — personal/local app
-- Agent.userId is optional, not enforced
-- API routes have no auth checks
+### Auth
+- NextAuth v5 with GitHub + Google OAuth providers
+- PrismaAdapter for storage, JWT session strategy
+- `allowDangerousEmailAccountLinking` enabled for both providers (same email, different providers)
+- Middleware in `src/middleware.ts` — cookie check for `authjs.session-token` / `__Secure-authjs.session-token`
+- Public paths: `/login`, `/embed/*`, `/api/auth/*`, `/api/health`, `/api/agents/[agentId]/chat`, `/_next/*`, `/embed.js`
+- Agent.userId is optional — agents can exist without auth
+
+### Embed Widget
+- `public/embed.js` creates bubble + iframe pointing to `/embed/[agentId]`
+- iframe guard: `if (window !== window.top) return;` — prevents recursive loading
+- `src/app/embed/layout.tsx` — dedicated layout without embed.js, without SessionProvider
+- Customizable via data attributes: `data-color`, `data-title`, `data-welcome-message`, `data-proactive-message`
+- Proactive message after 30s, unread badge, mobile full-screen
+
+### Analytics & Monitoring
+- `trackChatResponse()` — fire-and-forget analytics for every chat response
+- Rate limiting: 20 req/min per agentId:IP on `/api/agents/[agentId]/chat`
+- Health check: `/api/health` returns DB status, uptime, version
+- Structured JSON logger (`src/lib/logger.ts`) — server-only, levels: info/warn/error
+- `instrumentation.ts` — validates critical env variables at startup
 
 ---
 
@@ -224,6 +277,11 @@ cp .env.example .env.local
 #   DIRECT_URL         — Supabase PostgreSQL (port 5432 for migrations)
 #   DEEPSEEK_API_KEY   — default chat model
 #   OPENAI_API_KEY     — required for embeddings
+#   AUTH_SECRET         — NextAuth JWT secret (openssl rand -base64 32)
+#   AUTH_GITHUB_ID      — GitHub OAuth App client ID
+#   AUTH_GITHUB_SECRET  — GitHub OAuth App client secret
+#   AUTH_GOOGLE_ID      — Google OAuth client ID
+#   AUTH_GOOGLE_SECRET  — Google OAuth client secret
 # Optional:
 #   ANTHROPIC_API_KEY  — alternative chat model
 
@@ -281,14 +339,15 @@ pnpm db:seed          # Seed dev data
 
 ### Adding a New API Route
 - Follow existing pattern: parse params, try/catch, return `{ success, data/error }`
-- No auth checks needed (personal app)
+- Protected routes: use `auth()` from `@/lib/auth` to get session, return 401 if unauthenticated
+- Public routes (embed chat, health, auth): add path to middleware matcher in `src/middleware.ts`
 - Validate input with Zod where applicable
 - Keep Prisma queries in `src/lib/` when reusable
 
 ### Testing
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - Run: `pnpm test`
-- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component
+- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks
 - Test behavior, not implementation details
 
 ### AI Model Config
