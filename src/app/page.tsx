@@ -5,16 +5,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { Plus, Bot, MessageSquare, Database, Trash2, MoreVertical, Download, Upload, LogOut, BarChart3, Plug, ArrowRightLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
+  Plus, Bot, MessageSquare, Database, Trash2, MoreVertical,
+  Download, Upload, LogOut, BarChart3, Plug, ArrowRightLeft,
+  Sun, Moon,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { MCPServerManager } from "@/components/mcp/mcp-server-manager";
 import { AgentCallMonitor } from "@/components/a2a/agent-call-monitor";
+import { useTheme } from "@/components/theme-provider";
 
 interface Agent {
   id: string;
@@ -48,6 +45,7 @@ interface Agent {
 export default function DashboardPage() {
   const router = useRouter();
   const { data: session } = useSession();
+  const { theme, toggleTheme } = useTheme();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -136,144 +134,235 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold">Agent Studio</h1>
-          <p className="text-muted-foreground mt-1">
-            Build and manage your AI agents
+    <div className="min-h-screen bg-background">
+      {/* ── Top Navigation ─────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur-sm">
+        <div className="mx-auto max-w-5xl px-6 h-14 flex items-center justify-between gap-4">
+
+          {/* Wordmark */}
+          <span className="text-sm font-medium tracking-tight select-none">
+            Agent Studio
+          </span>
+
+          {/* Actions */}
+          <div className="flex items-center gap-0.5">
+
+            {/* Secondary — icon-only with tooltips */}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              asChild
+              title="Analytics"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Link href="/analytics">
+                <BarChart3 className="size-4" />
+              </Link>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setShowCallMonitor(true)}
+              title="Agent Calls"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ArrowRightLeft className="size-4" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setShowMCPManager(true)}
+              title="MCP Servers"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Plug className="size-4" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => importInputRef.current?.click()}
+              title="Import agent"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Upload className="size-4" />
+            </Button>
+
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImport(file);
+                e.target.value = "";
+              }}
+            />
+
+            {/* Divider */}
+            <div className="w-px h-4 bg-border mx-1.5" />
+
+            {/* User */}
+            {session?.user && (
+              <>
+                {session.user.image && (
+                  <Image
+                    src={session.user.image}
+                    alt=""
+                    width={24}
+                    height={24}
+                    className="rounded-full mx-1"
+                  />
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => signOut()}
+                  title="Sign out"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <LogOut className="size-4" />
+                </Button>
+                <div className="w-px h-4 bg-border mx-1.5" />
+              </>
+            )}
+
+            {/* Theme toggle */}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={toggleTheme}
+              title={theme === "dark" ? "Switch to light" : "Switch to dark"}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {theme === "dark"
+                ? <Sun className="size-4" />
+                : <Moon className="size-4" />
+              }
+            </Button>
+
+            {/* Divider */}
+            <div className="w-px h-4 bg-border mx-1.5" />
+
+            {/* New Agent — primary CTA */}
+            <Button
+              size="sm"
+              onClick={() => setShowCreate(true)}
+              className="gap-1.5 h-7 px-3 text-xs font-medium"
+            >
+              <Plus className="size-3" />
+              New Agent
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* ── Main Content ────────────────────────────────────────────────── */}
+      <main className="mx-auto max-w-5xl px-6 py-10">
+
+        {/* Page heading */}
+        <div className="mb-10">
+          <h1 className="text-2xl font-light tracking-tight text-foreground">
+            Your Agents
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isLoading
+              ? "Loading..."
+              : agents.length === 0
+                ? "No agents yet"
+                : `${agents.length} agent${agents.length !== 1 ? "s" : ""}`
+            }
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {session?.user && (
-            <div className="flex items-center gap-2 mr-2">
-              {session.user.image && (
-                <Image
-                  src={session.user.image}
-                  alt=""
-                  width={28}
-                  height={28}
-                  className="rounded-full"
-                />
-              )}
-              <span className="text-sm text-muted-foreground hidden sm:inline">
-                {session.user.name ?? session.user.email}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => signOut()}
-                title="Sign out"
-              >
-                <LogOut className="size-4" />
-              </Button>
-            </div>
-          )}
-          <Button variant="outline" asChild>
-            <Link href="/analytics">
-              <BarChart3 className="mr-2 size-4" />
-              Analytics
-            </Link>
-          </Button>
-          <Button variant="outline" onClick={() => setShowCallMonitor(true)}>
-            <ArrowRightLeft className="mr-2 size-4" />
-            Agent Calls
-          </Button>
-          <Button variant="outline" onClick={() => setShowMCPManager(true)}>
-            <Plug className="mr-2 size-4" />
-            MCP Servers
-          </Button>
-          <Button variant="outline" onClick={() => importInputRef.current?.click()}>
-            <Upload className="mr-2 size-4" />
-            Import
-          </Button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".json"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleImport(file);
-              e.target.value = "";
-            }}
-          />
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="mr-2 size-4" />
-            New Agent
-          </Button>
-        </div>
-      </div>
 
-      {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardHeader>
-                <div className="h-5 w-32 rounded bg-muted" />
-                <div className="h-4 w-48 rounded bg-muted" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-4 w-24 rounded bg-muted" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : agents.length === 0 ? (
-        <Card className="py-12">
-          <CardContent className="flex flex-col items-center text-center">
-            <Bot className="size-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold">No agents yet</h3>
-            <p className="text-muted-foreground mt-1 mb-4">
-              Create your first AI agent to get started
+        {/* Agent Grid */}
+        {isLoading ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="animate-pulse rounded-lg border border-border bg-card p-5 space-y-3"
+              >
+                <div className="h-4 w-28 rounded bg-muted" />
+                <div className="h-3 w-40 rounded bg-muted" />
+                <div className="h-3 w-20 rounded bg-muted" />
+              </div>
+            ))}
+          </div>
+        ) : agents.length === 0 ? (
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="rounded-full border border-border p-4 mb-5">
+              <Bot className="size-6 text-muted-foreground" />
+            </div>
+            <h2 className="text-base font-medium mb-1">No agents yet</h2>
+            <p className="text-sm text-muted-foreground mb-6 max-w-xs">
+              Create your first agent and start building conversational AI flows.
             </p>
-            <Button onClick={() => setShowCreate(true)}>
-              <Plus className="mr-2 size-4" />
-              Create Agent
+            <Button
+              size="sm"
+              onClick={() => setShowCreate(true)}
+              className="gap-1.5"
+            >
+              <Plus className="size-3.5" />
+              Create your first agent
             </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {agents.map((agent) => (
-            <Card key={agent.id} className="group relative">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-base">{agent.name}</CardTitle>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {agents.map((agent) => (
+              <div
+                key={agent.id}
+                className="group relative flex flex-col rounded-lg border border-border bg-card p-5 transition-all duration-200 hover:border-foreground/20 hover:shadow-sm"
+              >
+                {/* Card header */}
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="text-sm font-medium leading-snug text-foreground pr-2">
+                    {agent.name}
+                  </h3>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-xs" className="opacity-0 group-hover:opacity-100">
-                        <MoreVertical className="size-4" />
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
+                      >
+                        <MoreVertical className="size-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => handleExport(agent.id, agent.name)}
-                      >
-                        <Download className="size-4" />
+                    <DropdownMenuContent align="end" className="text-sm">
+                      <DropdownMenuItem onClick={() => handleExport(agent.id, agent.name)}>
+                        <Download className="size-3.5" />
                         Export
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         variant="destructive"
                         onClick={() => handleDelete(agent.id)}
                       >
-                        <Trash2 className="size-4" />
+                        <Trash2 className="size-3.5" />
                         Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                {agent.description && (
-                  <CardDescription className="line-clamp-2">
+
+                {/* Description */}
+                {agent.description ? (
+                  <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 mb-4 flex-1">
                     {agent.description}
-                  </CardDescription>
+                  </p>
+                ) : (
+                  <div className="flex-1 mb-4" />
                 )}
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+
+                {/* Meta */}
+                <div className="flex items-center gap-3 text-xs text-muted-foreground mb-4">
                   <span className="flex items-center gap-1">
                     <MessageSquare className="size-3" />
-                    {agent._count.conversations} chats
+                    {agent._count.conversations} chat{agent._count.conversations !== 1 ? "s" : ""}
                   </span>
                   {agent.knowledgeBase && (
                     <span className="flex items-center gap-1">
@@ -282,51 +371,74 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </div>
-              </CardContent>
-              <CardFooter className="gap-2">
-                <Button size="sm" variant="outline" asChild className="flex-1">
-                  <Link href={`/builder/${agent.id}`}>Edit Flow</Link>
-                </Button>
-                <Button size="sm" asChild className="flex-1">
-                  <Link href={`/chat/${agent.id}`}>Chat</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      )}
 
+                {/* Actions */}
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    asChild
+                    className="flex-1 h-7 text-xs font-normal"
+                  >
+                    <Link href={`/builder/${agent.id}`}>Edit Flow</Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    asChild
+                    className="flex-1 h-7 text-xs font-normal"
+                  >
+                    <Link href={`/chat/${agent.id}`}>Chat</Link>
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+
+      {/* ── Create Agent Dialog ─────────────────────────────────────────── */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Create New Agent</DialogTitle>
+            <DialogTitle className="text-base font-medium">New Agent</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Name</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Name</Label>
               <Input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="My Agent"
                 autoFocus
+                className="text-sm"
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Description</Label>
               <Textarea
                 value={newDescription}
                 onChange={(e) => setNewDescription(e.target.value)}
                 placeholder="What does this agent do?"
                 rows={3}
+                className="text-sm resize-none"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowCreate(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={isCreating || !newName.trim()}>
-              {isCreating ? "Creating..." : "Create"}
+            <Button
+              size="sm"
+              onClick={handleCreate}
+              disabled={isCreating || !newName.trim()}
+            >
+              {isCreating ? "Creating…" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>

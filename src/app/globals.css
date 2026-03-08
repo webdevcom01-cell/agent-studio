@@ -29,56 +29,65 @@
   --color-ring: hsl(var(--ring));
 }
 
-.dark {
-  --background: 224 71% 4%;
-  --foreground: 210 20% 98%;
-  --card: 224 71% 4%;
-  --card-foreground: 210 20% 98%;
-  --popover: 224 71% 4%;
-  --popover-foreground: 210 20% 98%;
-  --primary: 217 91% 60%;
-  --primary-foreground: 224 71% 4%;
-  --secondary: 215 28% 17%;
-  --secondary-foreground: 210 20% 98%;
-  --muted: 215 28% 17%;
-  --muted-foreground: 218 11% 65%;
-  --accent: 215 28% 17%;
-  --accent-foreground: 210 20% 98%;
-  --destructive: 0 63% 31%;
-  --destructive-foreground: 210 20% 98%;
-  --border: 215 28% 17%;
-  --input: 215 28% 17%;
-  --ring: 217 91% 60%;
+/* ── MINIMAL / REFINED — monochrome palette ───────────────────────────── */
+:root {
+  --background: 0 0% 98%;          /* #FAFAFA — off-white */
+  --foreground: 0 0% 5%;           /* #0D0D0D — near-black */
+  --card: 0 0% 100%;               /* #FFFFFF — pure white */
+  --card-foreground: 0 0% 5%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 5%;
+  --primary: 0 0% 5%;              /* black buttons */
+  --primary-foreground: 0 0% 98%;
+  --secondary: 0 0% 95%;
+  --secondary-foreground: 0 0% 40%;
+  --muted: 0 0% 95%;
+  --muted-foreground: 0 0% 45%;    /* #737373 */
+  --accent: 0 0% 95%;
+  --accent-foreground: 0 0% 5%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 90%;              /* #E5E5E5 — very subtle */
+  --input: 0 0% 90%;
+  --ring: 0 0% 5%;
 }
 
-:root {
-  --background: 0 0% 100%;
-  --foreground: 224 71% 4%;
-  --card: 0 0% 100%;
-  --card-foreground: 224 71% 4%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 224 71% 4%;
-  --primary: 220 70% 51%;
-  --primary-foreground: 210 20% 98%;
-  --secondary: 220 14% 96%;
-  --secondary-foreground: 220 9% 46%;
-  --muted: 220 14% 96%;
-  --muted-foreground: 220 9% 46%;
-  --accent: 220 14% 96%;
-  --accent-foreground: 220 9% 46%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 210 20% 98%;
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 220 70% 51%;
+.dark {
+  --background: 0 0% 5%;           /* #0D0D0D — near-black */
+  --foreground: 0 0% 95%;          /* #F2F2F2 — near-white */
+  --card: 0 0% 8%;                 /* #141414 — dark card */
+  --card-foreground: 0 0% 95%;
+  --popover: 0 0% 8%;
+  --popover-foreground: 0 0% 95%;
+  --primary: 0 0% 95%;             /* white buttons */
+  --primary-foreground: 0 0% 5%;
+  --secondary: 0 0% 12%;
+  --secondary-foreground: 0 0% 60%;
+  --muted: 0 0% 12%;
+  --muted-foreground: 0 0% 50%;    /* #808080 */
+  --accent: 0 0% 12%;
+  --accent-foreground: 0 0% 95%;
+  --destructive: 0 63% 31%;
+  --destructive-foreground: 0 0% 95%;
+  --border: 0 0% 14%;              /* #242424 — dark border */
+  --input: 0 0% 14%;
+  --ring: 0 0% 95%;
 }
 
 @layer base {
   * {
     @apply border-border;
   }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
   body {
     @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 }
 
