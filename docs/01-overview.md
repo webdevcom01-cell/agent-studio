@@ -15,7 +15,10 @@ The agent's knowledge store. You can add URLs of web pages that will be automati
 ### 3. Chat Interface
 Every agent has a public chat link you can share with users. It is available at `/chat/[agentId]`.
 
-### 4. Test Chat
+### 4. MCP Servers
+Connect external tool servers via the Model Context Protocol (MCP). Agents can call tools on remote servers — search APIs, databases, code interpreters, and more. Manage servers globally from the dashboard, then enable per-agent.
+
+### 5. Test Chat
 A button in the top right corner of the Builder that opens a chat for testing the agent in real time.
 
 ---

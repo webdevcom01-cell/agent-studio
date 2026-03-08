@@ -101,3 +101,13 @@ Fields: Label, Fields to Extract, and Model. Fields to Extract are added by clic
 The AI Summarize node uses an AI model to summarize text. Use it to create short summaries of conversations or long texts.
 
 Fields: Label, Output Variable, Max Length (chars), and Model. Output Variable is the name of the variable where the summary is stored (default is summary). Max Length is the maximum number of characters in the summary (default 200). Model is the AI model used for summarization (default is deepseek-chat).
+
+## MCP Tool Node
+
+The MCP Tool node calls a tool on an external MCP (Model Context Protocol) server. Use it to integrate with external services — search engines, databases, code interpreters, and any MCP-compatible tool server.
+
+Fields: Label, MCP Server, Tool, Input Mapping, and Output Variable. MCP Server is a dropdown of configured servers — add servers from the dashboard via "MCP Servers". Tool is a dropdown of available tools on the selected server (populated from the server's tools cache — use "Test Connection" in MCP Settings to refresh). Input Mapping maps tool parameters to values — each entry has a parameter name (left) and a template value (right, e.g. {{user_question}}). Output Variable is the name of the variable where the tool result is stored.
+
+Unlike the AI Response node (which lets the AI decide when to call tools), the MCP Tool node always calls the specified tool deterministically. Use it when you want guaranteed tool execution at a specific point in your flow.
+
+Example: Connect a Capture node → MCP Tool node (calling a "search" tool with {{user_question}}) → AI Response node (using {{search_results}} in the system prompt).

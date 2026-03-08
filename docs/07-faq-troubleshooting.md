@@ -119,6 +119,37 @@ The badge appears automatically. When the agent sends a new message while the wi
 
 ---
 
+### How do I add an MCP server?
+
+1. On the dashboard, click "MCP Servers"
+2. Click "Add Server" and enter a name, URL, and transport type
+3. Click "Create", then use the wifi icon to test the connection
+4. If successful, the server's tools will appear — they are now available to your agents
+
+To enable the server for a specific agent: open the agent's flow builder, click the "MCP" button in the toolbar, and check the server in the list.
+
+---
+
+### Which MCP transports are supported?
+
+Agent Studio supports two transports:
+- **Streamable HTTP** (recommended) — the modern standard, works with most MCP servers
+- **SSE** (Server-Sent Events) — backward compatible with older MCP servers
+
+Select the transport when adding a server. If unsure, try Streamable HTTP first.
+
+---
+
+### What happens if an MCP server is unavailable?
+
+Agent Studio uses graceful degradation:
+- **MCP Tool node**: returns an error message to the user but the flow continues
+- **AI Response node with MCP tools**: the AI generates a response without tools (logged as a warning)
+
+The agent never crashes due to MCP failures.
+
+---
+
 ## Troubleshooting
 
 ### Problem: Bot only repeats the Capture prompt, doesn't generate a response

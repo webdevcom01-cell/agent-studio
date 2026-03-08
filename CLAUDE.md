@@ -24,6 +24,7 @@ no billing, no plugins, no collaboration. OAuth login (GitHub + Google), embedda
 - **UI primitives:** Radix UI (individual packages) + lucide-react icons
 - **Flow editor:** @xyflow/react v12
 - **Auth:** NextAuth v5 (next-auth@5) + PrismaAdapter, JWT sessions, GitHub + Google OAuth
+- **MCP:** @ai-sdk/mcp — Streamable HTTP + SSE transports for external tool servers
 - **Data fetching:** SWR (client-side hooks, analytics dashboard)
 - **Charts:** recharts (analytics dashboard)
 - **Markdown:** react-markdown
@@ -37,7 +38,7 @@ no billing, no plugins, no collaboration. OAuth login (GitHub + Google), embedda
 
 ```
 prisma/
-  schema.prisma         ← DB schema (12 models, pgvector)
+  schema.prisma         ← DB schema (14 models, pgvector)
   migrations/           ← auto-generated — never edit manually
 
 public/
@@ -74,7 +75,11 @@ src/
       agents/[agentId]/knowledge/sources/[sourceId]/route.ts  ← DELETE source
       agents/[agentId]/knowledge/search/route.ts          ← POST hybrid search
       agents/[agentId]/export/route.ts            ← GET download agent as JSON
+      agents/[agentId]/mcp/route.ts               ← GET, POST, DELETE agent-server links
       agents/import/route.ts                      ← POST import agent from JSON
+      mcp-servers/route.ts                        ← GET list, POST create MCP servers
+      mcp-servers/[serverId]/route.ts             ← GET, PATCH, DELETE MCP server
+      mcp-servers/[serverId]/test/route.ts        ← POST test MCP connection
 
   components/
     ui/               ← 12 Radix UI primitives (button, card, dialog, input, etc.)
@@ -82,11 +87,14 @@ src/
       __tests__/        ← UI component tests
     chat/
       use-streaming-chat.ts ← Client hook for consuming NDJSON chat stream
+    mcp/
+      mcp-server-manager.tsx  ← Global MCP server CRUD dialog
+      agent-mcp-selector.tsx  ← Per-agent MCP server picker with tool filtering
     builder/
-      flow-builder.tsx    ← Main ReactFlow editor
+      flow-builder.tsx    ← Main ReactFlow editor (+ MCP panel toggle)
       node-picker.tsx     ← Node type selector dropdown
       property-panel.tsx  ← Right sidebar for editing node properties
-      nodes/              ← 7 node display components (base, message, ai-response, etc.)
+      nodes/              ← 18 node display components (base, message, ai-response, mcp-tool, etc.)
 
   lib/
     ai.ts             ← AI model routing (DeepSeek/OpenAI/Anthropic)
@@ -97,6 +105,10 @@ src/
     prisma.ts         ← Prisma client singleton
     rate-limit.ts     ← In-memory sliding window rate limiter
     utils.ts          ← cn() utility (clsx + tailwind-merge)
+    mcp/
+      client.ts         ← MCP client wrapper (getMCPToolsForAgent, testMCPConnection, callMCPTool)
+      pool.ts           ← Connection pool (in-memory, 5min TTL, auto-cleanup)
+      __tests__/        ← MCP client and pool tests
     schemas/
       agent-export.ts  ← Zod schema + AgentExportData type for agent export/import
     runtime/
@@ -107,9 +119,10 @@ src/
       template.ts          ← {{variable}} interpolation
       types.ts             ← RuntimeContext, ExecutionResult, NodeHandler, StreamChunk, StreamWriter
       handlers/
-        index.ts           ← Handler registry (16 handlers)
-        ai-response-handler.ts          ← Non-streaming AI (generateText)
-        ai-response-streaming-handler.ts ← Streaming AI (streamText → NDJSON)
+        index.ts           ← Handler registry (17 handlers)
+        ai-response-handler.ts          ← Non-streaming AI (generateText + MCP tools)
+        ai-response-streaming-handler.ts ← Streaming AI (streamText → NDJSON + MCP tools)
+        mcp-tool-handler.ts             ← Deterministic MCP tool call node
         message-handler.ts, condition-handler.ts, ...
     knowledge/
       index.ts        ← Main search entry point
@@ -137,11 +150,14 @@ src/
 User
   ├── Account[] (1:N, OAuth account linking, @@unique([provider, providerAccountId]))
   ├── Session[] (1:N, database sessions)
+  ├── MCPServer[] (1:N, userId required)
+  │     └── AgentMCPServer[] (1:N, cascade delete — join table)
   └── Agent[] (1:N, userId is optional)
         ├── Flow (1:1, cascade delete)
         ├── KnowledgeBase (1:1, cascade delete)
         │     └── KBSource[] (1:N, cascade delete)
         │           └── KBChunk[] (1:N, cascade delete, has vector(1536) embedding)
+        ├── AgentMCPServer[] (1:N, cascade delete — enabledTools filter)
         ├── AnalyticsEvent[] (1:N, cascade delete — timeToFirstTokenMs, totalResponseTimeMs, isNewConversation)
         └── Conversation[] (1:N, cascade delete)
               └── Message[] (1:N, cascade delete)
@@ -149,10 +165,12 @@ User
 VerificationToken — NextAuth email verification (standalone, no relations)
 ```
 
-**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE)
+**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE), MCPTransport (STREAMABLE_HTTP|SSE)
 
 **Key details:**
 - Agent.userId is `String?` — optional, linked when user is authenticated
+- MCPServer.userId is `String` — required, ownership enforced in API routes
+- AgentMCPServer has @@unique([agentId, mcpServerId]) to prevent duplicate links
 - Account model enables OAuth account linking (GitHub + Google on same email)
 - KBChunk.embedding uses `Unsupported("vector(1536)")` for pgvector
 - Flow.content is `Json` storing `FlowContent` (nodes, edges, variables)
@@ -176,6 +194,10 @@ VerificationToken — NextAuth email verification (standalone, no relations)
 | `/api/agents/[agentId]/knowledge/search` | POST | Test hybrid search (semantic + BM25 + optional reranking) |
 | `/api/agents/[agentId]/export` | GET | Download agent as versioned JSON (config + flow, no conversations/KB) |
 | `/api/agents/import` | POST | Import agent from exported JSON, Zod-validated with `z.literal(1)` version |
+| `/api/agents/[agentId]/mcp` | GET, POST, DELETE | List/link/unlink MCP servers for agent |
+| `/api/mcp-servers` | GET, POST | List all user's MCP servers, create new server |
+| `/api/mcp-servers/[serverId]` | GET, PATCH, DELETE | Get/update/delete MCP server (ownership enforced) |
+| `/api/mcp-servers/[serverId]/test` | POST | Test MCP connection, auto-refresh toolsCache |
 | `/api/auth/*` | GET, POST | NextAuth authentication endpoints |
 | `/api/health` | GET | Health check (DB connectivity + uptime + version) |
 | `/api/analytics` | GET | Analytics dashboard data (response times, KB stats, conversations) |
@@ -187,8 +209,8 @@ VerificationToken — NextAuth email verification (standalone, no relations)
 ## 6. KEY CONVENTIONS & PATTERNS
 
 ### Runtime Engine
-- 16 node handlers registered in `src/lib/runtime/handlers/index.ts`
-- Node types: message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook
+- 17 node handlers registered in `src/lib/runtime/handlers/index.ts`
+- Node types: message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool
 - Safety limits: MAX_ITERATIONS=50, MAX_HISTORY=100
 - Handlers return `ExecutionResult` with messages, nextNodeId, waitForInput, updatedVariables
 - Handlers never throw — always return graceful fallback
@@ -254,6 +276,16 @@ VerificationToken — NextAuth email verification (standalone, no relations)
 - `src/app/embed/layout.tsx` — dedicated layout without embed.js, without SessionProvider
 - Customizable via data attributes: `data-color`, `data-title`, `data-welcome-message`, `data-proactive-message`
 - Proactive message after 30s, unread badge, mobile full-screen
+
+### MCP Integration
+- Hybrid registry pattern: global MCP servers (per-user) + per-agent selection via AgentMCPServer join table
+- Transports: Streamable HTTP (primary) + SSE (backward compat) via `@ai-sdk/mcp createMCPClient()`
+- Connection pooling: in-memory pool with 5min idle TTL, auto-cleanup every 60s (`src/lib/mcp/pool.ts`)
+- **MCP Tool Node** (`mcp_tool`): deterministic tool call — `mcpServerId`, `toolName`, `inputMapping` with template resolution, `outputVariable`
+- **AI Response + MCP**: tools auto-injected into `streamText`/`generateText` when agent has linked MCP servers, `stopWhen: stepCountIs(5)` for multi-step tool calling
+- Graceful degradation: if MCP tools fail to load, AI continues without tools (logged as warning)
+- Tool filtering: per-agent `enabledTools` array — if set, only listed tools are passed to AI
+- UI: Dashboard "MCP Servers" button for global management, flow builder "MCP" button for per-agent server selection
 
 ### Analytics & Monitoring
 - `trackChatResponse()` — fire-and-forget analytics for every chat response
@@ -347,7 +379,7 @@ pnpm db:seed          # Seed dev data
 ### Testing
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - Run: `pnpm test`
-- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks
+- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler
 - Test behavior, not implementation details
 
 ### AI Model Config
