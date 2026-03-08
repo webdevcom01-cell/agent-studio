@@ -12,8 +12,11 @@ vi.mock("@/lib/ai", () => ({
   DEFAULT_MODEL: "deepseek-chat",
 }));
 
+const { mockGetMCPToolsForAgent } = vi.hoisted(() => ({
+  mockGetMCPToolsForAgent: vi.fn(),
+}));
 vi.mock("@/lib/mcp/client", () => ({
-  getMCPToolsForAgent: vi.fn(),
+  getMCPToolsForAgent: mockGetMCPToolsForAgent,
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -21,12 +24,10 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { streamText } from "ai";
-import { getMCPToolsForAgent } from "@/lib/mcp/client";
 import { logger } from "@/lib/logger";
 import { aiResponseStreamingHandler } from "../ai-response-streaming-handler";
 
 const mockedStreamText = vi.mocked(streamText);
-const mockedGetMCPTools = vi.mocked(getMCPToolsForAgent);
 
 function createNode(data: Record<string, unknown>): FlowNode {
   return {
@@ -80,7 +81,7 @@ describe("aiResponseStreamingHandler — MCP integration", () => {
       search: { description: "Search the web", execute: vi.fn() },
       translate: { description: "Translate text", execute: vi.fn() },
     };
-    mockedGetMCPTools.mockResolvedValue(mockTools);
+    mockGetMCPToolsForAgent.mockResolvedValue(mockTools);
     mockedStreamText.mockReturnValue({
       textStream: createMockTextStream(["result"]),
     } as ReturnType<typeof streamText>);
@@ -91,7 +92,7 @@ describe("aiResponseStreamingHandler — MCP integration", () => {
 
     await aiResponseStreamingHandler(node, ctx, writer);
 
-    expect(mockedGetMCPTools).toHaveBeenCalledWith("agent-1");
+    expect(mockGetMCPToolsForAgent).toHaveBeenCalledWith("agent-1");
     expect(mockedStreamText).toHaveBeenCalledWith(
       expect.objectContaining({
         tools: mockTools,
@@ -101,7 +102,7 @@ describe("aiResponseStreamingHandler — MCP integration", () => {
   });
 
   it("does not pass tools when agent has no MCP servers", async () => {
-    mockedGetMCPTools.mockResolvedValue({});
+    mockGetMCPToolsForAgent.mockResolvedValue({});
     mockedStreamText.mockReturnValue({
       textStream: createMockTextStream(["response"]),
     } as ReturnType<typeof streamText>);
@@ -118,7 +119,7 @@ describe("aiResponseStreamingHandler — MCP integration", () => {
   });
 
   it("continues without tools when getMCPToolsForAgent throws", async () => {
-    mockedGetMCPTools.mockRejectedValue(new Error("DB connection failed"));
+    mockGetMCPToolsForAgent.mockRejectedValue(new Error("DB connection failed"));
     mockedStreamText.mockReturnValue({
       textStream: createMockTextStream(["fallback response"]),
     } as ReturnType<typeof streamText>);
@@ -144,7 +145,7 @@ describe("aiResponseStreamingHandler — MCP integration", () => {
     const mockTools = {
       calculator: { description: "Do math", execute: vi.fn() },
     };
-    mockedGetMCPTools.mockResolvedValue(mockTools);
+    mockGetMCPToolsForAgent.mockResolvedValue(mockTools);
     mockedStreamText.mockReturnValue({
       textStream: createMockTextStream(["42"]),
     } as ReturnType<typeof streamText>);
