@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 interface PropertyPanelProps {
   node: Node;
   allNodes: Node[];
+  agentId?: string;
   onUpdateData: (nodeId: string, data: Record<string, unknown>) => void;
   onDeleteNode: (nodeId: string) => void;
   onClose: () => void;
@@ -19,6 +20,7 @@ interface PropertyPanelProps {
 export function PropertyPanel({
   node,
   allNodes,
+  agentId,
   onUpdateData,
   onDeleteNode,
   onClose,
@@ -285,6 +287,14 @@ export function PropertyPanel({
 
         {node.type === "mcp_tool" && (
           <MCPToolProperties data={data} update={update} />
+        )}
+
+        {node.type === "call_agent" && (
+          <CallAgentProperties data={data} update={update} currentAgentId={agentId ?? ""} />
+        )}
+
+        {node.type === "human_approval" && (
+          <HumanApprovalProperties data={data} update={update} />
         )}
       </div>
 
@@ -653,6 +663,401 @@ function MCPToolProperties({ data, update }: SubPanelProps) {
           placeholder="e.g. mcp_result"
         />
       </div>
+    </>
+  );
+}
+
+interface AgentOption {
+  id: string;
+  name: string;
+}
+
+interface ExternalSkill {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+interface CallAgentPropertiesProps extends SubPanelProps {
+  currentAgentId: string;
+}
+
+interface ParallelTargetData {
+  agentId: string;
+  agentName?: string;
+  outputVariable: string;
+  inputMapping: { key: string; value: string }[];
+}
+
+function CallAgentProperties({ data, update, currentAgentId }: CallAgentPropertiesProps) {
+  const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingCard, setIsFetchingCard] = useState(false);
+  const [externalSkills, setExternalSkills] = useState<ExternalSkill[]>([]);
+  const mode = (data.mode as string) ?? "internal";
+  const allowParallel = (data.allowParallel as boolean) ?? false;
+  const parallelTargets = (data.parallelTargets as ParallelTargetData[]) ?? [];
+  const targetAgentId = (data.targetAgentId as string) ?? "";
+  const inputMapping = (data.inputMapping as { key: string; value: string }[]) ?? [];
+  const onError = (data.onError as string) ?? "continue";
+
+  useEffect(() => {
+    if (mode !== "internal") return;
+    setIsLoading(true);
+    fetch("/api/agents")
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.success) {
+          const filtered = (res.data as AgentOption[]).filter(
+            (a) => a.id !== currentAgentId
+          );
+          setAgents(filtered);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, [currentAgentId, mode]);
+
+  function handleAgentChange(agentId: string) {
+    const agent = agents.find((a) => a.id === agentId);
+    update("targetAgentId", agentId);
+    update("targetAgentName", agent?.name ?? "");
+  }
+
+  function handleFetchCard() {
+    const cardUrl = (data.externalCardUrl as string) ?? "";
+    if (!cardUrl) return;
+
+    setIsFetchingCard(true);
+    fetch(cardUrl)
+      .then((r) => r.json())
+      .then((card) => {
+        const skills = (card.skills ?? card.data?.skills ?? []) as ExternalSkill[];
+        setExternalSkills(skills);
+        if (skills.length > 0 && !data.externalSkillId) {
+          update("externalSkillId", skills[0].id);
+        }
+      })
+      .catch(() => {
+        setExternalSkills([]);
+      })
+      .finally(() => setIsFetchingCard(false));
+  }
+
+  function addMapping() {
+    update("inputMapping", [...inputMapping, { key: "", value: "" }]);
+  }
+
+  function updateMapping(index: number, field: "key" | "value", val: string) {
+    const updated = inputMapping.map((m, i) =>
+      i === index ? { ...m, [field]: val } : m
+    );
+    update("inputMapping", updated);
+  }
+
+  function removeMapping(index: number) {
+    update("inputMapping", inputMapping.filter((_, i) => i !== index));
+  }
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Mode</Label>
+        <select
+          value={mode}
+          onChange={(e) => update("mode", e.target.value)}
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+        >
+          <option value="internal">Internal (same instance)</option>
+          <option value="external">External (A2A protocol)</option>
+        </select>
+      </div>
+
+      {mode === "internal" && (
+        <>
+          <div className="space-y-2">
+            <Label>Execution</Label>
+            <select
+              value={allowParallel ? "parallel" : "sequential"}
+              onChange={(e) => update("allowParallel", e.target.value === "parallel")}
+              className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+            >
+              <option value="sequential">Sequential (single agent)</option>
+              <option value="parallel">Parallel (multiple agents)</option>
+            </select>
+          </div>
+
+          {!allowParallel && (
+            <div className="space-y-2">
+              <Label>Target Agent</Label>
+              <select
+                value={targetAgentId}
+                onChange={(e) => handleAgentChange(e.target.value)}
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                disabled={isLoading}
+              >
+                <option value="">{isLoading ? "Loading..." : "Select an agent..."}</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {allowParallel && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Agents</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2"
+                  onClick={() =>
+                    update("parallelTargets", [
+                      ...parallelTargets,
+                      { agentId: "", agentName: "", outputVariable: "", inputMapping: [] },
+                    ])
+                  }
+                >
+                  <Plus className="mr-1 size-3" /> Add
+                </Button>
+              </div>
+              {parallelTargets.map((target, i) => (
+                <div key={i} className="space-y-1 rounded border p-2">
+                  <div className="flex gap-1">
+                    <select
+                      value={target.agentId}
+                      onChange={(e) => {
+                        const agent = agents.find((a) => a.id === e.target.value);
+                        const updated = parallelTargets.map((t, j) =>
+                          j === i
+                            ? { ...t, agentId: e.target.value, agentName: agent?.name ?? "" }
+                            : t
+                        );
+                        update("parallelTargets", updated);
+                      }}
+                      className="h-8 flex-1 rounded-md border bg-background px-2 text-xs"
+                      disabled={isLoading}
+                    >
+                      <option value="">Select...</option>
+                      {agents.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      value={target.outputVariable}
+                      onChange={(e) => {
+                        const updated = parallelTargets.map((t, j) =>
+                          j === i ? { ...t, outputVariable: e.target.value } : t
+                        );
+                        update("parallelTargets", updated);
+                      }}
+                      placeholder="output_var"
+                      className="h-8 w-28 text-xs"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 shrink-0"
+                      onClick={() =>
+                        update(
+                          "parallelTargets",
+                          parallelTargets.filter((_, j) => j !== i)
+                        )
+                      }
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {mode === "external" && (
+        <>
+          <div className="space-y-2">
+            <Label>Agent Card URL</Label>
+            <div className="flex gap-1">
+              <Input
+                value={(data.externalCardUrl as string) ?? ""}
+                onChange={(e) => update("externalCardUrl", e.target.value)}
+                placeholder="https://example.com/api/agents/.../a2a/card"
+                className="flex-1"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={handleFetchCard}
+                disabled={isFetchingCard || !(data.externalCardUrl as string)}
+              >
+                {isFetchingCard ? "..." : "Fetch"}
+              </Button>
+            </div>
+          </div>
+
+          {externalSkills.length > 0 && (
+            <div className="space-y-2">
+              <Label>Skill</Label>
+              <select
+                value={(data.externalSkillId as string) ?? ""}
+                onChange={(e) => update("externalSkillId", e.target.value)}
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+              >
+                {externalSkills.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Input Mapping</Label>
+          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={addMapping}>
+            <Plus className="mr-1 size-3" /> Add
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Pass variables to the sub-agent
+        </p>
+        {inputMapping.map((mapping, i) => (
+          <div key={i} className="flex gap-1">
+            <Input
+              value={mapping.key}
+              onChange={(e) => updateMapping(i, "key", e.target.value)}
+              placeholder="param"
+              className="flex-1"
+            />
+            <Input
+              value={mapping.value}
+              onChange={(e) => updateMapping(i, "value", e.target.value)}
+              placeholder="{{variable}}"
+              className="flex-1"
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0"
+              onClick={() => removeMapping(i)}
+            >
+              <X className="size-3" />
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "agent_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="e.g. agent_result"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Timeout (seconds)</Label>
+        <Input
+          type="number"
+          value={(data.timeoutSeconds as number) ?? 30}
+          onChange={(e) => update("timeoutSeconds", parseInt(e.target.value) || 30)}
+          min={1}
+          max={120}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>On Error</Label>
+        <select
+          value={onError}
+          onChange={(e) => update("onError", e.target.value)}
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+        >
+          <option value="continue">Continue flow</option>
+          <option value="stop">Stop flow</option>
+        </select>
+      </div>
+    </>
+  );
+}
+
+function HumanApprovalProperties({ data, update }: SubPanelProps) {
+  const onTimeout = (data.onTimeout as string) ?? "continue";
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Prompt</Label>
+        <Textarea
+          value={(data.prompt as string) ?? ""}
+          onChange={(e) => update("prompt", e.target.value)}
+          rows={3}
+          placeholder="Please review and approve this response"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Context Variable</Label>
+        <Input
+          value={(data.inputVariable as string) ?? ""}
+          onChange={(e) => update("inputVariable", e.target.value)}
+          placeholder="e.g. draft_response"
+        />
+        <p className="text-xs text-muted-foreground">
+          Variable to show for context in the approval UI
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "approval_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="e.g. approval_result"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Timeout (minutes)</Label>
+        <Input
+          type="number"
+          value={(data.timeoutMinutes as number) ?? 60}
+          onChange={(e) => update("timeoutMinutes", parseInt(e.target.value) || 60)}
+          min={1}
+          max={1440}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>On Timeout</Label>
+        <select
+          value={onTimeout}
+          onChange={(e) => update("onTimeout", e.target.value)}
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+        >
+          <option value="continue">Continue flow</option>
+          <option value="stop">Stop flow</option>
+          <option value="use_default">Use default value</option>
+        </select>
+      </div>
+      {onTimeout === "use_default" && (
+        <div className="space-y-2">
+          <Label>Default Value</Label>
+          <Input
+            value={(data.defaultValue as string) ?? ""}
+            onChange={(e) => update("defaultValue", e.target.value)}
+            placeholder="Value to use on timeout"
+          />
+        </div>
+      )}
     </>
   );
 }

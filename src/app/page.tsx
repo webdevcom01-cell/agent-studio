@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { Plus, Bot, MessageSquare, Database, Trash2, MoreVertical, Download, Upload, LogOut, BarChart3, Plug } from "lucide-react";
+import { Plus, Bot, MessageSquare, Database, Trash2, MoreVertical, Download, Upload, LogOut, BarChart3, Plug, ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -33,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { MCPServerManager } from "@/components/mcp/mcp-server-manager";
+import { AgentCallMonitor } from "@/components/a2a/agent-call-monitor";
 
 interface Agent {
   id: string;
@@ -55,6 +56,7 @@ export default function DashboardPage() {
   const [isCreating, setIsCreating] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [showMCPManager, setShowMCPManager] = useState(false);
+  const [showCallMonitor, setShowCallMonitor] = useState(false);
 
   useEffect(() => {
     fetchAgents();
@@ -172,6 +174,10 @@ export default function DashboardPage() {
               <BarChart3 className="mr-2 size-4" />
               Analytics
             </Link>
+          </Button>
+          <Button variant="outline" onClick={() => setShowCallMonitor(true)}>
+            <ArrowRightLeft className="mr-2 size-4" />
+            Agent Calls
           </Button>
           <Button variant="outline" onClick={() => setShowMCPManager(true)}>
             <Plug className="mr-2 size-4" />
@@ -329,6 +335,11 @@ export default function DashboardPage() {
       <MCPServerManager
         open={showMCPManager}
         onOpenChange={setShowMCPManager}
+      />
+
+      <AgentCallMonitor
+        open={showCallMonitor}
+        onOpenChange={setShowCallMonitor}
       />
     </div>
   );

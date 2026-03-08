@@ -42,4 +42,6 @@ export type NodeType =
   | "function"
   | "kb_search"
   | "webhook"
-  | "mcp_tool";
+  | "mcp_tool"
+  | "call_agent"
+  | "human_approval";

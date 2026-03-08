@@ -36,6 +36,8 @@ import { AIClassifyNode } from "./nodes/ai-classify-node";
 import { AIExtractNode } from "./nodes/ai-extract-node";
 import { AISummarizeNode } from "./nodes/ai-summarize-node";
 import { MCPToolNode } from "./nodes/mcp-tool-node";
+import { CallAgentNode } from "./nodes/call-agent-node";
+import { HumanApprovalNode } from "./nodes/human-approval-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { Button } from "@/components/ui/button";
 import { Save, Plug, X } from "lucide-react";
@@ -66,6 +68,8 @@ const NODE_TYPES: NodeTypes = {
   ai_extract: AIExtractNode,
   ai_summarize: AISummarizeNode,
   mcp_tool: MCPToolNode,
+  call_agent: CallAgentNode,
+  human_approval: HumanApprovalNode,
 };
 
 export function FlowBuilder(props: FlowBuilderProps) {
@@ -271,6 +275,7 @@ function FlowBuilderCanvas({
           <PropertyPanel
             node={selectedNode}
             allNodes={nodes}
+            agentId={agentId}
             onUpdateData={updateNodeData}
             onDeleteNode={deleteNode}
             onClose={() => setSelectedNodeId(null)}

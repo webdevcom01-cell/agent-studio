@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { upsertAgentCard } from "@/lib/a2a/card-generator";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -51,6 +52,11 @@ export async function PATCH(
     where: { id: agentId },
     data: updateData,
   });
+
+  if (agent.userId) {
+    const baseUrl = new URL(request.url).origin;
+    upsertAgentCard(agentId, agent.userId, baseUrl).catch(() => {});
+  }
 
   return NextResponse.json({ success: true, data: agent });
 }

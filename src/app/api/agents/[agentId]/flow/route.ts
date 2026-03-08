@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { upsertAgentCard } from "@/lib/a2a/card-generator";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -44,6 +45,15 @@ export async function PUT(
     update: { content: body.content },
     create: { agentId, content: body.content },
   });
+
+  const agent = await prisma.agent.findUnique({
+    where: { id: agentId },
+    select: { userId: true },
+  });
+  if (agent?.userId) {
+    const baseUrl = new URL(request.url).origin;
+    upsertAgentCard(agentId, agent.userId, baseUrl).catch(() => {});
+  }
 
   return NextResponse.json({ success: true, data: flow });
 }

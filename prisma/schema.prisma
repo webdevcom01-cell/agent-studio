@@ -79,6 +79,10 @@ model Agent {
   conversations   Conversation[]
   analyticsEvents AnalyticsEvent[]
   mcpServers      AgentMCPServer[]
+  callerCallLogs    AgentCallLog[]          @relation("CallerCallLogs")
+  calleeCallLogs    AgentCallLog[]          @relation("CalleeCallLogs")
+  agentCard         AgentCard?
+  approvalRequests  HumanApprovalRequest[]
 
   @@index([userId])
 }
@@ -236,4 +240,81 @@ model AgentMCPServer {
   @@unique([agentId, mcpServerId])
   @@index([agentId])
   @@index([mcpServerId])
+}
+
+// ─── A2A Communication ────────────────────────────────────────────────────────
+
+model AgentCard {
+  id        String   @id @default(cuid())
+  agentId   String   @unique
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  isPublic  Boolean  @default(false)
+  skills    Json
+  updatedAt DateTime @updatedAt
+}
+
+model HumanApprovalRequest {
+  id          String    @id @default(cuid())
+  executionId String
+  agentId     String
+  userId      String
+  prompt      String    @db.Text
+  contextData Json?
+  status      String    @default("pending")
+  response    String?   @db.Text
+  expiresAt   DateTime
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  agent       Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([userId, status])
+  @@index([executionId])
+}
+
+enum A2ATaskStatus {
+  SUBMITTED
+  WORKING
+  INPUT_REQUIRED
+  COMPLETED
+  FAILED
+}
+
+model AgentCallLog {
+  id            String        @id @default(cuid())
+
+  traceId       String
+  spanId        String        @unique
+  parentSpanId  String?
+
+  callerAgentId String
+  calleeAgentId String?
+  externalUrl   String?
+
+  taskId        String        @unique
+  status        A2ATaskStatus @default(SUBMITTED)
+
+  inputParts    Json
+  outputParts   Json?
+  errorMessage  String?
+
+  durationMs    Int?
+  tokensUsed    Int?
+  estimatedCostUsd Decimal?   @db.Decimal(10, 6)
+
+  executionId   String?
+  depth         Int           @default(0)
+  isParallel    Boolean       @default(false)
+
+  createdAt     DateTime      @default(now())
+  completedAt   DateTime?
+
+  callerAgent   Agent         @relation("CallerCallLogs", fields: [callerAgentId], references: [id], onDelete: Cascade)
+  calleeAgent   Agent?        @relation("CalleeCallLogs", fields: [calleeAgentId], references: [id], onDelete: Cascade)
+
+  @@index([callerAgentId])
+  @@index([calleeAgentId])
+  @@index([traceId])
+  @@index([createdAt])
 }

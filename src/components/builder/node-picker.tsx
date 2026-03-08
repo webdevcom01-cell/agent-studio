@@ -19,6 +19,8 @@ import {
   FileOutput,
   FileText,
   Plug,
+  ArrowRightLeft,
+  UserCheck,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -195,6 +197,40 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
     color: "teal",
     category: "Integrations",
     defaultData: { label: "MCP Tool", mcpServerId: "", toolName: "", inputMapping: {}, outputVariable: "" },
+  },
+  {
+    type: "call_agent",
+    label: "Call Agent",
+    description: "Call another agent as a sub-agent",
+    icon: ArrowRightLeft,
+    color: "orange",
+    category: "Integrations",
+    defaultData: {
+      label: "Call Agent",
+      targetAgentId: "",
+      targetAgentName: "",
+      inputMapping: [],
+      outputVariable: "agent_result",
+      timeoutSeconds: 30,
+      onError: "continue",
+    },
+  },
+  {
+    type: "human_approval",
+    label: "Human Approval",
+    description: "Pause flow and wait for human review",
+    icon: UserCheck,
+    color: "amber",
+    category: "Control",
+    defaultData: {
+      label: "Human Approval",
+      prompt: "",
+      inputVariable: "",
+      outputVariable: "approval_result",
+      timeoutMinutes: 60,
+      onTimeout: "continue",
+      defaultValue: "",
+    },
   },
 ];
 
