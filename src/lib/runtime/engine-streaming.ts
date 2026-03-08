@@ -4,6 +4,7 @@ import { saveContext, saveMessages } from "./context";
 import { findNextNode, findStartNode } from "./engine";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
+import { prisma } from "@/lib/prisma";
 
 const MAX_ITERATIONS = 50;
 const MAX_HISTORY = 100;
@@ -51,6 +52,13 @@ export function executeFlowStreaming(
         }
 
         if (userMessage) {
+          await prisma.message.create({
+            data: {
+              conversationId: context.conversationId,
+              role: "USER",
+              content: userMessage,
+            },
+          });
           context.messageHistory.push({ role: "user", content: userMessage });
           context.variables["last_message"] = userMessage;
         }
@@ -202,13 +210,9 @@ export function executeFlowStreaming(
           waitForInput: waitingForInput,
         });
       } finally {
-        await saveMessages(context.conversationId, allMessages);
-        await saveContext(context);
-        try {
-          writer.close();
-        } catch {
-          // stream already closed
-        }
+        try { await saveMessages(context.conversationId, allMessages); } catch { /* best effort */ }
+        try { await saveContext(context); } catch { /* best effort */ }
+        try { writer.close(); } catch { /* stream already closed */ }
       }
     },
   });

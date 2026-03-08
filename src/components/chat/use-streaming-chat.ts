@@ -42,6 +42,9 @@ export function useStreamingChat({
     setMessages((prev) => [...prev, { role: "user", content: text }]);
     setIsLoading(true);
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60_000);
+
     try {
       const res = await fetch(`/api/agents/${agentId}/chat`, {
         method: "POST",
@@ -51,6 +54,7 @@ export function useStreamingChat({
           conversationId: conversationIdRef.current,
           stream: true,
         }),
+        signal: controller.signal,
       });
 
       if (!res.ok || !res.body) {
@@ -145,6 +149,7 @@ export function useStreamingChat({
         { role: "assistant", content: "Failed to connect to the server." },
       ]);
     } finally {
+      clearTimeout(timeout);
       setIsLoading(false);
     }
   }, [agentId, input, isLoading, persistKey]);

@@ -2,6 +2,7 @@ import type { RuntimeContext, ExecutionResult, OutputMessage } from "./types";
 import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
 import { logger } from "@/lib/logger";
+import { prisma } from "@/lib/prisma";
 import type { FlowNode } from "@/types";
 
 export function findNextNode(
@@ -47,6 +48,13 @@ export async function executeFlow(
   }
 
   if (userMessage) {
+    await prisma.message.create({
+      data: {
+        conversationId: context.conversationId,
+        role: "USER",
+        content: userMessage,
+      },
+    });
     context.messageHistory.push({ role: "user", content: userMessage });
     context.variables["last_message"] = userMessage;
   }

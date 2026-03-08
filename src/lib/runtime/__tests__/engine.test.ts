@@ -12,6 +12,14 @@ vi.mock("../context", () => ({
   saveMessages: vi.fn(),
 }));
 
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    message: {
+      create: vi.fn(),
+    },
+  },
+}));
+
 import { getHandler } from "../handlers";
 
 const mockedGetHandler = vi.mocked(getHandler);

@@ -11,6 +11,14 @@ vi.mock("../context", () => ({
   saveMessages: vi.fn(),
 }));
 
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    message: {
+      create: vi.fn(),
+    },
+  },
+}));
+
 vi.mock("../handlers/ai-response-streaming-handler", () => ({
   aiResponseStreamingHandler: vi.fn(),
 }));
