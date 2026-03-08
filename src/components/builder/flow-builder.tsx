@@ -38,7 +38,8 @@ import { AISummarizeNode } from "./nodes/ai-summarize-node";
 import { MCPToolNode } from "./nodes/mcp-tool-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { Button } from "@/components/ui/button";
-import { Save } from "lucide-react";
+import { Save, Plug, X } from "lucide-react";
+import { AgentMCPSelector } from "@/components/mcp/agent-mcp-selector";
 import type { FlowContent, FlowNode } from "@/types";
 
 interface FlowBuilderProps {
@@ -87,6 +88,7 @@ function FlowBuilderCanvas({
     (initialContent.edges ?? []) as Edge[]
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [showMCPPanel, setShowMCPPanel] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const nodesRef = useRef(nodes);
@@ -116,6 +118,7 @@ function FlowBuilderCanvas({
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       setSelectedNodeId(node.id);
+      setShowMCPPanel(false);
     },
     []
   );
@@ -208,14 +211,28 @@ function FlowBuilderCanvas({
           <h2 className="text-sm font-semibold">{agentName}</h2>
           <NodePicker onAddNode={addNode} />
         </div>
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={isSaving || !hasChanges}
-        >
-          <Save className="mr-1.5 size-4" />
-          {isSaving ? "Saving..." : "Save"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={showMCPPanel ? "default" : "outline"}
+            onClick={() => {
+              setShowMCPPanel(!showMCPPanel);
+              if (!showMCPPanel) setSelectedNodeId(null);
+            }}
+            className={showMCPPanel ? "bg-teal-600 hover:bg-teal-700" : ""}
+          >
+            <Plug className="mr-1.5 size-4" />
+            MCP
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={isSaving || !hasChanges}
+          >
+            <Save className="mr-1.5 size-4" />
+            {isSaving ? "Saving..." : "Save"}
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -258,6 +275,28 @@ function FlowBuilderCanvas({
             onDeleteNode={deleteNode}
             onClose={() => setSelectedNodeId(null)}
           />
+        )}
+
+        {showMCPPanel && !selectedNode && (
+          <div className="flex w-80 flex-col border-l bg-background">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                <Plug className="size-4 text-teal-500" />
+                MCP Tools
+              </h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => setShowMCPPanel(false)}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <AgentMCPSelector agentId={agentId} />
+            </div>
+          </div>
         )}
       </div>
     </div>

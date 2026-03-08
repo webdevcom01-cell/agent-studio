@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { Plus, Bot, MessageSquare, Database, Trash2, MoreVertical, Download, Upload, LogOut, BarChart3 } from "lucide-react";
+import { Plus, Bot, MessageSquare, Database, Trash2, MoreVertical, Download, Upload, LogOut, BarChart3, Plug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { MCPServerManager } from "@/components/mcp/mcp-server-manager";
 
 interface Agent {
   id: string;
@@ -53,6 +54,7 @@ export default function DashboardPage() {
   const [newDescription, setNewDescription] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const [showMCPManager, setShowMCPManager] = useState(false);
 
   useEffect(() => {
     fetchAgents();
@@ -170,6 +172,10 @@ export default function DashboardPage() {
               <BarChart3 className="mr-2 size-4" />
               Analytics
             </Link>
+          </Button>
+          <Button variant="outline" onClick={() => setShowMCPManager(true)}>
+            <Plug className="mr-2 size-4" />
+            MCP Servers
           </Button>
           <Button variant="outline" onClick={() => importInputRef.current?.click()}>
             <Upload className="mr-2 size-4" />
@@ -319,6 +325,11 @@ export default function DashboardPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MCPServerManager
+        open={showMCPManager}
+        onOpenChange={setShowMCPManager}
+      />
     </div>
   );
 }
