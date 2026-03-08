@@ -11,6 +11,14 @@ vi.mock("@/lib/ai", () => ({
   DEFAULT_MODEL: "deepseek-chat",
 }));
 
+vi.mock("@/lib/mcp/client", () => ({
+  getMCPToolsForAgent: vi.fn().mockResolvedValue({}),
+}));
+
+vi.mock("@/lib/logger", () => ({
+  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
 import { streamText } from "ai";
 import { aiResponseStreamingHandler } from "../ai-response-streaming-handler";
 

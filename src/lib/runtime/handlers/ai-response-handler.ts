@@ -1,8 +1,26 @@
-import { generateText } from "ai";
+import { generateText, stepCountIs } from "ai";
 import { getModel, DEFAULT_MODEL } from "@/lib/ai";
 import { logger } from "@/lib/logger";
+import { getMCPToolsForAgent } from "@/lib/mcp/client";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
+
+const MAX_TOOL_STEPS = 5;
+
+async function loadMCPTools(agentId: string): Promise<Record<string, unknown>> {
+  try {
+    const tools = await getMCPToolsForAgent(agentId);
+    if (Object.keys(tools).length > 0) {
+      return tools;
+    }
+  } catch (err) {
+    logger.warn("MCP tools unavailable, continuing without tools", {
+      agentId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return {};
+}
 
 export const aiResponseHandler: NodeHandler = async (node, context) => {
   const prompt = resolveTemplate(
@@ -26,12 +44,22 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
       content: m.content,
     }));
 
-    const result = await generateText({
+    const mcpTools = await loadMCPTools(context.agentId);
+    const hasTools = Object.keys(mcpTools).length > 0;
+
+    const generateOptions: Parameters<typeof generateText>[0] = {
       model,
       messages: [...systemMessages, ...historyMessages],
       temperature,
       maxOutputTokens: maxTokens,
-    });
+    };
+
+    if (hasTools) {
+      generateOptions.tools = mcpTools as Parameters<typeof generateText>[0]["tools"];
+      generateOptions.stopWhen = stepCountIs(MAX_TOOL_STEPS);
+    }
+
+    const result = await generateText(generateOptions);
 
     const responseText = result.text || "I couldn't generate a response.";
 

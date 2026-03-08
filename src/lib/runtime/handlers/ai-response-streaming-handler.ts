@@ -1,8 +1,27 @@
-import { streamText } from "ai";
+import { streamText, stepCountIs } from "ai";
 import { getModel, DEFAULT_MODEL } from "@/lib/ai";
+import { logger } from "@/lib/logger";
+import { getMCPToolsForAgent } from "@/lib/mcp/client";
 import type { ExecutionResult, RuntimeContext, StreamWriter } from "../types";
 import type { FlowNode } from "@/types";
 import { resolveTemplate } from "../template";
+
+const MAX_TOOL_STEPS = 5;
+
+async function loadMCPTools(agentId: string): Promise<Record<string, unknown>> {
+  try {
+    const tools = await getMCPToolsForAgent(agentId);
+    if (Object.keys(tools).length > 0) {
+      return tools;
+    }
+  } catch (err) {
+    logger.warn("MCP tools unavailable, continuing without tools", {
+      agentId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return {};
+}
 
 export async function aiResponseStreamingHandler(
   node: FlowNode,
@@ -30,12 +49,22 @@ export async function aiResponseStreamingHandler(
       content: m.content,
     }));
 
-    const result = streamText({
+    const mcpTools = await loadMCPTools(context.agentId);
+    const hasTools = Object.keys(mcpTools).length > 0;
+
+    const streamOptions: Parameters<typeof streamText>[0] = {
       model,
       messages: [...systemMessages, ...historyMessages],
       temperature,
       maxOutputTokens: maxTokens,
-    });
+    };
+
+    if (hasTools) {
+      streamOptions.tools = mcpTools as Parameters<typeof streamText>[0]["tools"];
+      streamOptions.stopWhen = stepCountIs(MAX_TOOL_STEPS);
+    }
+
+    const result = streamText(streamOptions);
 
     writer.write({ type: "stream_start" });
 
