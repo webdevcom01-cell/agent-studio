@@ -39,8 +39,9 @@ export async function POST(
       );
     }
 
+    const topK = Math.min(Math.max(Number(body.topK) || 5, 1), 20);
     const results = await hybridSearch(query, agent.knowledgeBase.id, {
-      topK: body.topK ?? 5,
+      topK,
     });
 
     return NextResponse.json({ success: true, data: results });
