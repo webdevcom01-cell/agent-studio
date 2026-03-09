@@ -6,6 +6,9 @@ import { trackChatResponse } from "@/lib/analytics";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 
+// MCP tool calls (e.g. NotebookLM) can take 30-60s
+export const maxDuration = 60;
+
 interface RouteParams {
   params: Promise<{ agentId: string }>;
 }
