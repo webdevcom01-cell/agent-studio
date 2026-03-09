@@ -42,6 +42,27 @@ beforeEach(() => {
   mockPrisma.agent.findUnique.mockResolvedValue({ userId: "u1" });
 });
 
+describe("auth ownership", () => {
+  it("returns 403 when agent owned by different user", async () => {
+    mockPrisma.agent.findUnique.mockResolvedValue({ userId: "other-user" });
+    const res = await GET(makeRequest("GET"), PARAMS);
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 404 when agent not found", async () => {
+    mockPrisma.agent.findUnique.mockResolvedValue(null);
+    const res = await GET(makeRequest("GET"), PARAMS);
+    expect(res.status).toBe(404);
+  });
+
+  it("allows access to unowned agent (userId: null)", async () => {
+    mockPrisma.agent.findUnique.mockResolvedValue({ userId: null });
+    mockPrisma.agentMCPServer.findMany.mockResolvedValue([]);
+    const res = await GET(makeRequest("GET"), PARAMS);
+    expect(res.status).toBe(200);
+  });
+});
+
 describe("GET /api/agents/[agentId]/mcp", () => {
   it("returns 401 when not authenticated", async () => {
     mockAuth.mockResolvedValue(null);
