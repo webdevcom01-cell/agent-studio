@@ -99,10 +99,9 @@ export async function POST(
       },
     });
   } catch (err) {
-    logger.error("Agent execution failed", err, {});
-    const message = err instanceof Error ? err.message : "Execution failed";
+    logger.error("Execution failed", err instanceof Error ? err : new Error(String(err)));
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: "Execution failed" },
       { status: 500 }
     );
   }

@@ -96,9 +96,9 @@ export async function POST(
       { status: 201 }
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to process file";
+    logger.error("File upload processing failed", error instanceof Error ? error : new Error(String(error)), { agentId });
     return NextResponse.json(
-      { success: false, error: message },
+      { success: false, error: "Failed to process file" },
       { status: 422 }
     );
   }

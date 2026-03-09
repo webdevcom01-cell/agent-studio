@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { logger } from "@/lib/logger";
+import { validateExternalUrl } from "@/lib/utils/url-validation";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_URL_RESPONSE_SIZE = 5 * 1024 * 1024;
@@ -42,6 +43,11 @@ export function parseHTML(html: string): string {
 }
 
 export async function fetchAndParseURL(url: string): Promise<string> {
+  const urlCheck = validateExternalUrl(url);
+  if (!urlCheck.valid) {
+    throw new Error("URL not allowed: blocked destination");
+  }
+
   const response = await fetch(url, {
     headers: { "User-Agent": "AgentStudio-KB/1.0" },
     signal: AbortSignal.timeout(15000),
@@ -96,22 +102,55 @@ export async function parseSource(source: {
 }
 
 const MAX_SITEMAP_URLS = 50;
+const SITEMAP_CONCURRENCY = 5;
+const SITEMAP_TOTAL_TIMEOUT_MS = 120_000;
+
+async function fetchWithConcurrency(
+  urls: string[],
+  fn: (url: string) => Promise<string>,
+  limit: number,
+): Promise<PromiseSettledResult<{ url: string; content: string }>[]> {
+  const results: PromiseSettledResult<{ url: string; content: string }>[] = [];
+  for (let i = 0; i < urls.length; i += limit) {
+    const batch = urls.slice(i, i + limit);
+    const batchResults = await Promise.allSettled(
+      batch.map(async (url) => ({ url, content: await fn(url) })),
+    );
+    results.push(...batchResults);
+  }
+  return results;
+}
 
 async function parseSitemapContent(sitemapUrl: string): Promise<string> {
   const { parseSitemap } = await import("./scraper");
   const urls = await parseSitemap(sitemapUrl);
-  const contentParts: string[] = [];
 
   if (urls.length > MAX_SITEMAP_URLS) {
     logger.warn("Sitemap truncated", { sitemapUrl, totalUrls: urls.length, limit: MAX_SITEMAP_URLS });
   }
 
-  for (const url of urls.slice(0, MAX_SITEMAP_URLS)) {
-    try {
-      const content = await fetchAndParseURL(url);
-      contentParts.push(`\n\n--- ${url} ---\n\n${content}`);
-    } catch (error) {
-      logger.error("URL fetch failed", error, { url });
+  const trimmedUrls = urls.slice(0, MAX_SITEMAP_URLS);
+
+  const deadline = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error("Sitemap fetch timeout")), SITEMAP_TOTAL_TIMEOUT_MS);
+  });
+
+  const work = fetchWithConcurrency(trimmedUrls, fetchAndParseURL, SITEMAP_CONCURRENCY);
+
+  let results: PromiseSettledResult<{ url: string; content: string }>[];
+  try {
+    results = await Promise.race([work, deadline]);
+  } catch {
+    logger.warn("Sitemap total timeout reached", { sitemapUrl });
+    return "";
+  }
+
+  const contentParts: string[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      contentParts.push(`\n\n--- ${result.value.url} ---\n\n${result.value.content}`);
+    } else {
+      logger.error("Sitemap URL fetch failed", result.reason instanceof Error ? result.reason : new Error(String(result.reason)));
     }
   }
 

@@ -19,7 +19,7 @@ export async function loadContext(
 
   if (conversationId) {
     const conversation = await prisma.conversation.findUniqueOrThrow({
-      where: { id: conversationId },
+      where: { id: conversationId, agentId },
       include: {
         messages: { orderBy: { createdAt: "asc" }, take: 50 },
       },

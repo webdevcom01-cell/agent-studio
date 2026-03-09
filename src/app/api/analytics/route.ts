@@ -47,13 +47,14 @@ interface KBCountRow {
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
       { status: 401 }
     );
   }
 
+  const userId = session.user.id;
   const periodParam = request.nextUrl.searchParams.get("period") ?? "30d";
   const period: PeriodOption = isValidPeriod(periodParam) ? periodParam : "30d";
   const days = PERIOD_DAYS[period];
@@ -72,18 +73,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     avgResponseOverall,
   ] = await Promise.all([
     prisma.conversation.count({
-      where: { createdAt: { gte: sinceDate } },
+      where: { createdAt: { gte: sinceDate }, agent: { userId } },
     }),
     prisma.message.count({
-      where: { createdAt: { gte: sinceDate } },
+      where: { createdAt: { gte: sinceDate }, conversation: { agent: { userId } } },
     }),
     prisma.$queryRaw<DailyRow[]>(
       Prisma.sql`
-        SELECT DATE("createdAt")::text AS date, COUNT(*)::bigint AS count
-        FROM "Conversation"
-        WHERE "createdAt" >= ${sinceDate}
-        GROUP BY DATE("createdAt")
-        ORDER BY DATE("createdAt") ASC
+        SELECT DATE(c."createdAt")::text AS date, COUNT(*)::bigint AS count
+        FROM "Conversation" c
+        INNER JOIN "Agent" a ON a."id" = c."agentId"
+        WHERE c."createdAt" >= ${sinceDate}
+          AND a."userId" = ${userId}
+        GROUP BY DATE(c."createdAt")
+        ORDER BY DATE(c."createdAt") ASC
       `
     ),
     prisma.$queryRaw<TopAgentRow[]>(
@@ -96,6 +99,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         FROM "Agent" a
         LEFT JOIN "Conversation" c ON c."agentId" = a."id" AND c."createdAt" >= ${sinceDate}
         LEFT JOIN "Message" m ON m."conversationId" = c."id"
+        WHERE a."userId" = ${userId}
         GROUP BY a."id", a."name"
         ORDER BY "conversationCount" DESC
         LIMIT 10
@@ -108,8 +112,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           SELECT DISTINCT ON (m."conversationId") m."content"
           FROM "Message" m
           INNER JOIN "Conversation" c ON c."id" = m."conversationId"
+          INNER JOIN "Agent" a ON a."id" = c."agentId"
           WHERE m."role" = 'USER'
             AND c."createdAt" >= ${sinceDate}
+            AND a."userId" = ${userId}
           ORDER BY m."conversationId", m."createdAt" ASC
         ) fm
         GROUP BY fm."content"
@@ -120,32 +126,38 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     prisma.$queryRaw<AvgResponseRow[]>(
       Prisma.sql`
         SELECT
-          DATE("createdAt")::text AS date,
-          AVG((metadata->>'totalResponseTimeMs')::numeric)::float AS avg_ms
-        FROM "AnalyticsEvent"
-        WHERE type = 'CHAT_RESPONSE'
-          AND "createdAt" >= ${sinceDate}
-        GROUP BY DATE("createdAt")
-        ORDER BY DATE("createdAt") ASC
+          DATE(ae."createdAt")::text AS date,
+          AVG((ae.metadata->>'totalResponseTimeMs')::numeric)::float AS avg_ms
+        FROM "AnalyticsEvent" ae
+        INNER JOIN "Agent" a ON a."id" = ae."agentId"
+        WHERE ae.type = 'CHAT_RESPONSE'
+          AND ae."createdAt" >= ${sinceDate}
+          AND a."userId" = ${userId}
+        GROUP BY DATE(ae."createdAt")
+        ORDER BY DATE(ae."createdAt") ASC
       `
     ),
     prisma.$queryRaw<KBCountRow[]>(
       Prisma.sql`
         SELECT
-          ((metadata->>'resultCount')::int > 0) AS has_results,
+          ((ae.metadata->>'resultCount')::int > 0) AS has_results,
           COUNT(*)::bigint AS count
-        FROM "AnalyticsEvent"
-        WHERE type = 'KB_SEARCH'
-          AND "createdAt" >= ${sinceDate}
+        FROM "AnalyticsEvent" ae
+        INNER JOIN "Agent" a ON a."id" = ae."agentId"
+        WHERE ae.type = 'KB_SEARCH'
+          AND ae."createdAt" >= ${sinceDate}
+          AND a."userId" = ${userId}
         GROUP BY has_results
       `
     ),
     prisma.$queryRaw<[{ avg_ms: number | null }]>(
       Prisma.sql`
-        SELECT AVG((metadata->>'totalResponseTimeMs')::numeric)::float AS avg_ms
-        FROM "AnalyticsEvent"
-        WHERE type = 'CHAT_RESPONSE'
-          AND "createdAt" >= ${sinceDate}
+        SELECT AVG((ae.metadata->>'totalResponseTimeMs')::numeric)::float AS avg_ms
+        FROM "AnalyticsEvent" ae
+        INNER JOIN "Agent" a ON a."id" = ae."agentId"
+        WHERE ae.type = 'CHAT_RESPONSE'
+          AND ae."createdAt" >= ${sinceDate}
+          AND a."userId" = ${userId}
       `
     ),
   ]);

@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { validateExternalUrl } from "@/lib/utils/url-validation";
 
 const MAX_PAGES_DEFAULT = 20;
 const MAX_DEPTH_DEFAULT = 3;
@@ -120,6 +121,11 @@ interface ScrapedPageInternal extends ScrapedPage {
 }
 
 async function scrapePage(url: string): Promise<ScrapedPageInternal> {
+  const urlCheck = validateExternalUrl(url);
+  if (!urlCheck.valid) {
+    throw new Error("URL not allowed: blocked destination");
+  }
+
   const response = await fetch(url, {
     headers: { "User-Agent": "AgentStudio-KB/1.0" },
     signal: AbortSignal.timeout(TIMEOUT_MS),

@@ -1,6 +1,7 @@
 import { logger } from "@/lib/logger";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
+import { validateExternalUrl } from "@/lib/utils/url-validation";
 
 export const apiCallHandler: NodeHandler = async (node, context) => {
   const method = (node.data.method as string) ?? "GET";
@@ -27,6 +28,11 @@ export const apiCallHandler: NodeHandler = async (node, context) => {
 
     if (["POST", "PUT", "PATCH"].includes(method) && rawBody) {
       fetchOptions.body = resolveTemplate(rawBody, context.variables);
+    }
+
+    const urlCheck = validateExternalUrl(url);
+    if (!urlCheck.valid) {
+      throw new Error("URL not allowed: blocked destination");
     }
 
     try {
