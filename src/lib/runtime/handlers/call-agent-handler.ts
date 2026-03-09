@@ -231,7 +231,7 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
           completedAt: new Date(),
         },
       })
-      .catch(() => {});
+      .catch((err) => logger.warn("Call log update failed", err));
 
     recordFailure(context.agentId, calleeId);
 
@@ -360,7 +360,7 @@ async function executeParallel(
               completedAt: new Date(),
             },
           })
-          .catch(() => {});
+          .catch((err) => logger.warn("Call log update failed", err));
 
         return { variable: target.outputVariable, output: subResult.output };
       } catch (err) {
@@ -378,7 +378,7 @@ async function executeParallel(
               completedAt: new Date(),
             },
           })
-          .catch(() => {});
+          .catch((err) => logger.warn("Call log update failed", err));
 
         throw err;
       }

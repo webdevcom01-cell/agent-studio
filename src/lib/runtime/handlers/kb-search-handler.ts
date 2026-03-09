@@ -51,7 +51,7 @@ export const kbSearchHandler: NodeHandler = async (node, context) => {
       query,
       resultCount: expanded.length,
       topScore: expanded.length > 0 ? expanded[0].relevanceScore : null,
-    }).catch(() => {});
+    }).catch((err) => logger.warn("KB search tracking failed", err));
 
     return {
       messages: [],

@@ -38,7 +38,7 @@ no billing, no plugins, no collaboration. OAuth login (GitHub + Google), embedda
 
 ```
 prisma/
-  schema.prisma         ← DB schema (14 models, pgvector)
+  schema.prisma         ← DB schema (17 models, pgvector, versioning, A2A)
   migrations/           ← auto-generated — never edit manually
 
 public/
@@ -68,7 +68,13 @@ src/
       analytics/route.ts                       ← Analytics dashboard data (response times, KB stats, conversations)
       agents/route.ts                          ← GET list, POST create
       agents/[agentId]/route.ts                ← GET, PATCH, DELETE agent
-      agents/[agentId]/flow/route.ts           ← GET, PUT flow content
+      agents/[agentId]/flow/route.ts           ← GET, PUT flow content (auth-guarded, Zod-validated, auto-versioned)
+      agents/[agentId]/flow/versions/route.ts             ← GET list, POST create version
+      agents/[agentId]/flow/versions/[versionId]/route.ts ← GET single version
+      agents/[agentId]/flow/versions/[versionId]/diff/route.ts    ← GET diff with previous
+      agents/[agentId]/flow/versions/[versionId]/deploy/route.ts  ← POST deploy version
+      agents/[agentId]/flow/versions/[versionId]/rollback/route.ts ← POST rollback + deploy
+      agents/[agentId]/flow/versions/[versionId]/test/route.ts    ← POST sandbox test
       agents/[agentId]/chat/route.ts           ← POST send message
       agents/[agentId]/knowledge/sources/route.ts         ← GET, POST sources (URL/TEXT)
       agents/[agentId]/knowledge/sources/upload/route.ts     ← POST file upload (PDF/DOCX, multipart/form-data)
@@ -91,9 +97,12 @@ src/
       mcp-server-manager.tsx  ← Global MCP server CRUD dialog
       agent-mcp-selector.tsx  ← Per-agent MCP server picker with tool filtering
     builder/
-      flow-builder.tsx    ← Main ReactFlow editor (+ MCP panel toggle)
+      flow-builder.tsx    ← Main ReactFlow editor (+ MCP panel, version history, deploy status)
       node-picker.tsx     ← Node type selector dropdown
       property-panel.tsx  ← Right sidebar for editing node properties
+      version-panel.tsx   ← Version history sidebar (SWR, rollback, compare, deploy)
+      deploy-dialog.tsx   ← Deploy confirmation dialog with sandbox test
+      diff-view.tsx       ← Version diff viewer (added/removed/modified nodes)
       nodes/              ← 18 node display components (base, message, ai-response, mcp-tool, etc.)
 
   lib/
@@ -105,6 +114,13 @@ src/
     prisma.ts         ← Prisma client singleton
     rate-limit.ts     ← In-memory sliding window rate limiter
     utils.ts          ← cn() utility (clsx + tailwind-merge)
+    api/
+      auth-guard.ts     ← requireAuth(), requireAgentOwner(), isAuthError() — used by all protected routes
+    validators/
+      flow-content.ts   ← Zod schema for FlowContent validation (nodes, edges, variables)
+    versioning/
+      diff-engine.ts    ← JSON diff engine for FlowContent (node/edge/variable comparison)
+      version-service.ts ← Version CRUD, deploy, rollback, diff (supports transaction client)
     mcp/
       client.ts         ← MCP client wrapper (getMCPToolsForAgent, testMCPConnection, callMCPTool)
       pool.ts           ← Connection pool (in-memory, 5min TTL, auto-cleanup)
@@ -154,18 +170,21 @@ User
   │     └── AgentMCPServer[] (1:N, cascade delete — join table)
   └── Agent[] (1:N, userId is optional)
         ├── Flow (1:1, cascade delete)
+        │     ├── FlowVersion[] (1:N, cascade delete — immutable content snapshots)
+        │     └── activeVersionId? → FlowVersion
+        ├── FlowDeployment[] (1:N, cascade delete — deploy audit log)
         ├── KnowledgeBase (1:1, cascade delete)
         │     └── KBSource[] (1:N, cascade delete)
         │           └── KBChunk[] (1:N, cascade delete, has vector(1536) embedding)
         ├── AgentMCPServer[] (1:N, cascade delete — enabledTools filter)
         ├── AnalyticsEvent[] (1:N, cascade delete — timeToFirstTokenMs, totalResponseTimeMs, isNewConversation)
-        └── Conversation[] (1:N, cascade delete)
+        └── Conversation[] (1:N, cascade delete, optional flowVersionId for audit)
               └── Message[] (1:N, cascade delete)
 
 VerificationToken — NextAuth email verification (standalone, no relations)
 ```
 
-**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE), MCPTransport (STREAMABLE_HTTP|SSE)
+**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE), MCPTransport (STREAMABLE_HTTP|SSE), FlowVersionStatus (DRAFT|PUBLISHED|ARCHIVED)
 
 **Key details:**
 - Agent.userId is `String?` — optional, linked when user is authenticated
@@ -186,7 +205,13 @@ VerificationToken — NextAuth email verification (standalone, no relations)
 |-------|---------|---------|
 | `/api/agents` | GET, POST | List all agents (with conversation/source counts), create agent + flow + KB |
 | `/api/agents/[agentId]` | GET, PATCH, DELETE | Full agent detail, update fields, delete |
-| `/api/agents/[agentId]/flow` | GET, PUT | Get/upsert flow content (nodes, edges, variables) |
+| `/api/agents/[agentId]/flow` | GET, PUT | Get/upsert flow content (auth-guarded, Zod-validated, auto-versioned in transaction) |
+| `/api/agents/[agentId]/flow/versions` | GET, POST | List all versions, manually create version with label |
+| `/api/agents/[agentId]/flow/versions/[versionId]` | GET | Get single version |
+| `/api/agents/[agentId]/flow/versions/[versionId]/diff` | GET | Diff with previous or `?compareWith=` version |
+| `/api/agents/[agentId]/flow/versions/[versionId]/deploy` | POST | Deploy version (archives old PUBLISHED, creates FlowDeployment) |
+| `/api/agents/[agentId]/flow/versions/[versionId]/rollback` | POST | Rollback to version (creates new version + deploys) |
+| `/api/agents/[agentId]/flow/versions/[versionId]/test` | POST | Sandbox test execution against version content |
 | `/api/agents/[agentId]/chat` | POST | Send user message; `{ stream: true }` for NDJSON streaming, otherwise JSON response |
 | `/api/agents/[agentId]/knowledge/sources` | GET, POST | List sources with chunk counts, create URL/TEXT + trigger background ingest |
 | `/api/agents/[agentId]/knowledge/sources/upload` | POST | File upload (multipart/form-data, PDF/DOCX, max 10 MB) |
@@ -287,6 +312,30 @@ VerificationToken — NextAuth email verification (standalone, no relations)
 - Tool filtering: per-agent `enabledTools` array — if set, only listed tools are passed to AI
 - UI: Dashboard "MCP Servers" button for global management, flow builder "MCP" button for per-agent server selection
 
+### Flow Versioning & Deploy Pipeline
+- Immutable version snapshots created on every flow save (30s throttle, skips if unchanged)
+- Version lifecycle: DRAFT → PUBLISHED → ARCHIVED (only one PUBLISHED at a time)
+- Deploy uses interactive `prisma.$transaction` — archives old, publishes new, updates Flow.activeVersionId, creates FlowDeployment
+- Rollback creates a NEW version with old content (non-destructive), then deploys it
+- Flow save + version creation wrapped in single transaction to prevent race conditions
+- `VersionService.createVersion` accepts optional `tx` (transaction client) parameter
+- Diff engine compares nodes by ID, edges by ID, variables by name; ignores position changes under 10px
+- Version panel UI: SWR data fetching, compare/deploy/rollback actions per version
+- Deploy dialog: optional note + sandbox test before confirming
+
+### Auth Guards
+- `requireAuth()` — returns `{ userId }` or 401 NextResponse
+- `requireAgentOwner(agentId)` — returns `{ userId, agentId }`, or 401/403/404
+- `isAuthError(result)` — type guard to check if result is a NextResponse error
+- All agent routes use `requireAgentOwner()` except: `/api/agents/[agentId]/chat` (public for embed widget)
+- Unowned agents (`userId: null`) are accessible to any authenticated user
+
+### Input Validation
+- `validateFlowContent()` — Zod schema for FlowContent (nodes, edges, variables)
+- Max limits: 500 nodes, 2000 edges, 100 variables
+- Validates node types against `NodeType` union, position values must be finite
+- Applied on flow PUT route; returns `{ success, error }` with human-readable path
+
 ### Analytics & Monitoring
 - `trackChatResponse()` — fire-and-forget analytics for every chat response
 - Rate limiting: 20 req/min per agentId:IP on `/api/agents/[agentId]/chat`
@@ -370,16 +419,18 @@ pnpm db:seed          # Seed dev data
 7. Write unit test in `src/lib/runtime/handlers/__tests__/[name]-handler.test.ts`
 
 ### Adding a New API Route
-- Follow existing pattern: parse params, try/catch, return `{ success, data/error }`
-- Protected routes: use `auth()` from `@/lib/auth` to get session, return 401 if unauthenticated
+- Follow existing pattern: parse params, try/catch with `logger.error`, return `{ success, data/error }`
+- Protected routes: use `requireAgentOwner(agentId)` from `@/lib/api/auth-guard` (NOT raw `auth()`)
 - Public routes (embed chat, health, auth): add path to middleware matcher in `src/middleware.ts`
 - Validate input with Zod where applicable
+- Never expose internal error details — return generic messages in catch blocks
 - Keep Prisma queries in `src/lib/` when reusable
 
 ### Testing
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - Run: `pnpm test`
-- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler
+- 299 tests across 38 test files
+- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents
 - Test behavior, not implementation details
 
 ### AI Model Config

@@ -194,16 +194,19 @@ describe("VersionService.deployVersion", () => {
       content: CONTENT_WITH_NODE,
       flow: { id: "f1" },
     });
-    mockPrisma.$transaction.mockResolvedValue([]);
     mockPrisma.flowDeployment.create.mockResolvedValue({
       id: "d1",
       agentId: "a1",
       flowVersionId: "v2",
     });
+    mockPrisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma)
+    );
 
     const result = await VersionService.deployVersion("a1", "v2", "user1", "Go live");
 
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.flowVersion.updateMany).toHaveBeenCalled();
     expect(mockPrisma.flowDeployment.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
