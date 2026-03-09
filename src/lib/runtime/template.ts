@@ -16,7 +16,7 @@ export function resolveTemplate(
       }
       value = (value as Record<string, unknown>)[part];
     }
-    if (value == null) return "";
+    if (value == null) return `{{${path}}}`;
     return String(value);
   });
 }

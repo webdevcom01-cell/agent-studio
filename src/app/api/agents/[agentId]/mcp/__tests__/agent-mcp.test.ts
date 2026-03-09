@@ -3,6 +3,9 @@ import { NextRequest } from "next/server";
 
 const mockAuth = vi.hoisted(() => vi.fn());
 const mockPrisma = vi.hoisted(() => ({
+  agent: {
+    findUnique: vi.fn(),
+  },
   agentMCPServer: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
@@ -36,6 +39,7 @@ function makeRequest(method: string, body?: unknown): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuth.mockResolvedValue(SESSION);
+  mockPrisma.agent.findUnique.mockResolvedValue({ userId: "u1" });
 });
 
 describe("GET /api/agents/[agentId]/mcp", () => {
@@ -104,9 +108,8 @@ describe("POST /api/agents/[agentId]/mcp", () => {
 
   it("returns 409 on duplicate link", async () => {
     mockPrisma.mCPServer.findFirst.mockResolvedValue({ id: "s1" });
-    mockPrisma.agentMCPServer.create.mockRejectedValue(
-      new Error("Unique constraint failed on the fields: (`agentId`,`mcpServerId`)"),
-    );
+    const prismaError = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+    mockPrisma.agentMCPServer.create.mockRejectedValue(prismaError);
 
     const res = await POST(makeRequest("POST", { mcpServerId: "s1" }), PARAMS);
     expect(res.status).toBe(409);

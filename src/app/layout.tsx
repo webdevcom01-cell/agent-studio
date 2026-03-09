@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { DM_Sans } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { Toaster } from "sonner";
@@ -32,11 +31,6 @@ export default function RootLayout({
           </ThemeProvider>
         </SessionProvider>
         <Toaster richColors position="bottom-right" />
-        <Script
-          src="/embed.js"
-          data-agent-id="cmmfxpb97000cpbgy3w15p8ue"
-          strategy="afterInteractive"
-        />
       </body>
     </html>
   );

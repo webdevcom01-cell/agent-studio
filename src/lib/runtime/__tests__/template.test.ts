@@ -29,9 +29,9 @@ describe("resolveTemplate", () => {
     expect(result).toBe("First: apple");
   });
 
-  it("returns empty string for null/undefined values", () => {
+  it("preserves placeholder for missing variables", () => {
     const result = resolveTemplate("Value: {{missing}}", {});
-    expect(result).toBe("Value: ");
+    expect(result).toBe("Value: {{missing}}");
   });
 
   it("preserves template syntax for invalid paths", () => {
@@ -54,8 +54,8 @@ describe("resolveTemplate", () => {
     expect(result).toBe("");
   });
 
-  it("handles empty variables", () => {
+  it("preserves placeholder with empty variables", () => {
     const result = resolveTemplate("{{name}}", {});
-    expect(result).toBe("");
+    expect(result).toBe("{{name}}");
   });
 });

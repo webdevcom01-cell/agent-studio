@@ -152,9 +152,7 @@ export async function POST(
       },
     });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Execution failed";
     logger.error("A2A task execution failed", err, {});
-    return jsonRpcError(null, -32000, message, 500);
+    return jsonRpcError(null, -32000, "Internal execution error", 500);
   }
 }

@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma";
 import { parseSource } from "./parsers";
 import { chunkText, estimateTokens } from "./chunker";
 import { generateEmbeddings } from "./embeddings";
 import { logger } from "@/lib/logger";
+
+const BATCH_SIZE = 50;
 
 export async function ingestSource(
   sourceId: string,
@@ -37,26 +40,33 @@ export async function ingestSource(
 
     const embeddings = await generateEmbeddings(chunks);
 
+    for (let i = 0; i < embeddings.length; i++) {
+      if (!embeddings[i].every((v) => typeof v === "number" && isFinite(v))) {
+        throw new Error(`Embedding at index ${i} contains invalid values`);
+      }
+    }
+
     await deleteSourceChunks(sourceId);
 
-    for (let i = 0; i < chunks.length; i++) {
-      const content = chunks[i];
-      const embedding = embeddings[i];
-      const tokens = estimateTokens(content);
-      const vectorStr = `[${embedding.join(",")}]`;
-      const metadata = JSON.stringify({ index: i, total: chunks.length });
+    for (let batchStart = 0; batchStart < chunks.length; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, chunks.length);
+      const values = [];
+
+      for (let i = batchStart; i < batchEnd; i++) {
+        const content = chunks[i];
+        const embedding = embeddings[i];
+        const tokens = estimateTokens(content);
+        const vectorStr = `[${embedding.join(",")}]`;
+        const metadata = JSON.stringify({ index: i, total: chunks.length });
+
+        values.push(
+          Prisma.sql`(gen_random_uuid()::text, ${content}, ${vectorStr}::vector, ${tokens}, ${metadata}::jsonb, NOW(), ${sourceId})`
+        );
+      }
 
       await prisma.$executeRaw`
         INSERT INTO "KBChunk" ("id", "content", "embedding", "tokens", "metadata", "createdAt", "sourceId")
-        VALUES (
-          gen_random_uuid()::text,
-          ${content},
-          ${vectorStr}::vector,
-          ${tokens},
-          ${metadata}::jsonb,
-          NOW(),
-          ${sourceId}
-        )
+        VALUES ${Prisma.join(values)}
       `;
     }
 

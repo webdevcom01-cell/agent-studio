@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
 interface RouteParams {
@@ -22,15 +22,10 @@ export async function GET(
   { params }: RouteParams,
 ): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
-
     const { agentId } = await params;
+    const authResult = await requireAgentOwner(agentId);
+    if (isAuthError(authResult)) return authResult;
+
     const agentMCPServers = await prisma.agentMCPServer.findMany({
       where: { agentId },
       include: {
@@ -49,9 +44,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, data: agentMCPServers });
   } catch (err) {
-    logger.error("Failed to list agent MCP servers", {
-      error: err instanceof Error ? err.message : String(err),
-    });
+    logger.error("Failed to list agent MCP servers", err);
     return NextResponse.json(
       { success: false, error: "Failed to list agent MCP servers" },
       { status: 500 },
@@ -64,15 +57,10 @@ export async function POST(
   { params }: RouteParams,
 ): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
-
     const { agentId } = await params;
+    const authResult = await requireAgentOwner(agentId);
+    if (isAuthError(authResult)) return authResult;
+
     const body = await request.json();
     const parsed = linkServerSchema.safeParse(body);
     if (!parsed.success) {
@@ -83,7 +71,7 @@ export async function POST(
     }
 
     const server = await prisma.mCPServer.findFirst({
-      where: { id: parsed.data.mcpServerId, userId: session.user.id },
+      where: { id: parsed.data.mcpServerId, userId: authResult.userId },
     });
     if (!server) {
       return NextResponse.json(
@@ -107,18 +95,14 @@ export async function POST(
 
     return NextResponse.json({ success: true, data: link }, { status: 201 });
   } catch (err) {
-    if (
-      err instanceof Error &&
-      err.message.includes("Unique constraint")
-    ) {
+    const errCode = err instanceof Error && "code" in err ? (err as { code: string }).code : null;
+    if (errCode === "P2002") {
       return NextResponse.json(
         { success: false, error: "Server already linked to this agent" },
         { status: 409 },
       );
     }
-    logger.error("Failed to link MCP server to agent", {
-      error: err instanceof Error ? err.message : String(err),
-    });
+    logger.error("Failed to link MCP server to agent", err);
     return NextResponse.json(
       { success: false, error: "Failed to link MCP server to agent" },
       { status: 500 },
@@ -131,15 +115,10 @@ export async function DELETE(
   { params }: RouteParams,
 ): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
-
     const { agentId } = await params;
+    const authResult = await requireAgentOwner(agentId);
+    if (isAuthError(authResult)) return authResult;
+
     const body = await request.json();
     const parsed = unlinkServerSchema.safeParse(body);
     if (!parsed.success) {
@@ -171,9 +150,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    logger.error("Failed to unlink MCP server from agent", {
-      error: err instanceof Error ? err.message : String(err),
-    });
+    logger.error("Failed to unlink MCP server from agent", err);
     return NextResponse.json(
       { success: false, error: "Failed to unlink MCP server from agent" },
       { status: 500 },

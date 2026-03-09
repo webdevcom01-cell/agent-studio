@@ -86,6 +86,7 @@ model Agent {
   deployments       FlowDeployment[]
 
   @@index([userId])
+  @@index([userId, updatedAt])
 }
 
 model Flow {
@@ -140,6 +141,7 @@ model KBSource {
   updatedAt       DateTime       @updatedAt
 
   @@index([knowledgeBaseId])
+  @@index([knowledgeBaseId, status])
 }
 
 model KBChunk {
@@ -210,6 +212,7 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
+  @@index([conversationId, createdAt])
 }
 
 enum MCPTransport {
@@ -272,6 +275,7 @@ model FlowVersion {
 
   @@unique([flowId, version])
   @@index([flowId])
+  @@index([flowId, status])
   @@index([createdAt])
 }
 

@@ -15,12 +15,17 @@
     return;
   }
 
+  function sanitizeCSS(val) {
+    return val.replace(/[^a-zA-Z0-9#(),.\s%-]/g, "");
+  }
+
   var baseUrl = script.getAttribute("data-base-url") || script.src.replace(/\/embed\.js.*$/, "");
-  var position = script.getAttribute("data-position") || "right";
-  var color = script.getAttribute("data-color") || "#6366f1";
+  var position = script.getAttribute("data-position") === "left" ? "left" : "right";
+  var color = sanitizeCSS(script.getAttribute("data-color") || "#6366f1");
   var title = script.getAttribute("data-title") || "Chat";
   var welcomeMessage = script.getAttribute("data-welcome-message") || "";
   var proactiveMessage = script.getAttribute("data-proactive-message") || "Need help? I'm here!";
+  var expectedOrigin = new URL(baseUrl).origin;
 
   var PROACTIVE_DELAY_MS = 30000;
   var proactiveKey = "as-proactive-" + agentId;
@@ -60,12 +65,12 @@
 
   var iframeParams = new URLSearchParams();
   if (color) iframeParams.set("color", color);
-  if (title) iframeParams.set("title", title);
-  if (welcomeMessage) iframeParams.set("welcome", welcomeMessage);
+  if (title) iframeParams.set("title", encodeURIComponent(title));
+  if (welcomeMessage) iframeParams.set("welcome", encodeURIComponent(welcomeMessage));
 
   var iframe = document.createElement("iframe");
   iframe.className = "as-widget-frame";
-  iframe.src = baseUrl + "/embed/" + agentId + "?" + iframeParams.toString();
+  iframe.src = baseUrl + "/embed/" + encodeURIComponent(agentId) + "?" + iframeParams.toString();
   iframe.setAttribute("title", title);
   iframe.setAttribute("allow", "clipboard-write");
   document.body.appendChild(iframe);
@@ -99,6 +104,7 @@
   bubble.addEventListener("click", toggleChat);
 
   window.addEventListener("message", function (e) {
+    if (e.origin !== expectedOrigin) return;
     if (!e.data) return;
     if (e.data.type === "agent-studio-close") {
       if (isOpen) toggleChat();
@@ -120,7 +126,7 @@
         setTimeout(function () {
           iframe.contentWindow.postMessage(
             { type: "agent-studio-proactive", message: proactiveMessage },
-            "*"
+            expectedOrigin
           );
         }, 500);
       }
