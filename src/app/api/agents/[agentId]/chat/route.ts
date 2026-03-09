@@ -95,7 +95,8 @@ export async function POST(
         waitForInput: result.waitingForInput,
       },
     });
-  } catch {
+  } catch (err) {
+    logger.error("Chat processing failed", err instanceof Error ? err : new Error(String(err)), { agentId });
     return NextResponse.json(
       { success: false, error: "Failed to process message" },
       { status: 500 }

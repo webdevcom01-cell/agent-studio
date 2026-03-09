@@ -17,6 +17,19 @@ export async function DELETE(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
+    const source = await prisma.kBSource.findFirst({
+      where: {
+        id: sourceId,
+        knowledgeBase: { agentId },
+      },
+    });
+    if (!source) {
+      return NextResponse.json(
+        { success: false, error: "Source not found" },
+        { status: 404 }
+      );
+    }
+
     await deleteSourceChunks(sourceId);
     await prisma.kBSource.delete({ where: { id: sourceId } });
 

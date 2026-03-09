@@ -583,16 +583,22 @@ async function executeSubAgent(params: SubAgentParams): Promise<SubAgentResult> 
   const runFlow =
     executeFlowFn ?? (await import("../engine")).executeFlow;
 
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(
+  let timeoutRef: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutRef = setTimeout(
       () => reject(new Error(`Sub-agent timed out after ${timeoutSeconds}s`)),
       timeoutSeconds * 1000
-    )
-  );
+    );
+  });
 
   const executionPromise = runFlow(subContext);
 
-  const result = await Promise.race([executionPromise, timeoutPromise]);
+  let result: Awaited<typeof executionPromise>;
+  try {
+    result = await Promise.race([executionPromise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutRef!);
+  }
 
   const lastAssistantMessage = result.messages
     .filter((m) => m.role === "assistant")

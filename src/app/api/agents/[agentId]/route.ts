@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { upsertAgentCard } from "@/lib/a2a/card-generator";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
+
+const VALID_MODELS = ["deepseek-chat", "gpt-4o-mini", "gpt-4o", "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"] as const;
+
+const updateAgentSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
+  systemPrompt: z.string().max(10000).optional(),
+  model: z.enum(VALID_MODELS).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+}).strict();
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -57,16 +68,17 @@ export async function PATCH(
     if (isAuthError(authResult)) return authResult;
 
     const body = await request.json();
-
-    const updateData: Record<string, unknown> = {};
-    if (typeof body.name === "string") updateData.name = body.name.trim();
-    if (typeof body.description === "string") updateData.description = body.description;
-    if (typeof body.systemPrompt === "string") updateData.systemPrompt = body.systemPrompt;
-    if (typeof body.model === "string") updateData.model = body.model;
+    const parsed = updateAgentSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.errors[0].message },
+        { status: 400 }
+      );
+    }
 
     const agent = await prisma.agent.update({
       where: { id: agentId },
-      data: updateData,
+      data: parsed.data,
     });
 
     if (agent.userId) {

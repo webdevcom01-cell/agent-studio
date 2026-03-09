@@ -86,7 +86,8 @@ export async function aiResponseStreamingHandler(
         ? { [outputVariable]: fullText }
         : undefined,
     };
-  } catch {
+  } catch (err) {
+    logger.error("AI streaming response failed", err instanceof Error ? err : new Error(String(err)), { agentId: context.agentId });
     const errorMsg =
       "I'm having trouble generating a response right now. Let me continue.";
     writer.write({ type: "error", content: errorMsg });
