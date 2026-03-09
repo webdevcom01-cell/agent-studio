@@ -95,12 +95,18 @@ export async function parseSource(source: {
   }
 }
 
+const MAX_SITEMAP_URLS = 50;
+
 async function parseSitemapContent(sitemapUrl: string): Promise<string> {
   const { parseSitemap } = await import("./scraper");
   const urls = await parseSitemap(sitemapUrl);
   const contentParts: string[] = [];
 
-  for (const url of urls.slice(0, 50)) {
+  if (urls.length > MAX_SITEMAP_URLS) {
+    logger.warn("Sitemap truncated", { sitemapUrl, totalUrls: urls.length, limit: MAX_SITEMAP_URLS });
+  }
+
+  for (const url of urls.slice(0, MAX_SITEMAP_URLS)) {
     try {
       const content = await fetchAndParseURL(url);
       contentParts.push(`\n\n--- ${url} ---\n\n${content}`);

@@ -26,7 +26,7 @@ export const captureHandler: NodeHandler = async (node, context) => {
     if (validationType === "number" && isNaN(Number(input))) {
       validationFailed = true;
       errorMessage = "Please enter a valid number.";
-    } else if (validationType === "email" && !input.includes("@")) {
+    } else if (validationType === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input)) {
       validationFailed = true;
       errorMessage = "Please enter a valid email address.";
     }

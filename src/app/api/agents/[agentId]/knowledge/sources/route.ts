@@ -102,6 +102,23 @@ export async function POST(
       );
     }
 
+    if ((type === "URL" || type === "SITEMAP") && typeof body.url === "string") {
+      try {
+        const parsed = new URL(body.url);
+        if (!["http:", "https:"].includes(parsed.protocol)) {
+          return NextResponse.json(
+            { success: false, error: "URL must use http or https protocol" },
+            { status: 400 }
+          );
+        }
+      } catch {
+        return NextResponse.json(
+          { success: false, error: "Invalid URL format" },
+          { status: 400 }
+        );
+      }
+    }
+
     const source = await prisma.kBSource.create({
       data: {
         name,
