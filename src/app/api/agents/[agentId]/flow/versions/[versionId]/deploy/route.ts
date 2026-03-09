@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { VersionService } from "@/lib/versioning/version-service";
+import { logger } from "@/lib/logger";
 
 interface RouteParams {
   params: Promise<{ agentId: string; versionId: string }>;
@@ -29,7 +30,8 @@ export async function POST(
       { success: true, data: deployment },
       { status: 201 }
     );
-  } catch {
+  } catch (err) {
+    logger.error("Failed to deploy version", err);
     return NextResponse.json(
       { success: false, error: "Failed to deploy version" },
       { status: 500 }

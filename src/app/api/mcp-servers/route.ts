@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const createServerSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
@@ -55,6 +56,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 },
+      );
+    }
+
+    const rateResult = checkRateLimit(`create-mcp:${session.user.id}`, 10);
+    if (!rateResult.allowed) {
+      return NextResponse.json(
+        { success: false, error: "Too many requests" },
+        { status: 429 }
       );
     }
 

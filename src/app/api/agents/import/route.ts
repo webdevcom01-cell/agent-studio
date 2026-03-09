@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { agentExportSchema } from "@/lib/schemas/agent-export";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_IMPORT_SIZE = 5 * 1024 * 1024;
 
@@ -12,6 +13,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       { success: false, error: "Unauthorized" },
       { status: 401 }
+    );
+  }
+
+  const rateResult = checkRateLimit(`import-agent:${session.user.id}`, 5);
+  if (!rateResult.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests" },
+      { status: 429 }
     );
   }
 
@@ -38,11 +47,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const parsed = agentExportSchema.safeParse(body);
   if (!parsed.success) {
-    const issues = parsed.error.issues
-      .map((i) => `${i.path.join(".")}: ${i.message}`)
-      .join("; ");
     return NextResponse.json(
-      { success: false, error: `Invalid export format: ${issues}` },
+      { success: false, error: "Invalid export format" },
       { status: 422 }
     );
   }

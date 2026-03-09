@@ -14,13 +14,13 @@ export interface RateLimitResult {
   retryAfterMs: number;
 }
 
-export function checkRateLimit(key: string): RateLimitResult {
+export function checkRateLimit(key: string, maxRequests: number = MAX_REQUESTS): RateLimitResult {
   const now = Date.now();
   const entry = store.get(key) ?? { timestamps: [] };
 
   entry.timestamps = entry.timestamps.filter((t) => now - t < WINDOW_MS);
 
-  if (entry.timestamps.length >= MAX_REQUESTS) {
+  if (entry.timestamps.length >= maxRequests) {
     const oldestInWindow = entry.timestamps[0];
     const retryAfterMs = WINDOW_MS - (now - oldestInWindow);
     return { allowed: false, remaining: 0, retryAfterMs };
@@ -31,7 +31,7 @@ export function checkRateLimit(key: string): RateLimitResult {
 
   return {
     allowed: true,
-    remaining: MAX_REQUESTS - entry.timestamps.length,
+    remaining: maxRequests - entry.timestamps.length,
     retryAfterMs: 0,
   };
 }
