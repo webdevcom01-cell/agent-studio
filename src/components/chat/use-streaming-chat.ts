@@ -43,7 +43,7 @@ export function useStreamingChat({
     setIsLoading(true);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60_000);
+    const timeout = setTimeout(() => controller.abort(), 120_000);
     let readerRef: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
     try {
@@ -141,6 +141,11 @@ export function useStreamingChat({
                 ...prev,
                 { role: "assistant", content: chunk.content },
               ]);
+              break;
+
+            case "heartbeat":
+              // Keep-alive signal from server during long-running operations
+              // (e.g. MCP tool calls). No UI action needed.
               break;
           }
         }

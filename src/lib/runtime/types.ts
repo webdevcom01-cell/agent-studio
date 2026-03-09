@@ -37,7 +37,8 @@ export type StreamChunk =
   | { type: "stream_delta"; content: string }
   | { type: "stream_end"; content: string }
   | { type: "done"; conversationId: string; waitForInput: boolean }
-  | { type: "error"; content: string };
+  | { type: "error"; content: string }
+  | { type: "heartbeat" };
 
 export interface StreamWriter {
   write(chunk: StreamChunk): void;

@@ -148,7 +148,27 @@ export function executeFlowStreaming(
             }
 
             try {
-              result = await handler(node, context);
+              // For long-running nodes (e.g. MCP tools), send heartbeats
+              // to keep the Vercel streaming connection alive
+              const isLongRunning = node.type === "mcp_tool";
+              let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+              if (isLongRunning) {
+                writer.write({ type: "heartbeat" });
+                heartbeatTimer = setInterval(() => {
+                  try {
+                    writer.write({ type: "heartbeat" });
+                  } catch {
+                    // stream already closed
+                  }
+                }, 5000);
+              }
+
+              try {
+                result = await handler(node, context);
+              } finally {
+                if (heartbeatTimer) clearInterval(heartbeatTimer);
+              }
             } catch (error) {
               logger.error("Node handler error", error, { agentId: context.agentId, nodeType: node.type, nodeId: node.id });
               const msg: OutputMessage = {
