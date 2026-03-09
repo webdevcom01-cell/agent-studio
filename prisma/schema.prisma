@@ -83,18 +83,21 @@ model Agent {
   calleeCallLogs    AgentCallLog[]          @relation("CalleeCallLogs")
   agentCard         AgentCard?
   approvalRequests  HumanApprovalRequest[]
+  deployments       FlowDeployment[]
 
   @@index([userId])
 }
 
 model Flow {
-  id        String   @id @default(cuid())
-  name      String   @default("Main Flow")
-  content   Json     @default("{\"nodes\":[],\"edges\":[],\"variables\":[]}")
-  agentId   String   @unique
-  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String        @id @default(cuid())
+  name            String        @default("Main Flow")
+  content         Json          @default("{\"nodes\":[],\"edges\":[],\"variables\":[]}")
+  activeVersionId String?
+  agentId         String        @unique
+  agent           Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  versions        FlowVersion[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 model KnowledgeBase {
@@ -177,15 +180,17 @@ enum ConversationStatus {
 }
 
 model Conversation {
-  id            String             @id @default(cuid())
-  status        ConversationStatus @default(ACTIVE)
-  currentNodeId String?
-  variables     Json               @default("{}")
-  agentId       String
-  agent         Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  messages      Message[]
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id              String             @id @default(cuid())
+  status          ConversationStatus @default(ACTIVE)
+  currentNodeId   String?
+  variables       Json               @default("{}")
+  agentId         String
+  agent           Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  flowVersionId   String?
+  flowVersion     FlowVersion?       @relation(fields: [flowVersionId], references: [id])
+  messages        Message[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   @@index([agentId])
 }
@@ -240,6 +245,49 @@ model AgentMCPServer {
   @@unique([agentId, mcpServerId])
   @@index([agentId])
   @@index([mcpServerId])
+}
+
+// ─── Flow Versioning ─────────────────────────────────────────────────────────
+
+enum FlowVersionStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model FlowVersion {
+  id             String            @id @default(cuid())
+  flowId         String
+  flow           Flow              @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  version        Int
+  label          String?
+  content        Json
+  status         FlowVersionStatus @default(DRAFT)
+  changesSummary Json?
+  createdById    String?
+  createdAt      DateTime          @default(now())
+
+  deployments    FlowDeployment[]
+  conversations  Conversation[]
+
+  @@unique([flowId, version])
+  @@index([flowId])
+  @@index([createdAt])
+}
+
+model FlowDeployment {
+  id              String      @id @default(cuid())
+  agentId         String
+  agent           Agent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  flowVersionId   String
+  flowVersion     FlowVersion @relation(fields: [flowVersionId], references: [id], onDelete: Cascade)
+  deployedById    String?
+  note            String?
+  createdAt       DateTime    @default(now())
+
+  @@index([agentId])
+  @@index([flowVersionId])
+  @@index([createdAt])
 }
 
 // ─── A2A Communication ────────────────────────────────────────────────────────

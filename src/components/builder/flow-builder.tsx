@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -39,8 +39,10 @@ import { MCPToolNode } from "./nodes/mcp-tool-node";
 import { CallAgentNode } from "./nodes/call-agent-node";
 import { HumanApprovalNode } from "./nodes/human-approval-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
+import { VersionPanel } from "./version-panel";
+import { DeployDialog } from "./deploy-dialog";
 import { Button } from "@/components/ui/button";
-import { Save, Plug, X } from "lucide-react";
+import { Save, Plug, X, Clock, Rocket, Circle } from "lucide-react";
 import { AgentMCPSelector } from "@/components/mcp/agent-mcp-selector";
 import type { FlowContent, FlowNode } from "@/types";
 
@@ -93,8 +95,26 @@ function FlowBuilderCanvas({
   );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [showMCPPanel, setShowMCPPanel] = useState(false);
+  const [showVersionPanel, setShowVersionPanel] = useState(false);
+  const [showDeployDialog, setShowDeployDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [lastSavedVersionId, setLastSavedVersionId] = useState<string | null>(
+    null
+  );
+  const [deployedVersion, setDeployedVersion] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/agents/${agentId}/flow`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success && json.data?.activeVersion) {
+          setDeployedVersion(json.data.activeVersion.version);
+          setLastSavedVersionId(json.data.activeVersion.id);
+        }
+      })
+      .catch(() => {});
+  }, [agentId]);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
   nodesRef.current = nodes;
@@ -189,11 +209,16 @@ function FlowBuilderCanvas({
         variables: initialContent.variables ?? [],
       };
 
-      await fetch(`/api/agents/${agentId}/flow`, {
+      const res = await fetch(`/api/agents/${agentId}/flow`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
       });
+      const json = await res.json();
+
+      if (json.success && json.data?.latestVersion?.id) {
+        setLastSavedVersionId(json.data.latestVersion.id);
+      }
 
       setHasChanges(false);
     } catch (error) {
@@ -216,12 +241,67 @@ function FlowBuilderCanvas({
           <NodePicker onAddNode={addNode} />
         </div>
         <div className="flex items-center gap-2">
+          <button
+            className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+            onClick={() => {
+              setShowVersionPanel(true);
+              setSelectedNodeId(null);
+              setShowMCPPanel(false);
+            }}
+          >
+            {hasChanges ? (
+              <>
+                <Circle className="size-2.5 fill-amber-400 text-amber-400" />
+                Unpublished changes
+              </>
+            ) : deployedVersion ? (
+              <>
+                <Circle className="size-2.5 fill-emerald-400 text-emerald-400" />
+                Live · v{deployedVersion}
+              </>
+            ) : (
+              <>
+                <Circle className="size-2.5 fill-muted-foreground text-muted-foreground" />
+                No deploy
+              </>
+            )}
+          </button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setShowVersionPanel(!showVersionPanel);
+              if (!showVersionPanel) {
+                setSelectedNodeId(null);
+                setShowMCPPanel(false);
+              }
+            }}
+          >
+            <Clock className="mr-1.5 size-4" />
+            History
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              if (lastSavedVersionId) {
+                setShowDeployDialog(true);
+              }
+            }}
+            disabled={!lastSavedVersionId}
+          >
+            <Rocket className="mr-1.5 size-4" />
+            Deploy
+          </Button>
           <Button
             size="sm"
             variant={showMCPPanel ? "default" : "outline"}
             onClick={() => {
               setShowMCPPanel(!showMCPPanel);
-              if (!showMCPPanel) setSelectedNodeId(null);
+              if (!showMCPPanel) {
+                setSelectedNodeId(null);
+                setShowVersionPanel(false);
+              }
             }}
             className={showMCPPanel ? "bg-teal-600 hover:bg-teal-700" : ""}
           >
@@ -282,7 +362,17 @@ function FlowBuilderCanvas({
           />
         )}
 
-        {showMCPPanel && !selectedNode && (
+        {showVersionPanel && !selectedNode && (
+          <VersionPanel
+            agentId={agentId}
+            onClose={() => setShowVersionPanel(false)}
+            onVersionRestored={() => {
+              window.location.reload();
+            }}
+          />
+        )}
+
+        {showMCPPanel && !selectedNode && !showVersionPanel && (
           <div className="flex w-80 flex-col border-l bg-background">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="text-sm font-semibold flex items-center gap-1.5">
@@ -304,6 +394,17 @@ function FlowBuilderCanvas({
           </div>
         )}
       </div>
+
+      {showDeployDialog && lastSavedVersionId && (
+        <DeployDialog
+          agentId={agentId}
+          versionId={lastSavedVersionId}
+          onClose={() => setShowDeployDialog(false)}
+          onDeployed={() => {
+            setShowDeployDialog(false);
+          }}
+        />
+      )}
     </div>
   );
 }

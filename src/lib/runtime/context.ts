@@ -44,6 +44,7 @@ export async function loadContext(
       agentId,
       status: "ACTIVE",
       variables: {},
+      flowVersionId: agent.flow.activeVersionId ?? undefined,
     },
   });
 
