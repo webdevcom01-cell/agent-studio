@@ -44,6 +44,7 @@ export function useStreamingChat({
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60_000);
+    let readerRef: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
     try {
       const res = await fetch(`/api/agents/${agentId}/chat`, {
@@ -66,6 +67,7 @@ export function useStreamingChat({
       }
 
       const reader = res.body.getReader();
+      readerRef = reader;
       const decoder = new TextDecoder();
       let buffer = "";
 
@@ -144,11 +146,13 @@ export function useStreamingChat({
         }
       }
     } catch {
+      readerRef?.cancel().catch(() => {});
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Failed to connect to the server." },
       ]);
     } finally {
+      readerRef = null;
       clearTimeout(timeout);
       setIsLoading(false);
     }

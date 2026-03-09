@@ -1,10 +1,9 @@
-import type { NodeHandler } from "../types";
+import type { NodeHandler, ExecutionResult } from "../types";
 import { resolveTemplate } from "../template";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
 const DEFAULT_TIMEOUT_MINUTES = 60;
-const POLL_INTERVAL_MS = 5000;
 
 export const humanApprovalHandler: NodeHandler = async (node, context) => {
   const prompt = (node.data.prompt as string) || "Please review and approve";
@@ -38,6 +37,62 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
     };
   }
 
+  const pendingRequestId = context.variables["_approval_request_id"] as string | undefined;
+
+  if (pendingRequestId) {
+    const updated = await prisma.humanApprovalRequest.findUnique({
+      where: { id: pendingRequestId },
+    });
+
+    if (!updated) {
+      return {
+        messages: [{ role: "assistant", content: "Approval request not found." }],
+        nextNodeId: null,
+        waitForInput: false,
+        updatedVariables: { [outputVariable]: null },
+      };
+    }
+
+    if (updated.status === "approved" || updated.status === "rejected") {
+      return {
+        messages: [
+          {
+            role: "assistant",
+            content: `Human ${updated.status}: ${updated.response ?? ""}`.trim(),
+          },
+        ],
+        nextNodeId: null,
+        waitForInput: false,
+        updatedVariables: {
+          [outputVariable]: updated.response ?? updated.status,
+          _approval_request_id: null,
+        },
+      };
+    }
+
+    if (new Date() > updated.expiresAt) {
+      await prisma.humanApprovalRequest
+        .update({
+          where: { id: pendingRequestId },
+          data: { status: "timeout", resolvedAt: new Date() },
+        })
+        .catch((err) => {
+          logger.error("Failed to update approval timeout", err, {
+            requestId: pendingRequestId,
+          });
+        });
+
+      return handleTimeout(onTimeout, timeoutMinutes, outputVariable, defaultValue);
+    }
+
+    return {
+      messages: [{ role: "assistant", content: "Waiting for human approval..." }],
+      nextNodeId: node.id,
+      waitForInput: true,
+      updatedVariables: {},
+    };
+  }
+
   const expiresAt = new Date(Date.now() + timeoutMinutes * 60 * 1000);
 
   const request = await prisma.humanApprovalRequest.create({
@@ -52,47 +107,25 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
     },
   });
 
-  const maxPolls = Math.ceil(
-    (timeoutMinutes * 60 * 1000) / POLL_INTERVAL_MS
-  );
+  return {
+    messages: [
+      {
+        role: "assistant",
+        content: `Awaiting human approval: ${resolvedPrompt}`,
+      },
+    ],
+    nextNodeId: node.id,
+    waitForInput: true,
+    updatedVariables: { _approval_request_id: request.id },
+  };
+};
 
-  for (let i = 0; i < maxPolls; i++) {
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-
-    const updated = await prisma.humanApprovalRequest.findUnique({
-      where: { id: request.id },
-    });
-
-    if (!updated) break;
-
-    if (updated.status === "approved" || updated.status === "rejected") {
-      return {
-        messages: [
-          {
-            role: "assistant",
-            content: `Human ${updated.status}: ${updated.response ?? ""}`.trim(),
-          },
-        ],
-        nextNodeId: null,
-        waitForInput: false,
-        updatedVariables: {
-          [outputVariable]: updated.response ?? updated.status,
-        },
-      };
-    }
-  }
-
-  await prisma.humanApprovalRequest
-    .update({
-      where: { id: request.id },
-      data: { status: "timeout", resolvedAt: new Date() },
-    })
-    .catch((err) => {
-      logger.error("Failed to update approval timeout", err, {
-        requestId: request.id,
-      });
-    });
-
+function handleTimeout(
+  onTimeout: string,
+  timeoutMinutes: number,
+  outputVariable: string,
+  defaultValue: string,
+): ExecutionResult {
   if (onTimeout === "stop") {
     return {
       messages: [
@@ -103,6 +136,7 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
       ],
       nextNodeId: null,
       waitForInput: false,
+      updatedVariables: { _approval_request_id: null },
     };
   }
 
@@ -116,7 +150,10 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
       ],
       nextNodeId: null,
       waitForInput: false,
-      updatedVariables: { [outputVariable]: defaultValue || null },
+      updatedVariables: {
+        [outputVariable]: defaultValue || null,
+        _approval_request_id: null,
+      },
     };
   }
 
@@ -129,6 +166,6 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
     ],
     nextNodeId: null,
     waitForInput: false,
-    updatedVariables: { [outputVariable]: null },
+    updatedVariables: { [outputVariable]: null, _approval_request_id: null },
   };
-};
+}

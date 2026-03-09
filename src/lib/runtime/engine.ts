@@ -35,6 +35,7 @@ export async function executeFlow(
   const MAX_ITERATIONS = 50;
   let iterations = 0;
   const visitedNodes = new Map<string, number>();
+  const nodeMap = new Map(context.flowContent.nodes.map((n) => [n.id, n]));
 
   const isResuming = !!context.currentNodeId && !!userMessage;
   context.isResuming = isResuming;
@@ -67,9 +68,7 @@ export async function executeFlow(
   while (context.currentNodeId && iterations < MAX_ITERATIONS) {
     iterations++;
 
-    const node = context.flowContent.nodes.find(
-      (n) => n.id === context.currentNodeId
-    );
+    const node = nodeMap.get(context.currentNodeId);
 
     if (!node) {
       allMessages.push({

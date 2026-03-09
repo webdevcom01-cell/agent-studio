@@ -1,5 +1,6 @@
 import { createMCPClient } from "@ai-sdk/mcp";
 import type { MCPTransport as MCPTransportType } from "@/generated/prisma";
+import { logger } from "@/lib/logger";
 
 interface PoolEntry {
   client: Awaited<ReturnType<typeof createMCPClient>>;
@@ -8,6 +9,7 @@ interface PoolEntry {
 
 const IDLE_TTL_MS = 5 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 60 * 1000;
+const MAX_POOL_SIZE = 50;
 
 const pool = new Map<string, PoolEntry>();
 let cleanupTimer: ReturnType<typeof setInterval> | null = null;
@@ -21,13 +23,39 @@ function buildTransportConfig(
   return headers ? { type, url, headers } : { type, url };
 }
 
+function evictLRU(): void {
+  if (pool.size < MAX_POOL_SIZE) return;
+
+  let oldestId: string | null = null;
+  let oldestTime = Infinity;
+
+  for (const [id, entry] of pool) {
+    if (entry.lastUsed < oldestTime) {
+      oldestTime = entry.lastUsed;
+      oldestId = id;
+    }
+  }
+
+  if (oldestId) {
+    const entry = pool.get(oldestId);
+    if (entry) {
+      entry.client.close().catch((err) => {
+        logger.warn("Failed to close evicted MCP client", { serverId: oldestId, error: String(err) });
+      });
+    }
+    pool.delete(oldestId);
+  }
+}
+
 function startCleanup(): void {
   if (cleanupTimer) return;
   cleanupTimer = setInterval(() => {
     const now = Date.now();
     for (const [id, entry] of pool) {
       if (now - entry.lastUsed > IDLE_TTL_MS) {
-        entry.client.close().catch(() => {});
+        entry.client.close().catch((err) => {
+          logger.warn("Failed to close idle MCP client", { serverId: id, error: String(err) });
+        });
         pool.delete(id);
       }
     }
@@ -50,6 +78,8 @@ export async function getOrCreate(
     return existing.client;
   }
 
+  evictLRU();
+
   const transportConfig = buildTransportConfig(url, transport, headers);
   const client = await createMCPClient({ transport: transportConfig });
 
@@ -62,7 +92,9 @@ export async function getOrCreate(
 export async function remove(serverId: string): Promise<void> {
   const entry = pool.get(serverId);
   if (entry) {
-    await entry.client.close().catch(() => {});
+    await entry.client.close().catch((err) => {
+      logger.warn("Failed to close removed MCP client", { serverId, error: String(err) });
+    });
     pool.delete(serverId);
   }
 }
@@ -72,8 +104,10 @@ export function getPoolSize(): number {
 }
 
 export function clearPool(): void {
-  for (const [, entry] of pool) {
-    entry.client.close().catch(() => {});
+  for (const [id, entry] of pool) {
+    entry.client.close().catch((err) => {
+      logger.warn("Failed to close MCP client during pool clear", { serverId: id, error: String(err) });
+    });
   }
   pool.clear();
   if (cleanupTimer) {

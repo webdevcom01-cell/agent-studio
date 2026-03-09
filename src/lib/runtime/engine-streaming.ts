@@ -5,6 +5,7 @@ import { findNextNode, findStartNode } from "./engine";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
 
 const MAX_ITERATIONS = 50;
 const MAX_HISTORY = 100;
@@ -20,6 +21,7 @@ export function executeFlowStreaming(
       const allMessages: OutputMessage[] = [];
       let iterations = 0;
       const visitedNodes = new Map<string, number>();
+      const nodeMap = new Map(context.flowContent.nodes.map((n) => [n.id, n]));
 
       try {
         const isResuming = !!context.currentNodeId && !!userMessage;
@@ -72,9 +74,7 @@ export function executeFlowStreaming(
         while (context.currentNodeId && iterations < MAX_ITERATIONS) {
           iterations++;
 
-          const node = context.flowContent.nodes.find(
-            (n) => n.id === context.currentNodeId
-          );
+          const node = nodeMap.get(context.currentNodeId!);
 
           if (!node) {
             const msg: OutputMessage = {
@@ -119,7 +119,8 @@ export function executeFlowStreaming(
                 context,
                 writer
               );
-            } catch {
+            } catch (error) {
+              logger.error("AI streaming handler error", error, { agentId: context.agentId, nodeId: node.id });
               const msg: OutputMessage = {
                 role: "assistant",
                 content: "Something went wrong. Let me try to continue.",
@@ -148,7 +149,8 @@ export function executeFlowStreaming(
 
             try {
               result = await handler(node, context);
-            } catch {
+            } catch (error) {
+              logger.error("Node handler error", error, { agentId: context.agentId, nodeType: node.type, nodeId: node.id });
               const msg: OutputMessage = {
                 role: "assistant",
                 content: "Something went wrong. Let me try to continue.",
@@ -210,8 +212,8 @@ export function executeFlowStreaming(
           waitForInput: waitingForInput,
         });
       } finally {
-        try { await saveMessages(context.conversationId, allMessages); } catch { /* best effort */ }
-        try { await saveContext(context); } catch { /* best effort */ }
+        try { await saveMessages(context.conversationId, allMessages); } catch (err) { logger.error("Failed to save messages", err, { conversationId: context.conversationId }); }
+        try { await saveContext(context); } catch (err) { logger.error("Failed to save context", err, { conversationId: context.conversationId }); }
         try { writer.close(); } catch { /* stream already closed */ }
       }
     },
