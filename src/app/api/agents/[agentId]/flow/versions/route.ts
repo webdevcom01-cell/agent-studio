@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
+import { logger } from "@/lib/logger";
 import { VersionService } from "@/lib/versioning/version-service";
 import type { FlowContent } from "@/types";
 
@@ -12,46 +13,64 @@ export async function GET(
   _request: NextRequest,
   { params }: RouteParams
 ): Promise<NextResponse> {
-  const { agentId } = await params;
+  try {
+    const { agentId } = await params;
+    const authResult = await requireAgentOwner(agentId);
+    if (isAuthError(authResult)) return authResult;
 
-  const flow = await prisma.flow.findUnique({ where: { agentId } });
-  if (!flow) {
+    const flow = await prisma.flow.findUnique({ where: { agentId } });
+    if (!flow) {
+      return NextResponse.json(
+        { success: false, error: "Flow not found" },
+        { status: 404 }
+      );
+    }
+
+    const versions = await VersionService.listVersions(flow.id);
+
+    return NextResponse.json({ success: true, data: versions });
+  } catch (err) {
+    logger.error("Failed to list versions", err);
     return NextResponse.json(
-      { success: false, error: "Flow not found" },
-      { status: 404 }
+      { success: false, error: "Failed to list versions" },
+      { status: 500 }
     );
   }
-
-  const versions = await VersionService.listVersions(flow.id);
-
-  return NextResponse.json({ success: true, data: versions });
 }
 
 export async function POST(
   request: NextRequest,
   { params }: RouteParams
 ): Promise<NextResponse> {
-  const { agentId } = await params;
-  const session = await auth();
-  const userId = session?.user?.id;
+  try {
+    const { agentId } = await params;
+    const authResult = await requireAgentOwner(agentId);
+    if (isAuthError(authResult)) return authResult;
 
-  const flow = await prisma.flow.findUnique({ where: { agentId } });
-  if (!flow) {
+    const flow = await prisma.flow.findUnique({ where: { agentId } });
+    if (!flow) {
+      return NextResponse.json(
+        { success: false, error: "Flow not found" },
+        { status: 404 }
+      );
+    }
+
+    const body = await request.json();
+    const label = typeof body.label === "string" ? body.label : undefined;
+
+    const version = await VersionService.createVersion(
+      flow.id,
+      flow.content as unknown as FlowContent,
+      authResult.userId,
+      label
+    );
+
+    return NextResponse.json({ success: true, data: version }, { status: 201 });
+  } catch (err) {
+    logger.error("Failed to create version", err);
     return NextResponse.json(
-      { success: false, error: "Flow not found" },
-      { status: 404 }
+      { success: false, error: "Failed to create version" },
+      { status: 500 }
     );
   }
-
-  const body = await request.json();
-  const label = typeof body.label === "string" ? body.label : undefined;
-
-  const version = await VersionService.createVersion(
-    flow.id,
-    flow.content as unknown as FlowContent,
-    userId,
-    label
-  );
-
-  return NextResponse.json({ success: true, data: version }, { status: 201 });
 }

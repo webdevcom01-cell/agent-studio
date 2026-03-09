@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { VersionService } from "@/lib/versioning/version-service";
 
 interface RouteParams {
@@ -10,7 +11,10 @@ export async function GET(
   request: NextRequest,
   { params }: RouteParams
 ): Promise<NextResponse> {
-  const { versionId } = await params;
+  const { agentId, versionId } = await params;
+  const authResult = await requireAgentOwner(agentId);
+  if (isAuthError(authResult)) return authResult;
+
   const compareWith = request.nextUrl.searchParams.get("compareWith");
 
   const currentVersion = await prisma.flowVersion.findUnique({

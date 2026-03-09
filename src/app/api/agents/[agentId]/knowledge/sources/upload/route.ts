@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseSource } from "@/lib/knowledge/parsers";
 import { ingestSource } from "@/lib/knowledge/ingest";
+import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
+import { logger } from "@/lib/logger";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = [".pdf", ".docx"];
@@ -15,6 +17,8 @@ export async function POST(
   { params }: RouteParams
 ): Promise<NextResponse> {
   const { agentId } = await params;
+  const authResult = await requireAgentOwner(agentId);
+  if (isAuthError(authResult)) return authResult;
 
   const agent = await prisma.agent.findUnique({
     where: { id: agentId },
@@ -83,7 +87,9 @@ export async function POST(
       },
     });
 
-    ingestSource(source.id, extractedText).catch(() => {});
+    ingestSource(source.id, extractedText).catch(
+      (err) => logger.error("Background ingest failed", err)
+    );
 
     return NextResponse.json(
       { success: true, data: source },

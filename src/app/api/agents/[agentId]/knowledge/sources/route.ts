@@ -2,84 +2,127 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ingestSource } from "@/lib/knowledge/ingest";
 import { logger } from "@/lib/logger";
+import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
 }
 
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 100;
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: RouteParams
 ): Promise<NextResponse> {
-  const { agentId } = await params;
+  try {
+    const { agentId } = await params;
+    const authResult = await requireAgentOwner(agentId);
+    if (isAuthError(authResult)) return authResult;
 
-  const agent = await prisma.agent.findUnique({
-    where: { id: agentId },
-    select: { knowledgeBase: { select: { id: true } } },
-  });
+    const searchParams = request.nextUrl.searchParams;
+    const page = Math.max(1, Number(searchParams.get("page")) || 1);
+    const limit = Math.min(
+      MAX_PAGE_SIZE,
+      Math.max(1, Number(searchParams.get("limit")) || DEFAULT_PAGE_SIZE)
+    );
+    const skip = (page - 1) * limit;
 
-  if (!agent?.knowledgeBase) {
+    const agent = await prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { knowledgeBase: { select: { id: true } } },
+    });
+
+    if (!agent?.knowledgeBase) {
+      return NextResponse.json(
+        { success: false, error: "Knowledge base not found" },
+        { status: 404 }
+      );
+    }
+
+    const where = { knowledgeBaseId: agent.knowledgeBase.id };
+
+    const [sources, total] = await Promise.all([
+      prisma.kBSource.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        include: { _count: { select: { chunks: true } } },
+        skip,
+        take: limit,
+      }),
+      prisma.kBSource.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      data: sources,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    logger.error("Failed to list knowledge sources", err);
     return NextResponse.json(
-      { success: false, error: "Knowledge base not found" },
-      { status: 404 }
+      { success: false, error: "Failed to list sources" },
+      { status: 500 }
     );
   }
-
-  const sources = await prisma.kBSource.findMany({
-    where: { knowledgeBaseId: agent.knowledgeBase.id },
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { chunks: true } } },
-  });
-
-  return NextResponse.json({ success: true, data: sources });
 }
 
 export async function POST(
   request: NextRequest,
   { params }: RouteParams
 ): Promise<NextResponse> {
-  const { agentId } = await params;
+  try {
+    const { agentId } = await params;
+    const authResult = await requireAgentOwner(agentId);
+    if (isAuthError(authResult)) return authResult;
 
-  const agent = await prisma.agent.findUnique({
-    where: { id: agentId },
-    select: { knowledgeBase: { select: { id: true } } },
-  });
+    const agent = await prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { knowledgeBase: { select: { id: true } } },
+    });
 
-  if (!agent?.knowledgeBase) {
+    if (!agent?.knowledgeBase) {
+      return NextResponse.json(
+        { success: false, error: "Knowledge base not found" },
+        { status: 404 }
+      );
+    }
+
+    const body = await request.json();
+    const type = body.type as string;
+    const name = typeof body.name === "string" ? body.name : "Untitled";
+
+    const validTypes = ["TEXT", "URL", "SITEMAP", "FILE"] as const;
+    type ValidType = (typeof validTypes)[number];
+
+    if (!validTypes.includes(type as ValidType)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid source type" },
+        { status: 400 }
+      );
+    }
+
+    const source = await prisma.kBSource.create({
+      data: {
+        name,
+        type: type as ValidType,
+        url: type === "URL" || type === "SITEMAP" ? body.url : null,
+        rawContent: type === "TEXT" ? body.content : null,
+        knowledgeBaseId: agent.knowledgeBase.id,
+        status: "PENDING",
+      },
+    });
+
+    ingestSource(source.id, type === "TEXT" ? body.content : undefined).catch(
+      (err) => logger.error("Background ingest failed", err)
+    );
+
+    return NextResponse.json({ success: true, data: source }, { status: 201 });
+  } catch (err) {
+    logger.error("Failed to create knowledge source", err);
     return NextResponse.json(
-      { success: false, error: "Knowledge base not found" },
-      { status: 404 }
+      { success: false, error: "Failed to create source" },
+      { status: 500 }
     );
   }
-
-  const body = await request.json();
-  const type = body.type as string;
-  const name = typeof body.name === "string" ? body.name : "Untitled";
-
-  const validTypes = ["TEXT", "URL", "SITEMAP", "FILE"] as const;
-  type ValidType = (typeof validTypes)[number];
-
-  if (!validTypes.includes(type as ValidType)) {
-    return NextResponse.json(
-      { success: false, error: "Invalid source type" },
-      { status: 400 }
-    );
-  }
-
-  const source = await prisma.kBSource.create({
-    data: {
-      name,
-      type: type as ValidType,
-      url: type === "URL" || type === "SITEMAP" ? body.url : null,
-      rawContent: type === "TEXT" ? body.content : null,
-      knowledgeBaseId: agent.knowledgeBase.id,
-      status: "PENDING",
-    },
-  });
-
-  ingestSource(source.id, type === "TEXT" ? body.content : undefined).catch(
-    (err) => logger.error("Background ingest failed", err)
-  );
-
-  return NextResponse.json({ success: true, data: source }, { status: 201 });
 }

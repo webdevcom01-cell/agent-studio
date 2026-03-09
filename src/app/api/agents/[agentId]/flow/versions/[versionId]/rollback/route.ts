@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { VersionService } from "@/lib/versioning/version-service";
 
 interface RouteParams {
@@ -12,8 +12,8 @@ export async function POST(
   { params }: RouteParams
 ): Promise<NextResponse> {
   const { agentId, versionId } = await params;
-  const session = await auth();
-  const userId = session?.user?.id;
+  const authResult = await requireAgentOwner(agentId);
+  if (isAuthError(authResult)) return authResult;
 
   const flow = await prisma.flow.findUnique({ where: { agentId } });
   if (!flow) {
@@ -27,13 +27,13 @@ export async function POST(
     const newVersion = await VersionService.rollbackToVersion(
       flow.id,
       versionId,
-      userId
+      authResult.userId
     );
 
     const deployment = await VersionService.deployVersion(
       agentId,
       newVersion.id,
-      userId,
+      authResult.userId,
       `Rollback to v${newVersion.label?.replace("Rollback to v", "") ?? "?"}`
     );
 

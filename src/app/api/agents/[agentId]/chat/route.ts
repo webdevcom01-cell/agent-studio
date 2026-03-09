@@ -4,6 +4,7 @@ import { executeFlowStreaming } from "@/lib/runtime/engine-streaming";
 import { loadContext } from "@/lib/runtime/context";
 import { trackChatResponse } from "@/lib/analytics";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -63,7 +64,7 @@ export async function POST(
         timeToFirstTokenMs,
         totalResponseTimeMs: timeToFirstTokenMs,
         isNewConversation: context.isNewConversation,
-      }).catch(() => {});
+      }).catch((err) => logger.warn("Analytics tracking failed", err));
 
       return new Response(stream, {
         headers: {
@@ -84,7 +85,7 @@ export async function POST(
       timeToFirstTokenMs: totalResponseTimeMs,
       totalResponseTimeMs,
       isNewConversation: context.isNewConversation,
-    }).catch(() => {});
+    }).catch((err) => logger.warn("Analytics tracking failed", err));
 
     return NextResponse.json({
       success: true,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { executeFlow } from "@/lib/runtime/engine";
 import type { FlowContent } from "@/types";
 import type { RuntimeContext } from "@/lib/runtime/types";
@@ -13,6 +14,8 @@ export async function POST(
   { params }: RouteParams
 ): Promise<NextResponse> {
   const { agentId, versionId } = await params;
+  const authResult = await requireAgentOwner(agentId);
+  if (isAuthError(authResult)) return authResult;
 
   const body = await request.json();
   const input = typeof body.input === "string" ? body.input.trim() : "";

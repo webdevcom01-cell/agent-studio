@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { PrismaClient } from "@/generated/prisma";
 import { generateChangesSummary, computeFlowDiff } from "./diff-engine";
 import type { FlowContent } from "@/types";
 import type { FlowDiff } from "./diff-engine";
@@ -8,6 +9,11 @@ import type {
   FlowVersionStatus,
 } from "@/generated/prisma";
 
+type TransactionClient = Omit<
+  PrismaClient,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>;
+
 const MIN_VERSION_INTERVAL_MS = 30_000;
 
 export class VersionService {
@@ -15,9 +21,11 @@ export class VersionService {
     flowId: string,
     content: FlowContent,
     userId?: string,
-    label?: string
+    label?: string,
+    tx?: TransactionClient
   ): Promise<FlowVersion> {
-    const lastVersion = await prisma.flowVersion.findFirst({
+    const db = tx ?? prisma;
+    const lastVersion = await db.flowVersion.findFirst({
       where: { flowId },
       orderBy: { version: "desc" },
     });
@@ -43,7 +51,7 @@ export class VersionService {
         )
       : null;
 
-    return prisma.flowVersion.create({
+    return db.flowVersion.create({
       data: {
         flowId,
         version: nextVersion,
@@ -121,36 +129,36 @@ export class VersionService {
 
     const content = version.content as unknown as FlowContent;
 
-    await prisma.$transaction([
-      prisma.flowVersion.updateMany({
+    return prisma.$transaction(async (tx) => {
+      await tx.flowVersion.updateMany({
         where: {
           flowId: version.flowId,
           status: "PUBLISHED" as FlowVersionStatus,
         },
         data: { status: "ARCHIVED" as FlowVersionStatus },
-      }),
+      });
 
-      prisma.flowVersion.update({
+      await tx.flowVersion.update({
         where: { id: versionId },
         data: { status: "PUBLISHED" as FlowVersionStatus },
-      }),
+      });
 
-      prisma.flow.update({
+      await tx.flow.update({
         where: { id: version.flowId },
         data: {
           activeVersionId: versionId,
           content: JSON.parse(JSON.stringify(content)),
         },
-      }),
-    ]);
+      });
 
-    return prisma.flowDeployment.create({
-      data: {
-        agentId,
-        flowVersionId: versionId,
-        deployedById: userId ?? null,
-        note: note ?? null,
-      },
+      return tx.flowDeployment.create({
+        data: {
+          agentId,
+          flowVersionId: versionId,
+          deployedById: userId ?? null,
+          note: note ?? null,
+        },
+      });
     });
   }
 

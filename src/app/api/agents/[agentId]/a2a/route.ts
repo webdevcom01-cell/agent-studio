@@ -136,7 +136,7 @@ export async function POST(
           completedAt: new Date(),
         },
       })
-      .catch(() => {});
+      .catch((err) => logger.warn("A2A task update failed", err));
 
     return NextResponse.json({
       jsonrpc: "2.0",
