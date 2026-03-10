@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { agentExportSchema } from "@/lib/schemas/agent-export";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { parseBodyWithLimit, BodyTooLargeError } from "@/lib/api/body-limit";
 
 const MAX_IMPORT_SIZE = 5 * 1024 * 1024;
 const MAX_AGENTS_PER_USER = 100;
@@ -28,21 +29,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const contentLength = parseInt(
-    request.headers.get("content-length") ?? "0",
-    10
-  );
-  if (contentLength > MAX_IMPORT_SIZE) {
-    return NextResponse.json(
-      { success: false, error: "Import file exceeds 5 MB limit" },
-      { status: 400 }
-    );
-  }
-
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    body = await parseBodyWithLimit(request, MAX_IMPORT_SIZE);
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) {
+      return NextResponse.json(
+        { success: false, error: "Import file exceeds 5 MB limit" },
+        { status: 400 }
+      );
+    }
     return NextResponse.json(
       { success: false, error: "Invalid JSON" },
       { status: 400 }

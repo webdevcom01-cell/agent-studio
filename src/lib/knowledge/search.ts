@@ -8,6 +8,20 @@ import { logger } from "@/lib/logger";
 const MIN_RELEVANCE_SCORE = 0.005;
 const MAX_CONTEXT_TOKENS = 4000;
 
+const HTML_ESCAPE_MAP: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#x27;",
+};
+
+const HTML_ESCAPE_RE = /[&<>"']/g;
+
+export function sanitizeChunkContent(content: string): string {
+  return content.replace(HTML_ESCAPE_RE, (ch) => HTML_ESCAPE_MAP[ch]);
+}
+
 export interface SearchResult {
   chunkId: string;
   content: string;
@@ -88,7 +102,7 @@ export async function searchKnowledgeBase(
     const meta = parseMetadata(r.metadata);
     return {
       chunkId: r.id,
-      content: r.content,
+      content: sanitizeChunkContent(r.content),
       similarity: Number(r.similarity),
       sourceId: r.sourceId,
       sourceDocument: r.sourceName ?? undefined,
@@ -124,7 +138,7 @@ async function keywordSearch(
     const meta = parseMetadata(r.metadata);
     return {
       chunkId: r.id,
-      content: r.content,
+      content: sanitizeChunkContent(r.content),
       similarity: Number(r.rank),
       sourceId: r.sourceId,
       sourceDocument: r.sourceName ?? undefined,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 
@@ -48,6 +49,14 @@ interface KBCountRow {
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const authResult = await requireAuth();
   if (isAuthError(authResult)) return authResult;
+
+  const rateResult = checkRateLimit(`analytics:${authResult.userId}`, 10);
+  if (!rateResult.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests" },
+      { status: 429 }
+    );
+  }
 
   const userId = authResult.userId;
   const periodParam = request.nextUrl.searchParams.get("period") ?? "30d";

@@ -10,7 +10,7 @@ interface RouteParams {
 
 const updateServerSchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  url: z.string().url().optional(),
+  url: z.string().url().max(2000).optional(),
   transport: z.enum(["STREAMABLE_HTTP", "SSE"]).optional(),
   headers: z.record(z.string()).nullable().optional(),
   enabled: z.boolean().optional(),

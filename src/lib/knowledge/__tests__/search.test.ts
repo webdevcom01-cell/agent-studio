@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeDynamicTopK, reciprocalRankFusion, type SearchResult } from "../search";
+import { computeDynamicTopK, reciprocalRankFusion, sanitizeChunkContent, type SearchResult } from "../search";
 
 function makeResult(overrides: Partial<SearchResult> = {}): SearchResult {
   return {
@@ -12,6 +12,36 @@ function makeResult(overrides: Partial<SearchResult> = {}): SearchResult {
     ...overrides,
   };
 }
+
+describe("sanitizeChunkContent", () => {
+  it("escapes HTML special characters", () => {
+    expect(sanitizeChunkContent('<script>alert("xss")</script>')).toBe(
+      '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;'
+    );
+  });
+
+  it("escapes ampersands", () => {
+    expect(sanitizeChunkContent("Tom & Jerry")).toBe("Tom &amp; Jerry");
+  });
+
+  it("escapes single quotes", () => {
+    expect(sanitizeChunkContent("it's")).toBe("it&#x27;s");
+  });
+
+  it("returns plain text unchanged", () => {
+    expect(sanitizeChunkContent("hello world")).toBe("hello world");
+  });
+
+  it("handles empty string", () => {
+    expect(sanitizeChunkContent("")).toBe("");
+  });
+
+  it("escapes all special chars in one string", () => {
+    expect(sanitizeChunkContent(`<a href="x" data-v='y'>&`)).toBe(
+      '&lt;a href=&quot;x&quot; data-v=&#x27;y&#x27;&gt;&amp;'
+    );
+  });
+});
 
 describe("computeDynamicTopK", () => {
   it("returns 3 for short queries (1-3 words)", () => {

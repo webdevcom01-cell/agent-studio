@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { applySecurityHeaders } from "@/lib/api/security-headers";
 
 // UX guard only — redirects unauthenticated users to /login.
 // This is NOT a security boundary. Cookie existence is checked, not validated.
@@ -39,14 +40,18 @@ export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
   if (isPublicPath(pathname)) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    applySecurityHeaders(response, pathname);
+    return response;
   }
 
   if (!isCsrfSafe(request)) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       { success: false, error: "Forbidden: origin mismatch" },
       { status: 403 }
     );
+    applySecurityHeaders(response, pathname);
+    return response;
   }
 
   const hasSession =
@@ -56,10 +61,14 @@ export function middleware(request: NextRequest): NextResponse {
   if (!hasSession) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
-    return NextResponse.redirect(loginUrl);
+    const response = NextResponse.redirect(loginUrl);
+    applySecurityHeaders(response, pathname);
+    return response;
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  applySecurityHeaders(response, pathname);
+  return response;
 }
 
 export const config = {

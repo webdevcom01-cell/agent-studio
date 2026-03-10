@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { validateExternalUrlWithDNS } from "@/lib/utils/url-validation";
+import { validateExternalUrl, validateExternalUrlWithDNS } from "@/lib/utils/url-validation";
 
 const MAX_PAGES_DEFAULT = 20;
 const MAX_DEPTH_DEFAULT = 3;
@@ -120,16 +120,52 @@ interface ScrapedPageInternal extends ScrapedPage {
   html: string;
 }
 
+const MAX_REDIRECTS = 5;
+const REDIRECT_STATUSES = new Set([301, 302, 307, 308]);
+
+async function fetchWithSafeRedirects(
+  url: string,
+  signal: AbortSignal
+): Promise<Response> {
+  let currentUrl = url;
+
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const response = await fetch(currentUrl, {
+      headers: { "User-Agent": "AgentStudio-KB/1.0" },
+      signal,
+      redirect: "manual",
+    });
+
+    if (!REDIRECT_STATUSES.has(response.status)) {
+      return response;
+    }
+
+    const location = response.headers.get("location");
+    if (!location) {
+      throw new Error(`Redirect ${response.status} missing Location header`);
+    }
+
+    const redirectUrl = new URL(location, currentUrl).href;
+    const redirectCheck = await validateExternalUrlWithDNS(redirectUrl);
+    if (!redirectCheck.valid) {
+      throw new Error(
+        `Redirect blocked: ${redirectCheck.error ?? "blocked destination"}`
+      );
+    }
+
+    currentUrl = redirectUrl;
+  }
+
+  throw new Error(`Too many redirects (max ${MAX_REDIRECTS})`);
+}
+
 async function scrapePage(url: string): Promise<ScrapedPageInternal> {
   const urlCheck = await validateExternalUrlWithDNS(url);
   if (!urlCheck.valid) {
     throw new Error(`URL not allowed: ${urlCheck.error ?? "blocked destination"}`);
   }
 
-  const response = await fetch(url, {
-    headers: { "User-Agent": "AgentStudio-KB/1.0" },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
+  const response = await fetchWithSafeRedirects(url, AbortSignal.timeout(TIMEOUT_MS));
 
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const contentType = response.headers.get("content-type") || "";
@@ -194,6 +230,11 @@ export async function scrapeWebsite(
 }
 
 export async function parseSitemap(sitemapUrl: string): Promise<string[]> {
+  const urlCheck = await validateExternalUrlWithDNS(sitemapUrl);
+  if (!urlCheck.valid) {
+    throw new Error(`Sitemap URL not allowed: ${urlCheck.error ?? "blocked destination"}`);
+  }
+
   const response = await fetch(sitemapUrl, {
     headers: { "User-Agent": "AgentStudio-KB/1.0" },
     signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -206,13 +247,19 @@ export async function parseSitemap(sitemapUrl: string): Promise<string[]> {
 
   $("url > loc").each((_, el) => {
     const url = $(el).text().trim();
-    if (url) urls.push(url);
+    if (url) {
+      const entryCheck = validateExternalUrl(url);
+      if (entryCheck.valid) urls.push(url);
+    }
   });
 
   if (urls.length === 0) {
     $("sitemap > loc").each((_, el) => {
       const url = $(el).text().trim();
-      if (url) urls.push(url);
+      if (url) {
+        const entryCheck = validateExternalUrl(url);
+        if (entryCheck.valid) urls.push(url);
+      }
     });
   }
 

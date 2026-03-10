@@ -10,8 +10,14 @@ const mockPrisma = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth", () => ({ auth: mockAuth }));
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: vi.fn().mockReturnValue({ allowed: true, remaining: 9, retryAfterMs: 0 }),
+}));
 
 import { GET } from "../route";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+const mockCheckRateLimit = vi.mocked(checkRateLimit);
 
 const USER_A_SESSION = { user: { id: "user-a", email: "a@test.com" } };
 
@@ -82,5 +88,21 @@ describe("GET /api/analytics", () => {
     expect(body.data).toHaveProperty("summary");
     expect(body.data).toHaveProperty("dailyConversations");
     expect(body.data).toHaveProperty("topAgents");
+  });
+
+  it("returns 429 when rate limit exceeded", async () => {
+    mockCheckRateLimit.mockReturnValue({ allowed: false, remaining: 0, retryAfterMs: 5000 });
+
+    const res = await GET(makeRequest());
+    const body = await res.json();
+
+    expect(res.status).toBe(429);
+    expect(body.error).toBe("Too many requests");
+  });
+
+  it("rate limits by userId with limit of 10", async () => {
+    await GET(makeRequest());
+
+    expect(mockCheckRateLimit).toHaveBeenCalledWith("analytics:user-a", 10);
   });
 });

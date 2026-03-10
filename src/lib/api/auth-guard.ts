@@ -13,25 +13,31 @@ interface AgentOwnerResult extends AuthResult {
   agentId: string;
 }
 
-const UNAUTHORIZED = NextResponse.json(
-  { success: false, error: "Unauthorized" },
-  { status: 401 }
-);
+function unauthorized(): NextResponse {
+  return NextResponse.json(
+    { success: false, error: "Unauthorized" },
+    { status: 401 }
+  );
+}
 
-const FORBIDDEN = NextResponse.json(
-  { success: false, error: "Forbidden" },
-  { status: 403 }
-);
+function forbidden(): NextResponse {
+  return NextResponse.json(
+    { success: false, error: "Forbidden" },
+    { status: 403 }
+  );
+}
 
-const AGENT_NOT_FOUND = NextResponse.json(
-  { success: false, error: "Agent not found" },
-  { status: 404 }
-);
+function agentNotFound(): NextResponse {
+  return NextResponse.json(
+    { success: false, error: "Agent not found" },
+    { status: 404 }
+  );
+}
 
 export async function requireAuth(): Promise<AuthResult | NextResponse> {
   const session = await auth();
   if (!session?.user?.id) {
-    return UNAUTHORIZED;
+    return unauthorized();
   }
   return { userId: session.user.id };
 }
@@ -45,7 +51,7 @@ export async function requireAgentOwner(
   }
 
   if (!cuidSchema.safeParse(agentId).success) {
-    return AGENT_NOT_FOUND;
+    return agentNotFound();
   }
 
   const agent = await prisma.agent.findUnique({
@@ -54,11 +60,11 @@ export async function requireAgentOwner(
   });
 
   if (!agent) {
-    return AGENT_NOT_FOUND;
+    return agentNotFound();
   }
 
   if (agent.userId && agent.userId !== authResult.userId) {
-    return FORBIDDEN;
+    return forbidden();
   }
 
   return { userId: authResult.userId, agentId };

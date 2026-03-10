@@ -108,4 +108,40 @@ describe("POST /api/mcp-servers", () => {
       data: expect.objectContaining({ transport: "SSE" }),
     });
   });
+
+  it("rejects invalid transport value with 400", async () => {
+    const res = await POST(makeRequest({ name: "Test", url: "http://localhost/mcp", transport: "WEBSOCKET" }));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.success).toBe(false);
+  });
+
+  it("rejects name exceeding 100 characters with 400", async () => {
+    const res = await POST(makeRequest({ name: "a".repeat(101), url: "http://localhost/mcp" }));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.success).toBe(false);
+  });
+
+  it("rejects URL exceeding 2000 characters with 400", async () => {
+    const longUrl = "http://localhost/" + "a".repeat(2000);
+    const res = await POST(makeRequest({ name: "Test", url: longUrl }));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.success).toBe(false);
+  });
+
+  it("rejects missing name with 400", async () => {
+    const res = await POST(makeRequest({ url: "http://localhost/mcp" }));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.success).toBe(false);
+  });
+
+  it("rejects missing url with 400", async () => {
+    const res = await POST(makeRequest({ name: "Test" }));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.success).toBe(false);
+  });
 });

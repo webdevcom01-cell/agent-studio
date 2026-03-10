@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ingestSource } from "@/lib/knowledge/ingest";
 import { logger } from "@/lib/logger";
+import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -60,9 +61,9 @@ export async function GET(
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (err) {
-    logger.error("Failed to list knowledge sources", err);
+    const message = sanitizeErrorMessage(err, "Failed to list knowledge sources");
     return NextResponse.json(
-      { success: false, error: "Failed to list sources" },
+      { success: false, error: message },
       { status: 500 }
     );
   }
@@ -145,9 +146,9 @@ export async function POST(
 
     return NextResponse.json({ success: true, data: source }, { status: 201 });
   } catch (err) {
-    logger.error("Failed to create knowledge source", err);
+    const message = sanitizeErrorMessage(err, "Failed to create knowledge source");
     return NextResponse.json(
-      { success: false, error: "Failed to create source" },
+      { success: false, error: message },
       { status: 500 }
     );
   }

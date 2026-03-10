@@ -7,7 +7,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 
 const createServerSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
-  url: z.string().url("Must be a valid URL"),
+  url: z.string().url("Must be a valid URL").max(2000, "URL must not exceed 2000 characters"),
   transport: z.enum(["STREAMABLE_HTTP", "SSE"]).optional().default("STREAMABLE_HTTP"),
   headers: z.record(z.string()).optional(),
 });

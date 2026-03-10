@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { upsertAgentCard } from "@/lib/a2a/card-generator";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
+import { parseBodyWithLimit, BodyTooLargeError } from "@/lib/api/body-limit";
+import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { VersionService } from "@/lib/versioning/version-service";
 import { validateFlowContent } from "@/lib/validators/flow-content";
 import type { FlowContent } from "@/types";
@@ -50,9 +52,9 @@ export async function GET(
       },
     });
   } catch (err) {
-    logger.error("Failed to get flow", err);
+    const message = sanitizeErrorMessage(err, "Failed to get flow");
     return NextResponse.json(
-      { success: false, error: "Failed to get flow" },
+      { success: false, error: message },
       { status: 500 }
     );
   }
@@ -67,7 +69,21 @@ export async function PUT(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const body = await request.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await parseBodyWithLimit(request) as Record<string, unknown>;
+    } catch (err) {
+      if (err instanceof BodyTooLargeError) {
+        return NextResponse.json(
+          { success: false, error: "Request body too large" },
+          { status: 413 }
+        );
+      }
+      return NextResponse.json(
+        { success: false, error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
 
     const validation = validateFlowContent(body.content);
     if (!validation.success) {
@@ -111,9 +127,9 @@ export async function PUT(
       },
     });
   } catch (err) {
-    logger.error("Failed to save flow", err);
+    const message = sanitizeErrorMessage(err, "Failed to save flow");
     return NextResponse.json(
-      { success: false, error: "Failed to save flow" },
+      { success: false, error: message },
       { status: 500 }
     );
   }

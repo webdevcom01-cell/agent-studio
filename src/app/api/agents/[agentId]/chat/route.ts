@@ -4,7 +4,11 @@ import { executeFlowStreaming } from "@/lib/runtime/engine-streaming";
 import { loadContext } from "@/lib/runtime/context";
 import { trackChatResponse } from "@/lib/analytics";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { parseBodyWithLimit, BodyTooLargeError, InvalidJsonError } from "@/lib/api/body-limit";
+import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { logger } from "@/lib/logger";
+
+const MAX_MESSAGE_LENGTH = 10_000;
 
 // MCP tool calls (e.g. NotebookLM) can take 30-60s
 export const maxDuration = 60;
@@ -39,7 +43,21 @@ export async function POST(
     );
   }
 
-  const body = await request.json();
+  let body: Record<string, unknown>;
+  try {
+    body = await parseBodyWithLimit(request) as Record<string, unknown>;
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) {
+      return NextResponse.json(
+        { success: false, error: "Request body too large" },
+        { status: 413 }
+      );
+    }
+    return NextResponse.json(
+      { success: false, error: "Invalid request body" },
+      { status: 400 }
+    );
+  }
 
   const message = typeof body.message === "string" ? body.message.trim() : "";
   const conversationId =
@@ -49,6 +67,13 @@ export async function POST(
   if (!message) {
     return NextResponse.json(
       { success: false, error: "Message is required" },
+      { status: 400 }
+    );
+  }
+
+  if (message.length > MAX_MESSAGE_LENGTH) {
+    return NextResponse.json(
+      { success: false, error: `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters` },
       { status: 400 }
     );
   }
@@ -99,9 +124,9 @@ export async function POST(
       },
     });
   } catch (err) {
-    logger.error("Chat processing failed", err instanceof Error ? err : new Error(String(err)), { agentId });
+    const message = sanitizeErrorMessage(err, "Chat processing failed");
     return NextResponse.json(
-      { success: false, error: "Failed to process message" },
+      { success: false, error: message },
       { status: 500 }
     );
   }

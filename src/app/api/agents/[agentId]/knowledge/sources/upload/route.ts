@@ -4,14 +4,15 @@ import { parseSource } from "@/lib/knowledge/parsers";
 import { ingestSource } from "@/lib/knowledge/ingest";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
+import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = [".pdf", ".docx"];
-const ALLOWED_MIME_TYPES = [
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-];
+const EXTENSION_MIME_MAP: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -56,6 +57,13 @@ export async function POST(
     );
   }
 
+  if (file.size === 0) {
+    return NextResponse.json(
+      { success: false, error: "Empty file" },
+      { status: 400 }
+    );
+  }
+
   if (file.size > MAX_FILE_SIZE) {
     return NextResponse.json(
       {
@@ -78,9 +86,13 @@ export async function POST(
     );
   }
 
-  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+  const expectedMime = EXTENSION_MIME_MAP[ext];
+  if (file.type && file.type !== expectedMime) {
     return NextResponse.json(
-      { success: false, error: `Unsupported MIME type: ${file.type}. Allowed: PDF, DOCX` },
+      {
+        success: false,
+        error: `MIME type mismatch: expected ${expectedMime} for ${ext} file, got ${file.type}`,
+      },
       { status: 400 }
     );
   }
@@ -116,9 +128,9 @@ export async function POST(
       { status: 201 }
     );
   } catch (error) {
-    logger.error("File upload processing failed", error instanceof Error ? error : new Error(String(error)), { agentId });
+    const message = sanitizeErrorMessage(error, "File upload processing failed");
     return NextResponse.json(
-      { success: false, error: "Failed to process file" },
+      { success: false, error: message },
       { status: 422 }
     );
   }
