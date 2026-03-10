@@ -46,3 +46,6 @@ playwright-report
 scripts/
 services/
 *.mjs
+
+# Vercel env secrets
+.env.vercel
