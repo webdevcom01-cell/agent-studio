@@ -1,3 +1,4 @@
+import vm from "node:vm";
 import { logger } from "@/lib/logger";
 import type { NodeHandler } from "../types";
 
@@ -10,6 +11,7 @@ const BLOCKED_PATTERNS = [
 ];
 
 const MAX_CODE_LENGTH = 10_000;
+const VM_TIMEOUT_MS = 5_000;
 
 function validateCode(code: string): string | null {
   if (code.length > MAX_CODE_LENGTH) {
@@ -21,6 +23,35 @@ function validateCode(code: string): string | null {
     }
   }
   return null;
+}
+
+function createSandboxContext(variables: Record<string, unknown>): vm.Context {
+  const sandbox = {
+    variables: JSON.parse(JSON.stringify(variables)),
+    String,
+    Number,
+    Boolean,
+    Array,
+    Object,
+    Date,
+    Math,
+    JSON,
+    parseInt,
+    parseFloat,
+    isNaN,
+    isFinite,
+    undefined,
+    NaN,
+    Infinity,
+    RegExp,
+    Map,
+    Set,
+    Error,
+  };
+
+  return vm.createContext(sandbox, {
+    codeGeneration: { strings: false, wasm: false },
+  });
 }
 
 export const functionHandler: NodeHandler = async (node, context) => {
@@ -41,27 +72,14 @@ export const functionHandler: NodeHandler = async (node, context) => {
   }
 
   try {
-    const sandboxedVars = JSON.parse(JSON.stringify(context.variables));
+    const sandboxContext = createSandboxContext(context.variables);
 
-    const func = new Function(
-      "vars", "$String", "$Number", "$Boolean", "$Array", "$Object", "$Date", "$Math", "$JSON",
-      "globalThis", "global", "process", "require", "module", "exports",
-      "fetch", "XMLHttpRequest", "WebSocket", "setTimeout", "setInterval", "setImmediate", "queueMicrotask", "Buffer",
-      `"use strict";
-      var variables = vars;
-      var String = $String, Number = $Number, Boolean = $Boolean;
-      var Array = $Array, Object = $Object, Date = $Date;
-      var Math = $Math, JSON = $JSON;
-      return (function() { ${code} })();`
-    );
+    const wrappedCode = `"use strict"; (function() { ${code} })();`;
+    const script = new vm.Script(wrappedCode, { filename: "user-function.js" });
 
-    const result = func(
-      sandboxedVars,
-      String, Number, Boolean, Array, Object, Date, Math, JSON,
-      undefined, undefined, undefined, undefined, undefined,
-      undefined, undefined, undefined, undefined,
-      undefined, undefined, undefined, undefined
-    );
+    const result: unknown = script.runInContext(sandboxContext, {
+      timeout: VM_TIMEOUT_MS,
+    });
 
     return {
       messages: [],
@@ -70,9 +88,15 @@ export const functionHandler: NodeHandler = async (node, context) => {
       updatedVariables: outputVariable ? { [outputVariable]: result } : undefined,
     };
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const isTimeout = errorMsg.includes("Script execution timed out");
+    const content = isTimeout
+      ? "Function execution timed out."
+      : "Error executing function.";
+
     logger.error("Function execution failed", error, { agentId: context.agentId });
     return {
-      messages: [{ role: "assistant", content: "Error executing function." }],
+      messages: [{ role: "assistant", content }],
       nextNodeId: null,
       waitForInput: false,
     };

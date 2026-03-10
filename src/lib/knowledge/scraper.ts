@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { validateExternalUrl } from "@/lib/utils/url-validation";
+import { validateExternalUrlWithDNS } from "@/lib/utils/url-validation";
 
 const MAX_PAGES_DEFAULT = 20;
 const MAX_DEPTH_DEFAULT = 3;
@@ -121,9 +121,9 @@ interface ScrapedPageInternal extends ScrapedPage {
 }
 
 async function scrapePage(url: string): Promise<ScrapedPageInternal> {
-  const urlCheck = validateExternalUrl(url);
+  const urlCheck = await validateExternalUrlWithDNS(url);
   if (!urlCheck.valid) {
-    throw new Error("URL not allowed: blocked destination");
+    throw new Error(`URL not allowed: ${urlCheck.error ?? "blocked destination"}`);
   }
 
   const response = await fetch(url, {

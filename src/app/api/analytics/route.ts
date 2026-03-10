@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 
@@ -46,15 +46,10 @@ interface KBCountRow {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
-    );
-  }
+  const authResult = await requireAuth();
+  if (isAuthError(authResult)) return authResult;
 
-  const userId = session.user.id;
+  const userId = authResult.userId;
   const periodParam = request.nextUrl.searchParams.get("period") ?? "30d";
   const period: PeriodOption = isValidPeriod(periodParam) ? periodParam : "30d";
   const days = PERIOD_DAYS[period];

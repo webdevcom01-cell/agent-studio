@@ -7,6 +7,10 @@ import { logger } from "@/lib/logger";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = [".pdf", ".docx"];
+const ALLOWED_MIME_TYPES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -61,6 +65,13 @@ export async function POST(
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
     return NextResponse.json(
       { success: false, error: `Unsupported file type: ${ext || "unknown"}. Allowed: PDF, DOCX` },
+      { status: 400 }
+    );
+  }
+
+  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+    return NextResponse.json(
+      { success: false, error: `Unsupported MIME type: ${file.type}. Allowed: PDF, DOCX` },
       { status: 400 }
     );
   }

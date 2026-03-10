@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { executeFlow } from "@/lib/runtime/engine";
-import type { FlowContent } from "@/types";
+import { parseFlowContent } from "@/lib/validators/flow-content";
 import type { RuntimeContext } from "@/lib/runtime/types";
 
 interface RouteParams {
@@ -38,7 +38,7 @@ export async function POST(
     );
   }
 
-  const flowContent = version.content as unknown as FlowContent;
+  const flowContent = parseFlowContent(version.content);
 
   const sandboxConversation = await prisma.conversation.create({
     data: {

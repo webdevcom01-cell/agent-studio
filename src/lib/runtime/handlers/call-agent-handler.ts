@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { checkCircuit, recordSuccess, recordFailure } from "@/lib/a2a/circuit-breaker";
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
 import type { FlowContent } from "@/types";
+import { parseFlowContent } from "@/lib/validators/flow-content";
 
 const MAX_DEPTH = 5;
 const DEFAULT_TIMEOUT_SECONDS = 30;
@@ -557,7 +558,7 @@ async function executeSubAgent(params: SubAgentParams): Promise<SubAgentResult> 
     throw new Error(`Agent "${agent.name}" has no flow`);
   }
 
-  const flowContent = agent.flow.content as unknown as FlowContent;
+  const flowContent = parseFlowContent(agent.flow.content);
 
   const conversation = await prisma.conversation.create({
     data: {

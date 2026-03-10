@@ -91,4 +91,15 @@ describe("MCP connection pool", () => {
       },
     });
   });
+
+  it("deduplicates concurrent requests for the same server", async () => {
+    const [first, second] = await Promise.all([
+      getOrCreate("s1", "http://localhost:3000/mcp", "STREAMABLE_HTTP"),
+      getOrCreate("s1", "http://localhost:3000/mcp", "STREAMABLE_HTTP"),
+    ]);
+
+    expect(first).toBe(second);
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+    expect(getPoolSize()).toBe(1);
+  });
 });

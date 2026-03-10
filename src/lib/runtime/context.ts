@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { RuntimeContext, OutputMessage } from "./types";
-import type { FlowContent } from "@/types";
+import { parseFlowContent } from "@/lib/validators/flow-content";
 
 export async function loadContext(
   agentId: string,
@@ -15,7 +15,7 @@ export async function loadContext(
 
   if (!agent.flow) throw new Error("Agent has no flow");
 
-  const flowContent = agent.flow.content as unknown as FlowContent;
+  const flowContent = parseFlowContent(agent.flow.content);
 
   if (conversationId) {
     const conversation = await prisma.conversation.findUniqueOrThrow({

@@ -6,6 +6,11 @@ const VALID_ENV = {
   DIRECT_URL: "postgresql://user:pass@localhost:5432/db",
   OPENAI_API_KEY: "sk-test-openai",
   DEEPSEEK_API_KEY: "sk-test-deepseek",
+  AUTH_SECRET: "Q3ngdTFbDW7oZhaygY+GconLJkxdbLtZw/c3VnvRgEw=",
+  AUTH_GITHUB_ID: "test-github-id",
+  AUTH_GITHUB_SECRET: "test-github-secret",
+  AUTH_GOOGLE_ID: "test-google-id",
+  AUTH_GOOGLE_SECRET: "test-google-secret",
 };
 
 beforeEach(() => {
@@ -62,12 +67,43 @@ describe("validateEnv", () => {
     );
   });
 
-  it("does not warn when ANTHROPIC_API_KEY is present", () => {
+  it("does not warn when all optional keys are present", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    validateEnv({ ...VALID_ENV, ANTHROPIC_API_KEY: "sk-test-anthropic" });
+    validateEnv({
+      ...VALID_ENV,
+      ANTHROPIC_API_KEY: "sk-test-anthropic",
+      GOOGLE_GENERATIVE_AI_API_KEY: "sk-test-google",
+      GROQ_API_KEY: "sk-test-groq",
+      MISTRAL_API_KEY: "sk-test-mistral",
+      MOONSHOT_API_KEY: "sk-test-moonshot",
+    });
 
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("throws when AUTH_SECRET is missing", () => {
+    const { AUTH_SECRET: _, ...env } = VALID_ENV;
+    void _;
+    expect(() => validateEnv(env)).toThrow("AUTH_SECRET");
+  });
+
+  it("throws when AUTH_SECRET is too short", () => {
+    expect(() => validateEnv({ ...VALID_ENV, AUTH_SECRET: "short" })).toThrow(
+      "AUTH_SECRET"
+    );
+  });
+
+  it("throws when AUTH_GITHUB_ID is missing", () => {
+    const { AUTH_GITHUB_ID: _, ...env } = VALID_ENV;
+    void _;
+    expect(() => validateEnv(env)).toThrow("AUTH_GITHUB_ID");
+  });
+
+  it("throws when AUTH_GOOGLE_SECRET is missing", () => {
+    const { AUTH_GOOGLE_SECRET: _, ...env } = VALID_ENV;
+    void _;
+    expect(() => validateEnv(env)).toThrow("AUTH_GOOGLE_SECRET");
   });
 
   it("includes all missing vars in error message", () => {

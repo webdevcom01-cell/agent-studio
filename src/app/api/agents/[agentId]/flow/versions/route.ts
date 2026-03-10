@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { VersionService } from "@/lib/versioning/version-service";
-import type { FlowContent } from "@/types";
+import { parseFlowContent } from "@/lib/validators/flow-content";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -60,7 +60,7 @@ export async function POST(
 
     const version = await VersionService.createVersion(
       flow.id,
-      flow.content as unknown as FlowContent,
+      parseFlowContent(flow.content),
       authResult.userId,
       label
     );

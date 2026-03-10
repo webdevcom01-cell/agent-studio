@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { FlowContent } from "@/types";
 
 const NODE_TYPES = [
   "message",
@@ -73,4 +74,12 @@ export function validateFlowContent(
     success: false,
     error: `Invalid flow content: ${path ? `${path}: ` : ""}${firstError.message}`,
   };
+}
+
+const EMPTY_FLOW: FlowContent = { nodes: [], edges: [], variables: [] };
+
+export function parseFlowContent(json: unknown): FlowContent {
+  const result = flowContentSchema.safeParse(json);
+  if (result.success) return result.data as FlowContent;
+  return EMPTY_FLOW;
 }

@@ -15,7 +15,13 @@ export function executeFlowStreaming(
   context: RuntimeContext,
   userMessage?: string
 ): ReadableStream<Uint8Array> {
+  let aborted = false;
+
   return new ReadableStream<Uint8Array>({
+    cancel() {
+      aborted = true;
+      logger.info("Stream cancelled by client", { conversationId: context.conversationId });
+    },
     async start(controller) {
       const writer = createStreamWriter(controller);
       const allMessages: OutputMessage[] = [];
@@ -71,7 +77,7 @@ export function executeFlowStreaming(
 
         let waitingForInput = false;
 
-        while (context.currentNodeId && iterations < MAX_ITERATIONS) {
+        while (context.currentNodeId && iterations < MAX_ITERATIONS && !aborted) {
           iterations++;
 
           const node = nodeMap.get(context.currentNodeId!);

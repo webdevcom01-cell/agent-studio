@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// UX guard only — redirects unauthenticated users to /login.
+// This is NOT a security boundary. Cookie existence is checked, not validated.
+// All data access is protected by requireAuth()/requireAgentOwner() in API routes.
 const SESSION_COOKIE = "authjs.session-token";
 const SECURE_SESSION_COOKIE = "__Secure-authjs.session-token";
 

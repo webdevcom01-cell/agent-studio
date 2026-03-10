@@ -6,6 +6,8 @@ import { generateEmbeddings } from "./embeddings";
 import { logger } from "@/lib/logger";
 
 const BATCH_SIZE = 50;
+const MAX_CHUNKS = 500;
+const MAX_RETRIES = 3;
 
 export async function ingestSource(
   sourceId: string,
@@ -15,9 +17,17 @@ export async function ingestSource(
     where: { id: sourceId },
   });
 
+  if (source.retryCount >= MAX_RETRIES) {
+    logger.warn("Source exceeded max retry limit, skipping", {
+      sourceId,
+      retryCount: source.retryCount,
+    });
+    return { chunksCreated: 0 };
+  }
+
   await prisma.kBSource.update({
     where: { id: sourceId },
-    data: { status: "PROCESSING" },
+    data: { status: "PROCESSING", retryCount: { increment: 1 } },
   });
 
   try {
@@ -35,8 +45,20 @@ export async function ingestSource(
 
     if (!finalText.trim()) throw new Error("No content extracted");
 
-    const chunks = chunkText(finalText);
-    if (chunks.length === 0) throw new Error("No chunks generated");
+    const allChunks = chunkText(finalText);
+    if (allChunks.length === 0) throw new Error("No chunks generated");
+
+    const chunks = allChunks.length > MAX_CHUNKS
+      ? allChunks.slice(0, MAX_CHUNKS)
+      : allChunks;
+
+    if (allChunks.length > MAX_CHUNKS) {
+      logger.warn("Source exceeded max chunk limit, truncating", {
+        sourceId,
+        totalChunks: allChunks.length,
+        maxChunks: MAX_CHUNKS,
+      });
+    }
 
     const embeddings = await generateEmbeddings(chunks);
 

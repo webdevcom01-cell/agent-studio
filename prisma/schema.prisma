@@ -134,6 +134,7 @@ model KBSource {
   status          KBSourceStatus @default(PENDING)
   errorMsg        String?
   charCount       Int            @default(0)
+  retryCount      Int            @default(0)
   knowledgeBaseId String
   knowledgeBase   KnowledgeBase  @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
   chunks          KBChunk[]

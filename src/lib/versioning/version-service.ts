@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { PrismaClient } from "@/generated/prisma";
 import { generateChangesSummary, computeFlowDiff } from "./diff-engine";
 import type { FlowContent } from "@/types";
+import { parseFlowContent } from "@/lib/validators/flow-content";
 import type { FlowDiff } from "./diff-engine";
 import type {
   FlowVersion,
@@ -33,7 +34,7 @@ export class VersionService {
     if (lastVersion) {
       const timeSinceLast =
         Date.now() - lastVersion.createdAt.getTime();
-      const lastContent = lastVersion.content as unknown as FlowContent;
+      const lastContent = parseFlowContent(lastVersion.content);
       const hasChanges =
         JSON.stringify(lastContent) !== JSON.stringify(content);
 
@@ -46,7 +47,7 @@ export class VersionService {
 
     const changesSummary = lastVersion
       ? generateChangesSummary(
-          lastVersion.content as unknown as FlowContent,
+          parseFlowContent(lastVersion.content),
           content
         )
       : null;
@@ -92,8 +93,8 @@ export class VersionService {
     ]);
 
     return computeFlowDiff(
-      v1.content as unknown as FlowContent,
-      v2.content as unknown as FlowContent
+      parseFlowContent(v1.content),
+      parseFlowContent(v2.content)
     );
   }
 
@@ -106,7 +107,7 @@ export class VersionService {
       where: { id: targetVersionId },
     });
 
-    const content = targetVersion.content as unknown as FlowContent;
+    const content = parseFlowContent(targetVersion.content);
 
     return VersionService.createVersion(
       flowId,
@@ -127,7 +128,7 @@ export class VersionService {
       include: { flow: true },
     });
 
-    const content = version.content as unknown as FlowContent;
+    const content = parseFlowContent(version.content);
 
     return prisma.$transaction(async (tx) => {
       await tx.flowVersion.updateMany({

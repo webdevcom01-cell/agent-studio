@@ -4,7 +4,8 @@ import { generateEmbedding } from "./embeddings";
 import { estimateTokens } from "./chunker";
 import { logger } from "@/lib/logger";
 
-const MIN_RELEVANCE_SCORE = 0.25;
+// Post-RRF scores are typically 0.005–0.02 range, not cosine similarity.
+const MIN_RELEVANCE_SCORE = 0.005;
 const MAX_CONTEXT_TOKENS = 4000;
 
 export interface SearchResult {
@@ -61,6 +62,10 @@ export async function searchKnowledgeBase(
     throw new Error('Invalid embedding');
   }
 
+  // SAFETY: vectorStr is constructed from generateEmbedding() output,
+  // which is validated above (every element is a finite number).
+  // Prisma.raw() is used because Prisma.sql doesn't support pgvector's
+  // ::vector cast directly. No user input reaches vectorStr.
   const vectorStr = `[${queryEmbedding.join(",")}]`;
 
   const results = await prisma.$queryRaw<VectorSearchRow[]>(

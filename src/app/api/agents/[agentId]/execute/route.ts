@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { executeFlow } from "@/lib/runtime/engine";
-import type { FlowContent } from "@/types";
+import { parseFlowContent } from "@/lib/validators/flow-content";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -57,7 +57,7 @@ export async function POST(
       );
     }
 
-    const flowContent = agent.flow.content as unknown as FlowContent;
+    const flowContent = parseFlowContent(agent.flow.content);
     const inputVars = parsed.data.input as Record<string, unknown>;
 
     const conversation = await prisma.conversation.create({

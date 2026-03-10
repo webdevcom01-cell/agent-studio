@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { AgentExportData } from "@/lib/schemas/agent-export";
-import type { FlowContent } from "@/types";
+import { parseFlowContent } from "@/lib/validators/flow-content";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
@@ -37,7 +37,7 @@ export async function GET(
       );
     }
 
-    const flowContent = agent.flow.content as unknown as FlowContent;
+    const flowContent = parseFlowContent(agent.flow.content);
 
     const exportData: AgentExportData = {
       version: 1,

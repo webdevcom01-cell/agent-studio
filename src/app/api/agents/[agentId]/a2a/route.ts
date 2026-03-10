@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
-import type { FlowContent } from "@/types";
+import { parseFlowContent } from "@/lib/validators/flow-content";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -92,7 +92,7 @@ export async function POST(
 
     const { executeFlow } = await import("@/lib/runtime/engine");
 
-    const flowContent = agent.flow.content as unknown as FlowContent;
+    const flowContent = parseFlowContent(agent.flow.content);
 
     const conversation = await prisma.conversation.create({
       data: {

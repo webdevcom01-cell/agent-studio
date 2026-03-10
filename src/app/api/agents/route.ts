@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const VALID_MODELS = ["deepseek-chat", "gpt-4o-mini", "gpt-4o", "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"] as const;
+const MAX_AGENTS_PER_USER = 100;
 
 const createAgentSchema = z.object({
   name: z.string().min(1, "Name is required").max(200, "Name must be 200 characters or less"),
@@ -15,17 +16,12 @@ const createAgentSchema = z.object({
 });
 
 export async function GET(): Promise<NextResponse> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
-    );
-  }
+  const authResult = await requireAuth();
+  if (isAuthError(authResult)) return authResult;
 
   const agents = await prisma.agent.findMany({
     where: {
-      OR: [{ userId: session.user.id }, { userId: null }],
+      OR: [{ userId: authResult.userId }, { userId: null }],
     },
     orderBy: { updatedAt: "desc" },
     include: {
@@ -42,19 +38,24 @@ const WRITE_RATE_LIMIT = 10;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return authResult;
 
-    const rateResult = checkRateLimit(`create-agent:${session.user.id}`, WRITE_RATE_LIMIT);
+    const rateResult = checkRateLimit(`create-agent:${authResult.userId}`, WRITE_RATE_LIMIT);
     if (!rateResult.allowed) {
       return NextResponse.json(
         { success: false, error: "Too many requests" },
         { status: 429 }
+      );
+    }
+
+    const agentCount = await prisma.agent.count({
+      where: { userId: authResult.userId },
+    });
+    if (agentCount >= MAX_AGENTS_PER_USER) {
+      return NextResponse.json(
+        { success: false, error: `Agent limit reached (${MAX_AGENTS_PER_USER} max)` },
+        { status: 403 }
       );
     }
 
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         description,
         systemPrompt,
         model,
-        userId: session.user.id,
+        userId: authResult.userId,
         flow: {
           create: {
             content: {

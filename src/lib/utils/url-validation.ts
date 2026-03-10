@@ -1,3 +1,5 @@
+import dns from "node:dns/promises";
+
 interface UrlValidationResult {
   valid: boolean;
   error?: string;
@@ -40,6 +42,10 @@ function isBlockedIPv6(hostname: string): boolean {
   return BLOCKED_IPV6_PREFIXES.some((prefix) => bare.startsWith(prefix));
 }
 
+function isBlockedIP(ip: string): boolean {
+  return isPrivateIPv4(ip) || isBlockedIPv6(ip);
+}
+
 export function validateExternalUrl(url: string): UrlValidationResult {
   let parsed: URL;
   try {
@@ -66,8 +72,41 @@ export function validateExternalUrl(url: string): UrlValidationResult {
     return { valid: false, error: "Blocked destination" };
   }
 
-  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)) {
-    return { valid: false, error: "Blocked destination" };
+  return { valid: true };
+}
+
+export async function validateExternalUrlWithDNS(url: string): Promise<UrlValidationResult> {
+  const staticCheck = validateExternalUrl(url);
+  if (!staticCheck.valid) return staticCheck;
+
+  const parsed = new URL(url);
+  const hostname = parsed.hostname.toLowerCase();
+
+  // If hostname is already an IP literal, static check is sufficient
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
+    return { valid: true };
+  }
+  if (hostname.startsWith("[")) {
+    return { valid: true };
+  }
+
+  // Resolve DNS and check all resolved IPs against private ranges
+  try {
+    const addresses = await dns.resolve4(hostname).catch(() => [] as string[]);
+    const addresses6 = await dns.resolve6(hostname).catch(() => [] as string[]);
+    const allAddresses = [...addresses, ...addresses6];
+
+    if (allAddresses.length === 0) {
+      return { valid: false, error: "DNS resolution failed" };
+    }
+
+    for (const ip of allAddresses) {
+      if (isBlockedIP(ip)) {
+        return { valid: false, error: "Blocked destination (DNS resolves to private IP)" };
+      }
+    }
+  } catch {
+    return { valid: false, error: "DNS resolution failed" };
   }
 
   return { valid: true };

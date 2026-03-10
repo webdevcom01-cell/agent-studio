@@ -12,6 +12,7 @@ const CLEANUP_INTERVAL_MS = 60 * 1000;
 const MAX_POOL_SIZE = 50;
 
 const pool = new Map<string, PoolEntry>();
+const inflight = new Map<string, Promise<PoolEntry["client"]>>();
 let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
 function buildTransportConfig(
@@ -78,15 +79,28 @@ export async function getOrCreate(
     return existing.client;
   }
 
+  const pending = inflight.get(serverId);
+  if (pending) {
+    return pending;
+  }
+
   evictLRU();
 
-  const transportConfig = buildTransportConfig(url, transport, headers);
-  const client = await createMCPClient({ transport: transportConfig });
+  const promise = (async (): Promise<PoolEntry["client"]> => {
+    const transportConfig = buildTransportConfig(url, transport, headers);
+    const client = await createMCPClient({ transport: transportConfig });
+    pool.set(serverId, { client, lastUsed: Date.now() });
+    startCleanup();
+    return client;
+  })();
 
-  pool.set(serverId, { client, lastUsed: Date.now() });
-  startCleanup();
+  inflight.set(serverId, promise);
 
-  return client;
+  try {
+    return await promise;
+  } finally {
+    inflight.delete(serverId);
+  }
 }
 
 export async function remove(serverId: string): Promise<void> {
@@ -110,8 +124,17 @@ export function clearPool(): void {
     });
   }
   pool.clear();
+  inflight.clear();
   if (cleanupTimer) {
     clearInterval(cleanupTimer);
     cleanupTimer = null;
   }
 }
+
+function handleShutdown(): void {
+  logger.info("MCP pool shutdown triggered");
+  clearPool();
+}
+
+process.on("SIGTERM", handleShutdown);
+process.on("SIGINT", handleShutdown);
