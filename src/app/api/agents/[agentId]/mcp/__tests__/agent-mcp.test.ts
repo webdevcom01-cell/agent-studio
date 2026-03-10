@@ -26,10 +26,11 @@ vi.mock("@/lib/logger", () => ({
 import { GET, POST, DELETE } from "../route";
 
 const SESSION = { user: { id: "u1", email: "test@test.com" } };
-const PARAMS = { params: Promise.resolve({ agentId: "a1" }) };
+const AGENT_ID = "clh1234567890abcdef12345";
+const PARAMS = { params: Promise.resolve({ agentId: AGENT_ID }) };
 
 function makeRequest(method: string, body?: unknown): NextRequest {
-  return new NextRequest("http://localhost:3000/api/agents/a1/mcp", {
+  return new NextRequest(`http://localhost:3000/api/agents/${AGENT_ID}/mcp`, {
     method,
     headers: body ? { "Content-Type": "application/json" } : {},
     body: body ? JSON.stringify(body) : undefined,

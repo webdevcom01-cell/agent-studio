@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -14,16 +14,11 @@ const createServerSchema = z.object({
 
 export async function GET(): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return authResult;
 
     const servers = await prisma.mCPServer.findMany({
-      where: { userId: session.user.id },
+      where: { userId: authResult.userId },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -51,15 +46,10 @@ export async function GET(): Promise<NextResponse> {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return authResult;
 
-    const rateResult = checkRateLimit(`create-mcp:${session.user.id}`, 10);
+    const rateResult = checkRateLimit(`create-mcp:${authResult.userId}`, 10);
     if (!rateResult.allowed) {
       return NextResponse.json(
         { success: false, error: "Too many requests" },
@@ -82,7 +72,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         url: parsed.data.url,
         transport: parsed.data.transport,
         headers: parsed.data.headers ?? undefined,
-        userId: session.user.id,
+        userId: authResult.userId,
       },
     });
 

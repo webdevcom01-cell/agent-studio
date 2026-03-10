@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const mockTx = vi.hoisted(() => ({
+  kBChunk: { deleteMany: vi.fn() },
+  $executeRaw: vi.fn(),
+}));
+
 const mockPrisma = vi.hoisted(() => ({
   kBSource: {
     findUniqueOrThrow: vi.fn(),
@@ -9,6 +14,7 @@ const mockPrisma = vi.hoisted(() => ({
     deleteMany: vi.fn(),
   },
   $executeRaw: vi.fn(),
+  $transaction: vi.fn(async (fn: (tx: typeof mockTx) => Promise<void>) => fn(mockTx)),
 }));
 
 const mockParseSource = vi.hoisted(() => vi.fn());
@@ -36,6 +42,8 @@ beforeEach(() => {
   mockPrisma.kBSource.update.mockResolvedValue({});
   mockPrisma.kBChunk.deleteMany.mockResolvedValue({});
   mockPrisma.$executeRaw.mockResolvedValue(0);
+  mockTx.kBChunk.deleteMany.mockResolvedValue({});
+  mockTx.$executeRaw.mockResolvedValue(0);
   mockEstimateTokens.mockReturnValue(50);
 });
 
@@ -132,7 +140,7 @@ describe("ingestSource", () => {
     const result = await ingestSource("s1", "text");
 
     expect(result.chunksCreated).toBe(120);
-    expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(3);
+    expect(mockTx.$executeRaw).toHaveBeenCalledTimes(3);
   });
 
   it("throws when no chunks generated", async () => {

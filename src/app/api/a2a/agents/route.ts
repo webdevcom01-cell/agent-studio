@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { generateAgentCard } from "@/lib/a2a/card-generator";
 import { logger } from "@/lib/logger";
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return authResult;
 
     const agents = await prisma.agent.findMany({
-      where: { userId: session.user.id },
+      where: { userId: authResult.userId },
       select: { id: true },
     });
 
@@ -23,7 +18,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     const cards = await Promise.all(
       agents.map((agent) =>
-        generateAgentCard(agent.id, session.user!.id!, baseUrl).catch(
+        generateAgentCard(agent.id, authResult.userId, baseUrl).catch(
           (err) => {
             logger.error("Failed to generate card for agent", err, {
               agentId: agent.id,

@@ -4,6 +4,7 @@ import { parseSource } from "@/lib/knowledge/parsers";
 import { ingestSource } from "@/lib/knowledge/ingest";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = [".pdf", ".docx"];
@@ -23,6 +24,14 @@ export async function POST(
   const { agentId } = await params;
   const authResult = await requireAgentOwner(agentId);
   if (isAuthError(authResult)) return authResult;
+
+  const rateResult = checkRateLimit(`kb-upload:${authResult.userId}`, 10);
+  if (!rateResult.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests" },
+      { status: 429 }
+    );
+  }
 
   const agent = await prisma.agent.findUnique({
     where: { id: agentId },

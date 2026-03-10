@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { generateAgentCard } from "@/lib/a2a/card-generator";
 import { logger } from "@/lib/logger";
 
@@ -12,17 +12,12 @@ export async function GET(
   { params }: RouteParams
 ): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return authResult;
 
     const { agentId } = await params;
     const baseUrl = new URL(req.url).origin;
-    const card = await generateAgentCard(agentId, session.user.id, baseUrl);
+    const card = await generateAgentCard(agentId, authResult.userId, baseUrl);
 
     return NextResponse.json({ success: true, data: card });
   } catch (err) {

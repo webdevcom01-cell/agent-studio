@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
@@ -8,13 +8,8 @@ const DEFAULT_LIMIT = 50;
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return authResult;
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") ?? "pending";
@@ -25,7 +20,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const requests = await prisma.humanApprovalRequest.findMany({
       where: {
-        userId: session.user.id,
+        userId: authResult.userId,
         ...(status !== "all" ? { status } : {}),
       },
       orderBy: { createdAt: "desc" },

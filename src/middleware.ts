@@ -23,11 +23,30 @@ function isPublicPath(pathname: string): boolean {
   return false;
 }
 
+const MUTATION_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
+
+function isCsrfSafe(request: NextRequest): boolean {
+  if (!MUTATION_METHODS.has(request.method)) return true;
+
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+
+  const requestOrigin = new URL(request.url).origin;
+  return origin === requestOrigin;
+}
+
 export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
   if (isPublicPath(pathname)) {
     return NextResponse.next();
+  }
+
+  if (!isCsrfSafe(request)) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden: origin mismatch" },
+      { status: 403 }
+    );
   }
 
   const hasSession =

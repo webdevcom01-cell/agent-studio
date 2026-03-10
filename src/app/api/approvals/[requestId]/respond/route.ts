@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
@@ -18,13 +18,8 @@ export async function POST(
   { params }: RouteParams
 ): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return authResult;
 
     const { requestId } = await params;
     const body = await request.json();
@@ -40,7 +35,7 @@ export async function POST(
     const approvalRequest = await prisma.humanApprovalRequest.findFirst({
       where: {
         id: requestId,
-        userId: session.user.id,
+        userId: authResult.userId,
         status: "pending",
       },
     });

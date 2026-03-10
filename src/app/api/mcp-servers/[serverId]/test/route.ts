@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { testMCPConnection } from "@/lib/mcp/client";
 
@@ -13,17 +13,12 @@ export async function POST(
   { params }: RouteParams,
 ): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return authResult;
 
     const { serverId } = await params;
     const server = await prisma.mCPServer.findFirst({
-      where: { id: serverId, userId: session.user.id },
+      where: { id: serverId, userId: authResult.userId },
     });
 
     if (!server) {

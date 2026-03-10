@@ -75,8 +75,15 @@ export async function getOrCreate(
 ): Promise<PoolEntry["client"]> {
   const existing = pool.get(serverId);
   if (existing) {
-    existing.lastUsed = Date.now();
-    return existing.client;
+    try {
+      await existing.client.tools();
+      existing.lastUsed = Date.now();
+      return existing.client;
+    } catch {
+      logger.warn("MCP pool evicting dead connection", { serverId });
+      existing.client.close().catch(() => {});
+      pool.delete(serverId);
+    }
   }
 
   const pending = inflight.get(serverId);

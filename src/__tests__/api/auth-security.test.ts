@@ -59,6 +59,8 @@ function makeRequest(
   return new NextRequest(new URL(url, "http://localhost:3000"), options);
 }
 
+const AGENT_ID = "clh1234567890abcdef12345";
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -73,7 +75,7 @@ describe("Auth Security - Unauthenticated Access", () => {
       "@/app/api/agents/[agentId]/route"
     );
     const req = makeRequest("/api/agents/agent1", "GET");
-    const res = await GET(req, { params: Promise.resolve({ agentId: "agent1" }) });
+    const res = await GET(req, { params: Promise.resolve({ agentId: AGENT_ID }) });
     expect(res.status).toBe(401);
   });
 
@@ -82,7 +84,7 @@ describe("Auth Security - Unauthenticated Access", () => {
       "@/app/api/agents/[agentId]/route"
     );
     const req = makeRequest("/api/agents/agent1", "PATCH", { name: "new" });
-    const res = await PATCH(req, { params: Promise.resolve({ agentId: "agent1" }) });
+    const res = await PATCH(req, { params: Promise.resolve({ agentId: AGENT_ID }) });
     expect(res.status).toBe(401);
   });
 
@@ -91,7 +93,7 @@ describe("Auth Security - Unauthenticated Access", () => {
       "@/app/api/agents/[agentId]/route"
     );
     const req = makeRequest("/api/agents/agent1", "DELETE");
-    const res = await DELETE(req, { params: Promise.resolve({ agentId: "agent1" }) });
+    const res = await DELETE(req, { params: Promise.resolve({ agentId: AGENT_ID }) });
     expect(res.status).toBe(401);
   });
 
@@ -100,7 +102,7 @@ describe("Auth Security - Unauthenticated Access", () => {
       "@/app/api/agents/[agentId]/flow/route"
     );
     const req = makeRequest("/api/agents/agent1/flow", "GET");
-    const res = await GET(req, { params: Promise.resolve({ agentId: "agent1" }) });
+    const res = await GET(req, { params: Promise.resolve({ agentId: AGENT_ID }) });
     expect(res.status).toBe(401);
   });
 
@@ -111,7 +113,7 @@ describe("Auth Security - Unauthenticated Access", () => {
     const req = makeRequest("/api/agents/agent1/flow", "PUT", {
       content: { nodes: [], edges: [] },
     });
-    const res = await PUT(req, { params: Promise.resolve({ agentId: "agent1" }) });
+    const res = await PUT(req, { params: Promise.resolve({ agentId: AGENT_ID }) });
     expect(res.status).toBe(401);
   });
 
@@ -120,7 +122,7 @@ describe("Auth Security - Unauthenticated Access", () => {
       "@/app/api/agents/[agentId]/knowledge/sources/route"
     );
     const req = makeRequest("/api/agents/agent1/knowledge/sources", "GET");
-    const res = await GET(req, { params: Promise.resolve({ agentId: "agent1" }) });
+    const res = await GET(req, { params: Promise.resolve({ agentId: AGENT_ID }) });
     expect(res.status).toBe(401);
   });
 
@@ -129,7 +131,7 @@ describe("Auth Security - Unauthenticated Access", () => {
       "@/app/api/agents/[agentId]/export/route"
     );
     const req = makeRequest("/api/agents/agent1/export", "GET");
-    const res = await GET(req, { params: Promise.resolve({ agentId: "agent1" }) });
+    const res = await GET(req, { params: Promise.resolve({ agentId: AGENT_ID }) });
     expect(res.status).toBe(401);
   });
 
@@ -138,7 +140,7 @@ describe("Auth Security - Unauthenticated Access", () => {
       "@/app/api/agents/[agentId]/flow/versions/route"
     );
     const req = makeRequest("/api/agents/agent1/flow/versions", "GET");
-    const res = await GET(req, { params: Promise.resolve({ agentId: "agent1" }) });
+    const res = await GET(req, { params: Promise.resolve({ agentId: AGENT_ID }) });
     expect(res.status).toBe(401);
   });
 });
@@ -154,7 +156,7 @@ describe("Auth Security - Wrong User Access (403)", () => {
       "@/app/api/agents/[agentId]/route"
     );
     const req = makeRequest("/api/agents/agent1", "GET");
-    const res = await GET(req, { params: Promise.resolve({ agentId: "agent1" }) });
+    const res = await GET(req, { params: Promise.resolve({ agentId: AGENT_ID }) });
     expect(res.status).toBe(403);
   });
 
@@ -163,7 +165,7 @@ describe("Auth Security - Wrong User Access (403)", () => {
       "@/app/api/agents/[agentId]/route"
     );
     const req = makeRequest("/api/agents/agent1", "DELETE");
-    const res = await DELETE(req, { params: Promise.resolve({ agentId: "agent1" }) });
+    const res = await DELETE(req, { params: Promise.resolve({ agentId: AGENT_ID }) });
     expect(res.status).toBe(403);
   });
 
@@ -174,7 +176,7 @@ describe("Auth Security - Wrong User Access (403)", () => {
     const req = makeRequest("/api/agents/agent1/flow", "PUT", {
       content: { nodes: [], edges: [] },
     });
-    const res = await PUT(req, { params: Promise.resolve({ agentId: "agent1" }) });
+    const res = await PUT(req, { params: Promise.resolve({ agentId: AGENT_ID }) });
     expect(res.status).toBe(403);
   });
 });
@@ -184,7 +186,7 @@ describe("Auth Security - Unowned Agent Access (allowed)", () => {
     mockAuth.mockResolvedValue({ user: { id: "user1" } });
 
     const agentData = {
-      id: "agent1",
+      id: AGENT_ID,
       userId: null,
       flow: null,
       knowledgeBase: null,
@@ -199,7 +201,7 @@ describe("Auth Security - Unowned Agent Access (allowed)", () => {
     );
 
     const req = makeRequest("/api/agents/agent1", "GET");
-    const res = await GET(req, { params: Promise.resolve({ agentId: "agent1" }) });
+    const res = await GET(req, { params: Promise.resolve({ agentId: AGENT_ID }) });
     expect(res.status).toBe(200);
   });
 });

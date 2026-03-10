@@ -74,7 +74,7 @@ describe("mcpToolHandler", () => {
     });
     // MCP tool results are silent — stored in variables, not shown to user
     expect(result.messages).toHaveLength(0);
-    expect(result.updatedVariables?.weather).toEqual({ temperature: 22, unit: "celsius" });
+    expect(result.updatedVariables?.weather).toBe('{"temperature":22,"unit":"celsius"}');
   });
 
   it("stores string result directly in output variable", async () => {
@@ -177,6 +177,6 @@ describe("mcpToolHandler", () => {
     );
 
     expect(result.updatedVariables?.existing).toBe("keep");
-    expect(result.updatedVariables?.total).toBe(42);
+    expect(result.updatedVariables?.total).toBe("42");
   });
 });

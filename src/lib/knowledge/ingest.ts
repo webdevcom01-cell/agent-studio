@@ -68,29 +68,31 @@ export async function ingestSource(
       }
     }
 
-    await deleteSourceChunks(sourceId);
+    await prisma.$transaction(async (tx) => {
+      await tx.kBChunk.deleteMany({ where: { sourceId } });
 
-    for (let batchStart = 0; batchStart < chunks.length; batchStart += BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, chunks.length);
-      const values = [];
+      for (let batchStart = 0; batchStart < chunks.length; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, chunks.length);
+        const values = [];
 
-      for (let i = batchStart; i < batchEnd; i++) {
-        const content = chunks[i];
-        const embedding = embeddings[i];
-        const tokens = estimateTokens(content);
-        const vectorStr = `[${embedding.join(",")}]`;
-        const metadata = JSON.stringify({ index: i, total: chunks.length });
+        for (let i = batchStart; i < batchEnd; i++) {
+          const content = chunks[i];
+          const embedding = embeddings[i];
+          const tokens = estimateTokens(content);
+          const vectorStr = `[${embedding.join(",")}]`;
+          const metadata = JSON.stringify({ index: i, total: chunks.length });
 
-        values.push(
-          Prisma.sql`(gen_random_uuid()::text, ${content}, ${vectorStr}::vector, ${tokens}, ${metadata}::jsonb, NOW(), ${sourceId})`
-        );
+          values.push(
+            Prisma.sql`(gen_random_uuid()::text, ${content}, ${vectorStr}::vector, ${tokens}, ${metadata}::jsonb, NOW(), ${sourceId})`
+          );
+        }
+
+        await tx.$executeRaw`
+          INSERT INTO "KBChunk" ("id", "content", "embedding", "tokens", "metadata", "createdAt", "sourceId")
+          VALUES ${Prisma.join(values)}
+        `;
       }
-
-      await prisma.$executeRaw`
-        INSERT INTO "KBChunk" ("id", "content", "embedding", "tokens", "metadata", "createdAt", "sourceId")
-        VALUES ${Prisma.join(values)}
-      `;
-    }
+    });
 
     await prisma.kBSource.update({
       where: { id: sourceId },

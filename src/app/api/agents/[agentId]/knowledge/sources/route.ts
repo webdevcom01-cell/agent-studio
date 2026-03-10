@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ingestSource } from "@/lib/knowledge/ingest";
 import { logger } from "@/lib/logger";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -75,6 +76,14 @@ export async function POST(
     const { agentId } = await params;
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
+
+    const rateResult = checkRateLimit(`kb-source:${authResult.userId}`, 10);
+    if (!rateResult.allowed) {
+      return NextResponse.json(
+        { success: false, error: "Too many requests" },
+        { status: 429 }
+      );
+    }
 
     const agent = await prisma.agent.findUnique({
       where: { id: agentId },

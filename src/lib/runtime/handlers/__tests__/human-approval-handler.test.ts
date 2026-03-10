@@ -38,9 +38,9 @@ function makeContext(overrides: Record<string, unknown> = {}): RuntimeContext {
     variables: {},
     messageHistory: [],
     isNewConversation: false,
-    _userId: "user-1",
+    userId: "user-1",
     ...overrides,
-  } as RuntimeContext;
+  };
 }
 
 beforeEach(() => {
@@ -200,7 +200,7 @@ describe("humanApprovalHandler", () => {
         prompt: "Approve?",
         outputVariable: "result",
       }),
-      makeContext({ _userId: undefined }),
+      makeContext({ userId: undefined }),
     );
 
     expect(result.messages[0].content).toContain("authenticated user");

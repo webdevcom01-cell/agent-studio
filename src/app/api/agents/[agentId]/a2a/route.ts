@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
@@ -38,8 +38,8 @@ export async function POST(
   { params }: RouteParams
 ): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) {
       return jsonRpcError(null, -32000, "Unauthorized", 401);
     }
 
@@ -63,7 +63,7 @@ export async function POST(
     const inputMessage = textPart?.text ?? "";
 
     const agent = await prisma.agent.findFirst({
-      where: { id: agentId, userId: session.user.id },
+      where: { id: agentId, userId: authResult.userId },
       include: { flow: true },
     });
 

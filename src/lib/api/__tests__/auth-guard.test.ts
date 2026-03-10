@@ -13,6 +13,8 @@ vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 
 import { requireAuth, requireAgentOwner, isAuthError } from "../auth-guard";
 
+const VALID_CUID = "clh1234567890abcdef12345";
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -54,12 +56,12 @@ describe("requireAgentOwner", () => {
     mockAuth.mockResolvedValue({ user: { id: "user1" } });
     mockPrisma.agent.findUnique.mockResolvedValue({ userId: "user1" });
 
-    const result = await requireAgentOwner("agent1");
+    const result = await requireAgentOwner(VALID_CUID);
 
     expect(isAuthError(result)).toBe(false);
     if (!isAuthError(result)) {
       expect(result.userId).toBe("user1");
-      expect(result.agentId).toBe("agent1");
+      expect(result.agentId).toBe(VALID_CUID);
     }
   });
 
@@ -67,7 +69,7 @@ describe("requireAgentOwner", () => {
     mockAuth.mockResolvedValue({ user: { id: "user1" } });
     mockPrisma.agent.findUnique.mockResolvedValue({ userId: null });
 
-    const result = await requireAgentOwner("agent1");
+    const result = await requireAgentOwner(VALID_CUID);
 
     expect(isAuthError(result)).toBe(false);
   });
@@ -76,7 +78,7 @@ describe("requireAgentOwner", () => {
     mockAuth.mockResolvedValue({ user: { id: "user1" } });
     mockPrisma.agent.findUnique.mockResolvedValue({ userId: "user2" });
 
-    const result = await requireAgentOwner("agent1");
+    const result = await requireAgentOwner(VALID_CUID);
 
     expect(result).toBeInstanceOf(NextResponse);
     if (result instanceof NextResponse) {
@@ -84,11 +86,23 @@ describe("requireAgentOwner", () => {
     }
   });
 
-  it("returns 404 when agent does not exist", async () => {
+  it("returns 404 for invalid CUID format", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user1" } });
+
+    const result = await requireAgentOwner("nonexistent");
+
+    expect(result).toBeInstanceOf(NextResponse);
+    if (result instanceof NextResponse) {
+      expect(result.status).toBe(404);
+    }
+    expect(mockPrisma.agent.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when agent does not exist in DB", async () => {
     mockAuth.mockResolvedValue({ user: { id: "user1" } });
     mockPrisma.agent.findUnique.mockResolvedValue(null);
 
-    const result = await requireAgentOwner("nonexistent");
+    const result = await requireAgentOwner(VALID_CUID);
 
     expect(result).toBeInstanceOf(NextResponse);
     if (result instanceof NextResponse) {
@@ -99,7 +113,7 @@ describe("requireAgentOwner", () => {
   it("returns 401 when not authenticated", async () => {
     mockAuth.mockResolvedValue(null);
 
-    const result = await requireAgentOwner("agent1");
+    const result = await requireAgentOwner(VALID_CUID);
 
     expect(result).toBeInstanceOf(NextResponse);
     if (result instanceof NextResponse) {

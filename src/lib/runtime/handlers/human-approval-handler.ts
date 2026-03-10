@@ -19,9 +19,7 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
     ? { [inputVariable]: context.variables[inputVariable] }
     : {};
 
-  const userId = (context as unknown as Record<string, unknown>)["_userId"] as
-    | string
-    | undefined;
+  const userId = context.userId;
 
   if (!userId) {
     return {

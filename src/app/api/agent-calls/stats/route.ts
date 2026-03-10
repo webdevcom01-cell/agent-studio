@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { Prisma } from "@/generated/prisma";
@@ -27,15 +27,10 @@ interface RecentFailureRow {
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const authResult = await requireAuth();
+    if (isAuthError(authResult)) return authResult;
 
-    const userId = session.user.id;
+    const userId = authResult.userId;
     const { searchParams } = new URL(request.url);
     const period = searchParams.get("period") ?? "24h";
     const periodMs = PERIOD_MAP[period] ?? PERIOD_MAP["24h"];

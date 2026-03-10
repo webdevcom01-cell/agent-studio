@@ -140,6 +140,15 @@ export async function executeFlow(
     context.currentNodeId = result.nextNodeId ?? findNextNode(context, node.id);
   }
 
+  if (iterations >= MAX_ITERATIONS && context.currentNodeId) {
+    logger.warn("Flow reached max iterations", { agentId: context.agentId, iterations });
+    allMessages.push({
+      role: "assistant",
+      content: "This conversation has reached its processing limit. Please start a new conversation.",
+    });
+    context.currentNodeId = null;
+  }
+
   await saveMessages(context.conversationId, allMessages);
   await saveContext(context);
 

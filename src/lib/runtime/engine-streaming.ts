@@ -232,6 +232,17 @@ export function executeFlowStreaming(
             result.nextNodeId ?? findNextNode(context, node.id);
         }
 
+        if (iterations >= MAX_ITERATIONS && context.currentNodeId) {
+          logger.warn("Flow reached max iterations", { agentId: context.agentId, iterations });
+          const msg: OutputMessage = {
+            role: "assistant",
+            content: "This conversation has reached its processing limit. Please start a new conversation.",
+          };
+          allMessages.push(msg);
+          writer.write({ type: "message", role: msg.role, content: msg.content });
+          context.currentNodeId = null;
+        }
+
         writer.write({
           type: "done",
           conversationId: context.conversationId,

@@ -43,7 +43,7 @@ export function useStreamingChat({
     setIsLoading(true);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120_000);
+    const timeout = setTimeout(() => controller.abort(), 65_000);
     let readerRef: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
     try {
@@ -146,6 +146,29 @@ export function useStreamingChat({
             case "heartbeat":
               // Keep-alive signal from server during long-running operations
               // (e.g. MCP tool calls). No UI action needed.
+              break;
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        const chunk = parseChunk(buffer);
+        if (chunk) {
+          switch (chunk.type) {
+            case "message":
+              setMessages((prev) => [...prev, { role: "assistant", content: chunk.content }]);
+              break;
+            case "done":
+              if (chunk.conversationId) {
+                conversationIdRef.current = chunk.conversationId;
+                setConversationId(chunk.conversationId);
+                if (persistKey) {
+                  sessionStorage.setItem(persistKey, chunk.conversationId);
+                }
+              }
+              break;
+            case "error":
+              setMessages((prev) => [...prev, { role: "assistant", content: chunk.content }]);
               break;
           }
         }

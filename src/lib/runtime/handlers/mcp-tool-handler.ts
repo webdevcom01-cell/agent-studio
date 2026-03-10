@@ -26,18 +26,22 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
     resolvedArgs[param] = resolveTemplate(template, context.variables);
   }
 
+  const MAX_RESULT_LENGTH = 10_000;
+
   try {
     const result = await callMCPTool(mcpServerId, toolName, resolvedArgs);
 
-    // Store result in variables for downstream nodes (e.g. AI Response)
-    // No visible message — the AI Response node will use the variable
+    const sanitized = typeof result === "string"
+      ? result.slice(0, MAX_RESULT_LENGTH)
+      : JSON.stringify(result).slice(0, MAX_RESULT_LENGTH);
+
     return {
       messages: [],
       nextNodeId: null,
       waitForInput: false,
       updatedVariables: {
         ...context.variables,
-        [outputVariable]: result,
+        [outputVariable]: sanitized,
       },
     };
   } catch (err) {

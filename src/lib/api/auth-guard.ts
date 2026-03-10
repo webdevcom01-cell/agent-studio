@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+const cuidSchema = z.string().cuid();
 
 interface AuthResult {
   userId: string;
@@ -39,6 +42,10 @@ export async function requireAgentOwner(
   const authResult = await requireAuth();
   if (authResult instanceof NextResponse) {
     return authResult;
+  }
+
+  if (!cuidSchema.safeParse(agentId).success) {
+    return AGENT_NOT_FOUND;
   }
 
   const agent = await prisma.agent.findUnique({

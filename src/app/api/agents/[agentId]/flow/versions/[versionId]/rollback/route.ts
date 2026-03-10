@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { VersionService } from "@/lib/versioning/version-service";
 import { logger } from "@/lib/logger";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 interface RouteParams {
   params: Promise<{ agentId: string; versionId: string }>;
@@ -15,6 +16,14 @@ export async function POST(
   const { agentId, versionId } = await params;
   const authResult = await requireAgentOwner(agentId);
   if (isAuthError(authResult)) return authResult;
+
+  const rateResult = checkRateLimit(`deploy:${authResult.userId}`, 5);
+  if (!rateResult.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests" },
+      { status: 429 }
+    );
+  }
 
   const flow = await prisma.flow.findUnique({ where: { agentId } });
   if (!flow) {

@@ -9,6 +9,7 @@ export interface RuntimeContext {
   messageHistory: { role: "user" | "assistant" | "system"; content: string }[];
   isResuming?: boolean;
   isNewConversation: boolean;
+  userId?: string;
 }
 
 export interface ExecutionResult {
