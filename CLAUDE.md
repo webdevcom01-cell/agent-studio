@@ -18,7 +18,9 @@ no billing, no plugins, no collaboration. OAuth login (GitHub + Google), embedda
 - **Package manager:** pnpm
 - **Database ORM:** Prisma v6 + PostgreSQL (Supabase, pgvector v0.8.0)
 - **AI:** Vercel AI SDK v6 (`ai@6.0.116`) — never raw fetch to providers
-  - **Chat:** DeepSeek (default), OpenAI, Anthropic (optional)
+  - **Chat (required):** DeepSeek (`@ai-sdk/deepseek`, default), OpenAI (`@ai-sdk/openai`)
+  - **Chat (optional):** Anthropic (`@ai-sdk/anthropic`), Google Gemini (`@ai-sdk/google`), Groq (`@ai-sdk/groq`), Mistral (`@ai-sdk/mistral`), Moonshot/Kimi (OpenAI-compatible)
+  - **Model catalog:** `src/lib/models.ts` — client-safe, 18 models across 6 providers, tiered (fast/balanced/powerful)
   - **Embeddings:** OpenAI `text-embedding-3-small` (1536 dim) — required, DeepSeek has no embeddings
 - **Validation:** Zod v3
 - **UI primitives:** Radix UI (individual packages) + lucide-react icons
@@ -106,7 +108,8 @@ src/
       nodes/              ← 18 node display components (base, message, ai-response, mcp-tool, etc.)
 
   lib/
-    ai.ts             ← AI model routing (DeepSeek/OpenAI/Anthropic)
+    ai.ts             ← AI model routing (DeepSeek/OpenAI/Anthropic/Gemini/Groq/Mistral/Kimi)
+    models.ts         ← Client-safe model catalog (18 models, 6 providers, fast/balanced/powerful tiers)
     auth.ts           ← NextAuth config (GitHub + Google providers, PrismaAdapter, JWT)
     analytics.ts      ← Fire-and-forget analytics tracking
     env.ts            ← Environment variable validation (Zod schema)
@@ -354,17 +357,19 @@ pnpm install
 # 2. Configure environment
 cp .env.example .env.local
 # Required:
-#   DATABASE_URL       — Supabase PostgreSQL (port 6543 for pooling)
-#   DIRECT_URL         — Supabase PostgreSQL (port 5432 for migrations)
-#   DEEPSEEK_API_KEY   — default chat model
-#   OPENAI_API_KEY     — required for embeddings
-#   AUTH_SECRET         — NextAuth JWT secret (openssl rand -base64 32)
-#   AUTH_GITHUB_ID      — GitHub OAuth App client ID
-#   AUTH_GITHUB_SECRET  — GitHub OAuth App client secret
-#   AUTH_GOOGLE_ID      — Google OAuth client ID
-#   AUTH_GOOGLE_SECRET  — Google OAuth client secret
-# Optional:
-#   ANTHROPIC_API_KEY  — alternative chat model
+#   DATABASE_URL                   — Supabase PostgreSQL (port 6543 for pooling)
+#   DIRECT_URL                     — Supabase PostgreSQL (port 5432 for migrations)
+#   DEEPSEEK_API_KEY               — platform.deepseek.com — default chat model
+#   OPENAI_API_KEY                 — platform.openai.com — required for embeddings + GPT models
+#   AUTH_SECRET                    — NextAuth JWT secret (openssl rand -base64 32)
+#   AUTH_GITHUB_ID / AUTH_GITHUB_SECRET  — GitHub OAuth App
+#   AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET  — Google OAuth client
+# Optional (add keys to enable additional models):
+#   ANTHROPIC_API_KEY              — console.anthropic.com — Claude Haiku/Sonnet/Opus
+#   GOOGLE_GENERATIVE_AI_API_KEY   — aistudio.google.com — Gemini 2.5 Flash/Pro (free tier)
+#   GROQ_API_KEY                   — console.groq.com — Llama 3.3, Compound Beta (free tier)
+#   MISTRAL_API_KEY                — console.mistral.ai — Mistral Small/Medium/Large
+#   MOONSHOT_API_KEY               — platform.moonshot.cn — Kimi K2
 
 # 3. Setup database
 pnpm db:push           # Sync schema to DB (no migration files)
@@ -434,6 +439,9 @@ pnpm db:seed          # Seed dev data
 - Test behavior, not implementation details
 
 ### AI Model Config
-- `getModel(modelId)` in `src/lib/ai.ts` routes to correct provider
+- `getModel(modelId)` in `src/lib/ai.ts` routes to correct provider by modelId prefix
 - `getEmbeddingModel()` always returns OpenAI text-embedding-3-small
+- `getAvailableModels()` returns models filtered by configured env keys (client calls use `ALL_MODELS` directly)
+- `src/lib/models.ts` is client-safe — no server imports, no env access; import `ALL_MODELS` in client components
 - DeepSeek has no embedding support — OPENAI_API_KEY is required for KB features
+- Adding a new provider: (1) add `@ai-sdk/[provider]` package, (2) add env key to `src/lib/env.ts`, (3) add factory + routing to `src/lib/ai.ts`, (4) add models to `src/lib/models.ts`
