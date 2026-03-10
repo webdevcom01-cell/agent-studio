@@ -72,7 +72,8 @@ describe("mcpToolHandler", () => {
       location: "Belgrade",
       units: "metric",
     });
-    expect(result.messages[0].content).toContain("get_weather result:");
+    // MCP tool results are silent — stored in variables, not shown to user
+    expect(result.messages).toHaveLength(0);
     expect(result.updatedVariables?.weather).toEqual({ temperature: 22, unit: "celsius" });
   });
 
@@ -90,7 +91,8 @@ describe("mcpToolHandler", () => {
     );
 
     expect(result.updatedVariables?.result).toBe("sunny");
-    expect(result.messages[0].content).toContain("sunny");
+    // No visible messages — result only in variables
+    expect(result.messages).toHaveLength(0);
   });
 
   it("uses default outputVariable when not specified", async () => {
@@ -117,9 +119,10 @@ describe("mcpToolHandler", () => {
       makeContext(),
     );
 
-    expect(result.messages[0].content).toContain("failed");
-    expect(result.messages[0].content).toContain("Connection refused");
-    expect(result.updatedVariables).toBeUndefined();
+    // Errors are silent too — stored in output variable for AI to handle
+    expect(result.messages).toHaveLength(0);
+    expect(result.updatedVariables?.out).toContain("[Error:");
+    expect(result.updatedVariables?.out).toContain("Connection refused");
     expect(result.waitForInput).toBe(false);
   });
 
@@ -138,7 +141,8 @@ describe("mcpToolHandler", () => {
       makeContext(),
     );
 
-    expect(result.messages[0].content).toContain("not found");
+    expect(result.messages).toHaveLength(0);
+    expect(result.updatedVariables?.out).toContain("not found");
   });
 
   it("resolves nested template variables in input mapping", async () => {

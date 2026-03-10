@@ -28,15 +28,11 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
 
   try {
     const result = await callMCPTool(mcpServerId, toolName, resolvedArgs);
-    const resultStr = typeof result === "string" ? result : JSON.stringify(result);
 
+    // Store result in variables for downstream nodes (e.g. AI Response)
+    // No visible message — the AI Response node will use the variable
     return {
-      messages: [
-        {
-          role: "assistant",
-          content: `Tool ${toolName} result: ${resultStr}`,
-        },
-      ],
+      messages: [],
       nextNodeId: null,
       waitForInput: false,
       updatedVariables: {
@@ -48,14 +44,13 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
     const errorMsg = err instanceof Error ? err.message : String(err);
 
     return {
-      messages: [
-        {
-          role: "assistant",
-          content: `MCP Tool "${toolName}" failed: ${errorMsg}`,
-        },
-      ],
+      messages: [],
       nextNodeId: null,
       waitForInput: false,
+      updatedVariables: {
+        ...context.variables,
+        [outputVariable]: `[Error: ${errorMsg}]`,
+      },
     };
   }
 };
