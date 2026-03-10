@@ -48,6 +48,7 @@ describe("aiClassifyHandler", () => {
 
   it("returns early when input text is empty", async () => {
     const result = await aiClassifyHandler(makeNode(), makeContext({ variables: { message: "" } }));
+    expect(result).toBeDefined();
     expect(mockGenerateText).not.toHaveBeenCalled();
   });
 

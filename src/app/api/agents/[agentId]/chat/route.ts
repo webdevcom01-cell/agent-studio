@@ -4,7 +4,7 @@ import { executeFlowStreaming } from "@/lib/runtime/engine-streaming";
 import { loadContext } from "@/lib/runtime/context";
 import { trackChatResponse } from "@/lib/analytics";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { parseBodyWithLimit, BodyTooLargeError, InvalidJsonError } from "@/lib/api/body-limit";
+import { parseBodyWithLimit, BodyTooLargeError } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { logger } from "@/lib/logger";
 

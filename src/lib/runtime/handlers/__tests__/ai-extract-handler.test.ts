@@ -55,6 +55,7 @@ describe("aiExtractHandler", () => {
 
   it("returns early when conversation history is empty", async () => {
     const result = await aiExtractHandler(makeNode(), makeContext({ messageHistory: [] }));
+    expect(result).toBeDefined();
     expect(mockGenerateText).not.toHaveBeenCalled();
   });
 
