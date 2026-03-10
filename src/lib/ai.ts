@@ -59,6 +59,7 @@ export function getModel(modelId: string) {
   if (
     modelId.startsWith("gpt") ||
     modelId.startsWith("o1") ||
+    modelId.startsWith("o2") ||
     modelId.startsWith("o3") ||
     modelId.startsWith("o4")
   ) {
