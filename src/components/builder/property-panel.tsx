@@ -7,6 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ALL_MODELS } from "@/lib/models";
 
 interface PropertyPanelProps {
   node: Node;
@@ -15,6 +25,52 @@ interface PropertyPanelProps {
   onUpdateData: (nodeId: string, data: Record<string, unknown>) => void;
   onDeleteNode: (nodeId: string) => void;
   onClose: () => void;
+}
+
+const TIER_LABELS: Record<string, string> = {
+  fast: "⚡ Fast & Cheap",
+  balanced: "⚖️ Balanced",
+  powerful: "🧠 Powerful",
+};
+
+function ModelSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const models = ALL_MODELS;
+  const tiers = ["fast", "balanced", "powerful"] as const;
+
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="w-full text-xs">
+        <SelectValue placeholder="Select model..." />
+      </SelectTrigger>
+      <SelectContent>
+        {tiers.map((tier) => {
+          const group = models.filter((m) => m.tier === tier);
+          if (group.length === 0) return null;
+          return (
+            <SelectGroup key={tier}>
+              <SelectLabel className="text-xs text-muted-foreground">
+                {TIER_LABELS[tier]}
+              </SelectLabel>
+              {group.map((m) => (
+                <SelectItem key={m.id} value={m.id} className="text-xs">
+                  {m.name}
+                  <span className="ml-1 text-muted-foreground opacity-60">
+                    ({m.provider})
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          );
+        })}
+      </SelectContent>
+    </Select>
+  );
 }
 
 export function PropertyPanel({
@@ -77,9 +133,9 @@ export function PropertyPanel({
             </div>
             <div className="space-y-2">
               <Label>Model</Label>
-              <Input
+              <ModelSelect
                 value={(data.model as string) ?? "deepseek-chat"}
-                onChange={(e) => update("model", e.target.value)}
+                onChange={(val) => update("model", val)}
               />
             </div>
             <div className="space-y-2">

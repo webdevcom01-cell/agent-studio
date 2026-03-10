@@ -6,6 +6,10 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
   DEEPSEEK_API_KEY: z.string().min(1, "DEEPSEEK_API_KEY is required"),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1).optional(),
+  GROQ_API_KEY: z.string().min(1).optional(),
+  MISTRAL_API_KEY: z.string().min(1).optional(),
+  MOONSHOT_API_KEY: z.string().min(1).optional(),
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
@@ -29,9 +33,19 @@ export function validateEnv(
   }
 
   if (!result.data.ANTHROPIC_API_KEY) {
-    console.warn(
-      "ANTHROPIC_API_KEY not set — Anthropic models will be unavailable"
-    );
+    console.warn("ANTHROPIC_API_KEY not set — Anthropic models will be unavailable");
+  }
+  if (!result.data.GOOGLE_GENERATIVE_AI_API_KEY) {
+    console.warn("GOOGLE_GENERATIVE_AI_API_KEY not set — Gemini models will be unavailable");
+  }
+  if (!result.data.GROQ_API_KEY) {
+    console.warn("GROQ_API_KEY not set — Groq models will be unavailable");
+  }
+  if (!result.data.MISTRAL_API_KEY) {
+    console.warn("MISTRAL_API_KEY not set — Mistral models will be unavailable");
+  }
+  if (!result.data.MOONSHOT_API_KEY) {
+    console.warn("MOONSHOT_API_KEY not set — Kimi models will be unavailable");
   }
 
   return result.data;
