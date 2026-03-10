@@ -33,7 +33,7 @@ export async function DELETE(
     await deleteSourceChunks(sourceId);
     await prisma.kBSource.delete({ where: { id: sourceId } });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, data: null });
   } catch (err) {
     logger.error("Failed to delete source", err);
     return NextResponse.json(

@@ -47,6 +47,29 @@ describe("checkRateLimit", () => {
     expect(resultB.allowed).toBe(true);
   });
 
+  it("rate-limits concurrent requests from the same key", () => {
+    const key = `test-concurrent-${Date.now()}`;
+    const results = Array.from({ length: 25 }, () => checkRateLimit(key));
+
+    const allowed = results.filter((r) => r.allowed);
+    const blocked = results.filter((r) => !r.allowed);
+
+    expect(allowed).toHaveLength(20);
+    expect(blocked).toHaveLength(5);
+    expect(blocked.every((r) => r.remaining === 0)).toBe(true);
+    expect(blocked.every((r) => r.retryAfterMs > 0)).toBe(true);
+  });
+
+  it("respects custom maxRequests parameter", () => {
+    const key = `test-custom-${Date.now()}`;
+    for (let i = 0; i < 5; i++) {
+      checkRateLimit(key, 5);
+    }
+    const result = checkRateLimit(key, 5);
+    expect(result.allowed).toBe(false);
+    expect(result.remaining).toBe(0);
+  });
+
   it("allows requests after window expires", () => {
     const key = `test-expire-${Date.now()}`;
     const realDateNow = Date.now;

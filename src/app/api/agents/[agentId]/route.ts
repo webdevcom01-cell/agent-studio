@@ -109,7 +109,7 @@ export async function DELETE(
 
     await prisma.agent.delete({ where: { id: agentId } });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, data: null });
   } catch (err) {
     logger.error("Failed to delete agent", err);
     return NextResponse.json(

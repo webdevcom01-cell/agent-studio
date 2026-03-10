@@ -130,7 +130,7 @@ export async function DELETE(
 
     await prisma.mCPServer.delete({ where: { id: serverId } });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, data: null });
   } catch (err) {
     logger.error("Failed to delete MCP server", {
       error: err instanceof Error ? err.message : String(err),

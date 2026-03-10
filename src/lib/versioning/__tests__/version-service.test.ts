@@ -220,6 +220,75 @@ describe("VersionService.deployVersion", () => {
   });
 });
 
+describe("VersionService.deployVersion — transaction failure", () => {
+  it("rolls back all changes if any step in the transaction fails", async () => {
+    mockPrisma.flowVersion.findUniqueOrThrow.mockResolvedValue({
+      id: "v2",
+      version: 2,
+      flowId: "f1",
+      content: CONTENT_WITH_NODE,
+      flow: { id: "f1" },
+    });
+
+    const txMock = {
+      flowVersion: {
+        updateMany: vi.fn(),
+        update: vi.fn(),
+      },
+      flow: {
+        update: vi.fn().mockRejectedValue(new Error("DB connection lost")),
+      },
+      flowDeployment: {
+        create: vi.fn(),
+      },
+    };
+
+    mockPrisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock)
+    );
+
+    await expect(
+      VersionService.deployVersion("a1", "v2", "user1", "Deploy")
+    ).rejects.toThrow("DB connection lost");
+
+    expect(txMock.flowVersion.updateMany).toHaveBeenCalled();
+    expect(txMock.flowVersion.update).toHaveBeenCalled();
+    expect(txMock.flow.update).toHaveBeenCalled();
+    expect(txMock.flowDeployment.create).not.toHaveBeenCalled();
+  });
+
+  it("does not publish new version if archiving old versions fails", async () => {
+    mockPrisma.flowVersion.findUniqueOrThrow.mockResolvedValue({
+      id: "v2",
+      version: 2,
+      flowId: "f1",
+      content: CONTENT_WITH_NODE,
+      flow: { id: "f1" },
+    });
+
+    const txMock = {
+      flowVersion: {
+        updateMany: vi.fn().mockRejectedValue(new Error("Archive failed")),
+        update: vi.fn(),
+      },
+      flow: { update: vi.fn() },
+      flowDeployment: { create: vi.fn() },
+    };
+
+    mockPrisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock)
+    );
+
+    await expect(
+      VersionService.deployVersion("a1", "v2", "user1")
+    ).rejects.toThrow("Archive failed");
+
+    expect(txMock.flowVersion.update).not.toHaveBeenCalled();
+    expect(txMock.flow.update).not.toHaveBeenCalled();
+    expect(txMock.flowDeployment.create).not.toHaveBeenCalled();
+  });
+});
+
 describe("VersionService.getActiveVersion", () => {
   it("returns null when no active version", async () => {
     mockPrisma.flow.findUnique.mockResolvedValue({

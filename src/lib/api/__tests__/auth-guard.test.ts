@@ -123,6 +123,48 @@ describe("requireAgentOwner", () => {
   });
 });
 
+describe("requireAgentOwner — cross-user access", () => {
+  it("blocks user A from accessing user B's agent", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-A" } });
+    mockPrisma.agent.findUnique.mockResolvedValue({ userId: "user-B" });
+
+    const result = await requireAgentOwner(VALID_CUID);
+
+    expect(isAuthError(result)).toBe(true);
+    if (result instanceof NextResponse) {
+      expect(result.status).toBe(403);
+      const body = await result.json();
+      expect(body.success).toBe(false);
+    }
+  });
+
+  it("allows user B to access user B's own agent", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-B" } });
+    mockPrisma.agent.findUnique.mockResolvedValue({ userId: "user-B" });
+
+    const result = await requireAgentOwner(VALID_CUID);
+
+    expect(isAuthError(result)).toBe(false);
+    if (!isAuthError(result)) {
+      expect(result.userId).toBe("user-B");
+    }
+  });
+
+  it("returns 403 without leaking user info in status", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "attacker" } });
+    mockPrisma.agent.findUnique.mockResolvedValue({ userId: "victim" });
+
+    const result = await requireAgentOwner(VALID_CUID);
+
+    expect(result).toBeInstanceOf(NextResponse);
+    if (result instanceof NextResponse) {
+      expect(result.status).toBe(403);
+      expect(result.statusText).not.toContain("victim");
+      expect(result.statusText).not.toContain("attacker");
+    }
+  });
+});
+
 describe("isAuthError", () => {
   it("returns true for NextResponse", () => {
     expect(isAuthError(NextResponse.json({}))).toBe(true);

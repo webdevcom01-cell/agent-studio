@@ -148,7 +148,7 @@ export async function DELETE(
       where: { id: link.id },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, data: null });
   } catch (err) {
     logger.error("Failed to unlink MCP server from agent", err);
     return NextResponse.json(
