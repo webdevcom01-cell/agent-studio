@@ -352,6 +352,46 @@ export function PropertyPanel({
         {node.type === "human_approval" && (
           <HumanApprovalProperties data={data} update={update} />
         )}
+
+        {node.type === "loop" && (
+          <LoopProperties data={data} update={update} />
+        )}
+
+        {node.type === "parallel" && (
+          <ParallelProperties data={data} update={update} />
+        )}
+
+        {node.type === "memory_write" && (
+          <MemoryWriteProperties data={data} update={update} />
+        )}
+
+        {node.type === "memory_read" && (
+          <MemoryReadProperties data={data} update={update} />
+        )}
+
+        {node.type === "evaluator" && (
+          <EvaluatorProperties data={data} update={update} />
+        )}
+
+        {node.type === "schedule_trigger" && (
+          <ScheduleTriggerProperties data={data} update={update} />
+        )}
+
+        {node.type === "email_send" && (
+          <EmailSendProperties data={data} update={update} />
+        )}
+
+        {node.type === "notification" && (
+          <NotificationProperties data={data} update={update} />
+        )}
+
+        {node.type === "format_transform" && (
+          <FormatTransformProperties data={data} update={update} />
+        )}
+
+        {node.type === "switch" && (
+          <SwitchProperties data={data} update={update} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -1191,6 +1231,937 @@ function AIExtractProperties({ data, update }: SubPanelProps) {
         <Input
           value={(data.model as string) ?? "deepseek-chat"}
           onChange={(e) => update("model", e.target.value)}
+        />
+      </div>
+    </>
+  );
+}
+
+const LOOP_MODES = [
+  { value: "count", label: "Fixed Count" },
+  { value: "condition", label: "Until Condition" },
+  { value: "while", label: "While Condition" },
+] as const;
+
+const LOOP_OPERATORS = [
+  { value: "equals", label: "equals" },
+  { value: "not_equals", label: "not equals" },
+  { value: "contains", label: "contains" },
+  { value: "greater_than", label: "greater than" },
+  { value: "less_than", label: "less than" },
+  { value: "is_truthy", label: "is truthy" },
+  { value: "is_falsy", label: "is falsy" },
+] as const;
+
+function LoopProperties({ data, update }: SubPanelProps) {
+  const mode = (data.mode as string) ?? "count";
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Loop Mode</Label>
+        <Select value={mode} onValueChange={(val) => update("mode", val)}>
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LOOP_MODES.map((m) => (
+              <SelectItem key={m.value} value={m.value} className="text-xs">
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Max Iterations</Label>
+        <Input
+          type="number"
+          min={1}
+          max={100}
+          value={(data.maxIterations as number) ?? 10}
+          onChange={(e) => update("maxIterations", Math.min(100, Math.max(1, parseInt(e.target.value) || 10)))}
+        />
+        <p className="text-xs text-muted-foreground">Safety limit (1-100)</p>
+      </div>
+
+      {(mode === "condition" || mode === "while") && (
+        <>
+          <div className="space-y-2">
+            <Label>Condition Variable</Label>
+            <Input
+              value={(data.conditionVariable as string) ?? ""}
+              onChange={(e) => update("conditionVariable", e.target.value)}
+              placeholder="e.g. result_status"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Operator</Label>
+            <Select
+              value={(data.conditionOperator as string) ?? "equals"}
+              onValueChange={(val) => update("conditionOperator", val)}
+            >
+              <SelectTrigger className="w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LOOP_OPERATORS.map((op) => (
+                  <SelectItem key={op.value} value={op.value} className="text-xs">
+                    {op.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Condition Value</Label>
+            <Input
+              value={(data.conditionValue as string) ?? ""}
+              onChange={(e) => update("conditionValue", e.target.value)}
+              placeholder="e.g. done"
+            />
+            <p className="text-xs text-muted-foreground">{"Supports {{variable}} templates"}</p>
+          </div>
+        </>
+      )}
+
+      <div className="space-y-2">
+        <Label>Loop Variable Name</Label>
+        <Input
+          value={(data.loopVariable as string) ?? "loop_index"}
+          onChange={(e) => update("loopVariable", e.target.value)}
+          placeholder="loop_index"
+        />
+        <p className="text-xs text-muted-foreground">Stores current iteration (0-based)</p>
+      </div>
+
+      <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+        <p className="font-medium mb-1">Outputs:</p>
+        <p><strong>Loop Body</strong> — connects to the subflow to repeat</p>
+        <p><strong>Done</strong> — continues after loop completes</p>
+      </div>
+    </>
+  );
+}
+
+interface ParallelBranch {
+  branchId: string;
+  label: string;
+  outputVariable: string;
+}
+
+const MERGE_STRATEGIES = [
+  { value: "all", label: "All must succeed" },
+  { value: "any", label: "Any can succeed" },
+] as const;
+
+function ParallelProperties({ data, update }: SubPanelProps) {
+  const branches = (data.branches as ParallelBranch[]) ?? [];
+  const mergeStrategy = (data.mergeStrategy as string) ?? "all";
+
+  function addBranch() {
+    const id = `branch-${Date.now()}`;
+    update("branches", [
+      ...branches,
+      { branchId: id, label: `Branch ${branches.length + 1}`, outputVariable: "" },
+    ]);
+  }
+
+  function updateBranch(index: number, field: string, value: string) {
+    const updated = branches.map((b, i) =>
+      i === index ? { ...b, [field]: value } : b
+    );
+    update("branches", updated);
+  }
+
+  function removeBranch(index: number) {
+    update("branches", branches.filter((_, i) => i !== index));
+  }
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Merge Strategy</Label>
+        <Select value={mergeStrategy} onValueChange={(val) => update("mergeStrategy", val)}>
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {MERGE_STRATEGIES.map((s) => (
+              <SelectItem key={s.value} value={s.value} className="text-xs">
+                {s.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Timeout (seconds)</Label>
+        <Input
+          type="number"
+          min={5}
+          max={120}
+          value={(data.timeoutSeconds as number) ?? 30}
+          onChange={(e) => update("timeoutSeconds", Math.min(120, Math.max(5, parseInt(e.target.value) || 30)))}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Branches (max 5)</Label>
+          {branches.length < 5 && (
+            <Button variant="ghost" size="sm" className="h-6 px-2" onClick={addBranch}>
+              <Plus className="mr-1 size-3" /> Add
+            </Button>
+          )}
+        </div>
+        {branches.map((branch, i) => (
+          <div key={branch.branchId} className="space-y-1 rounded border p-2">
+            <div className="flex gap-1">
+              <Input
+                value={branch.label}
+                onChange={(e) => updateBranch(i, "label", e.target.value)}
+                placeholder="Branch label"
+                className="flex-1"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 shrink-0"
+                onClick={() => removeBranch(i)}
+              >
+                <X className="size-3" />
+              </Button>
+            </div>
+            <Input
+              value={branch.outputVariable}
+              onChange={(e) => updateBranch(i, "outputVariable", e.target.value)}
+              placeholder="Output variable (e.g. branch_1_result)"
+            />
+          </div>
+        ))}
+        {branches.length === 0 && (
+          <p className="text-xs italic text-muted-foreground">Add branches to run in parallel</p>
+        )}
+      </div>
+
+      <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+        <p className="font-medium mb-1">Outputs:</p>
+        {branches.map((b) => (
+          <p key={b.branchId}><strong>{b.label}</strong> — connect to branch subflow</p>
+        ))}
+        <p><strong>Done</strong> — after all branches complete</p>
+        <p><strong>Failed</strong> — if merge strategy fails</p>
+      </div>
+    </>
+  );
+}
+
+function MemoryWriteProperties({ data, update }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Key (template supported)</Label>
+        <Input
+          value={(data.key as string) ?? ""}
+          onChange={(e) => update("key", e.target.value)}
+          placeholder="e.g. user_preference or {{topic}}"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Value (template supported)</Label>
+        <Textarea
+          value={(data.value as string) ?? ""}
+          onChange={(e) => update("value", e.target.value)}
+          placeholder='e.g. {{last_message}} or {"key": "value"}'
+          rows={3}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Category</Label>
+        <Input
+          value={(data.category as string) ?? "general"}
+          onChange={(e) => update("category", e.target.value)}
+          placeholder="general"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Importance (0–1)</Label>
+        <Input
+          type="number"
+          min={0}
+          max={1}
+          step={0.1}
+          value={Number(data.importance) || 0.5}
+          onChange={(e) => update("importance", parseFloat(e.target.value) || 0.5)}
+        />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="generateEmbedding"
+          checked={(data.generateEmbedding as boolean) ?? false}
+          onChange={(e) => update("generateEmbedding", e.target.checked)}
+          className="rounded"
+        />
+        <Label htmlFor="generateEmbedding" className="text-sm font-normal">
+          Generate embedding (for semantic search)
+        </Label>
+      </div>
+
+      <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+        <p>Max 1000 memories per agent. Lowest-importance, least-accessed memories are evicted when full.</p>
+      </div>
+    </>
+  );
+}
+
+function MemoryReadProperties({ data, update }: SubPanelProps) {
+  const mode = (data.mode as string) ?? "key";
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Read Mode</Label>
+        <Select value={mode} onValueChange={(v) => update("mode", v)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="key">By Key</SelectItem>
+            <SelectItem value="category">By Category</SelectItem>
+            <SelectItem value="search">Semantic Search</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {mode === "key" && (
+        <div className="space-y-2">
+          <Label>Key (template supported)</Label>
+          <Input
+            value={(data.key as string) ?? ""}
+            onChange={(e) => update("key", e.target.value)}
+            placeholder="e.g. user_preference"
+          />
+        </div>
+      )}
+
+      {mode === "category" && (
+        <div className="space-y-2">
+          <Label>Category</Label>
+          <Input
+            value={(data.category as string) ?? ""}
+            onChange={(e) => update("category", e.target.value)}
+            placeholder="general"
+          />
+        </div>
+      )}
+
+      {mode === "search" && (
+        <div className="space-y-2">
+          <Label>Search Query (template supported)</Label>
+          <Textarea
+            value={(data.searchQuery as string) ?? ""}
+            onChange={(e) => update("searchQuery", e.target.value)}
+            placeholder="e.g. {{last_message}}"
+            rows={2}
+          />
+        </div>
+      )}
+
+      {(mode === "category" || mode === "search") && (
+        <div className="space-y-2">
+          <Label>Max Results</Label>
+          <Input
+            type="number"
+            min={1}
+            max={50}
+            value={Number(data.topK) || 5}
+            onChange={(e) => update("topK", parseInt(e.target.value) || 5)}
+          />
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "memory_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="memory_result"
+        />
+      </div>
+
+      <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+        {mode === "key" && <p>Returns the value for a single key, or null if not found.</p>}
+        {mode === "category" && <p>Returns an array of memories in the category, sorted by importance.</p>}
+        {mode === "search" && <p>Semantic search using embeddings. Requires memories with embeddings. Falls back to text search if unavailable.</p>}
+      </div>
+    </>
+  );
+}
+
+function EvaluatorProperties({ data, update }: SubPanelProps) {
+  interface Criterion {
+    name: string;
+    description: string;
+    weight: number;
+  }
+
+  const criteria = (data.criteria as Criterion[]) ?? [];
+
+  function updateCriterion(index: number, field: keyof Criterion, value: string | number) {
+    const updated = [...criteria];
+    updated[index] = { ...updated[index], [field]: value };
+    update("criteria", updated);
+  }
+
+  function addCriterion() {
+    update("criteria", [
+      ...criteria,
+      { name: "", description: "", weight: 1 },
+    ]);
+  }
+
+  function removeCriterion(index: number) {
+    update("criteria", criteria.filter((_, i) => i !== index));
+  }
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Input Variable</Label>
+        <Input
+          value={(data.inputVariable as string) ?? ""}
+          onChange={(e) => update("inputVariable", e.target.value)}
+          placeholder="e.g. ai_response"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "eval_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="eval_result"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Model</Label>
+        <Input
+          value={(data.model as string) ?? ""}
+          onChange={(e) => update("model", e.target.value)}
+          placeholder="Default: deepseek-chat"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Passing Score (0–10)</Label>
+        <Input
+          type="number"
+          min={0}
+          max={10}
+          step={0.5}
+          value={Number(data.passingScore) || 7}
+          onChange={(e) => update("passingScore", parseFloat(e.target.value) || 7)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Criteria</Label>
+          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={addCriterion}>
+            <Plus className="mr-1 size-3" /> Add
+          </Button>
+        </div>
+        {criteria.map((c, i) => (
+          <div key={i} className="space-y-1 rounded border p-2">
+            <div className="flex gap-1">
+              <Input
+                value={c.name}
+                onChange={(e) => updateCriterion(i, "name", e.target.value)}
+                placeholder="Criterion name"
+                className="flex-1"
+              />
+              <Input
+                type="number"
+                min={0}
+                max={10}
+                step={0.1}
+                value={c.weight}
+                onChange={(e) => updateCriterion(i, "weight", parseFloat(e.target.value) || 1)}
+                className="w-16"
+                placeholder="Weight"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 shrink-0"
+                onClick={() => removeCriterion(i)}
+              >
+                <X className="size-3" />
+              </Button>
+            </div>
+            <Input
+              value={c.description}
+              onChange={(e) => updateCriterion(i, "description", e.target.value)}
+              placeholder="Describe what to evaluate"
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+        <p className="font-medium mb-1">Outputs:</p>
+        <p><strong>Pass</strong> — score ≥ passing threshold</p>
+        <p><strong>Fail</strong> — score below threshold</p>
+      </div>
+    </>
+  );
+}
+
+function ScheduleTriggerProperties({ data, update }: SubPanelProps) {
+  const scheduleType = (data.scheduleType as string) ?? "manual";
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Schedule Type</Label>
+        <Select value={scheduleType} onValueChange={(v) => update("scheduleType", v)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="manual">Manual</SelectItem>
+            <SelectItem value="cron">Cron Expression</SelectItem>
+            <SelectItem value="interval">Fixed Interval</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {scheduleType === "cron" && (
+        <div className="space-y-2">
+          <Label>Cron Expression</Label>
+          <Input
+            value={(data.cronExpression as string) ?? ""}
+            onChange={(e) => update("cronExpression", e.target.value)}
+            placeholder="0 9 * * 1-5 (weekdays at 9am)"
+            className="font-mono"
+          />
+          <p className="text-xs text-muted-foreground">Format: minute hour day month weekday</p>
+        </div>
+      )}
+
+      {scheduleType === "interval" && (
+        <div className="space-y-2">
+          <Label>Interval (minutes)</Label>
+          <Input
+            type="number"
+            min={1}
+            max={10080}
+            value={Number(data.intervalMinutes) || 60}
+            onChange={(e) => update("intervalMinutes", parseInt(e.target.value) || 60)}
+          />
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Timezone</Label>
+        <Input
+          value={(data.timezone as string) ?? "UTC"}
+          onChange={(e) => update("timezone", e.target.value)}
+          placeholder="UTC"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "trigger_info"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="trigger_info"
+        />
+      </div>
+
+      <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+        <p>This node is a flow entry point. The scheduling system will trigger the flow based on the configured schedule. At runtime, trigger metadata is stored in the output variable.</p>
+      </div>
+    </>
+  );
+}
+
+function EmailSendProperties({ data, update }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>To (template supported)</Label>
+        <Input
+          value={(data.to as string) ?? ""}
+          onChange={(e) => update("to", e.target.value)}
+          placeholder="user@example.com or {{user_email}}"
+        />
+        <p className="text-xs text-muted-foreground">Comma-separated for multiple recipients</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Subject (template supported)</Label>
+        <Input
+          value={(data.subject as string) ?? ""}
+          onChange={(e) => update("subject", e.target.value)}
+          placeholder="e.g. Report for {{date}}"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Body (template supported)</Label>
+        <Textarea
+          value={(data.body as string) ?? ""}
+          onChange={(e) => update("body", e.target.value)}
+          placeholder="Email body content..."
+          rows={4}
+        />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="isHtml"
+          checked={(data.isHtml as boolean) ?? false}
+          onChange={(e) => update("isHtml", e.target.checked)}
+          className="rounded"
+        />
+        <Label htmlFor="isHtml" className="text-sm font-normal">
+          HTML body
+        </Label>
+      </div>
+
+      <div className="space-y-2">
+        <Label>From Name</Label>
+        <Input
+          value={(data.fromName as string) ?? "Agent Studio"}
+          onChange={(e) => update("fromName", e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Reply-To</Label>
+        <Input
+          value={(data.replyTo as string) ?? ""}
+          onChange={(e) => update("replyTo", e.target.value)}
+          placeholder="Optional reply-to address"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Webhook URL</Label>
+        <Input
+          value={(data.webhookUrl as string) ?? ""}
+          onChange={(e) => update("webhookUrl", e.target.value)}
+          placeholder="https://your-email-api.com/send"
+        />
+        <p className="text-xs text-muted-foreground">Leave empty for dry-run mode (logs only)</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "email_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+        />
+      </div>
+    </>
+  );
+}
+
+function NotificationProperties({ data, update }: SubPanelProps) {
+  const channel = (data.channel as string) ?? "log";
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Channel</Label>
+        <Select value={channel} onValueChange={(v) => update("channel", v)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="log">Log</SelectItem>
+            <SelectItem value="in_app">In-App Message</SelectItem>
+            <SelectItem value="webhook">Webhook (Slack/Discord/Teams)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Level</Label>
+        <Select
+          value={(data.level as string) ?? "info"}
+          onValueChange={(v) => update("level", v)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="info">Info</SelectItem>
+            <SelectItem value="success">Success</SelectItem>
+            <SelectItem value="warning">Warning</SelectItem>
+            <SelectItem value="error">Error</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Title (template supported)</Label>
+        <Input
+          value={(data.title as string) ?? ""}
+          onChange={(e) => update("title", e.target.value)}
+          placeholder="Notification title"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Message (template supported)</Label>
+        <Textarea
+          value={(data.message as string) ?? ""}
+          onChange={(e) => update("message", e.target.value)}
+          placeholder="Notification body..."
+          rows={3}
+        />
+      </div>
+
+      {channel === "webhook" && (
+        <div className="space-y-2">
+          <Label>Webhook URL</Label>
+          <Input
+            value={(data.webhookUrl as string) ?? ""}
+            onChange={(e) => update("webhookUrl", e.target.value)}
+            placeholder="https://hooks.slack.com/services/..."
+          />
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "notification_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+        />
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Format Transform Properties                                       */
+/* ------------------------------------------------------------------ */
+
+const TRANSFORM_FORMATS = [
+  { value: "json_to_text", label: "JSON → Text" },
+  { value: "text_to_json", label: "Text → JSON" },
+  { value: "csv_to_json", label: "CSV → JSON" },
+  { value: "json_to_csv", label: "JSON → CSV" },
+  { value: "template", label: "Template" },
+  { value: "uppercase", label: "Uppercase" },
+  { value: "lowercase", label: "Lowercase" },
+  { value: "trim", label: "Trim" },
+  { value: "split", label: "Split" },
+  { value: "join", label: "Join" },
+] as const;
+
+function FormatTransformProperties({ data, update }: SubPanelProps) {
+  const format = (data.format as string) || "template";
+  const showTemplate = format === "template" || format === "json_to_text";
+  const showSeparator = ["csv_to_json", "json_to_csv", "split", "join"].includes(format);
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Transform Format</Label>
+        <Select value={format} onValueChange={(v) => update("format", v)}>
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TRANSFORM_FORMATS.map((f) => (
+              <SelectItem key={f.value} value={f.value}>
+                {f.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Input Variable</Label>
+        <Input
+          placeholder="e.g. api_result"
+          value={(data.inputVariable as string) ?? ""}
+          onChange={(e) => update("inputVariable", e.target.value)}
+        />
+        <p className="text-xs text-muted-foreground">Leave empty to use direct input value below</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Direct Input Value</Label>
+        <Textarea
+          placeholder="Or enter data directly..."
+          rows={3}
+          value={(data.inputValue as string) ?? ""}
+          onChange={(e) => update("inputValue", e.target.value)}
+        />
+      </div>
+
+      {showTemplate && (
+        <div className="space-y-2">
+          <Label>Template</Label>
+          <Textarea
+            placeholder="Use {{variable}} syntax..."
+            rows={3}
+            value={(data.template as string) ?? ""}
+            onChange={(e) => update("template", e.target.value)}
+          />
+        </div>
+      )}
+
+      {showSeparator && (
+        <div className="space-y-2">
+          <Label>Separator</Label>
+          <Input
+            value={(data.separator as string) ?? ","}
+            onChange={(e) => update("separator", e.target.value)}
+          />
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "transform_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+        />
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Switch Properties                                                  */
+/* ------------------------------------------------------------------ */
+
+interface SwitchCase {
+  value: string;
+  label: string;
+}
+
+function SwitchProperties({ data, update }: SubPanelProps) {
+  const cases = ((data.cases as SwitchCase[]) || []).map((c) => ({
+    value: c.value ?? "",
+    label: c.label ?? "",
+  }));
+
+  function updateCases(newCases: SwitchCase[]) {
+    update("cases", newCases);
+  }
+
+  function addCase() {
+    updateCases([...cases, { value: "", label: "" }]);
+  }
+
+  function removeCase(index: number) {
+    updateCases(cases.filter((_, i) => i !== index));
+  }
+
+  function updateCase(index: number, field: "value" | "label", val: string) {
+    const updated = [...cases];
+    updated[index] = { ...updated[index], [field]: val };
+    updateCases(updated);
+  }
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Variable to Match</Label>
+        <Input
+          placeholder="e.g. user_choice"
+          value={(data.variable as string) ?? ""}
+          onChange={(e) => update("variable", e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Match Operator</Label>
+        <Select
+          value={(data.operator as string) || "equals"}
+          onValueChange={(v) => update("operator", v)}
+        >
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="equals">Equals</SelectItem>
+            <SelectItem value="contains">Contains</SelectItem>
+            <SelectItem value="starts_with">Starts With</SelectItem>
+            <SelectItem value="ends_with">Ends With</SelectItem>
+            <SelectItem value="regex">Regex</SelectItem>
+            <SelectItem value="gt">Greater Than</SelectItem>
+            <SelectItem value="gte">Greater or Equal</SelectItem>
+            <SelectItem value="lt">Less Than</SelectItem>
+            <SelectItem value="lte">Less or Equal</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Cases</Label>
+          <Button variant="ghost" size="sm" onClick={addCase}>
+            <Plus className="mr-1 size-3" />
+            Add
+          </Button>
+        </div>
+
+        {cases.map((c, i) => (
+          <div key={i} className="flex gap-2 items-start">
+            <div className="flex-1 space-y-1">
+              <Input
+                placeholder={`Case ${i + 1} value`}
+                value={c.value}
+                onChange={(e) => updateCase(i, "value", e.target.value)}
+              />
+              <Input
+                placeholder="Label (optional)"
+                value={c.label}
+                onChange={(e) => updateCase(i, "label", e.target.value)}
+                className="text-xs"
+              />
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+              onClick={() => removeCase(i)}
+            >
+              <Trash2 className="size-3" />
+            </Button>
+          </div>
+        ))}
+
+        <p className="text-xs text-muted-foreground italic">
+          Unmatched values route to the &quot;default&quot; output.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "switch_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
         />
       </div>
     </>

@@ -138,10 +138,20 @@ src/
       template.ts          ← {{variable}} interpolation
       types.ts             ← RuntimeContext, ExecutionResult, NodeHandler, StreamChunk, StreamWriter
       handlers/
-        index.ts           ← Handler registry (17 handlers)
+        index.ts           ← Handler registry (30 handlers)
         ai-response-handler.ts          ← Non-streaming AI (generateText + MCP tools)
         ai-response-streaming-handler.ts ← Streaming AI (streamText → NDJSON + MCP tools)
         mcp-tool-handler.ts             ← Deterministic MCP tool call node
+        loop-handler.ts                 ← Loop execution (count/condition modes)
+        parallel-handler.ts             ← Parallel branch execution with merge strategies
+        memory-write-handler.ts         ← Save data to agent persistent memory (AgentMemory)
+        memory-read-handler.ts          ← Read from agent memory (key/category/search modes)
+        evaluator-handler.ts            ← AI-powered content evaluation with criteria scoring
+        schedule-trigger-handler.ts     ← Flow entry-point (cron/interval/manual)
+        email-send-handler.ts           ← Webhook-based email sending with dry-run mode
+        notification-handler.ts         ← Multi-channel notifications (log/in_app/webhook)
+        format-transform-handler.ts     ← Data format transformation (JSON/CSV/text/template)
+        switch-handler.ts               ← Multi-way branching (switch/case with operators)
         message-handler.ts, condition-handler.ts, ...
     knowledge/
       index.ts        ← Main search entry point
@@ -185,6 +195,13 @@ User
               └── Message[] (1:N, cascade delete)
 
 VerificationToken — NextAuth email verification (standalone, no relations)
+
+AgentMemory — Persistent cross-conversation memory for agents
+  ├── agentId (required, indexed)
+  ├── key (unique per agent via @@unique([agentId, key]))
+  ├── value (String), category (default "general"), importance (0-1)
+  ├── embedding (vector(1536), optional — for semantic search)
+  └── accessCount, accessedAt — access tracking
 ```
 
 **Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE), MCPTransport (STREAMABLE_HTTP|SSE), FlowVersionStatus (DRAFT|PUBLISHED|ARCHIVED)
@@ -237,8 +254,8 @@ VerificationToken — NextAuth email verification (standalone, no relations)
 ## 6. KEY CONVENTIONS & PATTERNS
 
 ### Runtime Engine
-- 17 node handlers registered in `src/lib/runtime/handlers/index.ts`
-- Node types: message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool
+- 30 node handlers registered in `src/lib/runtime/handlers/index.ts`
+- Node types: message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, email_send, notification, format_transform, switch
 - Safety limits: MAX_ITERATIONS=50, MAX_HISTORY=100
 - Handlers return `ExecutionResult` with messages, nextNodeId, waitForInput, updatedVariables
 - Handlers never throw — always return graceful fallback
@@ -434,8 +451,8 @@ pnpm db:seed          # Seed dev data
 ### Testing
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - Run: `pnpm test`
-- 299 tests across 38 test files
-- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents
+- ~700 tests across 74 test files
+- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler
 - Test behavior, not implementation details
 
 ### AI Model Config

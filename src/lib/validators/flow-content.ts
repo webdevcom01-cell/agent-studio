@@ -21,6 +21,16 @@ const NODE_TYPES = [
   "mcp_tool",
   "call_agent",
   "human_approval",
+  "loop",
+  "parallel",
+  "memory_write",
+  "memory_read",
+  "evaluator",
+  "schedule_trigger",
+  "email_send",
+  "notification",
+  "format_transform",
+  "switch",
 ] as const;
 
 const VARIABLE_TYPES = ["string", "number", "boolean", "object"] as const;

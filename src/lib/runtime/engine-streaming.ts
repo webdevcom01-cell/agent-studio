@@ -99,7 +99,9 @@ export function executeFlowStreaming(
           }
 
           const visitCount = visitedNodes.get(node.id) ?? 0;
-          if (visitCount > MAX_NODE_VISITS) {
+          // Loop nodes need higher visit threshold since they intentionally revisit
+          const maxVisitsForNode = node.type === "loop" ? 110 : MAX_NODE_VISITS;
+          if (visitCount > maxVisitsForNode) {
             const msg: OutputMessage = {
               role: "assistant",
               content:
@@ -156,7 +158,7 @@ export function executeFlowStreaming(
             try {
               // For long-running nodes (e.g. MCP tools), send heartbeats
               // to keep the Vercel streaming connection alive
-              const isLongRunning = node.type === "mcp_tool";
+              const isLongRunning = node.type === "mcp_tool" || node.type === "parallel";
               let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
               if (isLongRunning) {

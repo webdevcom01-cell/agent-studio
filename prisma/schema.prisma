@@ -84,6 +84,7 @@ model Agent {
   agentCard         AgentCard?
   approvalRequests  HumanApprovalRequest[]
   deployments       FlowDeployment[]
+  memories          AgentMemory[]
 
   @@index([userId])
   @@index([userId, updatedAt])
@@ -370,4 +371,24 @@ model AgentCallLog {
   @@index([calleeAgentId])
   @@index([traceId])
   @@index([createdAt])
+}
+
+model AgentMemory {
+  id          String   @id @default(cuid())
+  agentId     String
+  key         String
+  value       Json
+  category    String   @default("general")
+  importance  Float    @default(0.5)
+  embedding   Unsupported("vector(1536)")?
+  accessCount Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  accessedAt  DateTime @default(now())
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, key])
+  @@index([agentId, category])
+  @@index([agentId, accessedAt])
 }

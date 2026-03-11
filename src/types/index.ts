@@ -44,4 +44,14 @@ export type NodeType =
   | "webhook"
   | "mcp_tool"
   | "call_agent"
-  | "human_approval";
+  | "human_approval"
+  | "loop"
+  | "parallel"
+  | "memory_write"
+  | "memory_read"
+  | "evaluator"
+  | "schedule_trigger"
+  | "email_send"
+  | "notification"
+  | "format_transform"
+  | "switch";

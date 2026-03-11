@@ -18,6 +18,16 @@ import { webhookHandler } from "./webhook-handler";
 import { mcpToolHandler } from "./mcp-tool-handler";
 import { callAgentHandler } from "./call-agent-handler";
 import { humanApprovalHandler } from "./human-approval-handler";
+import { loopHandler } from "./loop-handler";
+import { parallelHandler } from "./parallel-handler";
+import { memoryWriteHandler } from "./memory-write-handler";
+import { memoryReadHandler } from "./memory-read-handler";
+import { evaluatorHandler } from "./evaluator-handler";
+import { scheduleTriggerHandler } from "./schedule-trigger-handler";
+import { emailSendHandler } from "./email-send-handler";
+import { notificationHandler } from "./notification-handler";
+import { formatTransformHandler } from "./format-transform-handler";
+import { switchHandler } from "./switch-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -39,6 +49,16 @@ const handlers: Record<string, NodeHandler> = {
   mcp_tool: mcpToolHandler,
   call_agent: callAgentHandler,
   human_approval: humanApprovalHandler,
+  loop: loopHandler,
+  parallel: parallelHandler,
+  memory_write: memoryWriteHandler,
+  memory_read: memoryReadHandler,
+  evaluator: evaluatorHandler,
+  schedule_trigger: scheduleTriggerHandler,
+  email_send: emailSendHandler,
+  notification: notificationHandler,
+  format_transform: formatTransformHandler,
+  switch: switchHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

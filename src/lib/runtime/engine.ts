@@ -80,7 +80,9 @@ export async function executeFlow(
     }
 
     const visitCount = visitedNodes.get(node.id) ?? 0;
-    if (visitCount > 5) {
+    // Loop nodes need higher visit threshold since they intentionally revisit
+    const maxVisits = node.type === "loop" ? 110 : 5;
+    if (visitCount > maxVisits) {
       logger.warn("Circular flow detected", { nodeId: node.id, agentId: context.agentId, visitCount });
       allMessages.push({
         role: "assistant",

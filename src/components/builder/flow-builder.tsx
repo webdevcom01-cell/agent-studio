@@ -38,6 +38,16 @@ import { AISummarizeNode } from "./nodes/ai-summarize-node";
 import { MCPToolNode } from "./nodes/mcp-tool-node";
 import { CallAgentNode } from "./nodes/call-agent-node";
 import { HumanApprovalNode } from "./nodes/human-approval-node";
+import { LoopNode } from "./nodes/loop-node";
+import { ParallelNode } from "./nodes/parallel-node";
+import { MemoryWriteNode } from "./nodes/memory-write-node";
+import { MemoryReadNode } from "./nodes/memory-read-node";
+import { EvaluatorNode } from "./nodes/evaluator-node";
+import { ScheduleTriggerNode } from "./nodes/schedule-trigger-node";
+import { EmailSendNode } from "./nodes/email-send-node";
+import { NotificationNode } from "./nodes/notification-node";
+import { FormatTransformNode } from "./nodes/format-transform-node";
+import { SwitchNode } from "./nodes/switch-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -72,6 +82,16 @@ const NODE_TYPES: NodeTypes = {
   mcp_tool: MCPToolNode,
   call_agent: CallAgentNode,
   human_approval: HumanApprovalNode,
+  loop: LoopNode,
+  parallel: ParallelNode,
+  memory_write: MemoryWriteNode,
+  memory_read: MemoryReadNode,
+  evaluator: EvaluatorNode,
+  schedule_trigger: ScheduleTriggerNode,
+  email_send: EmailSendNode,
+  notification: NotificationNode,
+  format_transform: FormatTransformNode,
+  switch: SwitchNode,
 };
 
 export function FlowBuilder(props: FlowBuilderProps) {
