@@ -1,0 +1,180 @@
+# ──────────────────────────────────────────────────────────────
+# Agent Studio — CI Pipeline
+# ──────────────────────────────────────────────────────────────
+# Hybrid approach:
+#   ✅ Always: lint, typecheck, unit tests
+#   🔘 Optional: E2E tests (manual trigger or PR label)
+# ──────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: "Run E2E tests"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9"
+
+jobs:
+  # ─── Lint & Typecheck ──────────────────────────────────────
+  quality:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+  # ─── Unit Tests ────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Run unit tests
+        run: pnpm test -- --reporter=default --reporter=github-actions
+
+  # ─── E2E Tests (Optional) ─────────────────────────────────
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.event.inputs.run_e2e == 'true' ||
+      contains(github.event.pull_request.labels.*.name, 'e2e')
+    needs: [quality, unit-tests]
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agent_studio_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/agent_studio_test"
+      DIRECT_URL: "postgresql://postgres:postgres@localhost:5432/agent_studio_test"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+      AUTH_SECRET: "ci-test-secret-at-least-32-characters-long"
+      # AI keys — use dummy values; E2E tests mock all AI calls
+      DEEPSEEK_API_KEY: "sk-ci-dummy-deepseek-key"
+      OPENAI_API_KEY: "sk-ci-dummy-openai-key"
+      # OAuth — dummy values (not tested in E2E)
+      AUTH_GITHUB_ID: "ci-github-id"
+      AUTH_GITHUB_SECRET: "ci-github-secret"
+      AUTH_GOOGLE_ID: "ci-google-id"
+      AUTH_GOOGLE_SECRET: "ci-google-secret"
+      # Playwright
+      CI: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Setup database
+        run: pnpm db:push
+
+      - name: Generate E2E session token
+        run: |
+          TOKEN=$(pnpm tsx e2e/scripts/generate-ci-session.ts)
+          echo "E2E_SESSION_TOKEN=${TOKEN}" >> $GITHUB_ENV
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: pnpm test:e2e
+
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            e2e/.auth/
+            test-results/
+          retention-days: 7
