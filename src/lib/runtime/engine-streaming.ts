@@ -230,8 +230,16 @@ export function executeFlowStreaming(
             break;
           }
 
-          context.currentNodeId =
-            result.nextNodeId ?? findNextNode(context, node.id);
+          if (result.nextNodeId && nodeMap.has(result.nextNodeId)) {
+            // Direct node ID (e.g., goto, loop back)
+            context.currentNodeId = result.nextNodeId;
+          } else if (result.nextNodeId) {
+            // Treat as sourceHandle (e.g., switch "case_0", evaluator "passed"/"failed")
+            context.currentNodeId = findNextNode(context, node.id, result.nextNodeId);
+          } else {
+            // Default: follow the first unfiltered edge
+            context.currentNodeId = findNextNode(context, node.id);
+          }
         }
 
         if (iterations >= MAX_ITERATIONS && context.currentNodeId) {
