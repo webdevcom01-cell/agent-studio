@@ -1,20 +1,26 @@
 import { z } from "zod";
 
+// Treat empty strings as undefined for optional keys
+const optionalStr = z
+  .string()
+  .optional()
+  .transform((v) => (v === "" ? undefined : v));
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   DIRECT_URL: z.string().min(1, "DIRECT_URL is required"),
   OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
   DEEPSEEK_API_KEY: z.string().min(1, "DEEPSEEK_API_KEY is required"),
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters"),
-  AUTH_GITHUB_ID: z.string().min(1, "AUTH_GITHUB_ID is required"),
-  AUTH_GITHUB_SECRET: z.string().min(1, "AUTH_GITHUB_SECRET is required"),
-  AUTH_GOOGLE_ID: z.string().min(1, "AUTH_GOOGLE_ID is required"),
-  AUTH_GOOGLE_SECRET: z.string().min(1, "AUTH_GOOGLE_SECRET is required"),
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
-  GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1).optional(),
-  GROQ_API_KEY: z.string().min(1).optional(),
-  MISTRAL_API_KEY: z.string().min(1).optional(),
-  MOONSHOT_API_KEY: z.string().min(1).optional(),
+  AUTH_GITHUB_ID: optionalStr,
+  AUTH_GITHUB_SECRET: optionalStr,
+  AUTH_GOOGLE_ID: optionalStr,
+  AUTH_GOOGLE_SECRET: optionalStr,
+  ANTHROPIC_API_KEY: optionalStr,
+  GOOGLE_GENERATIVE_AI_API_KEY: optionalStr,
+  GROQ_API_KEY: optionalStr,
+  MISTRAL_API_KEY: optionalStr,
+  MOONSHOT_API_KEY: optionalStr,
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
@@ -37,6 +43,9 @@ export function validateEnv(
     throw new Error(message);
   }
 
+  if (!result.data.AUTH_GITHUB_ID && !result.data.AUTH_GOOGLE_ID) {
+    console.warn("No OAuth providers configured — AUTH_GITHUB_ID or AUTH_GOOGLE_ID required for login");
+  }
   if (!result.data.ANTHROPIC_API_KEY) {
     console.warn("ANTHROPIC_API_KEY not set — Anthropic models will be unavailable");
   }
