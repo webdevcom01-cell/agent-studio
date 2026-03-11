@@ -8,7 +8,7 @@ import { useSession, signOut } from "next-auth/react";
 import {
   Plus, Bot, MessageSquare, Database, Trash2, MoreVertical,
   Download, Upload, LogOut, BarChart3, Plug, ArrowRightLeft,
-  Sun, Moon,
+  Sun, Moon, LayoutTemplate,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,10 +27,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { MCPServerManager } from "@/components/mcp/mcp-server-manager";
 import { AgentCallMonitor } from "@/components/a2a/agent-call-monitor";
 import { useTheme } from "@/components/theme-provider";
+import {
+  TemplateGallery,
+  type AgentTemplate,
+} from "@/components/templates/template-gallery";
+import templateData from "@/data/agent-templates.json";
 
 interface Agent {
   id: string;
@@ -53,6 +59,7 @@ export default function DashboardPage() {
   const [newDescription, setNewDescription] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<AgentTemplate | null>(null);
   const [showMCPManager, setShowMCPManager] = useState(false);
   const [showCallMonitor, setShowCallMonitor] = useState(false);
 
@@ -76,16 +83,24 @@ export default function DashboardPage() {
     if (!newName.trim()) return;
     setIsCreating(true);
     try {
+      const payload: Record<string, string> = {
+        name: newName,
+        description: newDescription,
+      };
+      if (selectedTemplate) {
+        payload.systemPrompt = selectedTemplate.systemPrompt;
+      }
       const res = await fetch("/api/agents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName, description: newDescription }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (json.success) {
         setShowCreate(false);
         setNewName("");
         setNewDescription("");
+        setSelectedTemplate(null);
         router.push(`/builder/${json.data.id}`);
       }
     } catch {
@@ -93,6 +108,12 @@ export default function DashboardPage() {
     } finally {
       setIsCreating(false);
     }
+  }
+
+  function handleTemplateSelect(template: AgentTemplate): void {
+    setSelectedTemplate(template);
+    setNewName(template.name);
+    setNewDescription(template.description);
   }
 
   async function handleDelete(agentId: string) {
@@ -397,50 +418,146 @@ export default function DashboardPage() {
       </main>
 
       {/* ── Create Agent Dialog ─────────────────────────────────────────── */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog
+        open={showCreate}
+        onOpenChange={(open) => {
+          setShowCreate(open);
+          if (!open) {
+            setSelectedTemplate(null);
+            setNewName("");
+            setNewDescription("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="text-base font-medium">New Agent</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Name</Label>
-              <Input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="My Agent"
-                autoFocus
-                className="text-sm"
-                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Description</Label>
-              <Textarea
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-                placeholder="What does this agent do?"
-                rows={3}
-                className="text-sm resize-none"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowCreate(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleCreate}
-              disabled={isCreating || !newName.trim()}
-            >
-              {isCreating ? "Creating…" : "Create"}
-            </Button>
-          </DialogFooter>
+
+          <Tabs defaultValue="templates" className="flex-1 min-h-0 flex flex-col">
+            <TabsList className="w-full">
+              <TabsTrigger value="templates" className="flex-1 gap-1.5">
+                <LayoutTemplate className="size-3.5" />
+                Browse Templates
+              </TabsTrigger>
+              <TabsTrigger value="blank" className="flex-1 gap-1.5">
+                <Plus className="size-3.5" />
+                Blank Agent
+              </TabsTrigger>
+            </TabsList>
+
+            {/* ── Templates Tab ──────────────────────────── */}
+            <TabsContent value="templates" className="min-h-0 flex-1 overflow-hidden">
+              {selectedTemplate ? (
+                <div className="space-y-4 py-2">
+                  <div className="flex items-center gap-2 p-3 rounded-lg border border-border bg-muted/50">
+                    <span className="text-lg">{selectedTemplate.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{selectedTemplate.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{selectedTemplate.vibe}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs shrink-0"
+                      onClick={() => {
+                        setSelectedTemplate(null);
+                        setNewName("");
+                        setNewDescription("");
+                      }}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Name</Label>
+                    <Input
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="text-sm"
+                      onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Description</Label>
+                    <Textarea
+                      value={newDescription}
+                      onChange={(e) => setNewDescription(e.target.value)}
+                      rows={2}
+                      className="text-sm resize-none"
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowCreate(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleCreate}
+                      disabled={isCreating || !newName.trim()}
+                    >
+                      {isCreating ? "Creating…" : "Create from Template"}
+                    </Button>
+                  </DialogFooter>
+                </div>
+              ) : (
+                <TemplateGallery
+                  templates={templateData.templates as AgentTemplate[]}
+                  categories={templateData.categories}
+                  onSelect={handleTemplateSelect}
+                />
+              )}
+            </TabsContent>
+
+            {/* ── Blank Agent Tab ────────────────────────── */}
+            <TabsContent value="blank">
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Name</Label>
+                  <Input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="My Agent"
+                    className="text-sm"
+                    onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Description</Label>
+                  <Textarea
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                    placeholder="What does this agent do?"
+                    rows={3}
+                    className="text-sm resize-none"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCreate(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setSelectedTemplate(null);
+                    handleCreate();
+                  }}
+                  disabled={isCreating || !newName.trim()}
+                >
+                  {isCreating ? "Creating…" : "Create"}
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
 
