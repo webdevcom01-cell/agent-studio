@@ -144,6 +144,7 @@ src/
         mcp-tool-handler.ts             ← Deterministic MCP tool call node
         loop-handler.ts                 ← Loop execution (count/condition modes)
         parallel-handler.ts             ← Parallel branch execution with merge strategies
+        parallel-streaming-handler.ts   ← Streaming-aware parallel (real-time branch output + AI token streaming)
         memory-write-handler.ts         ← Save data to agent persistent memory (AgentMemory)
         memory-read-handler.ts          ← Read from agent memory (key/category/search modes)
         evaluator-handler.ts            ← AI-powered content evaluation with criteria scoring
@@ -265,7 +266,7 @@ AgentMemory — Persistent cross-conversation memory for agents
 - Chat API: `{ stream: true }` in request body switches to streaming mode (backwards compatible)
 - NDJSON wire protocol chunks: `message`, `stream_start`, `stream_delta`, `stream_end`, `done`, `error`
 - `StreamChunk` discriminated union type in `src/lib/runtime/types.ts`
-- Only `ai_response` nodes stream tokens; all other nodes emit instant `message` chunks
+- `ai_response` nodes stream tokens; `parallel` nodes use streaming-aware handler for real-time branch output; all other nodes emit instant `message` chunks
 - `stream-protocol.ts` has `encodeChunk()`, `parseChunk()`, `createStreamWriter()` — shared between server and client
 - Client hook `useStreamingChat` in `src/components/chat/use-streaming-chat.ts` handles line-buffered parsing
 - Context and messages are always saved in `finally` block, even on client disconnect
@@ -451,8 +452,8 @@ pnpm db:seed          # Seed dev data
 ### Testing
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - Run: `pnpm test`
-- ~700 tests across 74 test files
-- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler
+- ~720 tests across 76 test files
+- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, engine integration tests (multi-node flows)
 - Test behavior, not implementation details
 
 ### AI Model Config

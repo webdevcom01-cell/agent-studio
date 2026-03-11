@@ -4,6 +4,7 @@ import { saveContext, saveMessages } from "./context";
 import { findNextNode, findStartNode } from "./engine";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
+import { parallelStreamingHandler } from "./handlers/parallel-streaming-handler";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
@@ -138,6 +139,22 @@ export function executeFlowStreaming(
               context.currentNodeId = findNextNode(context, node.id);
               continue;
             }
+          } else if (node.type === "parallel") {
+            try {
+              // Parallel streaming handler emits branch messages/tokens in real-time
+              writer.write({ type: "heartbeat" });
+              result = await parallelStreamingHandler(node, context, writer);
+            } catch (error) {
+              logger.error("Parallel streaming handler error", error, { agentId: context.agentId, nodeId: node.id });
+              const msg: OutputMessage = {
+                role: "assistant",
+                content: "Something went wrong. Let me try to continue.",
+              };
+              allMessages.push(msg);
+              writer.write({ type: "error", content: msg.content });
+              context.currentNodeId = findNextNode(context, node.id);
+              continue;
+            }
           } else {
             const handler = getHandler(node.type);
             if (!handler) {
@@ -158,7 +175,7 @@ export function executeFlowStreaming(
             try {
               // For long-running nodes (e.g. MCP tools), send heartbeats
               // to keep the Vercel streaming connection alive
-              const isLongRunning = node.type === "mcp_tool" || node.type === "parallel";
+              const isLongRunning = node.type === "mcp_tool";
               let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
               if (isLongRunning) {
