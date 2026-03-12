@@ -2,6 +2,7 @@ import { streamText, stepCountIs } from "ai";
 import { getModel, DEFAULT_MODEL } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import { getMCPToolsForAgent } from "@/lib/mcp/client";
+import { getAgentToolsForAgent, type AgentToolContext } from "@/lib/agents/agent-tools";
 import type { ExecutionResult, RuntimeContext, StreamWriter } from "../types";
 import type { FlowNode } from "@/types";
 import { resolveTemplate } from "../template";
@@ -23,6 +24,32 @@ async function loadMCPTools(agentId: string): Promise<Record<string, unknown>> {
   return {};
 }
 
+async function loadAgentTools(
+  agentId: string,
+  context: RuntimeContext
+): Promise<Record<string, unknown>> {
+  try {
+    const extended = context as unknown as Record<string, unknown>;
+    const ctx: AgentToolContext = {
+      callerAgentId: agentId,
+      userId: context.userId ?? null,
+      depth: extended._a2aDepth as number | undefined,
+      callStack: extended._a2aCallStack as string[] | undefined,
+      traceId: extended._a2aTraceId as string | undefined,
+      conversationId: context.conversationId,
+    };
+
+    const tools = await getAgentToolsForAgent(agentId, ctx);
+    return tools as Record<string, unknown>;
+  } catch (err) {
+    logger.warn("Agent tools unavailable, continuing without them", {
+      agentId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return {};
+}
+
 export async function aiResponseStreamingHandler(
   node: FlowNode,
   context: RuntimeContext,
@@ -36,6 +63,7 @@ export async function aiResponseStreamingHandler(
   const temperature = (node.data.temperature as number) ?? 0.7;
   const maxTokens = (node.data.maxTokens as number) ?? 2000;
   const outputVariable = (node.data.outputVariable as string) ?? "";
+  const enableAgentTools = (node.data.enableAgentTools as boolean) ?? false;
 
   try {
     const model = getModel(modelId);
@@ -49,8 +77,17 @@ export async function aiResponseStreamingHandler(
       content: m.content,
     }));
 
+    // Load MCP tools (always)
     const mcpTools = await loadMCPTools(context.agentId);
-    const hasTools = Object.keys(mcpTools).length > 0;
+
+    // Load agent tools (only when enabled on this node)
+    const agentTools = enableAgentTools
+      ? await loadAgentTools(context.agentId, context)
+      : {};
+
+    // Merge all tools — MCP tools take priority on name conflicts
+    const allTools = { ...agentTools, ...mcpTools };
+    const hasTools = Object.keys(allTools).length > 0;
 
     const streamOptions: Parameters<typeof streamText>[0] = {
       model,
@@ -60,7 +97,7 @@ export async function aiResponseStreamingHandler(
     };
 
     if (hasTools) {
-      streamOptions.tools = mcpTools as Parameters<typeof streamText>[0]["tools"];
+      streamOptions.tools = allTools as Parameters<typeof streamText>[0]["tools"];
       streamOptions.stopWhen = stepCountIs(MAX_TOOL_STEPS);
     }
 

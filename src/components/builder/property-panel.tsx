@@ -154,6 +154,42 @@ export function PropertyPanel({
                 placeholder="e.g. ai_response"
               />
             </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-md border border-zinc-700 bg-zinc-800/50 p-3">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium">Agent Orchestration</Label>
+                  <p className="text-xs text-zinc-400">
+                    Let AI dynamically call your other agents as tools
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={(data.enableAgentTools as boolean) ?? false}
+                  onClick={() => update("enableAgentTools", !(data.enableAgentTools as boolean))}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
+                    (data.enableAgentTools as boolean)
+                      ? "bg-blue-600"
+                      : "bg-zinc-600"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                      (data.enableAgentTools as boolean)
+                        ? "translate-x-4"
+                        : "translate-x-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
+              {(data.enableAgentTools as boolean) && (
+                <p className="rounded bg-blue-950/50 px-2 py-1.5 text-xs text-blue-300">
+                  This AI node will see your other agents as callable tools.
+                  The LLM decides which agents to invoke based on the conversation.
+                  Protected by circuit breaker, rate limiting, and depth control.
+                </p>
+              )}
+            </div>
           </>
         )}
 
