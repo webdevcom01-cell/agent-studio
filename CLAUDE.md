@@ -2,10 +2,14 @@
 
 ## 1. PROJECT OVERVIEW
 
-Personal/local AI agent builder. Build AI agents visually via a flow editor (XyFlow),
-manage knowledge bases with RAG (chunking + embeddings + hybrid search), and chat with agents.
+Visual AI agent builder with multi-agent orchestration. Build AI agents via a flow editor
+(XyFlow), manage knowledge bases with RAG (chunking + embeddings + hybrid search), enable
+agent-to-agent communication (A2A protocol), and chat with agents. Features include: agent
+marketplace/discovery with faceted search, 112 agent templates across 11 categories,
+agent-as-tool orchestration (AI dynamically calls sibling agents), web browsing capabilities
+(fetch + browser actions via MCP), and an embeddable chat widget. OAuth login (GitHub + Google).
 Simplified extraction from the enterprise "direct-solutions" project — no multi-tenancy,
-no billing, no plugins, no collaboration. OAuth login (GitHub + Google), embeddable chat widget.
+no billing, no plugins, no collaboration.
 
 ---
 
@@ -32,6 +36,7 @@ no billing, no plugins, no collaboration. OAuth login (GitHub + Google), embedda
 - **Markdown:** react-markdown
 - **Toasts:** Sonner
 - **Unit tests:** Vitest + @vitest/coverage-v8
+- **E2E tests:** Playwright (7 spec files — auth, dashboard, flow editor, KB, chat, import/export, API)
 - **Utilities:** class-variance-authority (cva), clsx, tailwind-merge
 
 ---
@@ -40,15 +45,19 @@ no billing, no plugins, no collaboration. OAuth login (GitHub + Google), embedda
 
 ```
 prisma/
-  schema.prisma         ← DB schema (17 models, pgvector, versioning, A2A)
+  schema.prisma         ← DB schema (20 models, pgvector, versioning, A2A)
   migrations/           ← auto-generated — never edit manually
 
 public/
   embed.js              ← Embeddable widget script (bubble + iframe)
+  test-embed.html       ← Test page for embed widget
+
+e2e/
+  tests/                ← Playwright E2E specs (auth, dashboard, flow, KB, chat, API)
 
 src/
   instrumentation.ts    ← Startup env validation (critical vars check)
-  middleware.ts         ← Auth middleware (cookie-based session check)
+  middleware.ts         ← Auth middleware (cookie-based session check + CSRF Origin)
 
   app/
     page.tsx                          ← Dashboard (agent list, create/delete, export/import)
@@ -56,6 +65,9 @@ src/
     globals.css                       ← Tailwind v4 theme + React Flow overrides
     login/page.tsx                    ← Login page (GitHub + Google OAuth)
     analytics/page.tsx                ← Analytics dashboard (charts, response times, KB stats)
+    discover/page.tsx                 ← Agent Discovery Marketplace (faceted search, categories, tags)
+    templates/page.tsx                ← Agent Templates Gallery (112 templates, 11 categories)
+    templates/templates-client.tsx    ← Templates client component (search + filter)
     builder/[agentId]/page.tsx        ← Flow editor page
     builder/[agentId]/error.tsx       ← Error boundary (Flow Editor Error)
     chat/[agentId]/page.tsx           ← Chat interface (streaming via useStreamingChat)
@@ -69,7 +81,7 @@ src/
       health/route.ts                          ← Health check endpoint (DB connectivity + uptime)
       analytics/route.ts                       ← Analytics dashboard data (response times, KB stats, conversations)
       agents/route.ts                          ← GET list, POST create
-      agents/[agentId]/route.ts                ← GET, PATCH, DELETE agent
+      agents/[agentId]/route.ts                ← GET, PATCH, DELETE agent (incl. category/tags/isPublic)
       agents/[agentId]/flow/route.ts           ← GET, PUT flow content (auth-guarded, Zod-validated, auto-versioned)
       agents/[agentId]/flow/versions/route.ts             ← GET list, POST create version
       agents/[agentId]/flow/versions/[versionId]/route.ts ← GET single version
@@ -77,20 +89,29 @@ src/
       agents/[agentId]/flow/versions/[versionId]/deploy/route.ts  ← POST deploy version
       agents/[agentId]/flow/versions/[versionId]/rollback/route.ts ← POST rollback + deploy
       agents/[agentId]/flow/versions/[versionId]/test/route.ts    ← POST sandbox test
-      agents/[agentId]/chat/route.ts           ← POST send message
+      agents/[agentId]/chat/route.ts           ← POST send message (streaming + non-streaming)
+      agents/[agentId]/execute/route.ts        ← POST execute flow directly
       agents/[agentId]/knowledge/sources/route.ts         ← GET, POST sources (URL/TEXT)
       agents/[agentId]/knowledge/sources/upload/route.ts     ← POST file upload (PDF/DOCX, multipart/form-data)
       agents/[agentId]/knowledge/sources/[sourceId]/route.ts  ← DELETE source
       agents/[agentId]/knowledge/search/route.ts          ← POST hybrid search
       agents/[agentId]/export/route.ts            ← GET download agent as JSON
       agents/[agentId]/mcp/route.ts               ← GET, POST, DELETE agent-server links
+      agents/[agentId]/a2a/route.ts               ← A2A task communication endpoint
+      agents/[agentId]/a2a/card/route.ts          ← A2A card generation/retrieval
       agents/import/route.ts                      ← POST import agent from JSON
+      agents/discover/route.ts                    ← GET marketplace search/filter/sort/paginate
+      a2a/agents/route.ts                         ← A2A agent discovery endpoint
+      agent-calls/route.ts                        ← Agent-to-agent call logs (with trace IDs)
+      agent-calls/stats/route.ts                  ← Agent call statistics
+      approvals/route.ts                          ← GET pending human approval requests
+      approvals/[requestId]/respond/route.ts      ← POST approve/reject
       mcp-servers/route.ts                        ← GET list, POST create MCP servers
       mcp-servers/[serverId]/route.ts             ← GET, PATCH, DELETE MCP server
       mcp-servers/[serverId]/test/route.ts        ← POST test MCP connection
 
   components/
-    ui/               ← 12 Radix UI primitives (button, card, dialog, input, etc.)
+    ui/               ← 13 UI primitives (badge, button, card, dialog, dropdown-menu, input, label, select, skeleton, tabs, textarea, tooltip, error-display)
       error-display.tsx ← Shared error boundary UI component
       __tests__/        ← UI component tests
     chat/
@@ -98,14 +119,23 @@ src/
     mcp/
       mcp-server-manager.tsx  ← Global MCP server CRUD dialog
       agent-mcp-selector.tsx  ← Per-agent MCP server picker with tool filtering
+    a2a/
+      agent-call-monitor.tsx  ← Agent-to-agent call monitoring UI
+    templates/
+      template-gallery.tsx    ← Agent template gallery (search + category filter)
     builder/
       flow-builder.tsx    ← Main ReactFlow editor (+ MCP panel, version history, deploy status)
-      node-picker.tsx     ← Node type selector dropdown
-      property-panel.tsx  ← Right sidebar for editing node properties
+      flow-error-boundary.tsx ← Error boundary for flow editor
+      node-picker.tsx     ← Node type selector dropdown (31 node types)
+      property-panel.tsx  ← Right sidebar for editing node properties (searchable agent selector)
       version-panel.tsx   ← Version history sidebar (SWR, rollback, compare, deploy)
       deploy-dialog.tsx   ← Deploy confirmation dialog with sandbox test
       diff-view.tsx       ← Version diff viewer (added/removed/modified nodes)
-      nodes/              ← 18 node display components (base, message, ai-response, mcp-tool, etc.)
+      nodes/              ← 32 node display components (base + 31 node types)
+    theme-provider.tsx    ← Dark mode theme provider
+
+  data/
+    agent-templates.json  ← 112 agent templates across 11 categories
 
   lib/
     ai.ts             ← AI model routing (DeepSeek/OpenAI/Anthropic/Gemini/Groq/Mistral/Kimi)
@@ -118,7 +148,18 @@ src/
     rate-limit.ts     ← In-memory sliding window rate limiter
     utils.ts          ← cn() utility (clsx + tailwind-merge)
     api/
-      auth-guard.ts     ← requireAuth(), requireAgentOwner(), isAuthError() — used by all protected routes
+      auth-guard.ts       ← requireAuth(), requireAgentOwner(), isAuthError()
+      body-limit.ts       ← parseBodyWithLimit() — 1 MB default request body limit
+      sanitize-error.ts   ← sanitizeErrorMessage() — generic errors in production
+      security-headers.ts ← X-Content-Type-Options, X-Frame-Options, etc.
+    a2a/
+      card-generator.ts   ← AgentCard generation + upsert for A2A discovery
+      circuit-breaker.ts  ← Circuit breaker pattern for agent-to-agent calls
+      rate-limiter.ts     ← Rate limiting for A2A calls
+    agents/
+      agent-tools.ts      ← Convert sibling agents into AI SDK tool definitions (agent-as-tool)
+    constants/
+      agent-categories.ts ← Canonical AGENT_CATEGORIES list + AgentCategory type
     validators/
       flow-content.ts   ← Zod schema for FlowContent validation (nodes, edges, variables)
     versioning/
@@ -126,10 +167,11 @@ src/
       version-service.ts ← Version CRUD, deploy, rollback, diff (supports transaction client)
     mcp/
       client.ts         ← MCP client wrapper (getMCPToolsForAgent, testMCPConnection, callMCPTool)
-      pool.ts           ← Connection pool (in-memory, 5min TTL, auto-cleanup)
-      __tests__/        ← MCP client and pool tests
+      pool.ts           ← Connection pool (in-memory, 5min TTL, auto-cleanup, dead connection detection)
     schemas/
       agent-export.ts  ← Zod schema + AgentExportData type for agent export/import
+    utils/
+      url-validation.ts ← validateExternalUrlWithDNS() — SSRF protection, private IP blocklist
     runtime/
       engine.ts            ← Synchronous execution loop (MAX_ITERATIONS=50, MAX_HISTORY=100)
       engine-streaming.ts  ← Streaming execution loop (NDJSON ReadableStream output)
@@ -138,13 +180,14 @@ src/
       template.ts          ← {{variable}} interpolation
       types.ts             ← RuntimeContext, ExecutionResult, NodeHandler, StreamChunk, StreamWriter
       handlers/
-        index.ts           ← Handler registry (30 handlers)
-        ai-response-handler.ts          ← Non-streaming AI (generateText + MCP tools)
-        ai-response-streaming-handler.ts ← Streaming AI (streamText → NDJSON + MCP tools)
+        index.ts           ← Handler registry (31 handlers)
+        ai-response-handler.ts          ← Non-streaming AI (generateText + MCP + agent tools)
+        ai-response-streaming-handler.ts ← Streaming AI (streamText → NDJSON + MCP + agent tools)
         mcp-tool-handler.ts             ← Deterministic MCP tool call node
+        call-agent-handler.ts           ← Agent-to-agent call execution
         loop-handler.ts                 ← Loop execution (count/condition modes)
         parallel-handler.ts             ← Parallel branch execution with merge strategies
-        parallel-streaming-handler.ts   ← Streaming-aware parallel (real-time branch output + AI token streaming)
+        parallel-streaming-handler.ts   ← Streaming-aware parallel (real-time branch output)
         memory-write-handler.ts         ← Save data to agent persistent memory (AgentMemory)
         memory-read-handler.ts          ← Read from agent memory (key/category/search modes)
         evaluator-handler.ts            ← AI-powered content evaluation with criteria scoring
@@ -153,7 +196,10 @@ src/
         notification-handler.ts         ← Multi-channel notifications (log/in_app/webhook)
         format-transform-handler.ts     ← Data format transformation (JSON/CSV/text/template)
         switch-handler.ts               ← Multi-way branching (switch/case with operators)
-        message-handler.ts, condition-handler.ts, ...
+        web-fetch-handler.ts            ← HTTP fetch operations with URL validation
+        browser-action-handler.ts       ← Browser automation actions (via MCP)
+        human-approval-handler.ts       ← Human-in-the-loop approval requests
+        message-handler.ts, condition-handler.ts, button-handler.ts, ...
     knowledge/
       index.ts        ← Main search entry point
       chunker.ts      ← Text chunking (400 tokens, 20% overlap)
@@ -161,11 +207,11 @@ src/
       embeddings.ts   ← OpenAI embedding generation
       search.ts       ← Hybrid search (semantic + BM25 via pgvector) + parent document retrieval
       reranker.ts     ← LLM-based result re-ranking
-      scraper.ts      ← URL content fetching
+      scraper.ts      ← URL content fetching (safe redirect following, DNS validation)
       ingest.ts       ← Source ingestion pipeline (scrape → parse → chunk → embed → store)
 
   types/
-    index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType
+    index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType (32 types)
     pdf-parse.d.ts    ← Type declaration for pdf-parse
     mammoth.d.ts      ← Type declaration for mammoth
 
@@ -188,10 +234,13 @@ User
         │     └── activeVersionId? → FlowVersion
         ├── FlowDeployment[] (1:N, cascade delete — deploy audit log)
         ├── KnowledgeBase (1:1, cascade delete)
-        │     └── KBSource[] (1:N, cascade delete)
+        │     └── KBSource[] (1:N, cascade delete, retryCount for ingest retries)
         │           └── KBChunk[] (1:N, cascade delete, has vector(1536) embedding)
+        ├── AgentCard (1:1, cascade delete — A2A discovery card)
         ├── AgentMCPServer[] (1:N, cascade delete — enabledTools filter)
-        ├── AnalyticsEvent[] (1:N, cascade delete — timeToFirstTokenMs, totalResponseTimeMs, isNewConversation)
+        ├── AgentCallLog[] (1:N, cascade delete — agent-to-agent call tracing)
+        ├── HumanApprovalRequest[] (1:N — human-in-the-loop workflow)
+        ├── AnalyticsEvent[] (1:N, cascade delete — response times, KB_SEARCH events)
         └── Conversation[] (1:N, cascade delete, optional flowVersionId for audit)
               └── Message[] (1:N, cascade delete)
 
@@ -203,11 +252,27 @@ AgentMemory — Persistent cross-conversation memory for agents
   ├── value (String), category (default "general"), importance (0-1)
   ├── embedding (vector(1536), optional — for semantic search)
   └── accessCount, accessedAt — access tracking
+
+AgentCard — A2A public agent card for discovery
+  ├── agentId (1:1, unique)
+  ├── name, description, version, skills[]
+  └── inputModes[], outputModes[], capabilities (Json)
+
+AgentCallLog — Agent-to-agent call tracing
+  ├── callerAgentId, calleeAgentId (required, indexed)
+  ├── traceId, spanId, parentSpanId — distributed tracing
+  └── status, durationMs, inputTokens, outputTokens
+
+HumanApprovalRequest — Human-in-the-loop workflow
+  ├── agentId, conversationId (required)
+  ├── title, description, options (Json)
+  └── status (PENDING|APPROVED|REJECTED|EXPIRED), respondedAt
 ```
 
-**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE), MCPTransport (STREAMABLE_HTTP|SSE), FlowVersionStatus (DRAFT|PUBLISHED|ARCHIVED)
+**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE|KB_SEARCH), MCPTransport (STREAMABLE_HTTP|SSE), FlowVersionStatus (DRAFT|PUBLISHED|ARCHIVED), A2ATaskStatus (SUBMITTED|WORKING|INPUT_REQUIRED|COMPLETED|FAILED)
 
 **Key details:**
+- Agent model has: `category String?`, `tags String[]`, `isPublic Boolean` — marketplace fields
 - Agent.userId is `String?` — optional, linked when user is authenticated
 - MCPServer.userId is `String` — required, ownership enforced in API routes
 - AgentMCPServer has @@unique([agentId, mcpServerId]) to prevent duplicate links
@@ -216,6 +281,8 @@ AgentMemory — Persistent cross-conversation memory for agents
 - Flow.content is `Json` storing `FlowContent` (nodes, edges, variables)
 - Conversation.variables is `Json` storing runtime variable state
 - AnalyticsEvent.metadata is `Json` storing response timing and conversation data
+- AgentCallLog uses traceId/spanId for distributed tracing across agent chains
+- Database indexes: `@@index([category])`, `@@index([isPublic, updatedAt])` on Agent
 - All child models cascade delete from their parent
 
 ---
@@ -225,7 +292,7 @@ AgentMemory — Persistent cross-conversation memory for agents
 | Route | Methods | Purpose |
 |-------|---------|---------|
 | `/api/agents` | GET, POST | List all agents (with conversation/source counts), create agent + flow + KB |
-| `/api/agents/[agentId]` | GET, PATCH, DELETE | Full agent detail, update fields, delete |
+| `/api/agents/[agentId]` | GET, PATCH, DELETE | Full agent detail, update fields (incl. category/tags/isPublic), delete |
 | `/api/agents/[agentId]/flow` | GET, PUT | Get/upsert flow content (auth-guarded, Zod-validated, auto-versioned in transaction) |
 | `/api/agents/[agentId]/flow/versions` | GET, POST | List all versions, manually create version with label |
 | `/api/agents/[agentId]/flow/versions/[versionId]` | GET | Get single version |
@@ -234,13 +301,22 @@ AgentMemory — Persistent cross-conversation memory for agents
 | `/api/agents/[agentId]/flow/versions/[versionId]/rollback` | POST | Rollback to version (creates new version + deploys) |
 | `/api/agents/[agentId]/flow/versions/[versionId]/test` | POST | Sandbox test execution against version content |
 | `/api/agents/[agentId]/chat` | POST | Send user message; `{ stream: true }` for NDJSON streaming, otherwise JSON response |
+| `/api/agents/[agentId]/execute` | POST | Execute flow directly (non-chat context) |
 | `/api/agents/[agentId]/knowledge/sources` | GET, POST | List sources with chunk counts, create URL/TEXT + trigger background ingest |
 | `/api/agents/[agentId]/knowledge/sources/upload` | POST | File upload (multipart/form-data, PDF/DOCX, max 10 MB) |
 | `/api/agents/[agentId]/knowledge/sources/[sourceId]` | DELETE | Delete source and all its chunks |
 | `/api/agents/[agentId]/knowledge/search` | POST | Test hybrid search (semantic + BM25 + optional reranking) |
 | `/api/agents/[agentId]/export` | GET | Download agent as versioned JSON (config + flow, no conversations/KB) |
 | `/api/agents/import` | POST | Import agent from exported JSON, Zod-validated with `z.literal(1)` version |
+| `/api/agents/discover` | GET | Marketplace search/filter/sort/paginate with category stats and tag aggregation |
 | `/api/agents/[agentId]/mcp` | GET, POST, DELETE | List/link/unlink MCP servers for agent |
+| `/api/agents/[agentId]/a2a` | POST | A2A task communication (send/receive tasks between agents) |
+| `/api/agents/[agentId]/a2a/card` | GET, POST | Generate/retrieve A2A agent card for discovery |
+| `/api/a2a/agents` | GET | A2A agent discovery endpoint (public catalog) |
+| `/api/agent-calls` | GET | Agent-to-agent call logs with trace IDs |
+| `/api/agent-calls/stats` | GET | Agent call statistics (counts, durations, success rates) |
+| `/api/approvals` | GET | List pending human approval requests |
+| `/api/approvals/[requestId]/respond` | POST | Approve or reject a human approval request |
 | `/api/mcp-servers` | GET, POST | List all user's MCP servers, create new server |
 | `/api/mcp-servers/[serverId]` | GET, PATCH, DELETE | Get/update/delete MCP server (ownership enforced) |
 | `/api/mcp-servers/[serverId]/test` | POST | Test MCP connection, auto-refresh toolsCache |
@@ -255,8 +331,8 @@ AgentMemory — Persistent cross-conversation memory for agents
 ## 6. KEY CONVENTIONS & PATTERNS
 
 ### Runtime Engine
-- 30 node handlers registered in `src/lib/runtime/handlers/index.ts`
-- Node types: message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, email_send, notification, format_transform, switch
+- 31 node handlers registered in `src/lib/runtime/handlers/index.ts`
+- Node types (31): message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, email_send, notification, format_transform, switch, web_fetch, browser_action
 - Safety limits: MAX_ITERATIONS=50, MAX_HISTORY=100
 - Handlers return `ExecutionResult` with messages, nextNodeId, waitForInput, updatedVariables
 - Handlers never throw — always return graceful fallback
@@ -272,7 +348,8 @@ AgentMemory — Persistent cross-conversation memory for agents
 - Context and messages are always saved in `finally` block, even on client disconnect
 - Each save operation (saveMessages, saveContext, writer.close) is in its own try/catch to prevent cascading failures
 - User messages are persisted to DB via `prisma.message.create` in both engine.ts and engine-streaming.ts
-- AbortController with 60s timeout on the client side
+- AbortController with 180s timeout on the client side (matches server maxDuration)
+- Heartbeat interval during tool calls to prevent stream disconnects
 
 ### Knowledge/RAG Pipeline
 - Ingest: scrape URL / parse file / accept text → chunk (400 tokens, 20% overlap) → embed (OpenAI text-embedding-3-small) → store in pgvector
@@ -308,12 +385,66 @@ AgentMemory — Persistent cross-conversation memory for agents
 - `cn()` utility combining clsx + tailwind-merge
 - Dark mode by default (`<html className="dark">`)
 
+### Agent-to-Agent (A2A) Communication
+- AgentCard model stores public agent cards for discovery (name, description, skills, capabilities)
+- `card-generator.ts` generates cards from agent config + flow analysis (skill counting)
+- Circuit breaker pattern (`circuit-breaker.ts`) — CLOSED/OPEN/HALF_OPEN states, configurable thresholds
+- Rate limiter (`rate-limiter.ts`) — per-agent call rate limiting
+- AgentCallLog model with distributed tracing: traceId, spanId, parentSpanId
+- API routes: `/api/a2a/agents` (discovery), `/api/agents/[agentId]/a2a` (task communication), `/api/agents/[agentId]/a2a/card` (card generation)
+- Call monitoring UI: `src/components/a2a/agent-call-monitor.tsx`
+
+### Agent-as-Tool Orchestration
+- `src/lib/agents/agent-tools.ts` converts sibling agents into Vercel AI SDK tool definitions
+- AI response handlers (both streaming and non-streaming) merge agent tools alongside MCP tools when `enableAgentTools` is true
+- Protection stack: circuit breaker, rate limiter, circular call detection, depth limiting (max 3), audit logging
+- Property panel: "Agent Orchestration" toggle on ai_response nodes
+- `stopWhen: stepCountIs(20)` for multi-step tool calling (increased from 5 for web agent use cases)
+
+### Web Browsing Capabilities
+- `web_fetch` node — HTTP fetch with URL validation and SSRF protection
+- `browser_action` node — browser automation actions via MCP (Playwright)
+- AI response handlers support MAX_TOOL_STEPS=20 for multi-page web navigation
+- Server maxDuration=180s, client stream timeout=180s for long-running MCP tool chains
+- Heartbeat interval during tool calls to prevent stream disconnects
+
+### Agent Discovery Marketplace
+- `/discover` page with faceted search: categories, tags, model, sort, scope (public/mine/all)
+- `/api/agents/discover` endpoint: 4 parallel Prisma queries (agents, count, category stats, tag aggregation)
+- Agent model fields: `category String?`, `tags String[]`, `isPublic Boolean`
+- Shared categories in `src/lib/constants/agent-categories.ts` (11 categories)
+- Debounced search (300ms), loading skeletons, active filter pills, category badges with colors
+- Searchable agent selector in flow builder property panel (replaces basic HTML select)
+
+### Agent Templates
+- 112 templates in `src/data/agent-templates.json` across 11 categories
+- `/templates` page with server component + client-side search and category filter tabs
+- Dashboard "New Agent" dialog includes "Browse Templates" tab — selecting pre-fills name, description, systemPrompt
+- Template gallery component: `src/components/templates/template-gallery.tsx`
+
+### Human Approval Workflow
+- `human_approval` node type in flow — pauses execution for human review
+- HumanApprovalRequest model: PENDING → APPROVED/REJECTED/EXPIRED
+- API: `/api/approvals` (list pending), `/api/approvals/[requestId]/respond` (approve/reject)
+- `human-approval-handler.ts` creates request and returns `waitForInput: true`
+
+### Security Hardening
+- `body-limit.ts` — parseBodyWithLimit() with 1 MB default
+- `sanitize-error.ts` — generic errors in production, detailed in dev
+- `security-headers.ts` — X-Content-Type-Options, X-Frame-Options, CSP, Referrer-Policy
+- `url-validation.ts` — validateExternalUrlWithDNS() with private IP blocklist (SSRF protection)
+- CSRF Origin header check in middleware for mutations
+- MIME type + extension validation on file uploads
+- JWT session maxAge reduced to 24 hours
+- MAX_CHUNKS=500 limit in ingest pipeline, MAX_AGENTS_PER_USER=100 cap
+- `function-handler.ts` uses vm.Script + vm.createContext sandbox (no process/require/global, 5s timeout)
+
 ### Auth
 - NextAuth v5 with GitHub + Google OAuth providers
-- PrismaAdapter for storage, JWT session strategy
-- `allowDangerousEmailAccountLinking` enabled for both providers (same email, different providers)
+- PrismaAdapter for storage, JWT session strategy, maxAge 24 hours
+- CSRF Origin header check in middleware for state-changing methods (POST/PUT/PATCH/DELETE)
 - Middleware in `src/middleware.ts` — cookie check for `authjs.session-token` / `__Secure-authjs.session-token`
-- Public paths: `/login`, `/embed/*`, `/api/auth/*`, `/api/health`, `/api/agents/[agentId]/chat`, `/_next/*`, `/embed.js`
+- Public paths: `/login`, `/embed/*`, `/api/auth/*`, `/api/health`, `/api/agents/[agentId]/chat`, `/api/a2a/*`, `/_next/*`, `/embed.js`
 - Agent.userId is optional — agents can exist without auth
 
 ### Embed Widget
@@ -328,7 +459,7 @@ AgentMemory — Persistent cross-conversation memory for agents
 - Transports: Streamable HTTP (primary) + SSE (backward compat) via `@ai-sdk/mcp createMCPClient()`
 - Connection pooling: in-memory pool with 5min idle TTL, auto-cleanup every 60s (`src/lib/mcp/pool.ts`)
 - **MCP Tool Node** (`mcp_tool`): deterministic tool call — `mcpServerId`, `toolName`, `inputMapping` with template resolution, `outputVariable`
-- **AI Response + MCP**: tools auto-injected into `streamText`/`generateText` when agent has linked MCP servers, `stopWhen: stepCountIs(5)` for multi-step tool calling
+- **AI Response + MCP + Agent Tools**: tools auto-injected into `streamText`/`generateText` when agent has linked MCP servers or enableAgentTools is true, `stopWhen: stepCountIs(20)` for multi-step tool calling
 - Graceful degradation: if MCP tools fail to load, AI continues without tools (logged as warning)
 - Tool filtering: per-agent `enabledTools` array — if set, only listed tools are passed to AI
 - UI: Dashboard "MCP Servers" button for global management, flow builder "MCP" button for per-agent server selection
@@ -412,6 +543,9 @@ pnpm lint             # ESLint
 pnpm typecheck        # TypeScript check (no emit)
 pnpm test             # Vitest unit tests
 pnpm test:watch       # Vitest watch mode
+pnpm test:e2e         # Playwright E2E tests
+pnpm test:e2e:ui      # Playwright UI mode
+pnpm test:e2e:debug   # Playwright debug mode
 pnpm db:generate      # Generate Prisma client
 pnpm db:migrate       # Run migrations (dev)
 pnpm db:push          # Sync schema directly
@@ -431,6 +565,8 @@ pnpm db:seed          # Seed dev data
 - Never use `npm` or `yarn` — always `pnpm`
 - No `any` type — ever
 - No `console.log` left in committed code
+- Never export non-handler constants from Next.js route files (`route.ts`) — use `src/lib/constants/`
+- Only valid route file exports: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, dynamic, revalidate, runtime, fetchCache, preferredRegion
 
 ### Adding a New Node Type
 1. Add type to `NodeType` union in `src/types/index.ts`
@@ -451,9 +587,11 @@ pnpm db:seed          # Seed dev data
 
 ### Testing
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
-- Run: `pnpm test`
-- ~720 tests across 76 test files
-- Existing tests cover: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, engine integration tests (multi-node flows)
+- E2E tests: Playwright, `e2e/tests/` folder, `.spec.ts` extension (8 spec files)
+- Run: `pnpm test` (unit), `pnpm test:e2e` (E2E)
+- ~905 unit tests across 85 test files
+- E2E coverage: auth flows, dashboard CRUD, flow editor, chat streaming, knowledge base, agent import/export, API routes, health check
+- Unit test coverage: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, web fetch handler, webhook handler, set variable handler, wait handler, URL validation, engine integration tests (multi-node flows)
 - Test behavior, not implementation details
 
 ### AI Model Config
