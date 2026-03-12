@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { parseChunk } from "@/lib/runtime/stream-protocol";
 
-interface ChatMessage {
+export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
@@ -18,7 +18,9 @@ interface UseStreamingChatReturn {
   isLoading: boolean;
   conversationId: string | undefined;
   sendMessage: () => Promise<void>;
+  stopGeneration: () => void;
   resetChat: () => void;
+  loadConversation: (id: string, msgs: ChatMessage[]) => void;
 }
 
 export function useStreamingChat({
@@ -33,6 +35,21 @@ export function useStreamingChat({
   const [isLoading, setIsLoading] = useState(false);
   const conversationIdRef = useRef<string | undefined>(savedId);
   const [conversationId, setConversationId] = useState<string | undefined>(savedId);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const stopGeneration = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  const loadConversation = useCallback((id: string, msgs: ChatMessage[]) => {
+    abortRef.current?.abort();
+    setMessages(msgs);
+    conversationIdRef.current = id;
+    setConversationId(id);
+    if (persistKey) {
+      sessionStorage.setItem(persistKey, id);
+    }
+  }, [persistKey]);
 
   const sendMessage = useCallback(async () => {
     const text = input.trim();
@@ -43,6 +60,7 @@ export function useStreamingChat({
     setIsLoading(true);
 
     const controller = new AbortController();
+    abortRef.current = controller;
     const timeout = setTimeout(() => controller.abort(), 180_000);
     let readerRef: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
@@ -173,20 +191,25 @@ export function useStreamingChat({
           }
         }
       }
-    } catch {
+    } catch (err) {
       readerRef?.cancel().catch(() => {});
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Failed to connect to the server." },
-      ]);
+      // Don't add error message if user intentionally stopped
+      if (err instanceof Error && err.name !== "AbortError") {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Failed to connect to the server." },
+        ]);
+      }
     } finally {
       readerRef = null;
+      abortRef.current = null;
       clearTimeout(timeout);
       setIsLoading(false);
     }
   }, [agentId, input, isLoading, persistKey]);
 
   const resetChat = useCallback(() => {
+    abortRef.current?.abort();
     setMessages([]);
     conversationIdRef.current = undefined;
     setConversationId(undefined);
@@ -202,6 +225,8 @@ export function useStreamingChat({
     isLoading,
     conversationId,
     sendMessage,
+    stopGeneration,
     resetChat,
+    loadConversation,
   };
 }

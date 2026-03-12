@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef, useReducer } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -54,7 +54,8 @@ import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
 import { Button } from "@/components/ui/button";
-import { Save, Plug, X, Clock, Rocket, Circle } from "lucide-react";
+import { Save, Plug, X, Clock, Rocket, Circle, Undo2, Redo2, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { AgentMCPSelector } from "@/components/mcp/agent-mcp-selector";
 import type { FlowContent, FlowNode } from "@/types";
 
@@ -98,6 +99,64 @@ const NODE_TYPES: NodeTypes = {
   browser_action: BrowserActionNode,
 };
 
+// ---------------------------------------------------------------------------
+// History types for undo/redo
+// ---------------------------------------------------------------------------
+interface HistoryEntry {
+  nodes: Node[];
+  edges: Edge[];
+}
+
+type HistoryAction =
+  | { type: "PUSH"; entry: HistoryEntry }
+  | { type: "UNDO" }
+  | { type: "REDO" };
+
+interface HistoryState {
+  past: HistoryEntry[];
+  future: HistoryEntry[];
+}
+
+const MAX_HISTORY = 30;
+
+function historyReducer(state: HistoryState, action: HistoryAction): HistoryState {
+  switch (action.type) {
+    case "PUSH": {
+      const past = [...state.past, action.entry].slice(-MAX_HISTORY);
+      return { past, future: [] };
+    }
+    case "UNDO": {
+      if (state.past.length === 0) return state;
+      const previous = state.past[state.past.length - 1];
+      return {
+        past: state.past.slice(0, -1),
+        future: [previous, ...state.future],
+      };
+    }
+    case "REDO": {
+      if (state.future.length === 0) return state;
+      const next = state.future[0];
+      return {
+        past: [...state.past, next],
+        future: state.future.slice(1),
+      };
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Relative time helper
+// ---------------------------------------------------------------------------
+function relativeTime(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 10) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
+}
+
 export function FlowBuilder(props: FlowBuilderProps) {
   return (
     <ReactFlowProvider>
@@ -127,6 +186,21 @@ function FlowBuilderCanvas({
     null
   );
   const [deployedVersion, setDeployedVersion] = useState<number | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [saveTimeLabel, setSaveTimeLabel] = useState<string>("");
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Undo/redo history
+  const [history, dispatchHistory] = useReducer(historyReducer, {
+    past: [],
+    future: [],
+  });
+  const canUndo = history.past.length > 0;
+  const canRedo = history.future.length > 0;
 
   useEffect(() => {
     fetch(`/api/agents/${agentId}/flow`)
@@ -139,6 +213,7 @@ function FlowBuilderCanvas({
       })
       .catch(() => {});
   }, [agentId]);
+
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
   nodesRef.current = nodes;
@@ -146,8 +221,87 @@ function FlowBuilderCanvas({
 
   const markChanged = useCallback(() => setHasChanges(true), []);
 
+  // Update relative time label every 30s
+  useEffect(() => {
+    if (!lastSavedAt) return;
+    setSaveTimeLabel(relativeTime(lastSavedAt));
+    const interval = setInterval(() => {
+      setSaveTimeLabel(relativeTime(lastSavedAt));
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [lastSavedAt]);
+
+  // Ctrl+S shortcut
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        if (hasChanges && !isSaving) {
+          handleSave();
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+      if (
+        ((e.ctrlKey || e.metaKey) && e.key === "y") ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "z")
+      ) {
+        e.preventDefault();
+        handleRedo();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+        e.preventDefault();
+        setShowSearch((v) => !v);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasChanges, isSaving, canUndo, canRedo]);
+
+  // Focus search input when opened
+  useEffect(() => {
+    if (showSearch) {
+      setTimeout(() => searchRef.current?.focus(), 50);
+    } else {
+      setSearchQuery("");
+    }
+  }, [showSearch]);
+
+  // Push current state to history before a structural change
+  const pushHistory = useCallback(() => {
+    dispatchHistory({
+      type: "PUSH",
+      entry: {
+        nodes: nodesRef.current.map((n) => ({ ...n })),
+        edges: edgesRef.current.map((e) => ({ ...e })),
+      },
+    });
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (!canUndo) return;
+    const entry = history.past[history.past.length - 1];
+    dispatchHistory({ type: "UNDO" });
+    setNodes(entry.nodes);
+    setEdges(entry.edges);
+    setHasChanges(true);
+  }, [canUndo, history.past, setNodes, setEdges]);
+
+  const handleRedo = useCallback(() => {
+    if (!canRedo) return;
+    const entry = history.future[0];
+    dispatchHistory({ type: "REDO" });
+    setNodes(entry.nodes);
+    setEdges(entry.edges);
+    setHasChanges(true);
+  }, [canRedo, history.future, setNodes, setEdges]);
+
   const onConnect = useCallback(
     (connection: Connection) => {
+      pushHistory();
       const edgeId = `e-${connection.source}-${connection.sourceHandle ?? "default"}-${connection.target}`;
       setEdges((eds) => [
         ...eds,
@@ -160,7 +314,7 @@ function FlowBuilderCanvas({
       ]);
       markChanged();
     },
-    [setEdges, markChanged]
+    [setEdges, markChanged, pushHistory]
   );
 
   const onNodeClick = useCallback(
@@ -177,6 +331,7 @@ function FlowBuilderCanvas({
 
   const addNode = useCallback(
     (type: string, data: Record<string, unknown>) => {
+      pushHistory();
       const id = `${type}-${Date.now()}`;
       const newNode: Node = {
         id,
@@ -187,11 +342,12 @@ function FlowBuilderCanvas({
       setNodes((nds) => [...nds, newNode]);
       markChanged();
     },
-    [setNodes, markChanged]
+    [setNodes, markChanged, pushHistory]
   );
 
   const updateNodeData = useCallback(
     (nodeId: string, data: Record<string, unknown>) => {
+      pushHistory();
       setNodes((nds) =>
         nds.map((n) =>
           n.id === nodeId ? { ...n, data: { ...n.data, ...data } } : n
@@ -199,11 +355,12 @@ function FlowBuilderCanvas({
       );
       markChanged();
     },
-    [setNodes, markChanged]
+    [setNodes, markChanged, pushHistory]
   );
 
   const deleteNode = useCallback(
     (nodeId: string) => {
+      pushHistory();
       setNodes((nds) => nds.filter((n) => n.id !== nodeId));
       setEdges((eds) =>
         eds.filter((e) => e.source !== nodeId && e.target !== nodeId)
@@ -211,7 +368,7 @@ function FlowBuilderCanvas({
       setSelectedNodeId(null);
       markChanged();
     },
-    [setNodes, setEdges, markChanged]
+    [setNodes, setEdges, markChanged, pushHistory]
   );
 
   const handleSave = useCallback(async () => {
@@ -245,6 +402,7 @@ function FlowBuilderCanvas({
       }
 
       setHasChanges(false);
+      setLastSavedAt(new Date());
     } catch (error) {
       console.error("Save failed:", error);
     } finally {
@@ -257,6 +415,16 @@ function FlowBuilderCanvas({
     [nodes, selectedNodeId]
   );
 
+  // Filtered nodes for search
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return nodes.filter((n) => {
+      const label = (n.data?.label as string | undefined) ?? n.type ?? "";
+      return label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q);
+    });
+  }, [nodes, searchQuery]);
+
   return (
     <div className="flex h-full w-full flex-col">
       <div className="flex items-center justify-between border-b px-4 py-2">
@@ -265,6 +433,45 @@ function FlowBuilderCanvas({
           <NodePicker onAddNode={addNode} />
         </div>
         <div className="flex items-center gap-2">
+          {/* Undo / Redo */}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleUndo}
+            disabled={!canUndo}
+            title="Undo (Ctrl+Z)"
+            aria-label="Undo"
+            className="px-2"
+          >
+            <Undo2 className="size-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleRedo}
+            disabled={!canRedo}
+            title="Redo (Ctrl+Y)"
+            aria-label="Redo"
+            className="px-2"
+          >
+            <Redo2 className="size-4" />
+          </Button>
+
+          {/* Node search toggle */}
+          <Button
+            size="sm"
+            variant={showSearch ? "default" : "ghost"}
+            onClick={() => setShowSearch((v) => !v)}
+            title="Search nodes (Ctrl+F)"
+            aria-label="Search nodes"
+            className="px-2"
+          >
+            <Search className="size-4" />
+          </Button>
+
+          <div className="w-px h-4 bg-border" />
+
+          {/* Status indicator */}
           <button
             className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
             onClick={() => {
@@ -276,7 +483,7 @@ function FlowBuilderCanvas({
             {hasChanges ? (
               <>
                 <Circle className="size-2.5 fill-amber-400 text-amber-400" />
-                Unpublished changes
+                Unsaved changes
               </>
             ) : deployedVersion ? (
               <>
@@ -290,6 +497,14 @@ function FlowBuilderCanvas({
               </>
             )}
           </button>
+
+          {/* Save timestamp */}
+          {lastSavedAt && !hasChanges && (
+            <span className="text-xs text-muted-foreground hidden sm:inline">
+              Saved {saveTimeLabel}
+            </span>
+          )}
+
           <Button
             size="sm"
             variant="outline"
@@ -336,12 +551,59 @@ function FlowBuilderCanvas({
             size="sm"
             onClick={handleSave}
             disabled={isSaving || !hasChanges}
+            title="Save (Ctrl+S)"
           >
             <Save className="mr-1.5 size-4" />
             {isSaving ? "Saving..." : "Save"}
           </Button>
         </div>
       </div>
+
+      {/* Node search bar */}
+      {showSearch && (
+        <div className="border-b px-4 py-2 bg-muted/30">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              ref={searchRef}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search nodes…"
+              className="pl-8 h-8 text-sm"
+            />
+            {searchQuery && (
+              <button
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {searchResults.length === 0 ? (
+                <span className="text-xs text-muted-foreground">No nodes match</span>
+              ) : (
+                searchResults.map((n) => (
+                  <button
+                    key={n.id}
+                    className="inline-flex items-center gap-1.5 rounded border bg-background px-2 py-0.5 text-xs hover:bg-muted transition-colors"
+                    onClick={() => {
+                      setSelectedNodeId(n.id);
+                      setShowSearch(false);
+                    }}
+                  >
+                    <span className="text-muted-foreground">{n.type}</span>
+                    <span>{(n.data?.label as string | undefined) ?? n.id}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex-1" data-testid="flow-canvas">

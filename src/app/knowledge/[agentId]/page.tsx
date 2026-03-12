@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   XCircle,
   Search,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +72,7 @@ export default function KnowledgePage({
   const [addContent, setAddContent] = useState("");
   const [addFile, setAddFile] = useState<File | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
 
   const [confirmDeleteSourceId, setConfirmDeleteSourceId] = useState<string | null>(null);
   const [isDeletingSource, setIsDeletingSource] = useState(false);
@@ -85,7 +87,7 @@ export default function KnowledgePage({
       const json = await res.json();
       if (json.success) setSources(json.data);
     } catch {
-      toast.error("Failed to load sources");
+      // silent on poll failures
     } finally {
       setIsLoading(false);
     }
@@ -94,6 +96,16 @@ export default function KnowledgePage({
   useEffect(() => {
     fetchSources();
   }, [fetchSources]);
+
+  // Auto-poll while any source is PENDING or PROCESSING
+  useEffect(() => {
+    const hasActive = sources.some(
+      (s) => s.status === "PENDING" || s.status === "PROCESSING"
+    );
+    if (!hasActive) return;
+    const interval = setInterval(fetchSources, 4_000);
+    return () => clearInterval(interval);
+  }, [sources, fetchSources]);
 
   async function handleAdd() {
     setIsAdding(true);
@@ -148,6 +160,36 @@ export default function KnowledgePage({
     }
   }
 
+  async function handleRetry(sourceId: string) {
+    setRetryingIds((prev) => new Set(prev).add(sourceId));
+    try {
+      const res = await fetch(
+        `/api/agents/${agentId}/knowledge/sources/${sourceId}/retry`,
+        { method: "POST" }
+      );
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Retrying — ingestion started");
+        setSources((prev) =>
+          prev.map((s) =>
+            s.id === sourceId ? { ...s, status: "PENDING", errorMsg: null } : s
+          )
+        );
+        fetchSources();
+      } else {
+        toast.error(json.error || "Failed to retry");
+      }
+    } catch {
+      toast.error("Failed to retry");
+    } finally {
+      setRetryingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(sourceId);
+        return next;
+      });
+    }
+  }
+
   async function handleDelete() {
     if (!confirmDeleteSourceId) return;
     setIsDeletingSource(true);
@@ -188,6 +230,7 @@ export default function KnowledgePage({
       case "READY":
         return <CheckCircle2 className="size-4 text-green-500" />;
       case "PROCESSING":
+        return <Loader2 className="size-4 text-blue-500 animate-spin" />;
       case "PENDING":
         return <Loader2 className="size-4 text-yellow-500 animate-spin" />;
       case "FAILED":
@@ -195,6 +238,12 @@ export default function KnowledgePage({
       default:
         return null;
     }
+  };
+
+  const statusLabel = (status: string) => {
+    if (status === "PROCESSING") return "Processing…";
+    if (status === "PENDING") return "Queued";
+    return status;
   };
 
   return (
@@ -263,8 +312,22 @@ export default function KnowledgePage({
                                 : "secondary"
                           }
                         >
-                          {source.status}
+                          {statusLabel(source.status)}
                         </Badge>
+                        {source.status === "FAILED" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={retryingIds.has(source.id)}
+                            onClick={() => handleRetry(source.id)}
+                            aria-label={`Retry ingestion for ${source.name}`}
+                          >
+                            <RefreshCw
+                              className={`mr-1.5 size-3.5 ${retryingIds.has(source.id) ? "animate-spin" : ""}`}
+                            />
+                            Retry
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon-xs"
@@ -276,7 +339,22 @@ export default function KnowledgePage({
                       </div>
                     </div>
                     {source.errorMsg && (
-                      <p className="text-xs text-destructive mt-1">{source.errorMsg}</p>
+                      <p className="text-xs text-destructive mt-2 pl-7">{source.errorMsg}</p>
+                    )}
+                    {(source.status === "PENDING" || source.status === "PROCESSING") && (
+                      <div className="mt-2 pl-7">
+                        <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-1 rounded-full bg-blue-400 animate-pulse"
+                            style={{ width: source.status === "PROCESSING" ? "60%" : "20%" }}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {source.status === "PROCESSING"
+                            ? "Chunking and embedding…"
+                            : "Waiting to start…"}
+                        </p>
+                      </div>
                     )}
                   </CardHeader>
                 </Card>
