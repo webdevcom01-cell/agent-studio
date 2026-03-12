@@ -85,7 +85,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
                   id: "start",
                   type: "ai_response",
                   position: { x: 250, y: 100 },
-                  data: { label: "AI Response", prompt: "", model },
+                  data: { label: "AI Response", prompt: systemPrompt, model },
                 },
               ],
               edges: [],
