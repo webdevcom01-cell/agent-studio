@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { type Node } from "@xyflow/react";
-import { Trash2, X, Plus } from "lucide-react";
+import { Trash2, X, Plus, Search, Database, Plug, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -810,6 +810,13 @@ function MCPToolProperties({ data, update }: SubPanelProps) {
 interface AgentOption {
   id: string;
   name: string;
+  description?: string | null;
+  category?: string | null;
+  tags?: string[];
+  model?: string;
+  _count?: { conversations: number };
+  knowledgeBase?: { id: string } | null;
+  mcpServers?: unknown[];
 }
 
 interface ExternalSkill {
@@ -841,6 +848,8 @@ function CallAgentProperties({ data, update, currentAgentId }: CallAgentProperti
   const inputMapping = (data.inputMapping as { key: string; value: string }[]) ?? [];
   const onError = (data.onError as string) ?? "continue";
 
+  const [agentSearch, setAgentSearch] = useState("");
+
   useEffect(() => {
     if (mode !== "internal") return;
     setIsLoading(true);
@@ -857,6 +866,18 @@ function CallAgentProperties({ data, update, currentAgentId }: CallAgentProperti
       .catch(() => {})
       .finally(() => setIsLoading(false));
   }, [currentAgentId, mode]);
+
+  const filteredAgents = useMemo(() => {
+    if (!agentSearch.trim()) return agents;
+    const q = agentSearch.toLowerCase();
+    return agents.filter(
+      (a) =>
+        a.name.toLowerCase().includes(q) ||
+        (a.description?.toLowerCase().includes(q) ?? false) ||
+        (a.category?.toLowerCase().includes(q) ?? false) ||
+        (a.tags?.some((t) => t.toLowerCase().includes(q)) ?? false)
+    );
+  }, [agents, agentSearch]);
 
   function handleAgentChange(agentId: string) {
     const agent = agents.find((a) => a.id === agentId);
@@ -930,19 +951,79 @@ function CallAgentProperties({ data, update, currentAgentId }: CallAgentProperti
           {!allowParallel && (
             <div className="space-y-2">
               <Label>Target Agent</Label>
-              <select
-                value={targetAgentId}
-                onChange={(e) => handleAgentChange(e.target.value)}
-                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                disabled={isLoading}
-              >
-                <option value="">{isLoading ? "Loading..." : "Select an agent..."}</option>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+              {/* Search input */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
+                <Input
+                  value={agentSearch}
+                  onChange={(e) => setAgentSearch(e.target.value)}
+                  placeholder={isLoading ? "Loading agents..." : `Search ${agents.length} agents...`}
+                  className="pl-8 h-8 text-xs"
+                  disabled={isLoading}
+                />
+              </div>
+              {/* Agent list */}
+              <div className="max-h-48 overflow-y-auto rounded-md border border-border bg-background">
+                {filteredAgents.length === 0 ? (
+                  <p className="p-3 text-xs text-muted-foreground text-center">
+                    {isLoading ? "Loading..." : "No agents found"}
+                  </p>
+                ) : (
+                  filteredAgents.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => {
+                        handleAgentChange(a.id);
+                        setAgentSearch("");
+                      }}
+                      className={`w-full flex flex-col items-start gap-0.5 px-3 py-2 text-left transition-colors hover:bg-accent/50 border-b border-border/50 last:border-0 ${
+                        targetAgentId === a.id ? "bg-accent" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <span className="text-xs font-medium text-foreground truncate flex-1">
+                          {a.name}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {a.knowledgeBase && <Database className="size-2.5 text-muted-foreground" />}
+                          {(a.mcpServers?.length ?? 0) > 0 && <Plug className="size-2.5 text-muted-foreground" />}
+                          {(a._count?.conversations ?? 0) > 0 && (
+                            <span className="text-[10px] text-muted-foreground tabular-nums">
+                              {a._count?.conversations}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {a.description && (
+                        <p className="text-[10px] text-muted-foreground line-clamp-1 w-full">
+                          {a.description}
+                        </p>
+                      )}
+                      {(a.category || (a.tags?.length ?? 0) > 0) && (
+                        <div className="flex gap-1 mt-0.5">
+                          {a.category && (
+                            <span className="text-[9px] rounded-full bg-muted px-1.5 py-0 text-muted-foreground">
+                              {a.category}
+                            </span>
+                          )}
+                          {a.tags?.slice(0, 2).map((tag) => (
+                            <span key={tag} className="text-[9px] rounded-full bg-muted px-1.5 py-0 text-muted-foreground">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+              {targetAgentId && (
+                <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <Zap className="size-2.5" />
+                  Selected: {agents.find((a) => a.id === targetAgentId)?.name ?? targetAgentId}
+                </p>
+              )}
             </div>
           )}
 

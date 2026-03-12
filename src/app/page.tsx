@@ -8,7 +8,7 @@ import { useSession, signOut } from "next-auth/react";
 import {
   Plus, Bot, MessageSquare, Database, Trash2, MoreVertical,
   Download, Upload, LogOut, BarChart3, Plug, ArrowRightLeft,
-  Sun, Moon, LayoutTemplate,
+  Sun, Moon, LayoutTemplate, Compass,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -169,6 +169,18 @@ export default function DashboardPage() {
           <div className="flex items-center gap-0.5">
 
             {/* Secondary — icon-only with tooltips */}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              asChild
+              title="Discover Agents"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Link href="/discover">
+                <Compass className="size-4" />
+              </Link>
+            </Button>
+
             <Button
               variant="ghost"
               size="icon-sm"

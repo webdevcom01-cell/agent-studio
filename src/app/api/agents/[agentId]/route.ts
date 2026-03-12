@@ -7,12 +7,20 @@ import { logger } from "@/lib/logger";
 
 const VALID_MODELS = ["deepseek-chat", "gpt-4o-mini", "gpt-4o", "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"] as const;
 
+const AGENT_CATEGORIES = [
+  "assistant", "research", "writing", "coding", "design",
+  "marketing", "support", "data", "education", "productivity", "specialized",
+] as const;
+
 const updateAgentSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),
   systemPrompt: z.string().max(10000).optional(),
   model: z.enum(VALID_MODELS).optional(),
   temperature: z.number().min(0).max(2).optional(),
+  category: z.enum(AGENT_CATEGORIES).nullable().optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  isPublic: z.boolean().optional(),
 }).strict();
 
 interface RouteParams {

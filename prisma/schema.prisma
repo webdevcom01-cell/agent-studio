@@ -70,6 +70,9 @@ model Agent {
   systemPrompt  String?        @db.Text
   model         String         @default("gpt-4o-mini")
   temperature   Float          @default(0.7)
+  category      String?
+  tags          String[]       @default([])
+  isPublic      Boolean        @default(false)
   userId        String?
   user          User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt     DateTime       @default(now())
@@ -88,6 +91,8 @@ model Agent {
 
   @@index([userId])
   @@index([userId, updatedAt])
+  @@index([category])
+  @@index([isPublic, updatedAt])
 }
 
 model Flow {
