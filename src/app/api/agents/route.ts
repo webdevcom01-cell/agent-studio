@@ -11,7 +11,7 @@ const MAX_AGENTS_PER_USER = 100;
 const createAgentSchema = z.object({
   name: z.string().min(1, "Name is required").max(200, "Name must be 200 characters or less"),
   description: z.string().max(2000).optional().default(""),
-  systemPrompt: z.string().max(10000).optional().default("You are a helpful assistant."),
+  systemPrompt: z.string().max(50000).optional().default("You are a helpful assistant."),
   model: z.enum(VALID_MODELS).optional().default("deepseek-chat"),
 });
 

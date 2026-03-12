@@ -11,7 +11,7 @@ const VALID_MODELS = ["deepseek-chat", "gpt-4o-mini", "gpt-4o", "claude-sonnet-4
 const updateAgentSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),
-  systemPrompt: z.string().max(10000).optional(),
+  systemPrompt: z.string().max(50000).optional(),
   model: z.enum(VALID_MODELS).optional(),
   temperature: z.number().min(0).max(2).optional(),
   category: z.enum(AGENT_CATEGORIES).nullable().optional(),
