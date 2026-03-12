@@ -6,7 +6,7 @@ import type { ExecutionResult, RuntimeContext, StreamWriter } from "../types";
 import type { FlowNode } from "@/types";
 import { resolveTemplate } from "../template";
 
-const MAX_TOOL_STEPS = 5;
+const MAX_TOOL_STEPS = 20;
 
 async function loadMCPTools(agentId: string): Promise<Record<string, unknown>> {
   try {
@@ -34,7 +34,7 @@ export async function aiResponseStreamingHandler(
   );
   const modelId = (node.data.model as string) ?? DEFAULT_MODEL;
   const temperature = (node.data.temperature as number) ?? 0.7;
-  const maxTokens = (node.data.maxTokens as number) ?? 500;
+  const maxTokens = (node.data.maxTokens as number) ?? 2000;
   const outputVariable = (node.data.outputVariable as string) ?? "";
 
   try {
@@ -64,6 +64,13 @@ export async function aiResponseStreamingHandler(
       streamOptions.stopWhen = stepCountIs(MAX_TOOL_STEPS);
     }
 
+    // Send heartbeats during long-running tool calls to keep connection alive
+    const heartbeatTimer = hasTools
+      ? setInterval(() => {
+          try { writer.write({ type: "heartbeat" }); } catch { /* stream closed */ }
+        }, 5000)
+      : null;
+
     const result = streamText(streamOptions);
 
     writer.write({ type: "stream_start" });
@@ -73,6 +80,8 @@ export async function aiResponseStreamingHandler(
       fullText += delta;
       writer.write({ type: "stream_delta", content: delta });
     }
+
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
 
     if (!fullText) fullText = "I couldn't generate a response.";
 

@@ -43,7 +43,7 @@ export function useStreamingChat({
     setIsLoading(true);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 65_000);
+    const timeout = setTimeout(() => controller.abort(), 180_000);
     let readerRef: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
     try {

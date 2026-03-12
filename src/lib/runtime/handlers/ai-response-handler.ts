@@ -5,7 +5,7 @@ import { getMCPToolsForAgent } from "@/lib/mcp/client";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 
-const MAX_TOOL_STEPS = 5;
+const MAX_TOOL_STEPS = 20;
 
 async function loadMCPTools(agentId: string): Promise<Record<string, unknown>> {
   try {
@@ -29,7 +29,7 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
   );
   const modelId = (node.data.model as string) ?? DEFAULT_MODEL;
   const temperature = (node.data.temperature as number) ?? 0.7;
-  const maxTokens = (node.data.maxTokens as number) ?? 500;
+  const maxTokens = (node.data.maxTokens as number) ?? 2000;
   const outputVariable = (node.data.outputVariable as string) ?? "";
 
   try {

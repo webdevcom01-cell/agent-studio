@@ -10,8 +10,8 @@ import { logger } from "@/lib/logger";
 
 const MAX_MESSAGE_LENGTH = 10_000;
 
-// MCP tool calls (e.g. NotebookLM) can take 30-60s
-export const maxDuration = 60;
+// MCP tool calls (e.g. Playwright browser, web search) can take 2-3 minutes for multi-step browsing
+export const maxDuration = 180;
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
