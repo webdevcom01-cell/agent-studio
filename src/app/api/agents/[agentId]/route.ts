@@ -4,13 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { upsertAgentCard } from "@/lib/a2a/card-generator";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
+import { AGENT_CATEGORIES } from "@/lib/constants/agent-categories";
 
 const VALID_MODELS = ["deepseek-chat", "gpt-4o-mini", "gpt-4o", "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"] as const;
-
-const AGENT_CATEGORIES = [
-  "assistant", "research", "writing", "coding", "design",
-  "marketing", "support", "data", "education", "productivity", "specialized",
-] as const;
 
 const updateAgentSchema = z.object({
   name: z.string().min(1).max(200).optional(),

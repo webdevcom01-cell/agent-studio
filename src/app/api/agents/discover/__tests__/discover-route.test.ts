@@ -24,7 +24,8 @@ vi.mock("@/lib/api/auth-guard", () => ({
   isAuthError: mockIsAuthError,
 }));
 
-import { GET, AGENT_CATEGORIES } from "../route";
+import { GET } from "../route";
+import { AGENT_CATEGORIES } from "@/lib/constants/agent-categories";
 import { NextRequest } from "next/server";
 
 function makeRequest(queryParams: Record<string, string> = {}): NextRequest {

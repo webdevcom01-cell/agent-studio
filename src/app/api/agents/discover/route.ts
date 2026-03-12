@@ -25,20 +25,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
-
-const AGENT_CATEGORIES = [
-  "assistant",
-  "research",
-  "writing",
-  "coding",
-  "design",
-  "marketing",
-  "support",
-  "data",
-  "education",
-  "productivity",
-  "specialized",
-] as const;
+import { AGENT_CATEGORIES } from "@/lib/constants/agent-categories";
 
 const discoverSchema = z.object({
   q: z.string().max(200).optional(),
@@ -335,5 +322,3 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 }
 
-/** Exported for tests and documentation */
-export { AGENT_CATEGORIES };
