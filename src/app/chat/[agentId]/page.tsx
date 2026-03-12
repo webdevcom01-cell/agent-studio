@@ -45,9 +45,9 @@ export default function ChatPage({
   return (
     <div className="flex h-screen flex-col">
       <div className="flex items-center gap-2 border-b px-4 py-2">
-        <Button variant="ghost" size="icon-sm" asChild>
+        <Button variant="ghost" size="icon-sm" aria-label="Back to flow builder" asChild>
           <Link href={`/builder/${agentId}`}>
-            <ArrowLeft className="size-4" />
+            <ArrowLeft className="size-4" aria-hidden="true" />
           </Link>
         </Button>
         <h2 className="text-sm font-semibold flex-1">{agentName}</h2>
@@ -56,7 +56,7 @@ export default function ChatPage({
         </Button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4" aria-live="polite" aria-label="Chat messages" role="log">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <Bot className="size-12 mb-4" />
@@ -82,9 +82,9 @@ export default function ChatPage({
               )}
             >
               {msg.role === "user" ? (
-                <User className="size-4" />
+                <User className="size-4" aria-hidden="true" />
               ) : (
-                <Bot className="size-4" />
+                <Bot className="size-4" aria-hidden="true" />
               )}
             </div>
             <div
@@ -134,8 +134,8 @@ export default function ChatPage({
             autoFocus
             data-testid="chat-input"
           />
-          <Button type="submit" disabled={isLoading || !input.trim()} data-testid="chat-send-btn">
-            <Send className="size-4" />
+          <Button type="submit" disabled={isLoading || !input.trim()} aria-label="Send message" data-testid="chat-send-btn">
+            <Send className="size-4" aria-hidden="true" />
           </Button>
         </form>
       </div>

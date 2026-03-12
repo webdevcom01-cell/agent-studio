@@ -34,17 +34,26 @@ const SCOPE_OPTIONS = [
 ] as const;
 
 const CATEGORY_META: Record<string, { emoji: string; color: string }> = {
-  assistant: { emoji: "💬", color: "bg-blue-500/10 text-blue-400" },
-  research: { emoji: "🔍", color: "bg-purple-500/10 text-purple-400" },
-  writing: { emoji: "✍️", color: "bg-green-500/10 text-green-400" },
-  coding: { emoji: "💻", color: "bg-orange-500/10 text-orange-400" },
-  design: { emoji: "🎨", color: "bg-pink-500/10 text-pink-400" },
-  marketing: { emoji: "📢", color: "bg-yellow-500/10 text-yellow-400" },
-  support: { emoji: "🎧", color: "bg-teal-500/10 text-teal-400" },
-  data: { emoji: "📊", color: "bg-cyan-500/10 text-cyan-400" },
-  education: { emoji: "📚", color: "bg-amber-500/10 text-amber-400" },
+  // Original marketplace categories
+  assistant:    { emoji: "🤖", color: "bg-blue-500/10 text-blue-400" },
+  research:     { emoji: "🔍", color: "bg-purple-500/10 text-purple-400" },
+  writing:      { emoji: "✍️",  color: "bg-green-500/10 text-green-400" },
+  coding:       { emoji: "💻", color: "bg-orange-500/10 text-orange-400" },
+  design:       { emoji: "🎨", color: "bg-pink-500/10 text-pink-400" },
+  marketing:    { emoji: "📣", color: "bg-yellow-500/10 text-yellow-400" },
+  support:      { emoji: "🎧", color: "bg-teal-500/10 text-teal-400" },
+  data:         { emoji: "📊", color: "bg-cyan-500/10 text-cyan-400" },
+  education:    { emoji: "🎓", color: "bg-amber-500/10 text-amber-400" },
   productivity: { emoji: "⚡", color: "bg-indigo-500/10 text-indigo-400" },
-  specialized: { emoji: "🔧", color: "bg-gray-500/10 text-gray-400" },
+  specialized:  { emoji: "🔧", color: "bg-gray-500/10 text-gray-400" },
+  // Previously template-only categories (now unified)
+  engineering:        { emoji: "⚙️",  color: "bg-slate-500/10 text-slate-400" },
+  testing:            { emoji: "🧪", color: "bg-lime-500/10 text-lime-400" },
+  product:            { emoji: "📋", color: "bg-amber-500/10 text-amber-400" },
+  "project-management": { emoji: "📅", color: "bg-sky-500/10 text-sky-400" },
+  "game-development": { emoji: "🎮", color: "bg-violet-500/10 text-violet-400" },
+  "spatial-computing": { emoji: "🥽", color: "bg-rose-500/10 text-rose-400" },
+  "paid-media":       { emoji: "💰", color: "bg-red-500/10 text-red-400" },
 };
 
 const MODEL_LABELS: Record<string, string> = {

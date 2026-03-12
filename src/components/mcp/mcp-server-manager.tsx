@@ -25,6 +25,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
 
 interface MCPServer {
@@ -51,12 +52,14 @@ const TRANSPORT_OPTIONS = [
 const fetcher = (url: string): Promise<{ success: boolean; data: MCPServer[] }> =>
   fetch(url).then((r) => r.json());
 
-export function MCPServerManager({ open, onOpenChange }: MCPServerManagerProps): React.ReactElement {
+export function MCPServerManager({ open, onOpenChange }: MCPServerManagerProps): React.JSX.Element {
   const { data, mutate } = useSWR(open ? "/api/mcp-servers" : null, fetcher);
   const servers = data?.data ?? [];
 
   const [showForm, setShowForm] = useState(false);
   const [editingServer, setEditingServer] = useState<MCPServer | null>(null);
+  const [confirmDeleteServerId, setConfirmDeleteServerId] = useState<string | null>(null);
+  const [isDeletingServer, setIsDeletingServer] = useState(false);
 
   function handleAdd(): void {
     setEditingServer(null);
@@ -91,22 +94,28 @@ export function MCPServerManager({ open, onOpenChange }: MCPServerManagerProps):
     }
   }
 
-  async function handleDelete(serverId: string): Promise<void> {
+  async function handleDelete(): Promise<void> {
+    if (!confirmDeleteServerId) return;
+    setIsDeletingServer(true);
     try {
-      const res = await fetch(`/api/mcp-servers/${serverId}`, { method: "DELETE" });
+      const res = await fetch(`/api/mcp-servers/${confirmDeleteServerId}`, { method: "DELETE" });
       const json = await res.json();
       if (!json.success) {
         toast.error(json.error || "Failed to delete server");
         return;
       }
       toast.success("Server deleted");
+      setConfirmDeleteServerId(null);
       mutate();
     } catch {
       toast.error("Failed to delete server");
+    } finally {
+      setIsDeletingServer(false);
     }
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
@@ -138,7 +147,7 @@ export function MCPServerManager({ open, onOpenChange }: MCPServerManagerProps):
                 key={server.id}
                 server={server}
                 onEdit={() => handleEdit(server)}
-                onDelete={() => handleDelete(server.id)}
+                onDelete={() => setConfirmDeleteServerId(server.id)}
                 onToggleEnabled={() => handleToggleEnabled(server)}
                 onTestComplete={() => mutate()}
               />
@@ -168,6 +177,16 @@ export function MCPServerManager({ open, onOpenChange }: MCPServerManagerProps):
         )}
       </DialogContent>
     </Dialog>
+
+    <ConfirmDialog
+      open={confirmDeleteServerId !== null}
+      onOpenChange={(open) => { if (!open) setConfirmDeleteServerId(null); }}
+      title="Delete MCP Server"
+      description={`Are you sure you want to delete "${servers.find((s) => s.id === confirmDeleteServerId)?.name ?? "this server"}"? All agent connections to this server will be removed.`}
+      onConfirm={handleDelete}
+      isLoading={isDeletingServer}
+    />
+    </>
   );
 }
 

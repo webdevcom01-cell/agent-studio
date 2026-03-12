@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ALL_MODELS } from "@/lib/models";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface PropertyPanelProps {
   node: Node;
@@ -82,6 +83,7 @@ export function PropertyPanel({
   onClose,
 }: PropertyPanelProps) {
   const data = node.data as Record<string, unknown>;
+  const [confirmDeleteNode, setConfirmDeleteNode] = useState(false);
 
   function update(key: string, value: unknown) {
     onUpdateData(node.id, { [key]: value });
@@ -95,9 +97,10 @@ export function PropertyPanel({
           variant="ghost"
           size="icon"
           className="size-7"
+          aria-label="Close properties panel"
           onClick={onClose}
         >
-          <X className="size-4" />
+          <X className="size-4" aria-hidden="true" />
         </Button>
       </div>
 
@@ -443,12 +446,24 @@ export function PropertyPanel({
           variant="destructive"
           size="sm"
           className="w-full"
-          onClick={() => onDeleteNode(node.id)}
+          onClick={() => setConfirmDeleteNode(true)}
         >
           <Trash2 className="mr-2 size-4" />
           Delete Node
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteNode}
+        onOpenChange={setConfirmDeleteNode}
+        title="Delete Node"
+        description={`Delete this ${node.type ?? "node"}? Any connected edges will also be removed.`}
+        confirmLabel="Delete Node"
+        onConfirm={() => {
+          onDeleteNode(node.id);
+          setConfirmDeleteNode(false);
+        }}
+      />
     </div>
   );
 }

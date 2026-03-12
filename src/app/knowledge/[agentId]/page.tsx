@@ -34,6 +34,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
 
 interface KBSource {
@@ -70,6 +71,9 @@ export default function KnowledgePage({
   const [addContent, setAddContent] = useState("");
   const [addFile, setAddFile] = useState<File | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+
+  const [confirmDeleteSourceId, setConfirmDeleteSourceId] = useState<string | null>(null);
+  const [isDeletingSource, setIsDeletingSource] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -144,15 +148,20 @@ export default function KnowledgePage({
     }
   }
 
-  async function handleDelete(sourceId: string) {
+  async function handleDelete() {
+    if (!confirmDeleteSourceId) return;
+    setIsDeletingSource(true);
     try {
-      await fetch(`/api/agents/${agentId}/knowledge/sources/${sourceId}`, {
+      await fetch(`/api/agents/${agentId}/knowledge/sources/${confirmDeleteSourceId}`, {
         method: "DELETE",
       });
-      setSources((prev) => prev.filter((s) => s.id !== sourceId));
+      setSources((prev) => prev.filter((s) => s.id !== confirmDeleteSourceId));
       toast.success("Source deleted");
+      setConfirmDeleteSourceId(null);
     } catch {
       toast.error("Failed to delete source");
+    } finally {
+      setIsDeletingSource(false);
     }
   }
 
@@ -191,9 +200,9 @@ export default function KnowledgePage({
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="icon-sm" asChild>
+        <Button variant="ghost" size="icon-sm" aria-label="Back to flow builder" asChild>
           <Link href={`/builder/${agentId}`}>
-            <ArrowLeft className="size-4" />
+            <ArrowLeft className="size-4" aria-hidden="true" />
           </Link>
         </Button>
         <h1 className="text-xl font-bold flex-1">Knowledge Base</h1>
@@ -259,7 +268,8 @@ export default function KnowledgePage({
                         <Button
                           variant="ghost"
                           size="icon-xs"
-                          onClick={() => handleDelete(source.id)}
+                          onClick={() => setConfirmDeleteSourceId(source.id)}
+                          aria-label={`Delete source ${source.name}`}
                         >
                           <Trash2 className="size-4" />
                         </Button>
@@ -427,6 +437,15 @@ export default function KnowledgePage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDeleteSourceId !== null}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteSourceId(null); }}
+        title="Delete Source"
+        description={`Are you sure you want to delete "${sources.find((s) => s.id === confirmDeleteSourceId)?.name ?? "this source"}"? All embedded chunks will be permanently removed.`}
+        onConfirm={handleDelete}
+        isLoading={isDeletingSource}
+      />
     </div>
   );
 }

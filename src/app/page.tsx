@@ -31,6 +31,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { MCPServerManager } from "@/components/mcp/mcp-server-manager";
 import { AgentCallMonitor } from "@/components/a2a/agent-call-monitor";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useTheme } from "@/components/theme-provider";
 import {
   TemplateGallery,
@@ -62,6 +63,8 @@ export default function DashboardPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<AgentTemplate | null>(null);
   const [showMCPManager, setShowMCPManager] = useState(false);
   const [showCallMonitor, setShowCallMonitor] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchAgents();
@@ -116,13 +119,18 @@ export default function DashboardPage() {
     setNewDescription(template.description);
   }
 
-  async function handleDelete(agentId: string) {
+  async function handleDelete() {
+    if (!confirmDeleteId) return;
+    setIsDeleting(true);
     try {
-      await fetch(`/api/agents/${agentId}`, { method: "DELETE" });
-      setAgents((prev) => prev.filter((a) => a.id !== agentId));
+      await fetch(`/api/agents/${confirmDeleteId}`, { method: "DELETE" });
+      setAgents((prev) => prev.filter((a) => a.id !== confirmDeleteId));
       toast.success("Agent deleted");
+      setConfirmDeleteId(null);
     } catch {
       toast.error("Failed to delete agent");
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -156,6 +164,14 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Skip to main content — screen reader + keyboard nav */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring"
+      >
+        Skip to main content
+      </a>
+
       {/* ── Top Navigation ─────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur-sm">
         <div className="mx-auto max-w-5xl px-6 h-14 flex items-center justify-between gap-4">
@@ -174,10 +190,11 @@ export default function DashboardPage() {
               size="icon-sm"
               asChild
               title="Discover Agents"
+              aria-label="Discover Agents"
               className="text-muted-foreground hover:text-foreground"
             >
               <Link href="/discover">
-                <Compass className="size-4" />
+                <Compass className="size-4" aria-hidden="true" />
               </Link>
             </Button>
 
@@ -186,10 +203,11 @@ export default function DashboardPage() {
               size="icon-sm"
               asChild
               title="Analytics"
+              aria-label="Analytics"
               className="text-muted-foreground hover:text-foreground"
             >
               <Link href="/analytics">
-                <BarChart3 className="size-4" />
+                <BarChart3 className="size-4" aria-hidden="true" />
               </Link>
             </Button>
 
@@ -198,9 +216,10 @@ export default function DashboardPage() {
               size="icon-sm"
               onClick={() => setShowCallMonitor(true)}
               title="Agent Calls"
+              aria-label="Agent Calls"
               className="text-muted-foreground hover:text-foreground"
             >
-              <ArrowRightLeft className="size-4" />
+              <ArrowRightLeft className="size-4" aria-hidden="true" />
             </Button>
 
             <Button
@@ -208,9 +227,10 @@ export default function DashboardPage() {
               size="icon-sm"
               onClick={() => setShowMCPManager(true)}
               title="MCP Servers"
+              aria-label="MCP Servers"
               className="text-muted-foreground hover:text-foreground"
             >
-              <Plug className="size-4" />
+              <Plug className="size-4" aria-hidden="true" />
             </Button>
 
             <Button
@@ -218,10 +238,11 @@ export default function DashboardPage() {
               size="icon-sm"
               onClick={() => importInputRef.current?.click()}
               title="Import agent"
+              aria-label="Import agent"
               className="text-muted-foreground hover:text-foreground"
               data-testid="import-agent-btn"
             >
-              <Upload className="size-4" />
+              <Upload className="size-4" aria-hidden="true" />
             </Button>
 
             <input
@@ -257,9 +278,10 @@ export default function DashboardPage() {
                   size="icon-sm"
                   onClick={() => signOut()}
                   title="Sign out"
+                  aria-label="Sign out"
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  <LogOut className="size-4" />
+                  <LogOut className="size-4" aria-hidden="true" />
                 </Button>
                 <div className="w-px h-4 bg-border mx-1.5" />
               </>
@@ -270,12 +292,13 @@ export default function DashboardPage() {
               variant="ghost"
               size="icon-sm"
               onClick={toggleTheme}
-              title={theme === "dark" ? "Switch to light" : "Switch to dark"}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
               className="text-muted-foreground hover:text-foreground"
             >
               {theme === "dark"
-                ? <Sun className="size-4" />
-                : <Moon className="size-4" />
+                ? <Sun className="size-4" aria-hidden="true" />
+                : <Moon className="size-4" aria-hidden="true" />
               }
             </Button>
 
@@ -297,14 +320,14 @@ export default function DashboardPage() {
       </header>
 
       {/* ── Main Content ────────────────────────────────────────────────── */}
-      <main className="mx-auto max-w-5xl px-6 py-10">
+      <main id="main-content" className="mx-auto max-w-5xl px-6 py-10">
 
         {/* Page heading */}
         <div className="mb-10">
           <h1 className="text-2xl font-light tracking-tight text-foreground">
             Your Agents
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-muted-foreground" aria-live="polite" aria-atomic="true">
             {isLoading
               ? "Loading..."
               : agents.length === 0
@@ -365,9 +388,10 @@ export default function DashboardPage() {
                       <Button
                         variant="ghost"
                         size="icon-xs"
+                        aria-label={`More options for ${agent.name}`}
                         className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
                       >
-                        <MoreVertical className="size-3.5" />
+                        <MoreVertical className="size-3.5" aria-hidden="true" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="text-sm">
@@ -377,7 +401,7 @@ export default function DashboardPage() {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         variant="destructive"
-                        onClick={() => handleDelete(agent.id)}
+                        onClick={() => setConfirmDeleteId(agent.id)}
                       >
                         <Trash2 className="size-3.5" />
                         Delete
@@ -585,6 +609,15 @@ export default function DashboardPage() {
       <AgentCallMonitor
         open={showCallMonitor}
         onOpenChange={setShowCallMonitor}
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}
+        title="Delete Agent"
+        description={`Are you sure you want to delete "${agents.find((a) => a.id === confirmDeleteId)?.name ?? "this agent"}"? All conversations and knowledge base data will be permanently removed.`}
+        onConfirm={handleDelete}
+        isLoading={isDeleting}
       />
     </div>
   );

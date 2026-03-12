@@ -70,9 +70,9 @@ export default function BuilderPage({
   return (
     <div className="flex h-screen flex-col">
       <div className="flex items-center gap-2 border-b px-3 py-2">
-        <Button variant="ghost" size="icon-sm" asChild>
+        <Button variant="ghost" size="icon-sm" aria-label="Back to dashboard" asChild>
           <Link href="/">
-            <ArrowLeft className="size-4" />
+            <ArrowLeft className="size-4" aria-hidden="true" />
           </Link>
         </Button>
         <div className="flex-1" />

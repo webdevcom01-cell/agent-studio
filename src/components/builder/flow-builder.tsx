@@ -407,9 +407,10 @@ function FlowBuilderCanvas({
                 variant="ghost"
                 size="icon"
                 className="size-7"
+                aria-label="Close MCP panel"
                 onClick={() => setShowMCPPanel(false)}
               >
-                <X className="size-4" />
+                <X className="size-4" aria-hidden="true" />
               </Button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
