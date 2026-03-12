@@ -13,6 +13,7 @@ dist
 # env files
 .env
 .env.local
+.env.test
 .env.production
 .env.*.local
 
@@ -40,6 +41,8 @@ src/generated/
 coverage
 test-results
 playwright-report
+e2e/.auth/
+/blob-report/
 .vercel
 
 # Local dev scripts and external services

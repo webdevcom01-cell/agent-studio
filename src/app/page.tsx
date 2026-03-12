@@ -207,6 +207,7 @@ export default function DashboardPage() {
               onClick={() => importInputRef.current?.click()}
               title="Import agent"
               className="text-muted-foreground hover:text-foreground"
+              data-testid="import-agent-btn"
             >
               <Upload className="size-4" />
             </Button>
@@ -216,6 +217,7 @@ export default function DashboardPage() {
               type="file"
               accept=".json"
               className="hidden"
+              data-testid="import-file-input"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) handleImport(file);
@@ -273,6 +275,7 @@ export default function DashboardPage() {
               size="sm"
               onClick={() => setShowCreate(true)}
               className="gap-1.5 h-7 px-3 text-xs font-medium"
+              data-testid="create-agent-btn"
             >
               <Plus className="size-3" />
               New Agent
@@ -337,6 +340,7 @@ export default function DashboardPage() {
             {agents.map((agent) => (
               <div
                 key={agent.id}
+                data-testid="agent-card"
                 className="group relative flex flex-col rounded-lg border border-border bg-card p-5 transition-all duration-200 hover:border-foreground/20 hover:shadow-sm"
               >
                 {/* Card header */}

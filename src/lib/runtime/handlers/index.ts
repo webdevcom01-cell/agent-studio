@@ -28,6 +28,8 @@ import { emailSendHandler } from "./email-send-handler";
 import { notificationHandler } from "./notification-handler";
 import { formatTransformHandler } from "./format-transform-handler";
 import { switchHandler } from "./switch-handler";
+import { webFetchHandler } from "./web-fetch-handler";
+import { browserActionHandler } from "./browser-action-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -59,6 +61,8 @@ const handlers: Record<string, NodeHandler> = {
   notification: notificationHandler,
   format_transform: formatTransformHandler,
   switch: switchHandler,
+  web_fetch: webFetchHandler,
+  browser_action: browserActionHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

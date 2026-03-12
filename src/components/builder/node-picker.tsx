@@ -13,7 +13,9 @@ import {
   Clock,
   MousePointerClick,
   Globe,
+  GlobeLock,
   Webhook,
+  Monitor,
   Code,
   Tags,
   FileOutput,
@@ -240,6 +242,35 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
     defaultData: { label: "MCP Tool", mcpServerId: "", toolName: "", inputMapping: {}, outputVariable: "" },
   },
   {
+    type: "web_fetch",
+    label: "Web Fetch",
+    description: "Fetch and extract content from a URL",
+    icon: GlobeLock,
+    color: "cyan",
+    category: "Integrations",
+    defaultData: {
+      label: "Web Fetch",
+      url: "",
+      provider: "jina",
+      outputVariable: "web_content",
+      maxLength: 10000,
+    },
+  },
+  {
+    type: "browser_action",
+    label: "Browser Action",
+    description: "Automate browser: navigate, click, type, extract",
+    icon: Monitor,
+    color: "indigo",
+    category: "Integrations",
+    defaultData: {
+      label: "Browser Action",
+      mcpServerId: "",
+      actions: [{ action: "navigate", url: "" }],
+      outputVariable: "browser_result",
+    },
+  },
+  {
     type: "call_agent",
     label: "Call Agent",
     description: "Call another agent as a sub-agent",
@@ -442,7 +473,7 @@ export function NodePicker({ onAddNode }: NodePickerProps) {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button size="sm">
+        <Button size="sm" data-testid="node-picker">
           <Plus className="mr-1.5 size-4" />
           Add Node
         </Button>

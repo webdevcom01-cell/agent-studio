@@ -56,6 +56,16 @@ const colorMap: Record<string, { bg: string; border: string; text: string }> = {
     border: "border-orange-200 dark:border-orange-800",
     text: "text-orange-700 dark:text-orange-300",
   },
+  cyan: {
+    bg: "bg-cyan-50 dark:bg-cyan-950/30",
+    border: "border-cyan-200 dark:border-cyan-800",
+    text: "text-cyan-700 dark:text-cyan-300",
+  },
+  indigo: {
+    bg: "bg-indigo-50 dark:bg-indigo-950/30",
+    border: "border-indigo-200 dark:border-indigo-800",
+    text: "text-indigo-700 dark:text-indigo-300",
+  },
 };
 
 export function BaseNode({

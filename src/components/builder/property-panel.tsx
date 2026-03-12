@@ -88,7 +88,7 @@ export function PropertyPanel({
   }
 
   return (
-    <div className="flex w-80 flex-col border-l bg-background">
+    <div className="flex w-80 flex-col border-l bg-background" data-testid="property-panel">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <h3 className="text-sm font-semibold">Properties</h3>
         <Button
@@ -391,6 +391,14 @@ export function PropertyPanel({
 
         {node.type === "switch" && (
           <SwitchProperties data={data} update={update} />
+        )}
+
+        {node.type === "web_fetch" && (
+          <WebFetchProperties data={data} update={update} />
+        )}
+
+        {node.type === "browser_action" && (
+          <BrowserActionProperties data={data} update={update} />
         )}
       </div>
 
@@ -2161,6 +2169,228 @@ function SwitchProperties({ data, update }: SubPanelProps) {
         <Label>Output Variable</Label>
         <Input
           value={(data.outputVariable as string) ?? "switch_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+        />
+      </div>
+    </>
+  );
+}
+
+function WebFetchProperties({ data, update }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>URL</Label>
+        <Input
+          value={(data.url as string) ?? ""}
+          onChange={(e) => update("url", e.target.value)}
+          placeholder="https://example.com or {{url_variable}}"
+        />
+        <p className="text-xs text-muted-foreground">
+          Supports {"{{variable}}"} templates
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Provider</Label>
+        <Select
+          value={(data.provider as string) ?? "jina"}
+          onValueChange={(val) => update("provider", val)}
+        >
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="jina">Jina Reader (Markdown)</SelectItem>
+            <SelectItem value="raw">Raw HTML (Cheerio)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "web_content"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="web_content"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Max Length</Label>
+        <Input
+          type="number"
+          value={(data.maxLength as number) ?? 10000}
+          onChange={(e) => update("maxLength", Number(e.target.value))}
+          min={100}
+          max={100000}
+        />
+        <p className="text-xs text-muted-foreground">
+          Truncate content to this many characters
+        </p>
+      </div>
+    </>
+  );
+}
+
+const BROWSER_ACTIONS = [
+  { value: "navigate", label: "Navigate" },
+  { value: "click", label: "Click" },
+  { value: "type", label: "Type" },
+  { value: "snapshot", label: "Snapshot" },
+  { value: "screenshot", label: "Screenshot" },
+  { value: "wait", label: "Wait" },
+  { value: "select", label: "Select Option" },
+  { value: "save_pdf", label: "Save PDF" },
+] as const;
+
+interface BrowserStep {
+  action: string;
+  url?: string;
+  selector?: string;
+  text?: string;
+  description?: string;
+  timeout?: number;
+  value?: string;
+  filename?: string;
+}
+
+function BrowserActionProperties({ data, update }: SubPanelProps) {
+  const actions = (data.actions as BrowserStep[]) ?? [];
+
+  function addAction() {
+    update("actions", [...actions, { action: "navigate", url: "" }]);
+  }
+
+  function updateAction(index: number, field: string, value: unknown) {
+    const updated = actions.map((a, i) =>
+      i === index ? { ...a, [field]: value } : a
+    );
+    update("actions", updated);
+  }
+
+  function removeAction(index: number) {
+    update("actions", actions.filter((_, i) => i !== index));
+  }
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>MCP Server ID</Label>
+        <Input
+          value={(data.mcpServerId as string) ?? ""}
+          onChange={(e) => update("mcpServerId", e.target.value)}
+          placeholder="Playwright MCP Server ID"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Actions</Label>
+          <Button variant="ghost" size="sm" onClick={addAction}>
+            <Plus className="mr-1 size-3" />
+            Add
+          </Button>
+        </div>
+
+        {actions.map((step, i) => (
+          <div key={i} className="space-y-1.5 rounded-md border p-2">
+            <div className="flex items-center gap-2">
+              <Select
+                value={step.action}
+                onValueChange={(val) => updateAction(i, "action", val)}
+              >
+                <SelectTrigger className="flex-1 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BROWSER_ACTIONS.map((a) => (
+                    <SelectItem key={a.value} value={a.value}>
+                      {a.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                onClick={() => removeAction(i)}
+              >
+                <Trash2 className="size-3" />
+              </Button>
+            </div>
+
+            {step.action === "navigate" && (
+              <Input
+                value={step.url ?? ""}
+                onChange={(e) => updateAction(i, "url", e.target.value)}
+                placeholder="URL"
+                className="text-xs"
+              />
+            )}
+
+            {(step.action === "click" || step.action === "select") && (
+              <Input
+                value={step.selector ?? ""}
+                onChange={(e) => updateAction(i, "selector", e.target.value)}
+                placeholder="Selector / ref"
+                className="text-xs"
+              />
+            )}
+
+            {step.action === "type" && (
+              <>
+                <Input
+                  value={step.selector ?? ""}
+                  onChange={(e) => updateAction(i, "selector", e.target.value)}
+                  placeholder="Selector / ref"
+                  className="text-xs"
+                />
+                <Input
+                  value={step.text ?? ""}
+                  onChange={(e) => updateAction(i, "text", e.target.value)}
+                  placeholder="Text to type"
+                  className="text-xs"
+                />
+              </>
+            )}
+
+            {step.action === "select" && (
+              <Input
+                value={step.value ?? ""}
+                onChange={(e) => updateAction(i, "value", e.target.value)}
+                placeholder="Option value"
+                className="text-xs"
+              />
+            )}
+
+            {step.action === "wait" && (
+              <Input
+                type="number"
+                value={step.timeout ?? 1000}
+                onChange={(e) => updateAction(i, "timeout", Number(e.target.value))}
+                placeholder="Timeout (ms)"
+                className="text-xs"
+              />
+            )}
+
+            {step.action === "save_pdf" && (
+              <Input
+                value={step.filename ?? ""}
+                onChange={(e) => updateAction(i, "filename", e.target.value)}
+                placeholder="Filename"
+                className="text-xs"
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "browser_result"}
           onChange={(e) => update("outputVariable", e.target.value)}
         />
       </div>

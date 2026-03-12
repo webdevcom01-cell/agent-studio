@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "exportedAt": "2026-03-11T00:00:00.000Z",
+  "agent": {
+    "name": "E2E Import Test Agent",
+    "description": "Agent for E2E import testing",
+    "systemPrompt": "You are a helpful test assistant.",
+    "model": "deepseek-chat"
+  },
+  "flow": {
+    "nodes": [
+      {
+        "id": "node_start",
+        "type": "message",
+        "position": { "x": 250, "y": 100 },
+        "data": {
+          "label": "Welcome",
+          "message": "Hello! How can I help you today?"
+        }
+      },
+      {
+        "id": "node_capture",
+        "type": "capture",
+        "position": { "x": 250, "y": 250 },
+        "data": {
+          "label": "Get Input",
+          "variable": "user_input",
+          "prompt": "Please type your question:"
+        }
+      },
+      {
+        "id": "node_ai",
+        "type": "ai_response",
+        "position": { "x": 250, "y": 400 },
+        "data": {
+          "label": "AI Response",
+          "prompt": "Answer the user's question: {{user_input}}",
+          "model": "deepseek-chat",
+          "temperature": 0.7,
+          "maxTokens": 500,
+          "outputVariable": "ai_answer"
+        }
+      },
+      {
+        "id": "node_end",
+        "type": "end",
+        "position": { "x": 250, "y": 550 },
+        "data": {
+          "label": "End"
+        }
+      }
+    ],
+    "edges": [
+      { "id": "e1", "source": "node_start", "target": "node_capture" },
+      { "id": "e2", "source": "node_capture", "target": "node_ai" },
+      { "id": "e3", "source": "node_ai", "target": "node_end" }
+    ],
+    "variables": [
+      { "name": "user_input", "type": "string", "default": "" },
+      { "name": "ai_answer", "type": "string", "default": "" }
+    ]
+  }
+}

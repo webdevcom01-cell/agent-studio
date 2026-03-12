@@ -48,6 +48,8 @@ import { EmailSendNode } from "./nodes/email-send-node";
 import { NotificationNode } from "./nodes/notification-node";
 import { FormatTransformNode } from "./nodes/format-transform-node";
 import { SwitchNode } from "./nodes/switch-node";
+import { WebFetchNode } from "./nodes/web-fetch-node";
+import { BrowserActionNode } from "./nodes/browser-action-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -92,6 +94,8 @@ const NODE_TYPES: NodeTypes = {
   notification: NotificationNode,
   format_transform: FormatTransformNode,
   switch: SwitchNode,
+  web_fetch: WebFetchNode,
+  browser_action: BrowserActionNode,
 };
 
 export function FlowBuilder(props: FlowBuilderProps) {
@@ -340,7 +344,7 @@ function FlowBuilderCanvas({
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="relative flex-1">
+        <div className="relative flex-1" data-testid="flow-canvas">
           <FlowErrorBoundary>
           <ReactFlow
             nodes={nodes}

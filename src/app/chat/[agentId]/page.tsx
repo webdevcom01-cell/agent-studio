@@ -67,6 +67,7 @@ export default function ChatPage({
         {messages.map((msg, i) => (
           <div
             key={i}
+            data-testid={`chat-message-${msg.role}`}
             className={cn(
               "flex gap-3 max-w-2xl",
               msg.role === "user" ? "ml-auto flex-row-reverse" : ""
@@ -102,7 +103,7 @@ export default function ChatPage({
         ))}
 
         {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
-          <div className="flex gap-3">
+          <div className="flex gap-3" data-testid="chat-loading">
             <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
               <Bot className="size-4" />
             </div>
@@ -131,8 +132,9 @@ export default function ChatPage({
             placeholder="Type a message..."
             disabled={isLoading}
             autoFocus
+            data-testid="chat-input"
           />
-          <Button type="submit" disabled={isLoading || !input.trim()}>
+          <Button type="submit" disabled={isLoading || !input.trim()} data-testid="chat-send-btn">
             <Send className="size-4" />
           </Button>
         </form>

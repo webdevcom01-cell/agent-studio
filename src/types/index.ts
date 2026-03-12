@@ -54,4 +54,6 @@ export type NodeType =
   | "email_send"
   | "notification"
   | "format_transform"
-  | "switch";
+  | "switch"
+  | "web_fetch"
+  | "browser_action";

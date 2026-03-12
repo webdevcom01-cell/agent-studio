@@ -31,6 +31,8 @@ const NODE_TYPES = [
   "notification",
   "format_transform",
   "switch",
+  "web_fetch",
+  "browser_action",
 ] as const;
 
 const VARIABLE_TYPES = ["string", "number", "boolean", "object"] as const;

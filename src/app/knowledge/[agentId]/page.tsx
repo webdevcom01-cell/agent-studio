@@ -197,7 +197,7 @@ export default function KnowledgePage({
           </Link>
         </Button>
         <h1 className="text-xl font-bold flex-1">Knowledge Base</h1>
-        <Button onClick={() => setShowAdd(true)}>
+        <Button onClick={() => setShowAdd(true)} data-testid="kb-add-source">
           <Plus className="mr-2 size-4" />
           Add Source
         </Button>
@@ -229,7 +229,7 @@ export default function KnowledgePage({
           ) : (
             <div className="space-y-3 mt-4">
               {sources.map((source) => (
-                <Card key={source.id}>
+                <Card key={source.id} data-testid="kb-source-item">
                   <CardHeader className="py-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -288,8 +288,9 @@ export default function KnowledgePage({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Test a search query..."
+                data-testid="kb-search-input"
               />
-              <Button type="submit" disabled={isSearching}>
+              <Button type="submit" disabled={isSearching} data-testid="kb-search-btn">
                 <Search className="mr-1.5 size-4" />
                 Search
               </Button>
@@ -298,7 +299,7 @@ export default function KnowledgePage({
             {searchResults.length > 0 && (
               <div className="space-y-3">
                 {searchResults.map((result, i) => (
-                  <Card key={result.chunkId}>
+                  <Card key={result.chunkId} data-testid="kb-search-result">
                     <CardContent className="py-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
