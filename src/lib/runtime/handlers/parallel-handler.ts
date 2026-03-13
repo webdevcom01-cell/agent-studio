@@ -1,10 +1,7 @@
 import type { NodeHandler, ExecutionResult, RuntimeContext, OutputMessage } from "../types";
 import { getHandler } from "./index";
 import { logger } from "@/lib/logger";
-import type { FlowNode } from "@/types";
-
 const MAX_BRANCHES = 5;
-const DEFAULT_TIMEOUT_MS = 30000;
 
 interface BranchConfig {
   /** Unique identifier for this branch */
