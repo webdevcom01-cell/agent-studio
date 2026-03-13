@@ -21,6 +21,8 @@ const envSchema = z.object({
   GROQ_API_KEY: optionalStr,
   MISTRAL_API_KEY: optionalStr,
   MOONSHOT_API_KEY: optionalStr,
+  NOTION_CLIENT_ID: optionalStr,
+  NOTION_CLIENT_SECRET: optionalStr,
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),

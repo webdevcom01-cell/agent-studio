@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useSWR from "swr";
 import {
   Plug,
@@ -132,13 +132,50 @@ export function MCPServerManager({ open, onOpenChange }: MCPServerManagerProps):
     }
   }
 
+  // Listen for OAuth popup callbacks (e.g. Notion OAuth success/error)
+  useEffect(() => {
+    function handleOAuthMessage(event: MessageEvent): void {
+      if (event.origin !== window.location.origin) return;
+      const { data } = event as MessageEvent<{ type?: string; error?: string }>;
+      if (data?.type === "notion_oauth_success") {
+        toast.success("Notion connected successfully!");
+        void mutate();
+      } else if (data?.type === "notion_oauth_error") {
+        toast.error(data.error ?? "Failed to connect Notion");
+      }
+    }
+    window.addEventListener("message", handleOAuthMessage);
+    return () => window.removeEventListener("message", handleOAuthMessage);
+  }, [mutate]);
+
+  // Open the OAuth flow in a small popup window
+  function handleOAuthConnect(server: FeaturedMCPServer): void {
+    const route = server.oauthRoute;
+    if (!route) return;
+    const width = 600;
+    const height = 700;
+    const left = Math.round((screen.width - width) / 2);
+    const top = Math.round((screen.height - height) / 2);
+    const popup = window.open(
+      route,
+      "oauth_popup",
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`,
+    );
+    if (!popup) {
+      toast.error("Popup was blocked. Please allow popups for this site and try again.");
+    }
+  }
+
   // Check if a featured server is already connected (by URL prefix match)
   function isFeaturedConnected(featured: FeaturedMCPServer): boolean {
+    // coming_soon servers are never "connected"
+    if (featured.setupType === "coming_soon") return false;
     if (featured.url) {
       return servers.some((s) => s.url.startsWith(featured.url!));
     }
-    // repo_url type: check if any server URL matches the template base
+    // repo_url type: check by template base (guard against empty string)
     const base = featured.urlTemplate?.replace("{repo}", "") ?? "";
+    if (!base) return false;
     return servers.some((s) => s.url.startsWith(base));
   }
 
@@ -182,7 +219,13 @@ export function MCPServerManager({ open, onOpenChange }: MCPServerManagerProps):
                       key={featured.id}
                       server={featured}
                       connected={connected}
-                      onConnect={() => setConnectingFeatured(featured)}
+                      onConnect={() => {
+                        if (featured.setupType === "oauth") {
+                          handleOAuthConnect(featured);
+                        } else if (featured.setupType !== "coming_soon") {
+                          setConnectingFeatured(featured);
+                        }
+                      }}
                     />
                   );
                 })}
@@ -297,19 +340,40 @@ interface FeaturedServerCardProps {
 }
 
 function FeaturedServerCard({ server, connected, onConnect }: FeaturedServerCardProps): React.ReactElement {
+  const isComingSoon = server.setupType === "coming_soon";
+  const isOAuth = server.setupType === "oauth";
+
+  let buttonLabel: string;
+  if (isComingSoon) {
+    buttonLabel = "Coming Soon";
+  } else if (isOAuth) {
+    buttonLabel = connected ? "Reconnect" : "Connect with OAuth";
+  } else {
+    buttonLabel = connected ? "Reconnect" : "Connect";
+  }
+
   return (
-    <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
+    <div
+      className={`rounded-xl border border-border bg-card p-4 flex flex-col gap-3 ${
+        isComingSoon ? "opacity-60" : ""
+      }`}
+    >
       {/* Header */}
       <div className="flex items-start gap-3">
         <span className="text-2xl leading-none mt-0.5" aria-hidden="true">
           {server.icon}
         </span>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold">{server.name}</p>
             {connected && (
               <Badge className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
                 Connected
+              </Badge>
+            )}
+            {isComingSoon && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                Coming Soon
               </Badge>
             )}
           </div>
@@ -329,14 +393,38 @@ function FeaturedServerCard({ server, connected, onConnect }: FeaturedServerCard
         ))}
       </ul>
 
+      {/* OAuth setup note */}
+      {isOAuth && !connected && (
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          Requires <code className="bg-muted rounded px-1 text-[10px]">NOTION_CLIENT_ID</code> env var and a{" "}
+          <a
+            href="https://www.notion.so/my-integrations"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-foreground transition-colors"
+          >
+            Notion OAuth integration
+          </a>
+          .
+        </p>
+      )}
+
+      {/* Coming soon note */}
+      {isComingSoon && server.comingSoonNote && (
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          {server.comingSoonNote}
+        </p>
+      )}
+
       {/* Action */}
       <Button
         size="sm"
         variant={connected ? "outline" : "default"}
         className="w-full mt-auto"
-        onClick={onConnect}
+        onClick={isComingSoon ? undefined : onConnect}
+        disabled={isComingSoon}
       >
-        {connected ? "Reconnect" : "Connect"}
+        {buttonLabel}
       </Button>
     </div>
   );
@@ -451,13 +539,13 @@ function ConnectFeaturedDialog({
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <Label htmlFor="featured-input" className="text-xs font-medium">
-              {server.keyLabel}
+              {server.keyLabel ?? "Value"}
             </Label>
             <Input
               id="featured-input"
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
-              placeholder={server.keyPlaceholder}
+              placeholder={server.keyPlaceholder ?? ""}
               type={server.setupType === "api_key" ? "password" : "text"}
               autoFocus
               onKeyDown={(e) => {
@@ -466,19 +554,25 @@ function ConnectFeaturedDialog({
                 }
               }}
             />
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              {server.keyHelpText}
-              {" "}
-              <a
-                href={server.keyHelpUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-0.5 underline underline-offset-2 hover:text-foreground transition-colors"
-              >
-                {server.setupType === "api_key" ? "Get token" : "Browse GitHub"}
-                <ExternalLink className="size-3" aria-hidden="true" />
-              </a>
-            </p>
+            {(server.keyHelpText ?? server.keyHelpUrl) && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                {server.keyHelpText}
+                {server.keyHelpUrl && (
+                  <>
+                    {" "}
+                    <a
+                      href={server.keyHelpUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-0.5 underline underline-offset-2 hover:text-foreground transition-colors"
+                    >
+                      {server.setupType === "api_key" ? "Get token" : "Browse GitHub"}
+                      <ExternalLink className="size-3" aria-hidden="true" />
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
           </div>
 
           {/* Transport info */}
