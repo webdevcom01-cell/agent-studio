@@ -86,8 +86,13 @@ describe("GET /api/analytics", () => {
     expect(res.status).toBe(200);
     expect(body.success).toBe(true);
     expect(body.data).toHaveProperty("summary");
-    expect(body.data).toHaveProperty("dailyConversations");
+    expect(body.data).toHaveProperty("timeSeries");
     expect(body.data).toHaveProperty("topAgents");
+    expect(body.data).toHaveProperty("modelUsage");
+    expect(body.data).toHaveProperty("costTrend");
+    expect(body.data).toHaveProperty("conversationFunnel");
+    expect(body.data.summary).toHaveProperty("totalCostUsd");
+    expect(body.data.summary).toHaveProperty("errorRate");
   });
 
   it("returns 429 when rate limit exceeded", async () => {

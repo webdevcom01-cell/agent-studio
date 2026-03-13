@@ -97,16 +97,48 @@ vi.mock("@/components/ui/label", () => ({
   Label: ({ children }: { children: React.ReactNode }) => <label>{children}</label>,
 }));
 
+// Mock only the icons actually imported by property-panel.tsx.
+// Child components (Select, Button, ConfirmDialog, etc.) are all mocked,
+// so their icon imports never reach lucide-react.
 vi.mock("lucide-react", () => {
-  const icons = ["Trash2", "X", "Plus", "MessageSquare", "Sparkles", "GitBranch"];
-  const mocks: Record<string, unknown> = {};
-  for (const name of icons) {
-    mocks[name] = ({ className }: { className?: string }) => (
-      <span data-testid={`icon-${name}`} className={className} />
-    );
-  }
-  return mocks;
+  const Icon = ({ className }: { className?: string }) => (
+    <span className={className} />
+  );
+  return {
+    Trash2: Icon,
+    X: Icon,
+    Plus: Icon,
+    Search: Icon,
+    Database: Icon,
+    Plug: Icon,
+    Zap: Icon,
+    ChevronDown: Icon,
+    Check: Icon,
+    AlertTriangle: Icon,
+  };
 });
+
+vi.mock("@/components/ui/confirm-dialog", () => ({
+  ConfirmDialog: ({
+    open,
+    onConfirm,
+    children,
+  }: {
+    open?: boolean;
+    onConfirm?: () => void;
+    children?: React.ReactNode;
+    title?: string;
+    description?: string;
+    confirmLabel?: string;
+    onOpenChange?: (v: boolean) => void;
+  }) =>
+    open ? (
+      <div data-testid="confirm-dialog">
+        {children}
+        <button onClick={onConfirm}>Confirm</button>
+      </div>
+    ) : null,
+}));
 
 vi.mock("@/lib/models", () => ({
   ALL_MODELS: [
@@ -118,6 +150,19 @@ import { PropertyPanel } from "../property-panel";
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  // Prevent real HTTP calls from property-panel's useEffect hooks
+  // (fetches /api/mcp-servers, /api/agents, etc.)
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: [] }),
+    })
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 function makeNode(type: string, data: Record<string, unknown> = {}) {
@@ -184,7 +229,10 @@ describe("PropertyPanel", () => {
           node={makeNode("switch")}
         />
       );
+      // Clicking "Delete Node" opens the ConfirmDialog
       fireEvent.click(screen.getByText("Delete Node"));
+      // Confirm the deletion in the mock dialog
+      fireEvent.click(screen.getByText("Confirm"));
       expect(onDeleteNode).toHaveBeenCalledWith("node-switch");
     });
   });

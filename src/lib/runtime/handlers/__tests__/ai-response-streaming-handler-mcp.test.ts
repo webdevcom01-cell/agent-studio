@@ -96,7 +96,7 @@ describe("aiResponseStreamingHandler — MCP integration", () => {
     expect(mockedStreamText).toHaveBeenCalledWith(
       expect.objectContaining({
         tools: mockTools,
-        stopWhen: "stepCountIs(5)",
+        stopWhen: "stepCountIs(20)",
       })
     );
   });
@@ -141,7 +141,7 @@ describe("aiResponseStreamingHandler — MCP integration", () => {
     expect(result.messages[0].content).toBe("fallback response");
   });
 
-  it("sets maxSteps to 5 when tools are present", async () => {
+  it("sets maxSteps to 20 when tools are present", async () => {
     const mockTools = {
       calculator: { description: "Do math", execute: vi.fn() },
     };
@@ -157,6 +157,6 @@ describe("aiResponseStreamingHandler — MCP integration", () => {
     await aiResponseStreamingHandler(node, ctx, writer);
 
     const callArgs = mockedStreamText.mock.calls[0][0];
-    expect(callArgs.stopWhen).toBe("stepCountIs(5)");
+    expect(callArgs.stopWhen).toBe("stepCountIs(20)");
   });
 });

@@ -168,6 +168,10 @@ model KBChunk {
 enum AnalyticsEventType {
   CHAT_RESPONSE
   KB_SEARCH
+  TOOL_CALL
+  AGENT_CALL
+  ERROR
+  FLOW_EXECUTION
 }
 
 model AnalyticsEvent {
@@ -178,9 +182,27 @@ model AnalyticsEvent {
   metadata  Json               @default("{}")
   createdAt DateTime           @default(now())
 
+  // AI/LLM metrics
+  model          String?
+  inputTokens    Int?
+  outputTokens   Int?
+  totalTokens    Int?
+  costUsd        Decimal?   @db.Decimal(10, 6)
+
+  // Performance metrics
+  durationMs     Int?
+  ttfbMs         Int?       // Time to first byte/token
+
+  // Session tracking
+  sessionId      String?
+  conversationId String?
+
   @@index([agentId])
   @@index([type, createdAt])
   @@index([createdAt])
+  @@index([sessionId])
+  @@index([model, createdAt])
+  @@index([agentId, type, createdAt])
 }
 
 enum ConversationStatus {

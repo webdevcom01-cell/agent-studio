@@ -8,10 +8,13 @@ export default defineConfig({
     environment: "node",
     globals: true,
     include: ["src/**/*.test.{ts,tsx}"],
+    setupFiles: ["./vitest.setup.ts"],
   },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    // Force React development builds so React.act is available in tests
+    conditions: ["development", "browser"],
   },
 });

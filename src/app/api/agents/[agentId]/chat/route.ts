@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { executeFlow } from "@/lib/runtime/engine";
 import { executeFlowStreaming } from "@/lib/runtime/engine-streaming";
 import { loadContext } from "@/lib/runtime/context";
-import { trackChatResponse } from "@/lib/analytics";
+import { trackChatResponse, trackError } from "@/lib/analytics";
+import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { parseBodyWithLimit, BodyTooLargeError } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
@@ -81,6 +82,8 @@ export async function POST(
   try {
     const startTime = Date.now();
     const context = await loadContext(agentId, conversationId);
+    const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { model: true } });
+    const agentModel = agent?.model;
 
     if (isStreaming) {
       const stream = executeFlowStreaming(context, message);
@@ -92,6 +95,8 @@ export async function POST(
         timeToFirstTokenMs,
         totalResponseTimeMs: timeToFirstTokenMs,
         isNewConversation: context.isNewConversation,
+        isStreaming: true,
+        model: agentModel,
       }).catch((err) => logger.warn("Analytics tracking failed", err));
 
       return new Response(stream, {
@@ -113,6 +118,8 @@ export async function POST(
       timeToFirstTokenMs: totalResponseTimeMs,
       totalResponseTimeMs,
       isNewConversation: context.isNewConversation,
+      isStreaming: false,
+      model: agentModel,
     }).catch((err) => logger.warn("Analytics tracking failed", err));
 
     return NextResponse.json({
@@ -124,6 +131,12 @@ export async function POST(
       },
     });
   } catch (err) {
+    trackError({
+      agentId,
+      errorType: "runtime",
+      errorMessage: err instanceof Error ? err.message : "Unknown error",
+    }).catch(() => {/* fire and forget */});
+
     const message = sanitizeErrorMessage(err, "Chat processing failed");
     return NextResponse.json(
       { success: false, error: message },
