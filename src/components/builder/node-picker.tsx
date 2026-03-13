@@ -33,6 +33,7 @@ import {
   Bell,
   Shuffle,
   Route,
+  AppWindow,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -435,6 +436,22 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       operator: "equals",
       cases: [{ value: "", label: "" }],
       outputVariable: "switch_result",
+    },
+  },
+  {
+    type: "desktop_app",
+    label: "Desktop App",
+    description: "Control desktop apps via CLI bridge",
+    icon: AppWindow,
+    color: "emerald",
+    category: "Desktop Apps",
+    defaultData: {
+      label: "Desktop App",
+      mcpServerId: "",
+      appId: "",
+      actions: [],
+      outputVariable: "desktop_result",
+      sessionMode: "new",
     },
   },
 ];

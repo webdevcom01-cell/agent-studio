@@ -34,7 +34,9 @@ import {
   Bell,
   Shield,
   BarChart3,
+  AppWindow,
 } from "lucide-react";
+import { DESKTOP_APPS } from "@/lib/constants/desktop-apps";
 import {
   Dialog,
   DialogContent,
@@ -111,6 +113,7 @@ interface CallLog {
   errorMessage: string | null;
   callerAgent: { id: string; name: string };
   calleeAgent: { id: string; name: string } | null;
+  desktopApps?: string[];
 }
 
 interface AgentCallMonitorProps {
@@ -319,6 +322,9 @@ function CallChainItem({
           <span className="text-sm font-medium truncate">
             {log.calleeAgent?.name ?? "External"}
           </span>
+          {log.desktopApps && log.desktopApps.length > 0 && (
+            <DesktopAppIcons appIds={log.desktopApps} />
+          )}
         </div>
 
         {/* Quick metrics */}
@@ -410,6 +416,46 @@ function AgentPairCard({
         <span className="tabular-nums text-muted-foreground">{formatDuration(pair.avgDurationMs)}</span>
       </div>
     </div>
+  );
+}
+
+function DesktopAppIcons({
+  appIds,
+}: {
+  appIds: string[];
+}): React.ReactElement {
+  const apps = appIds
+    .map((id) => DESKTOP_APPS.find((a) => a.id === id))
+    .filter(Boolean);
+
+  if (apps.length === 0) {
+    return (
+      <span className="inline-flex items-center gap-0.5 ml-1" title="Desktop automation">
+        <AppWindow className="size-3 text-emerald-500" />
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-0.5 ml-1">
+      {apps.slice(0, 3).map((app) => {
+        const Icon = app!.icon;
+        return (
+          <span
+            key={app!.id}
+            title={app!.label}
+            className="inline-flex"
+          >
+            <Icon className="size-3 text-emerald-500" />
+          </span>
+        );
+      })}
+      {apps.length > 3 && (
+        <span className="text-[10px] text-emerald-500 font-medium">
+          +{apps.length - 3}
+        </span>
+      )}
+    </span>
   );
 }
 

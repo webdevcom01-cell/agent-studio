@@ -23,12 +23,27 @@ const MAX_DEPTH = 5;
 const DEFAULT_TIMEOUT_SECONDS = 30;
 
 /**
+ * Desktop capability metadata extracted from agent flows.
+ * Helps orchestrating AI understand what desktop apps a sub-agent can control.
+ */
+export interface AgentToolMetadata {
+  desktopApps: string[];
+  requiredCLIs: string[];
+  estimatedDuration: number;
+  outputTypes: string[];
+}
+
+/**
  * Agent metadata used to construct tool definitions.
  */
 interface AgentInfo {
   id: string;
   name: string;
   description: string | null;
+}
+
+interface AgentInfoWithFlow extends AgentInfo {
+  flow?: { content: unknown } | null;
 }
 
 /**
@@ -93,6 +108,7 @@ export async function getAgentToolsForAgent(
       const toolName = sanitizeToolName(agent.name, agent.id);
       const capturedAgent = agent;
       const capturedCtx = ctx;
+      const metadata = extractDesktopMetadata(agent);
 
       const inputSchema = z.object({
         input: z
@@ -103,7 +119,7 @@ export async function getAgentToolsForAgent(
       });
 
       tools[toolName] = {
-        description: buildToolDescription(capturedAgent),
+        description: buildToolDescription(capturedAgent, metadata),
         parameters: zodSchema(inputSchema),
         execute: async (args: { input: string }) => {
           return executeAgentTool(capturedAgent, args.input, capturedCtx);
@@ -287,7 +303,7 @@ async function executeAgentTool(
 async function loadAvailableAgents(
   callerAgentId: string,
   userId: string | null
-): Promise<AgentInfo[]> {
+): Promise<AgentInfoWithFlow[]> {
   const whereClause = userId
     ? {
         id: { not: callerAgentId },
@@ -306,6 +322,7 @@ async function loadAvailableAgents(
       id: true,
       name: true,
       description: true,
+      flow: { select: { content: true } },
     },
     take: 10,
     orderBy: { updatedAt: "desc" },
@@ -315,14 +332,96 @@ async function loadAvailableAgents(
 }
 
 /**
- * Build a description that helps the LLM understand when to use this agent.
+ * Extract desktop app metadata from an agent's flow content.
+ * Scans for desktop_app nodes and extracts app IDs and output types.
  */
-function buildToolDescription(agent: AgentInfo): string {
+export function extractDesktopMetadata(
+  agent: AgentInfoWithFlow,
+): AgentToolMetadata {
+  const metadata: AgentToolMetadata = {
+    desktopApps: [],
+    requiredCLIs: [],
+    estimatedDuration: 30,
+    outputTypes: [],
+  };
+
+  if (!agent.flow?.content) return metadata;
+
+  try {
+    const content = agent.flow.content as { nodes?: Array<{ type?: string; data?: Record<string, unknown> }> };
+    const nodes = content.nodes ?? [];
+
+    for (const node of nodes) {
+      if (node.type !== "desktop_app") continue;
+
+      const appId = node.data?.appId as string | undefined;
+      if (appId && !metadata.desktopApps.includes(appId)) {
+        metadata.desktopApps.push(appId);
+        metadata.requiredCLIs.push(appId);
+      }
+
+      const actions = (node.data?.actions as Array<{ command?: string }>) ?? [];
+      for (const action of actions) {
+        if (action.command) {
+          const outputType = inferOutputType(action.command);
+          if (outputType && !metadata.outputTypes.includes(outputType)) {
+            metadata.outputTypes.push(outputType);
+          }
+        }
+      }
+    }
+
+    if (metadata.desktopApps.length > 0) {
+      metadata.estimatedDuration = 30 + metadata.desktopApps.length * 15;
+    }
+  } catch {
+    // Non-critical — return empty metadata
+  }
+
+  return metadata;
+}
+
+function inferOutputType(command: string): string | null {
+  const cmd = command.toLowerCase();
+  if (cmd.includes("render") || cmd.includes("export-png") || cmd.includes("convert")) {
+    return "file";
+  }
+  if (cmd.includes("script") || cmd.includes("run")) {
+    return "text";
+  }
+  return null;
+}
+
+/**
+ * Build a description that helps the LLM understand when to use this agent.
+ * Enriches with desktop app capabilities when detected.
+ */
+function buildToolDescription(
+  agent: AgentInfo,
+  metadata?: AgentToolMetadata,
+): string {
+  const parts: string[] = [];
+
   const desc = agent.description?.trim();
   if (desc && desc.length > 10) {
-    return `Delegate a task to the "${agent.name}" agent. ${desc}`;
+    parts.push(`Delegate a task to the "${agent.name}" agent. ${desc}`);
+  } else {
+    parts.push(`Delegate a task to the "${agent.name}" agent.`);
   }
-  return `Delegate a task to the "${agent.name}" agent.`;
+
+  if (metadata && metadata.desktopApps.length > 0) {
+    parts.push(
+      `This agent controls desktop applications: ${metadata.desktopApps.join(", ")}.`,
+    );
+    if (metadata.outputTypes.length > 0) {
+      parts.push(`Output types: ${metadata.outputTypes.join(", ")}.`);
+    }
+    parts.push(
+      `Estimated duration: ~${metadata.estimatedDuration}s. Requires CLI bridge.`,
+    );
+  }
+
+  return parts.join(" ");
 }
 
 /**

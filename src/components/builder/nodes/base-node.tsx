@@ -66,6 +66,11 @@ const colorMap: Record<string, { bg: string; border: string; text: string }> = {
     border: "border-indigo-200 dark:border-indigo-800",
     text: "text-indigo-700 dark:text-indigo-300",
   },
+  emerald: {
+    bg: "bg-emerald-50 dark:bg-emerald-950/30",
+    border: "border-emerald-200 dark:border-emerald-800",
+    text: "text-emerald-700 dark:text-emerald-300",
+  },
 };
 
 export function BaseNode({
