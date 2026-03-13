@@ -105,6 +105,23 @@ export const FEATURED_MCP_SERVERS: FeaturedMCPServer[] = [
 
   // ── Productivity ────────────────────────────────────────────────────────────
   {
+    id: "google-workspace",
+    name: "Google Workspace",
+    icon: "🗓️",
+    description:
+      "Connect your Google account to manage Calendar events and Gmail — read, create, update, and send.",
+    capabilities: [
+      "List, create, and update Calendar events",
+      "Check availability across calendars",
+      "Read and search Gmail messages",
+      "Send emails and create drafts",
+    ],
+    url: null, // assigned post-OAuth (internal proxy URL per token)
+    transport: "STREAMABLE_HTTP",
+    setupType: "oauth",
+    oauthRoute: "/api/auth/oauth/google-workspace",
+  },
+  {
     id: "notion",
     name: "Notion",
     icon: "📝",

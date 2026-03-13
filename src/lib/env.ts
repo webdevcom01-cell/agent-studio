@@ -23,6 +23,8 @@ const envSchema = z.object({
   MOONSHOT_API_KEY: optionalStr,
   NOTION_CLIENT_ID: optionalStr,
   NOTION_CLIENT_SECRET: optionalStr,
+  GOOGLE_WORKSPACE_CLIENT_ID: optionalStr,
+  GOOGLE_WORKSPACE_CLIENT_SECRET: optionalStr,
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),

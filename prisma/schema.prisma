@@ -20,10 +20,11 @@ model User {
   emailVerified DateTime?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
-  agents        Agent[]
-  accounts      Account[]
-  sessions      Session[]
-  mcpServers    MCPServer[]
+  agents           Agent[]
+  accounts         Account[]
+  sessions         Session[]
+  mcpServers       MCPServer[]
+  googleOAuthTokens GoogleOAuthToken[]
 }
 
 model Account {
@@ -255,6 +256,33 @@ model AgentMCPServer {
   @@unique([agentId, mcpServerId])
   @@index([agentId])
   @@index([mcpServerId])
+}
+
+// ─── Google Workspace OAuth ───────────────────────────────────────────────────
+
+/**
+ * Stores Google OAuth tokens for per-user Google Workspace access.
+ * Used by the internal MCP proxy at /api/mcp/proxy/google-workspace/[id].
+ * Separate from NextAuth Account tokens — these carry Calendar + Gmail scopes.
+ */
+model GoogleOAuthToken {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The Google account email address
+  email        String
+  accessToken  String    @db.Text
+  refreshToken String?   @db.Text
+  /// When the current access token expires (null = unknown)
+  expiresAt    DateTime?
+  /// Space-separated OAuth scopes granted
+  scopes       String    @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  /// Prevent duplicate connections for the same user+email combination
+  @@unique([userId, email])
+  @@index([userId])
 }
 
 // ─── Flow Versioning ─────────────────────────────────────────────────────────

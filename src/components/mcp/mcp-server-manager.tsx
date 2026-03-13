@@ -142,6 +142,11 @@ export function MCPServerManager({ open, onOpenChange }: MCPServerManagerProps):
         void mutate();
       } else if (data?.type === "notion_oauth_error") {
         toast.error(data.error ?? "Failed to connect Notion");
+      } else if (data?.type === "google_workspace_oauth_success") {
+        toast.success("Google Workspace connected successfully!");
+        void mutate();
+      } else if (data?.type === "google_workspace_oauth_error") {
+        toast.error(data.error ?? "Failed to connect Google Workspace");
       }
     }
     window.addEventListener("message", handleOAuthMessage);
@@ -172,6 +177,13 @@ export function MCPServerManager({ open, onOpenChange }: MCPServerManagerProps):
     if (featured.setupType === "coming_soon") return false;
     if (featured.url) {
       return servers.some((s) => s.url.startsWith(featured.url!));
+    }
+    // oauth servers with url: null (e.g. Google Workspace) — match via internal proxy path
+    if (featured.setupType === "oauth" && featured.oauthRoute) {
+      const slug = featured.oauthRoute.split("/").pop() ?? "";
+      if (slug) {
+        return servers.some((s) => s.url.includes(`/api/mcp/proxy/${slug}/`));
+      }
     }
     // repo_url type: check by template base (guard against empty string)
     const base = featured.urlTemplate?.replace("{repo}", "") ?? "";

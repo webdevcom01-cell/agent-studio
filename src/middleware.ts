@@ -16,6 +16,9 @@ function isPublicPath(pathname: string): boolean {
 
   if (pathname.match(/^\/api\/agents\/[^/]+\/chat$/)) return true;
 
+  // Internal MCP proxy — called server-to-server by the MCP client pool, no session cookie
+  if (pathname.startsWith("/api/mcp/proxy/")) return true;
+
   if (pathname === "/favicon.ico") return true;
   if (pathname === "/embed.js") return true;
   if (pathname === "/test-embed.html") return true;
