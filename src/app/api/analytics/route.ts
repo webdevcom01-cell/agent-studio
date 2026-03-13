@@ -204,20 +204,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
 
     // 6. Response time percentiles (p50, p95, p99) by day
+    //    Falls back to metadata->>'totalResponseTimeMs' for events created before durationMs column
     prisma.$queryRaw<AvgResponseRow[]>(
       Prisma.sql`
         SELECT
           DATE(ae."createdAt")::text AS date,
-          AVG(ae."durationMs")::float AS avg_ms,
-          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ae."durationMs")::float AS p50_ms,
-          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY ae."durationMs")::float AS p95_ms,
-          PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY ae."durationMs")::float AS p99_ms
-        FROM "AnalyticsEvent" ae
-        INNER JOIN "Agent" a ON a."id" = ae."agentId"
-        WHERE ae.type = 'CHAT_RESPONSE'
-          AND ae."durationMs" IS NOT NULL
-          AND ae."createdAt" >= ${sinceDate}
-          AND a."userId" = ${userId}
+          AVG(dur)::float AS avg_ms,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY dur)::float AS p50_ms,
+          PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY dur)::float AS p95_ms,
+          PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY dur)::float AS p99_ms
+        FROM (
+          SELECT ae."createdAt",
+            COALESCE(ae."durationMs", (ae.metadata->>'totalResponseTimeMs')::int) AS dur
+          FROM "AnalyticsEvent" ae
+          INNER JOIN "Agent" a ON a."id" = ae."agentId"
+          WHERE ae.type = 'CHAT_RESPONSE'
+            AND ae."createdAt" >= ${sinceDate}
+            AND a."userId" = ${userId}
+            AND (ae."durationMs" IS NOT NULL OR ae.metadata->>'totalResponseTimeMs' IS NOT NULL)
+        ) ae
         GROUP BY DATE(ae."createdAt")
         ORDER BY DATE(ae."createdAt") ASC
       `

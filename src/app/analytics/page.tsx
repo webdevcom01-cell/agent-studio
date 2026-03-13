@@ -176,23 +176,20 @@ function StatCard({
 }): React.ReactElement {
   return (
     <Card className="relative overflow-hidden">
-      <CardContent className="pt-5 pb-4">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+      <CardContent className="px-4 pt-4 pb-3">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+            <Icon className="size-5 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider leading-none mb-1">
               {label}
             </p>
-            <p className="text-2xl font-bold tracking-tight">{value}</p>
-            {subValue && (
-              <p className="text-xs text-muted-foreground">{subValue}</p>
-            )}
-          </div>
-          <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-            <Icon className="size-4 text-primary" />
+            <p className="text-xl font-bold tracking-tight leading-none">{value}</p>
           </div>
         </div>
-        {trend && trendLabel && (
-          <div className="mt-2 flex items-center gap-1 text-xs">
+        {(subValue || (trend && trendLabel)) && (
+          <div className="mt-2.5 pt-2 border-t border-border/50 flex items-center gap-1 text-xs">
             {trend === "up" ? (
               <ArrowUpRight className="size-3 text-emerald-500" />
             ) : trend === "down" ? (
@@ -200,13 +197,14 @@ function StatCard({
             ) : null}
             <span
               className={cn(
-                "font-medium",
+                "font-medium truncate",
                 trend === "up" && "text-emerald-500",
                 trend === "down" && "text-red-500",
-                trend === "neutral" && "text-muted-foreground"
+                trend === "neutral" && "text-muted-foreground",
+                !trend && "text-muted-foreground"
               )}
             >
-              {trendLabel}
+              {trendLabel ?? subValue}
             </span>
           </div>
         )}
@@ -329,7 +327,7 @@ export default function AnalyticsPage(): React.ReactElement {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8 mb-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 mb-6">
         {isLoading || !analytics ? (
           Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)
         ) : (

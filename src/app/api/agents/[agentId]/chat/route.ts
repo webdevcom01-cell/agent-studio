@@ -86,20 +86,39 @@ export async function POST(
     const agentModel = agent?.model;
 
     if (isStreaming) {
-      const stream = executeFlowStreaming(context, message);
+      const innerStream = executeFlowStreaming(context, message);
       const timeToFirstTokenMs = Date.now() - startTime;
 
-      trackChatResponse({
-        agentId,
-        conversationId: context.conversationId,
-        timeToFirstTokenMs,
-        totalResponseTimeMs: timeToFirstTokenMs,
-        isNewConversation: context.isNewConversation,
-        isStreaming: true,
-        model: agentModel,
-      }).catch((err) => logger.warn("Analytics tracking failed", err));
+      // Wrap stream to track total duration after completion
+      const trackingStream = new ReadableStream({
+        async start(controller) {
+          const reader = innerStream.getReader();
+          try {
+            // eslint-disable-next-line no-constant-condition
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              controller.enqueue(value);
+            }
+          } catch (err) {
+            controller.error(err);
+          } finally {
+            controller.close();
+            const totalResponseTimeMs = Date.now() - startTime;
+            trackChatResponse({
+              agentId,
+              conversationId: context.conversationId,
+              timeToFirstTokenMs,
+              totalResponseTimeMs,
+              isNewConversation: context.isNewConversation,
+              isStreaming: true,
+              model: agentModel,
+            }).catch((err) => logger.warn("Analytics tracking failed", err));
+          }
+        },
+      });
 
-      return new Response(stream, {
+      return new Response(trackingStream, {
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
           "Transfer-Encoding": "chunked",
