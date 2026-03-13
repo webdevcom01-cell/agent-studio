@@ -586,13 +586,13 @@ export default function AnalyticsPage(): React.ReactElement {
                         <YAxis
                           className="text-xs"
                           tick={{ fill: "hsl(var(--muted-foreground))" }}
-                          tickFormatter={(v: number) => formatMs(v)}
+                          tickFormatter={(v) => formatMs(Number(v))}
                           axisLine={false}
                           tickLine={false}
                         />
                         <Tooltip
                           labelFormatter={(l) => formatDate(String(l))}
-                          formatter={(value: number, name: string) => [formatMs(value), name]}
+                          formatter={(value, name) => [formatMs(Number(value)), String(name)]}
                           contentStyle={CHART_STYLE}
                         />
                         <Line type="monotone" dataKey="p50Ms" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="p50" />
@@ -621,7 +621,7 @@ export default function AnalyticsPage(): React.ReactElement {
                           <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                           <XAxis dataKey="date" tickFormatter={formatDate} className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                           <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} unit="%" axisLine={false} tickLine={false} />
-                          <Tooltip labelFormatter={(l) => formatDate(String(l))} contentStyle={CHART_STYLE} formatter={(v: number) => [`${v}%`, "Error Rate"]} />
+                          <Tooltip labelFormatter={(l) => formatDate(String(l))} contentStyle={CHART_STYLE} formatter={(v) => [`${Number(v)}%`, "Error Rate"]} />
                           <Bar dataKey="rate" fill="hsl(0, 70%, 55%)" radius={[4, 4, 0, 0]} name="Error Rate" />
                         </BarChart>
                       </ResponsiveContainer>
@@ -700,10 +700,10 @@ export default function AnalyticsPage(): React.ReactElement {
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                         <XAxis dataKey="date" tickFormatter={formatDate} className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                        <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v: number) => formatCost(v)} axisLine={false} tickLine={false} />
+                        <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => formatCost(Number(v))} axisLine={false} tickLine={false} />
                         <Tooltip
                           labelFormatter={(l) => formatDate(String(l))}
-                          formatter={(v: number, name: string) => [name === "costUsd" ? formatCost(v) : formatTokens(v), name === "costUsd" ? "Cost" : "Tokens"]}
+                          formatter={(v, name) => [String(name) === "costUsd" ? formatCost(Number(v)) : formatTokens(Number(v)), String(name) === "costUsd" ? "Cost" : "Tokens"]}
                           contentStyle={CHART_STYLE}
                         />
                         <Area type="monotone" dataKey="costUsd" stroke="hsl(150, 60%, 45%)" fill="url(#costGradient)" strokeWidth={2} name="costUsd" />
@@ -783,13 +783,13 @@ export default function AnalyticsPage(): React.ReactElement {
                           </Pie>
                           <Tooltip
                             contentStyle={CHART_STYLE}
-                            formatter={(v: number) => [formatCost(v), "Cost"]}
+                            formatter={(v) => [formatCost(Number(v)), "Cost"]}
                           />
                           <Legend
                             verticalAlign="bottom"
                             height={36}
-                            formatter={(value: string) => (
-                              <span className="text-xs">{value}</span>
+                            formatter={(value) => (
+                              <span className="text-xs">{String(value)}</span>
                             )}
                           />
                         </PieChart>
