@@ -30,14 +30,16 @@ export function startExecution(
   const controller = new AbortController();
   activeExecutions.set(generationId, controller);
 
-  return executePipeline(generationId, config, controller.signal).catch(
-    (err) => {
+  return executePipeline(generationId, config, controller.signal)
+    .catch((err) => {
       logger.error("CLI generation execution failed", {
         generationId,
         error: err instanceof Error ? err.message : String(err),
       });
-    },
-  );
+    })
+    .then(() => {
+      // discard PipelineProgress to satisfy Promise<void> return type
+    });
 }
 
 async function executePipeline(
