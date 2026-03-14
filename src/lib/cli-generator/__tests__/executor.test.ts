@@ -42,7 +42,7 @@ describe("executor", () => {
   });
 
   it("tracks active executions", async () => {
-    let resolvePromise: () => void;
+    let resolvePromise!: () => void;
     const blockingPromise = new Promise<void>((resolve) => {
       resolvePromise = resolve;
     });
@@ -56,14 +56,17 @@ describe("executor", () => {
       };
     });
 
-    await startExecution("gen-active", { applicationName: "TestApp" });
+    // Don't await — startExecution now returns the pipeline promise which blocks
+    // until the pipeline completes. Check active status while it's still running.
+    const execPromise = startExecution("gen-active", { applicationName: "TestApp" });
 
+    // Map registration is synchronous, so isActive is true immediately
     expect(isExecutionActive("gen-active")).toBe(true);
     expect(getActiveExecutionCount()).toBeGreaterThanOrEqual(1);
 
-    resolvePromise!();
-    // Allow async completion
-    await new Promise((r) => setTimeout(r, 50));
+    // Unblock the pipeline and wait for completion
+    resolvePromise();
+    await execPromise;
   });
 
   it("returns false for unknown execution cancel", () => {
@@ -71,7 +74,7 @@ describe("executor", () => {
   });
 
   it("prevents duplicate executions", async () => {
-    let resolvePromise: () => void;
+    let resolvePromise!: () => void;
     const blockingPromise = new Promise<void>((resolve) => {
       resolvePromise = resolve;
     });
@@ -85,14 +88,17 @@ describe("executor", () => {
       };
     });
 
-    await startExecution("gen-dup", { applicationName: "App" });
+    // Start first execution (don't await — pipeline is blocked)
+    const firstExec = startExecution("gen-dup", { applicationName: "App" });
 
+    // Duplicate should reject immediately (Map check is synchronous)
     await expect(
       startExecution("gen-dup", { applicationName: "App" }),
     ).rejects.toThrow("already in progress");
 
-    resolvePromise!();
-    await new Promise((r) => setTimeout(r, 50));
+    // Unblock and clean up
+    resolvePromise();
+    await firstExec;
   });
 
   it("isExecutionActive returns false for non-running", () => {

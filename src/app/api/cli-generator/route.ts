@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
@@ -99,14 +99,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
 
-    startExecution(generation.id, {
-      applicationName,
-      description,
-      capabilities,
-      platform,
-    }).catch((err) => {
-      logger.error("Failed to start CLI generation", err);
-    });
+    after(
+      startExecution(generation.id, {
+        applicationName,
+        description,
+        capabilities,
+        platform,
+      }).catch((err) => {
+        logger.error("Failed to start CLI generation", err);
+      }),
+    );
 
     return NextResponse.json(
       { success: true, data: generation },

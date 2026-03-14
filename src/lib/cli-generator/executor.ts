@@ -17,23 +17,27 @@ export function cancelExecution(generationId: string): boolean {
   return true;
 }
 
-export async function startExecution(
+export function startExecution(
   generationId: string,
   config: PipelineConfig,
 ): Promise<void> {
   if (activeExecutions.has(generationId)) {
-    throw new Error(`Execution already in progress for ${generationId}`);
+    return Promise.reject(
+      new Error(`Execution already in progress for ${generationId}`),
+    );
   }
 
   const controller = new AbortController();
   activeExecutions.set(generationId, controller);
 
-  executePipeline(generationId, config, controller.signal).catch((err) => {
-    logger.error("CLI generation execution failed", {
-      generationId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  });
+  return executePipeline(generationId, config, controller.signal).catch(
+    (err) => {
+      logger.error("CLI generation execution failed", {
+        generationId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    },
+  );
 }
 
 async function executePipeline(
