@@ -103,7 +103,11 @@ Generate Python files following CLI-Anything framework conventions:
 - Proper argument translation, stdout/stderr capture, configurable timeout
 - Clean error handling with structured error responses
 
-Respond with ONLY a JSON object mapping filenames to file contents (no markdown, no code fences, no explanation):
+IMPORTANT: Keep each file CONCISE (under 150 lines). Focus on core functionality, avoid lengthy docstrings or comments. Use minimal but clear code.
+
+Respond with ONLY a JSON object mapping filenames to file contents (no markdown, no code fences, no explanation).
+Each value must be a complete, valid Python file as a single string. Ensure all JSON strings are properly escaped (newlines as \\n, quotes as \\").
+
 {
   "__init__.py": "<module init with version>",
   "main.py": "<click CLI entry point with commands that call subprocess>",
@@ -127,6 +131,8 @@ Generate test files following these conventions:
 - Test bridge.py: mock subprocess.run, verify argument translation, test timeout handling, test error cases
 - Test server.py: verify MCP protocol compliance, test tool registration, test request/response cycle
 - Fixtures in conftest.py for reusable test state
+
+IMPORTANT: Keep each file CONCISE (under 120 lines). Write focused tests, avoid verbose docstrings. Ensure all JSON strings are properly escaped (newlines as \\n, quotes as \\").
 
 Respond with ONLY a JSON object mapping filenames to file contents (no markdown, no code fences, no explanation):
 {

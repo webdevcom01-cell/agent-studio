@@ -30,9 +30,80 @@ function stripCodeFences(text: string): string {
     .trim();
 }
 
+function tryRepairJson(text: string): string {
+  let repaired = text.trim();
+
+  // Count open/close braces and brackets
+  const openBraces = (repaired.match(/{/g) || []).length;
+  const closeBraces = (repaired.match(/}/g) || []).length;
+  const openBrackets = (repaired.match(/\[/g) || []).length;
+  const closeBrackets = (repaired.match(/]/g) || []).length;
+
+  // If the JSON appears truncated (unterminated string), try to close it
+  // Find the last complete key-value pair by looking for last complete string
+  if (openBraces > closeBraces || openBrackets > closeBrackets) {
+    // Check if we're inside an unterminated string value
+    const lastQuote = repaired.lastIndexOf('"');
+    const lastColon = repaired.lastIndexOf(":");
+    const lastComma = repaired.lastIndexOf(",");
+
+    // If the last significant char suggests we're mid-value, truncate to last complete entry
+    if (lastComma > lastQuote || lastColon > lastQuote) {
+      // We're likely mid-value — truncate to the last comma or complete entry
+      const truncateAt = Math.max(
+        repaired.lastIndexOf('",'),
+        repaired.lastIndexOf('"}'),
+        repaired.lastIndexOf('"]'),
+      );
+      if (truncateAt > 0) {
+        repaired = repaired.substring(0, truncateAt + 1);
+      }
+    }
+
+    // Close remaining brackets/braces
+    const missingBrackets = openBrackets - (repaired.match(/]/g) || []).length;
+    const missingBraces = openBraces - (repaired.match(/}/g) || []).length;
+    repaired += "]".repeat(Math.max(0, missingBrackets));
+    repaired += "}".repeat(Math.max(0, missingBraces));
+  }
+
+  return repaired;
+}
+
 function parseJsonResponse(text: string): unknown {
   const cleaned = stripCodeFences(text);
-  return JSON.parse(cleaned);
+
+  // Try direct parse first
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Try repair on malformed/truncated JSON
+    logger.warn("JSON parse failed, attempting repair", { textLength: cleaned.length });
+    try {
+      const repaired = tryRepairJson(cleaned);
+      return JSON.parse(repaired);
+    } catch (repairErr) {
+      // Last resort: extract any valid JSON object from the text
+      const objectMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (objectMatch) {
+        try {
+          return JSON.parse(objectMatch[0]);
+        } catch {
+          // Try repair on extracted object too
+          try {
+            return JSON.parse(tryRepairJson(objectMatch[0]));
+          } catch {
+            // Give up
+          }
+        }
+      }
+      throw new Error(
+        `Failed to parse AI response as JSON (length: ${cleaned.length}): ${
+          repairErr instanceof Error ? repairErr.message : String(repairErr)
+        }`,
+      );
+    }
+  }
 }
 
 function extractGeneratedFiles(parsed: unknown): GeneratedFiles | undefined {
@@ -64,7 +135,7 @@ function buildTokensUsed(
   return { input: usage.inputTokens ?? 0, output: usage.outputTokens ?? 0 };
 }
 
-async function callAI(prompt: string, phase: string): Promise<{
+async function callAI(prompt: string, phase: string, maxTokens?: number): Promise<{
   text: string;
   usage: TokenUsage | undefined;
 }> {
@@ -77,6 +148,7 @@ async function callAI(prompt: string, phase: string): Promise<{
       model,
       prompt,
       abortSignal: controller.signal,
+      ...(maxTokens ? { maxTokens } : {}),
     });
 
     return { text: response.text, usage: response.usage };
@@ -141,7 +213,7 @@ export async function aiImplement(
     previousResults: [designResult],
   });
 
-  const { text, usage } = await callAI(prompt, "implement");
+  const { text, usage } = await callAI(prompt, "implement", 8192);
   const parsed = parseJsonResponse(text);
   const generatedFiles = extractGeneratedFiles(parsed);
 
@@ -164,7 +236,7 @@ export async function aiTest(
     previousResults: [implementResult],
   });
 
-  const { text, usage } = await callAI(prompt, "test");
+  const { text, usage } = await callAI(prompt, "test", 8192);
   const parsed = parseJsonResponse(text);
   const generatedFiles = extractGeneratedFiles(parsed);
 
