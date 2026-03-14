@@ -453,6 +453,7 @@ model CLIGeneration {
   currentPhase    Int                  @default(0)
   phases          Json                 @default("[]")
   cliConfig       Json?
+  generatedFiles  Json?
   errorMessage    String?
   userId          String
   user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import {
   ArrowLeft,
   Plus,
@@ -9,6 +10,7 @@ import {
   Trash2,
   RefreshCw,
   Loader2,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -18,6 +20,7 @@ import {
 } from "@/components/cli-generator/generation-wizard";
 import { PhaseMonitor } from "@/components/cli-generator/phase-monitor";
 import { CLIPreview } from "@/components/cli-generator/cli-preview";
+import { FileViewer } from "@/components/cli-generator/file-viewer";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { PhaseResult } from "@/lib/cli-generator/types";
 import { cn } from "@/lib/utils";
@@ -39,7 +42,17 @@ interface GenerationDetail {
   currentPhase: number;
   phases: PhaseResult[];
   cliConfig: Record<string, unknown> | null;
+  generatedFiles: Record<string, string> | null;
   errorMessage: string | null;
+}
+
+const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED"]);
+const POLLING_INTERVAL_MS = 2000;
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+function isInProgress(status: string): boolean {
+  return !TERMINAL_STATUSES.has(status);
 }
 
 export default function CLIGeneratorPage(): React.JSX.Element {
@@ -48,10 +61,26 @@ export default function CLIGeneratorPage(): React.JSX.Element {
   const [showWizard, setShowWizard] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<GenerationDetail | null>(null);
-  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const {
+    data: detailResponse,
+    isLoading: isLoadingDetail,
+    mutate: mutateDetail,
+  } = useSWR<{ success: boolean; data: GenerationDetail }>(
+    selectedId ? `/api/cli-generator/${selectedId}` : null,
+    fetcher,
+    {
+      refreshInterval: (latestData) => {
+        const status = latestData?.data?.status;
+        if (status && isInProgress(status)) return POLLING_INTERVAL_MS;
+        return 0;
+      },
+    },
+  );
+
+  const detail = detailResponse?.success ? detailResponse.data : null;
 
   const fetchGenerations = useCallback(async (): Promise<void> => {
     try {
@@ -69,24 +98,19 @@ export default function CLIGeneratorPage(): React.JSX.Element {
     fetchGenerations();
   }, [fetchGenerations]);
 
-  async function fetchDetail(id: string): Promise<void> {
-    setIsLoadingDetail(true);
-    try {
-      const res = await fetch(`/api/cli-generator/${id}`);
-      const json = await res.json();
-      if (json.success) {
-        setDetail(json.data);
-      }
-    } catch {
-      toast.error("Failed to load generation details");
-    } finally {
-      setIsLoadingDetail(false);
-    }
-  }
+  useEffect(() => {
+    if (!detail) return;
+    setGenerations((prev) =>
+      prev.map((g) =>
+        g.id === detail.id
+          ? { ...g, status: detail.status, currentPhase: detail.currentPhase }
+          : g,
+      ),
+    );
+  }, [detail]);
 
   function handleSelect(id: string): void {
     setSelectedId(id);
-    fetchDetail(id);
   }
 
   async function handleCreate(data: GenerationWizardResult): Promise<void> {
@@ -101,8 +125,8 @@ export default function CLIGeneratorPage(): React.JSX.Element {
       if (json.success) {
         setShowWizard(false);
         toast.success("Generation started");
-        fetchGenerations();
-        handleSelect(json.data.id);
+        await fetchGenerations();
+        setSelectedId(json.data.id);
       } else {
         toast.error(json.error ?? "Failed to start generation");
       }
@@ -125,7 +149,6 @@ export default function CLIGeneratorPage(): React.JSX.Element {
       );
       if (selectedId === confirmDeleteId) {
         setSelectedId(null);
-        setDetail(null);
       }
       toast.success("Generation deleted");
       setConfirmDeleteId(null);
@@ -138,10 +161,13 @@ export default function CLIGeneratorPage(): React.JSX.Element {
 
   async function handleRefresh(): Promise<void> {
     if (selectedId) {
-      await fetchDetail(selectedId);
+      await mutateDetail();
     }
     await fetchGenerations();
   }
+
+  const isCompleted = detail?.status === "COMPLETED";
+  const hasFiles = isCompleted && detail.generatedFiles && Object.keys(detail.generatedFiles).length > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -258,21 +284,39 @@ export default function CLIGeneratorPage(): React.JSX.Element {
                   Select a generation to view progress
                 </p>
               </div>
-            ) : isLoadingDetail ? (
+            ) : isLoadingDetail && !detail ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="size-5 animate-spin text-muted-foreground" />
               </div>
             ) : detail ? (
               <div className="flex flex-col gap-6">
-                <div>
-                  <h2 className="text-lg font-medium">
-                    {detail.applicationName}
-                  </h2>
-                  {detail.errorMessage && (
-                    <p className="text-xs text-red-500 mt-1">
-                      {detail.errorMessage}
-                    </p>
-                  )}
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-medium">
+                      {detail.applicationName}
+                    </h2>
+                    {detail.errorMessage && (
+                      <p className="text-xs text-red-500 mt-1">
+                        {detail.errorMessage}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                    disabled={!isCompleted}
+                    onClick={() => {
+                      if (selectedId) {
+                        window.open(
+                          `/api/cli-generator/${selectedId}/download`,
+                          "_blank",
+                        );
+                      }
+                    }}
+                  >
+                    <Download className="size-3.5" />
+                    Download CLI Bridge
+                  </Button>
                 </div>
 
                 <PhaseMonitor
@@ -281,7 +325,11 @@ export default function CLIGeneratorPage(): React.JSX.Element {
                   status={detail.status}
                 />
 
-                {detail.status === "COMPLETED" && detail.cliConfig && (
+                {hasFiles && selectedId && (
+                  <FileViewer generationId={selectedId} />
+                )}
+
+                {isCompleted && detail.cliConfig && (
                   <CLIPreview
                     cliConfig={
                       detail.cliConfig as unknown as Parameters<typeof CLIPreview>[0]["cliConfig"]

@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createInitialPhases } from "../pipeline";
 import { PIPELINE_PHASES, PHASE_COUNT } from "../types";
+import type { AIPhaseOutput } from "../types";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     cLIGeneration: {
-      update: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({ userId: "user-1" }),
     },
   },
 }));
@@ -18,12 +19,57 @@ vi.mock("@/lib/logger", () => ({
   },
 }));
 
+function makePhaseOutput(data: Record<string, unknown> = {}): AIPhaseOutput {
+  return {
+    result: { phase: "mock", ...data },
+    tokensUsed: { input: 50, output: 100 },
+  };
+}
+
+function makeFilePhaseOutput(files: Record<string, string>): AIPhaseOutput {
+  return {
+    result: files,
+    generatedFiles: files,
+    tokensUsed: { input: 80, output: 150 },
+  };
+}
+
+vi.mock("../ai-phases", () => ({
+  aiAnalyze: vi.fn().mockImplementation(() =>
+    Promise.resolve(makePhaseOutput({ detectedCLIPaths: ["/usr/bin/app"] })),
+  ),
+  aiDesign: vi.fn().mockImplementation(() =>
+    Promise.resolve(makePhaseOutput({ commands: [{ name: "app_run" }] })),
+  ),
+  aiImplement: vi.fn().mockImplementation(() =>
+    Promise.resolve(makeFilePhaseOutput({ "main.py": "import click", "bridge.py": "import subprocess" })),
+  ),
+  aiTest: vi.fn().mockImplementation(() =>
+    Promise.resolve(makeFilePhaseOutput({ "test_bridge.py": "def test(): pass" })),
+  ),
+  aiDocs: vi.fn().mockImplementation(() =>
+    Promise.resolve(makeFilePhaseOutput({ "README.md": "# App" })),
+  ),
+  aiPublish: vi.fn().mockImplementation(() =>
+    Promise.resolve({
+      result: { mcp_config: { name: "app-mcp" }, "requirements.txt": "click>=8.0" },
+      generatedFiles: { "requirements.txt": "click>=8.0" },
+      tokensUsed: { input: 60, output: 120 },
+    }),
+  ),
+}));
+
+vi.mock("../mcp-registration", () => ({
+  registerCLIBridgeAsMCP: vi.fn().mockResolvedValue({ id: "mcp-1" }),
+}));
+
 import { prisma } from "@/lib/prisma";
 const mockUpdate = vi.mocked(prisma.cLIGeneration.update);
 
 describe("pipeline", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUpdate.mockResolvedValue({ userId: "user-1" } as ReturnType<typeof mockUpdate> extends Promise<infer T> ? T : never);
   });
 
   describe("createInitialPhases", () => {
@@ -80,44 +126,47 @@ describe("pipeline", () => {
         applicationName: "Blender",
       });
 
-      // Called once per phase (running) + final completion
       expect(mockUpdate.mock.calls.length).toBeGreaterThanOrEqual(PHASE_COUNT);
     });
 
-    it("generates cliConfig on completion", async () => {
+    it("accumulates generatedFiles across phases", async () => {
       const { runPipeline } = await import("../pipeline");
 
       const result = await runPipeline("gen-3", {
         applicationName: "GIMP",
-        capabilities: ["convert", "resize"],
-      });
-
-      expect(result.cliConfig).toBeDefined();
-    });
-
-    it("handles config with no capabilities", async () => {
-      const { runPipeline } = await import("../pipeline");
-
-      const result = await runPipeline("gen-4", {
-        applicationName: "CustomApp",
       });
 
       expect(result.status).toBe("COMPLETED");
-      expect(result.cliConfig).toBeDefined();
+
+      const implementPhase = result.phases[2];
+      expect(implementPhase.generatedFiles).toBeDefined();
+      expect(implementPhase.generatedFiles?.["main.py"]).toBeDefined();
     });
 
-    it("includes platform in analysis", async () => {
+    it("stores tokensUsed in phase results", async () => {
       const { runPipeline } = await import("../pipeline");
 
-      const result = await runPipeline("gen-5", {
-        applicationName: "MacApp",
-        platform: "macos",
+      const result = await runPipeline("gen-4", {
+        applicationName: "FFmpeg",
       });
 
-      const analysisPhase = result.phases[0];
-      expect(analysisPhase.status).toBe("completed");
-      const output = analysisPhase.output as Record<string, unknown>;
-      expect(output.platform).toBe("macos");
+      expect(result.phases[0].tokensUsed).toBeDefined();
+      expect(result.phases[0].tokensUsed?.input).toBeGreaterThan(0);
+    });
+
+    it("handles AI phase failure gracefully", async () => {
+      const { aiAnalyze } = await import("../ai-phases");
+      vi.mocked(aiAnalyze).mockRejectedValueOnce(new Error("AI unavailable"));
+
+      const { runPipeline } = await import("../pipeline");
+
+      const result = await runPipeline("gen-fail", {
+        applicationName: "FailApp",
+      });
+
+      expect(result.status).toBe("FAILED");
+      expect(result.phases[0].status).toBe("failed");
+      expect(result.phases[0].error).toContain("AI unavailable");
     });
   });
 

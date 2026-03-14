@@ -4,12 +4,23 @@ import type {
   PipelineConfig,
   PhaseResult,
   PipelineProgress,
+  AIPhaseOutput,
+  GeneratedFiles,
 } from "./types";
 import {
   PIPELINE_PHASES,
   PHASE_COUNT,
   STATUS_FOR_PHASE,
 } from "./types";
+import {
+  aiAnalyze,
+  aiDesign,
+  aiImplement,
+  aiTest,
+  aiDocs,
+  aiPublish,
+} from "./ai-phases";
+import { registerCLIBridgeAsMCP } from "./mcp-registration";
 
 function createInitialPhases(): PhaseResult[] {
   return PIPELINE_PHASES.map(({ phase, name }) => ({
@@ -19,154 +30,19 @@ function createInitialPhases(): PhaseResult[] {
   }));
 }
 
-function analyzeApplication(config: PipelineConfig): unknown {
-  return {
-    applicationName: config.applicationName,
-    description: config.description ?? `CLI bridge for ${config.applicationName}`,
-    capabilities: config.capabilities ?? [],
-    platform: config.platform ?? "cross-platform",
-    detectedFeatures: [
-      "command-line interface",
-      "scripting support",
-      "batch processing",
-    ],
-  };
-}
-
-function designCLIInterface(
-  config: PipelineConfig,
-  analysisResult: unknown,
-): unknown {
-  const analysis = analysisResult as Record<string, unknown>;
-  const capabilities = (analysis.capabilities as string[]) ?? [];
-  const appName = config.applicationName.toLowerCase().replace(/\s+/g, "-");
-
-  const commands = capabilities.map((cap) => ({
-    name: `${appName}_${cap}`,
-    description: `Execute ${cap} on ${config.applicationName}`,
-    parameters: [
-      { name: "input", type: "string", required: true, description: "Input path or value" },
-      { name: "output", type: "string", required: false, description: "Output path" },
-    ],
-  }));
-
-  if (commands.length === 0) {
-    commands.push({
-      name: `${appName}_run`,
-      description: `Run ${config.applicationName} command`,
-      parameters: [
-        { name: "command", type: "string", required: true, description: "Command to execute" },
-        { name: "args", type: "string", required: false, description: "Command arguments" },
-      ],
-    });
-  }
-
-  return { appId: appName, commands, toolPrefix: appName };
-}
-
-function implementCLI(
-  config: PipelineConfig,
-  designResult: unknown,
-): unknown {
-  const design = designResult as Record<string, unknown>;
-  const commands = (design.commands as Array<Record<string, unknown>>) ?? [];
-
-  return {
-    implementation: {
-      language: "typescript",
-      entryPoint: `${config.applicationName.toLowerCase().replace(/\s+/g, "-")}-bridge.ts`,
-      commandCount: commands.length,
-      commands: commands.map((cmd) => ({
-        name: cmd.name,
-        implemented: true,
-      })),
-    },
-  };
-}
-
-function planTests(designResult: unknown): unknown {
-  const design = designResult as Record<string, unknown>;
-  const commands = (design.commands as Array<Record<string, unknown>>) ?? [];
-
-  return {
-    testPlan: {
-      unitTests: commands.map((cmd) => ({
-        name: `test_${cmd.name as string}`,
-        type: "unit",
-        description: `Verify ${cmd.name as string} executes correctly`,
-      })),
-      integrationTests: [
-        { name: "test_connection", type: "integration", description: "Verify MCP server connection" },
-        { name: "test_tool_discovery", type: "integration", description: "Verify tool registration" },
-      ],
-      totalTests: commands.length + 2,
-    },
-  };
-}
-
-function writeTests(testPlanResult: unknown): unknown {
-  const plan = testPlanResult as Record<string, unknown>;
-  const testPlan = plan.testPlan as Record<string, unknown>;
-  const totalTests = (testPlan.totalTests as number) ?? 0;
-
-  return {
-    testsWritten: totalTests,
-    coverage: { estimated: 85 },
-    passed: totalTests,
-    failed: 0,
-  };
-}
-
-function generateDocumentation(
-  config: PipelineConfig,
-  designResult: unknown,
-): unknown {
-  const design = designResult as Record<string, unknown>;
-  const commands = (design.commands as Array<Record<string, unknown>>) ?? [];
-
-  return {
-    documentation: {
-      readme: `# ${config.applicationName} CLI Bridge\n\nAuto-generated CLI bridge with ${commands.length} commands.`,
-      commandDocs: commands.map((cmd) => ({
-        name: cmd.name,
-        description: cmd.description,
-        parameters: cmd.parameters,
-      })),
-    },
-  };
-}
-
-function publishCLI(
-  config: PipelineConfig,
-  designResult: unknown,
-): unknown {
-  const design = designResult as Record<string, unknown>;
-
-  return {
-    published: true,
-    cliConfig: {
-      appId: design.appId,
-      toolPrefix: design.toolPrefix,
-      commands: design.commands,
-      version: "1.0.0",
-      applicationName: config.applicationName,
-    },
-  };
-}
-
 type PhaseRunner = (
   config: PipelineConfig,
   previousResults: PhaseResult[],
-) => unknown;
+) => Promise<AIPhaseOutput>;
 
 const PHASE_RUNNERS: PhaseRunner[] = [
-  (config) => analyzeApplication(config),
-  (config, prev) => designCLIInterface(config, prev[0]?.output),
-  (config, prev) => implementCLI(config, prev[1]?.output),
-  (_config, prev) => planTests(prev[1]?.output),
-  (_config, prev) => writeTests(prev[3]?.output),
-  (config, prev) => generateDocumentation(config, prev[1]?.output),
-  (config, prev) => publishCLI(config, prev[1]?.output),
+  (config) => aiAnalyze(config),                       // 0: analyze
+  (config, prev) => aiDesign(config, prev[0]?.output), // 1: design
+  (config, prev) => aiImplement(config, prev[1]?.output), // 2: implement
+  (config, prev) => aiTest(config, prev[2]?.output),   // 3: plan-tests (reuses aiTest for planning)
+  (config, prev) => aiTest(config, prev[2]?.output),   // 4: write-tests (reuses aiTest for writing)
+  (config, prev) => aiDocs(config, prev[1]?.output),   // 5: document
+  (config, prev) => aiPublish(config, prev[1]?.output), // 6: publish
 ];
 
 export async function runPipeline(
@@ -174,6 +50,7 @@ export async function runPipeline(
   config: PipelineConfig,
 ): Promise<PipelineProgress> {
   const phases = createInitialPhases();
+  const allFiles: GeneratedFiles = {};
 
   for (let i = 0; i < PHASE_COUNT; i++) {
     const phase = phases[i];
@@ -193,10 +70,28 @@ export async function runPipeline(
 
     try {
       const runner = PHASE_RUNNERS[i];
-      const output = runner(config, phases);
-      phase.output = output;
+      const aiOutput = await runner(config, phases);
+
+      phase.output = aiOutput.result;
+      phase.generatedFiles = aiOutput.generatedFiles;
+      phase.tokensUsed = aiOutput.tokensUsed;
       phase.status = "completed";
       phase.completedAt = new Date().toISOString();
+
+      if (aiOutput.generatedFiles) {
+        Object.assign(allFiles, aiOutput.generatedFiles);
+      }
+
+      await prisma.cLIGeneration.update({
+        where: { id: generationId },
+        data: {
+          currentPhase: i,
+          phases: JSON.parse(JSON.stringify(phases)),
+          generatedFiles: Object.keys(allFiles).length > 0
+            ? JSON.parse(JSON.stringify(allFiles))
+            : undefined,
+        },
+      });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       phase.status = "failed";
@@ -217,6 +112,9 @@ export async function runPipeline(
           currentPhase: i,
           phases: JSON.parse(JSON.stringify(phases)),
           errorMessage: `Phase ${phase.name} failed: ${errorMsg}`,
+          generatedFiles: Object.keys(allFiles).length > 0
+            ? JSON.parse(JSON.stringify(allFiles))
+            : undefined,
         },
       });
 
@@ -233,15 +131,38 @@ export async function runPipeline(
   const lastPhaseOutput = phases[PHASE_COUNT - 1]?.output as Record<string, unknown> | undefined;
   const cliConfig = lastPhaseOutput?.cliConfig ?? null;
 
-  await prisma.cLIGeneration.update({
+  const completedGeneration = await prisma.cLIGeneration.update({
     where: { id: generationId },
     data: {
       status: "COMPLETED",
       currentPhase: PHASE_COUNT - 1,
       phases: JSON.parse(JSON.stringify(phases)),
       cliConfig: cliConfig ? JSON.parse(JSON.stringify(cliConfig)) : undefined,
+      generatedFiles: Object.keys(allFiles).length > 0
+        ? JSON.parse(JSON.stringify(allFiles))
+        : undefined,
     },
   });
+
+  try {
+    if (completedGeneration.userId) {
+      const mcpServer = await registerCLIBridgeAsMCP(
+        generationId,
+        completedGeneration.userId,
+      );
+      if (mcpServer) {
+        logger.info("CLI bridge auto-registered as MCP server", {
+          generationId,
+          mcpServerId: mcpServer.id,
+        });
+      }
+    }
+  } catch (err) {
+    logger.warn("CLI bridge MCP auto-registration failed", {
+      generationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   return {
     generationId,

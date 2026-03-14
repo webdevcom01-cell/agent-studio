@@ -1,5 +1,13 @@
 import type { CLIGenerationStatus } from "@/generated/prisma";
 
+export type GeneratedFiles = Record<string, string>;
+
+export interface AIPhaseOutput {
+  result: unknown;
+  generatedFiles?: GeneratedFiles;
+  tokensUsed?: { input: number; output: number };
+}
+
 export interface PhaseResult {
   phase: number;
   name: string;
@@ -8,6 +16,8 @@ export interface PhaseResult {
   completedAt?: string;
   output?: unknown;
   error?: string;
+  generatedFiles?: GeneratedFiles;
+  tokensUsed?: { input: number; output: number };
 }
 
 export interface PipelineConfig {
