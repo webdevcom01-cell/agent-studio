@@ -50,7 +50,6 @@ import { FormatTransformNode } from "./nodes/format-transform-node";
 import { SwitchNode } from "./nodes/switch-node";
 import { WebFetchNode } from "./nodes/web-fetch-node";
 import { BrowserActionNode } from "./nodes/browser-action-node";
-import { DesktopAppNode } from "./nodes/desktop-app-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -98,7 +97,6 @@ const NODE_TYPES: NodeTypes = {
   switch: SwitchNode,
   web_fetch: WebFetchNode,
   browser_action: BrowserActionNode,
-  desktop_app: DesktopAppNode,
 };
 
 // ---------------------------------------------------------------------------

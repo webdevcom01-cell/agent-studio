@@ -51,7 +51,9 @@ Respond with ONLY a JSON object (no markdown, no code fences, no explanation):
     "linux": "<notes>",
     "windows": "<notes>"
   }
-}`;
+}
+
+Be concise. Limit your response to the essential fields only.`;
 }
 
 export function buildDesignPrompt(ctx: PromptContext): string {
@@ -84,7 +86,9 @@ Respond with ONLY a JSON array (no markdown, no code fences, no explanation):
       }
     }
   }
-]`;
+]
+
+Be concise. Limit your response to the essential fields only.`;
 }
 
 export function buildImplementPrompt(ctx: PromptContext): string {
@@ -109,7 +113,9 @@ Respond with ONLY a JSON object mapping filenames to file contents (no markdown,
   "main.py": "<click CLI entry point with commands that call subprocess>",
   "server.py": "<MCP server using Python mcp package, registers tools from design phase>",
   "bridge.py": "<core logic: argument translation to CLI flags, subprocess execution with timeout, stdout/stderr parsing, structured result objects>"
-}`;
+}
+
+Be concise. Limit your response to the essential fields only.`;
 }
 
 export function buildTestPrompt(ctx: PromptContext): string {
@@ -133,7 +139,9 @@ Respond with ONLY a JSON object mapping filenames to file contents (no markdown,
   "conftest.py": "<shared fixtures: mock CLI paths, sample outputs, test configurations>",
   "test_bridge.py": "<bridge tests: mocked subprocess calls, argument translation, timeout, error handling>",
   "test_server.py": "<MCP server tests: protocol compliance, tool registration, request handling>"
-}`;
+}
+
+Be concise. Limit your response to the essential fields only.`;
 }
 
 export function buildDocsPrompt(ctx: PromptContext): string {
@@ -157,7 +165,9 @@ Generate documentation covering:
 Respond with ONLY a JSON object mapping filenames to file contents (no markdown, no code fences, no explanation):
 {
   "README.md": "<Complete documentation with: ## Installation, ## Quick Start, ## Commands (with examples for each), ## MCP Server Setup, ## Troubleshooting, ## API Reference>"
-}`;
+}
+
+Be concise. Limit your response to the essential fields only.`;
 }
 
 export function buildPublishPrompt(ctx: PromptContext): string {
@@ -188,5 +198,7 @@ Respond with ONLY a JSON object (no markdown, no code fences, no explanation):
     "env": {},
     "tools": ["<list of tool names from design phase>"]
   }
-}`;
+}
+
+Be concise. Limit your response to the essential fields only.`;
 }

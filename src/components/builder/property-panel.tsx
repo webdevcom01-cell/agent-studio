@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { type Node } from "@xyflow/react";
-import { Trash2, X, Plus, Search, Database, Plug, Zap, AppWindow } from "lucide-react";
+import { Trash2, X, Plus, Search, Database, Plug, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/select";
 import { ALL_MODELS } from "@/lib/models";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { DESKTOP_APPS, getDesktopApp } from "@/lib/constants/desktop-apps";
 
 interface PropertyPanelProps {
   node: Node;
@@ -439,10 +438,6 @@ export function PropertyPanel({
 
         {node.type === "browser_action" && (
           <BrowserActionProperties data={data} update={update} />
-        )}
-
-        {node.type === "desktop_app" && (
-          <DesktopAppProperties data={data} update={update} />
         )}
       </div>
 
@@ -2528,187 +2523,6 @@ function BrowserActionProperties({ data, update }: SubPanelProps) {
         <Label>Output Variable</Label>
         <Input
           value={(data.outputVariable as string) ?? "browser_result"}
-          onChange={(e) => update("outputVariable", e.target.value)}
-        />
-      </div>
-    </>
-  );
-}
-
-interface DesktopAction {
-  appId: string;
-  capabilityId: string;
-  command: string;
-  parameters: Record<string, string>;
-}
-
-function DesktopAppProperties({ data, update }: SubPanelProps) {
-  const appId = (data.appId as string) || "";
-  const actions = (data.actions as DesktopAction[]) ?? [];
-  const selectedApp = appId ? getDesktopApp(appId) : undefined;
-
-  function selectApp(id: string) {
-    update("appId", id);
-    update("actions", []);
-  }
-
-  function addAction() {
-    if (!selectedApp || selectedApp.capabilities.length === 0) return;
-    const cap = selectedApp.capabilities[0];
-    const defaultParams: Record<string, string> = {};
-    for (const p of cap.parameters) {
-      defaultParams[p.name] = "";
-    }
-    update("actions", [
-      ...actions,
-      { appId, capabilityId: cap.id, command: cap.command, parameters: defaultParams },
-    ]);
-  }
-
-  function updateAction(index: number, field: string, value: unknown) {
-    const updated = actions.map((a, i) =>
-      i === index ? { ...a, [field]: value } : a
-    );
-    update("actions", updated);
-  }
-
-  function changeCapability(index: number, capabilityId: string) {
-    if (!selectedApp) return;
-    const cap = selectedApp.capabilities.find((c) => c.id === capabilityId);
-    if (!cap) return;
-    const defaultParams: Record<string, string> = {};
-    for (const p of cap.parameters) {
-      defaultParams[p.name] = "";
-    }
-    const updated = actions.map((a, i) =>
-      i === index
-        ? { ...a, capabilityId, command: cap.command, parameters: defaultParams }
-        : a
-    );
-    update("actions", updated);
-  }
-
-  function updateParam(actionIndex: number, paramName: string, value: string) {
-    const action = actions[actionIndex];
-    const updatedParams = { ...action.parameters, [paramName]: value };
-    updateAction(actionIndex, "parameters", updatedParams);
-  }
-
-  function removeAction(index: number) {
-    update("actions", actions.filter((_, i) => i !== index));
-  }
-
-  return (
-    <>
-      <div className="space-y-2">
-        <Label>CLI Bridge Server ID</Label>
-        <Input
-          value={(data.mcpServerId as string) ?? ""}
-          onChange={(e) => update("mcpServerId", e.target.value)}
-          placeholder="CLI Bridge server ID"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Application</Label>
-        <div className="grid grid-cols-4 gap-1.5">
-          {DESKTOP_APPS.map((app) => {
-            const Icon = app.icon;
-            const isSelected = appId === app.id;
-            return (
-              <button
-                key={app.id}
-                className={`flex flex-col items-center gap-1 rounded-md border p-2 text-center transition-colors hover:bg-accent ${
-                  isSelected ? "border-primary bg-accent" : "border-transparent"
-                }`}
-                onClick={() => selectApp(app.id)}
-                title={app.description}
-              >
-                <Icon className="size-5" />
-                <span className="text-[10px] leading-tight">{app.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Session Mode</Label>
-        <Select
-          value={(data.sessionMode as string) || "new"}
-          onValueChange={(val) => update("sessionMode", val)}
-        >
-          <SelectTrigger className="text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="new">New Session</SelectItem>
-            <SelectItem value="continue">Continue Session</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {selectedApp && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>Actions</Label>
-            <Button variant="ghost" size="sm" onClick={addAction}>
-              <Plus className="mr-1 size-3" />
-              Add
-            </Button>
-          </div>
-
-          {actions.map((action, i) => {
-            const cap = selectedApp.capabilities.find((c) => c.id === action.capabilityId);
-            return (
-              <div key={i} className="space-y-1.5 rounded-md border p-2">
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={action.capabilityId}
-                    onValueChange={(val) => changeCapability(i, val)}
-                  >
-                    <SelectTrigger className="flex-1 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {selectedApp.capabilities.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-6"
-                    onClick={() => removeAction(i)}
-                  >
-                    <Trash2 className="size-3" />
-                  </Button>
-                </div>
-
-                {cap && cap.parameters.map((param) => (
-                  <div key={param.name} className="space-y-0.5">
-                    <span className="text-[10px] text-muted-foreground">{param.label}</span>
-                    <Input
-                      value={action.parameters[param.name] ?? ""}
-                      onChange={(e) => updateParam(i, param.name, e.target.value)}
-                      placeholder={param.placeholder ?? "{{variable}}"}
-                      className="text-xs"
-                    />
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="space-y-2">
-        <Label>Output Variable</Label>
-        <Input
-          value={(data.outputVariable as string) ?? "desktop_result"}
           onChange={(e) => update("outputVariable", e.target.value)}
         />
       </div>

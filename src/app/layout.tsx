@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
+import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/theme-provider";
-import { ToasterProvider } from "@/components/toaster-provider";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -30,7 +30,7 @@ export default function RootLayout({
             {children}
           </ThemeProvider>
         </SessionProvider>
-        <ToasterProvider />
+        <Toaster richColors position="bottom-right" />
       </body>
     </html>
   );

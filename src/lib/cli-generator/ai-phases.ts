@@ -11,7 +11,7 @@ import {
   buildPublishPrompt,
 } from "./prompts";
 
-const AI_PHASE_TIMEOUT_MS = 60_000;
+const AI_PHASE_TIMEOUT_MS = 120_000;
 const PRIMARY_MODEL = "deepseek-chat";
 const FALLBACK_MODEL = "gpt-4o-mini";
 

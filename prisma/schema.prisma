@@ -24,7 +24,6 @@ model User {
   accounts         Account[]
   sessions         Session[]
   mcpServers       MCPServer[]
-  cliGenerations   CLIGeneration[]
   googleOAuthTokens GoogleOAuthToken[]
 }
 
@@ -256,17 +255,14 @@ model MCPServer {
   name       String
   url        String
   transport  MCPTransport   @default(STREAMABLE_HTTP)
-  serverType String         @default("external")
-  cliConfig  Json?
   headers    Json?
   toolsCache Json?
   enabled    Boolean        @default(true)
   userId     String
   user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  agents         AgentMCPServer[]
-  cliGenerations CLIGeneration[]
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  agents     AgentMCPServer[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
   @@index([userId])
 }
@@ -429,41 +425,6 @@ model AgentCallLog {
   @@index([callerAgentId])
   @@index([calleeAgentId])
   @@index([traceId])
-  @@index([createdAt])
-}
-
-// ─── CLI Generation Pipeline ─────────────────────────────────────────────────
-
-enum CLIGenerationStatus {
-  PENDING
-  ANALYZING
-  DESIGNING
-  IMPLEMENTING
-  TESTING
-  DOCUMENTING
-  PUBLISHING
-  COMPLETED
-  FAILED
-}
-
-model CLIGeneration {
-  id              String               @id @default(cuid())
-  applicationName String
-  status          CLIGenerationStatus  @default(PENDING)
-  currentPhase    Int                  @default(0)
-  phases          Json                 @default("[]")
-  cliConfig       Json?
-  generatedFiles  Json?
-  errorMessage    String?
-  userId          String
-  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mcpServerId     String?
-  mcpServer       MCPServer?           @relation(fields: [mcpServerId], references: [id], onDelete: SetNull)
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-
-  @@index([userId])
-  @@index([userId, status])
   @@index([createdAt])
 }
 

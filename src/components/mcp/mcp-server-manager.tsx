@@ -46,21 +46,10 @@ interface MCPServer {
   name: string;
   url: string;
   transport: "STREAMABLE_HTTP" | "SSE";
-  serverType: "external" | "cli_bridge";
-  cliConfig: CLIConfigUI | null;
   enabled: boolean;
   toolsCache: string[] | null;
   createdAt: string;
   _count: { agents: number };
-}
-
-interface CLIConfigUI {
-  cliPath: string;
-  cliName: string;
-  workingDirectory?: string;
-  timeout?: number;
-  sessionMode?: "oneshot" | "repl";
-  envVars?: Record<string, string>;
 }
 
 interface MCPServerManagerProps {
@@ -746,7 +735,7 @@ function ServerCard({
           {!featuredMatch && <Plug className="size-4 shrink-0 text-teal-500" />}
           <span className="font-medium text-sm truncate">{server.name}</span>
           <Badge variant="outline" className="text-[10px] shrink-0">
-            {server.serverType === "cli_bridge" ? "CLI" : server.transport === "SSE" ? "SSE" : "HTTP"}
+            {server.transport === "SSE" ? "SSE" : "HTTP"}
           </Badge>
           {!server.enabled && (
             <Badge variant="secondary" className="text-[10px] shrink-0">
@@ -866,19 +855,10 @@ function ServerFormDialog({
   const [transport, setTransport] = useState<string>(
     server?.transport ?? "STREAMABLE_HTTP"
   );
-  const [serverType, setServerType] = useState<string>(
-    server?.serverType ?? "external"
-  );
-  const [cliPath, setCLIPath] = useState(server?.cliConfig?.cliPath ?? "");
-  const [cliWorkDir, setCLIWorkDir] = useState(server?.cliConfig?.workingDirectory ?? "");
-  const [cliTimeout, setCLITimeout] = useState(server?.cliConfig?.timeout ?? 30000);
   const [headersText, setHeadersText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  const isCLIBridge = serverType === "cli_bridge";
-  const isValid = isCLIBridge
-    ? name.trim() !== "" && cliPath.trim() !== ""
-    : name.trim() !== "" && url.trim() !== "";
+  const isValid = name.trim() !== "" && url.trim() !== "";
 
   function getHeadersJson(): Record<string, string> | undefined {
     if (!headersText.trim()) return undefined;
@@ -905,23 +885,9 @@ function ServerFormDialog({
     try {
       const body: Record<string, unknown> = {
         name: name.trim(),
-        url: isCLIBridge ? `cli://${cliPath.trim()}` : url.trim(),
+        url: url.trim(),
         transport,
-        serverType,
       };
-
-      if (isCLIBridge) {
-        const cliName = cliPath.split("/").pop()?.replace(/\.\w+$/, "") ?? "cli";
-        body.cliConfig = {
-          cliPath: cliPath.trim(),
-          cliName,
-          workingDirectory: cliWorkDir.trim() || undefined,
-          timeout: cliTimeout,
-          sessionMode: "oneshot",
-          envVars: {},
-        };
-      }
-
       const headers = getHeadersJson();
       if (headers) body.headers = headers;
 
@@ -973,98 +939,43 @@ function ServerFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Server Type</Label>
-            <select
-              value={serverType}
-              onChange={(e) => setServerType(e.target.value)}
-              className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-            >
-              <option value="external">External MCP Server</option>
-              <option value="cli_bridge">CLI Bridge</option>
-            </select>
-            {isCLIBridge && (
-              <p className="text-xs text-muted-foreground">
-                Wraps a local CLI tool as MCP-compatible tools
-              </p>
-            )}
+            <Label>URL</Label>
+            <Input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://mcp-server.example.com/mcp"
+            />
           </div>
 
-          {isCLIBridge ? (
-            <>
-              <div className="space-y-2">
-                <Label>CLI Path</Label>
-                <Input
-                  value={cliPath}
-                  onChange={(e) => setCLIPath(e.target.value)}
-                  placeholder="/usr/bin/git or git"
-                  className="font-mono text-xs"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>
-                  Working Directory{" "}
-                  <span className="text-muted-foreground font-normal">(optional)</span>
-                </Label>
-                <Input
-                  value={cliWorkDir}
-                  onChange={(e) => setCLIWorkDir(e.target.value)}
-                  placeholder="/home/user/project"
-                  className="font-mono text-xs"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Timeout (ms)</Label>
-                <Input
-                  type="number"
-                  value={cliTimeout}
-                  onChange={(e) => setCLITimeout(Number(e.target.value))}
-                  min={1000}
-                  max={300000}
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label>URL</Label>
-                <Input
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://mcp-server.example.com/mcp"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label>Transport</Label>
+            <select
+              value={transport}
+              onChange={(e) => setTransport(e.target.value)}
+              className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+            >
+              {TRANSPORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
-              <div className="space-y-2">
-                <Label>Transport</Label>
-                <select
-                  value={transport}
-                  onChange={(e) => setTransport(e.target.value)}
-                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                >
-                  {TRANSPORT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>
-                  Headers{" "}
-                  <span className="text-muted-foreground font-normal">(optional)</span>
-                </Label>
-                <Textarea
-                  value={headersText}
-                  onChange={(e) => setHeadersText(e.target.value)}
-                  placeholder='{"Authorization": "Bearer ..."}'
-                  rows={3}
-                  className="font-mono text-xs"
-                />
-                <p className="text-xs text-muted-foreground">JSON object of HTTP headers</p>
-              </div>
-            </>
-          )}
+          <div className="space-y-2">
+            <Label>
+              Headers{" "}
+              <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Textarea
+              value={headersText}
+              onChange={(e) => setHeadersText(e.target.value)}
+              placeholder='{"Authorization": "Bearer ..."}'
+              rows={3}
+              className="font-mono text-xs"
+            />
+            <p className="text-xs text-muted-foreground">JSON object of HTTP headers</p>
+          </div>
         </div>
 
         <DialogFooter>

@@ -33,7 +33,6 @@ const NODE_TYPES = [
   "switch",
   "web_fetch",
   "browser_action",
-  "desktop_app",
 ] as const;
 
 const VARIABLE_TYPES = ["string", "number", "boolean", "object"] as const;

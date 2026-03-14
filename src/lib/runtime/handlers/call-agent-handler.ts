@@ -6,12 +6,6 @@ import { checkCircuit, recordSuccess, recordFailure } from "@/lib/a2a/circuit-br
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
 import type { FlowContent } from "@/types";
 import { parseFlowContent } from "@/lib/validators/flow-content";
-import {
-  createWorkspace,
-  shareWorkspace,
-  getFiles,
-  type AgentWorkspace,
-} from "@/lib/agents/agent-workspace";
 
 const MAX_DEPTH = 5;
 const DEFAULT_TIMEOUT_SECONDS = 30;
@@ -210,21 +204,6 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
       },
     });
 
-    const workspaceFiles = await getWorkspaceFiles(context.conversationId);
-
-    const updatedVars: Record<string, unknown> = {
-      [outputVariable]: output,
-    };
-
-    if (workspaceFiles.length > 0) {
-      updatedVars[`${outputVariable}_files`] = workspaceFiles.map((f) => ({
-        name: f.name,
-        path: f.path,
-        mimeType: f.mimeType,
-        size: f.size,
-      }));
-    }
-
     return {
       messages: [
         {
@@ -237,7 +216,7 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
       ],
       nextNodeId: null,
       waitForInput: false,
-      updatedVariables: updatedVars,
+      updatedVariables: { [outputVariable]: output },
     };
   } catch (err) {
     const durationMs = Date.now() - startTime;
@@ -589,23 +568,12 @@ async function executeSubAgent(params: SubAgentParams): Promise<SubAgentResult> 
     },
   });
 
-  let workspace: AgentWorkspace | undefined;
-  try {
-    workspace = await createWorkspace(targetAgentId, conversation.id);
-    workspace = shareWorkspace(workspace, callStack[0] ?? targetAgentId);
-  } catch {
-    // Workspace creation is non-critical
-  }
-
   const subContext: RuntimeContextWithDepth = {
     conversationId: conversation.id,
     agentId: targetAgentId,
     flowContent,
     currentNodeId: null,
-    variables: {
-      ...input,
-      ...(workspace ? { _workspace_path: workspace.basePath } : {}),
-    },
+    variables: { ...input },
     messageHistory: [],
     isNewConversation: true,
     _a2aDepth: depth,
@@ -655,16 +623,6 @@ interface RuntimeContextWithDepth {
   _a2aCallStack?: string[];
   _a2aTraceId?: string;
   _userId?: string;
-}
-
-async function getWorkspaceFiles(
-  conversationId: string,
-): Promise<{ name: string; path: string; mimeType: string; size: number }[]> {
-  try {
-    return await getFiles(conversationId);
-  } catch {
-    return [];
-  }
 }
 
 function normalizeInputMapping(

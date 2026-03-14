@@ -8,7 +8,7 @@ import { useSession, signOut } from "next-auth/react";
 import {
   Plus, Bot, MessageSquare, Database, Trash2, MoreVertical,
   Download, Upload, LogOut, BarChart3, Plug, ArrowRightLeft,
-  Sun, Moon, Compass, Terminal,
+  Sun, Moon, Compass,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -162,19 +162,6 @@ export default function DashboardPage() {
             >
               <Link href="/discover">
                 <Compass className="size-4" aria-hidden="true" />
-              </Link>
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              asChild
-              title="CLI Generator"
-              aria-label="CLI Generator"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Link href="/cli-generator">
-                <Terminal className="size-4" aria-hidden="true" />
               </Link>
             </Button>
 

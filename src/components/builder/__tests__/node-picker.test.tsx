@@ -37,7 +37,7 @@ vi.mock("lucide-react", () => {
     "Globe", "Webhook", "Code", "Tags", "FileOutput", "FileText", "Plug",
     "ArrowRightLeft", "UserCheck", "Repeat", "GitFork", "HardDriveUpload",
     "HardDriveDownload", "ClipboardCheck", "Timer", "Mail", "Bell", "Shuffle",
-    "Route", "Plus", "GlobeLock", "Monitor", "AppWindow",
+    "Route", "Plus", "GlobeLock", "Monitor",
   ];
   const mocks: Record<string, unknown> = {};
   for (const name of icons) {
@@ -168,12 +168,12 @@ describe("NodePicker", () => {
     }));
   });
 
-  it("has correct total number of node definitions (32)", () => {
+  it("has correct total number of node definitions (31)", () => {
     render(<NodePicker onAddNode={vi.fn()} />);
 
     const allButtons = screen.getAllByRole("button");
-    // Total nodes = 32 defined in NODE_DEFINITIONS
-    // + 1 for "Add Node" trigger button = 33 buttons total
-    expect(allButtons.length).toBe(33);
+    // Total nodes = 31 defined in NODE_DEFINITIONS
+    // + 1 for "Add Node" trigger button = 32 buttons total
+    expect(allButtons.length).toBe(32);
   });
 });

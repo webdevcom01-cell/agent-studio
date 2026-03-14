@@ -115,18 +115,6 @@ vi.mock("lucide-react", () => {
     ChevronDown: Icon,
     Check: Icon,
     AlertTriangle: Icon,
-    AppWindow: Icon,
-    Paintbrush: Icon,
-    Image: Icon,
-    PenTool: Icon,
-    Music: Icon,
-    FileSpreadsheet: Icon,
-    Video: Icon,
-    Film: Icon,
-    Scissors: Icon,
-    Phone: Icon,
-    Workflow: Icon,
-    Bot: Icon,
   };
 });
 

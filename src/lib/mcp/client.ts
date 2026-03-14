@@ -1,25 +1,17 @@
 import { createMCPClient } from "@ai-sdk/mcp";
-import { dynamicTool, type ToolSet as AIToolSet, jsonSchema } from "ai";
 import type { MCPTransport } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { getOrCreate, remove } from "./pool";
-import {
-  initializeCLIBridge,
-  callCLITool,
-  getCLIBridgeTools,
-} from "./cli-bridge/cli-mcp-server";
 
-type MCPToolSet = Awaited<ReturnType<Awaited<ReturnType<typeof createMCPClient>>["tools"]>>;
-
-const CLI_BRIDGE_SERVER_TYPE = "cli_bridge";
+type ToolSet = Awaited<ReturnType<Awaited<ReturnType<typeof createMCPClient>>["tools"]>>;
 
 function parseHeaders(headers: unknown): Record<string, string> | undefined {
   if (!headers || typeof headers !== "object") return undefined;
   return headers as Record<string, string>;
 }
 
-export async function getMCPToolsForAgent(agentId: string): Promise<AIToolSet> {
+export async function getMCPToolsForAgent(agentId: string): Promise<ToolSet> {
   const agentServers = await prisma.agentMCPServer.findMany({
     where: { agentId },
     include: {
@@ -31,17 +23,8 @@ export async function getMCPToolsForAgent(agentId: string): Promise<AIToolSet> {
 
   if (enabledServers.length === 0) return {};
 
-  const cliServers = enabledServers.filter((as) => as.mcpServer.serverType === CLI_BRIDGE_SERVER_TYPE);
-  const mcpServers = enabledServers.filter((as) => as.mcpServer.serverType !== CLI_BRIDGE_SERVER_TYPE);
-
-  const cliToolSets = await Promise.allSettled(
-    cliServers.map((as) =>
-      getCLIBridgeToolsForAgent(as.mcpServer.id, as.mcpServer.cliConfig, as.enabledTools as string[] | null),
-    ),
-  );
-
-  const mcpToolSets = await Promise.allSettled(
-    mcpServers.map(async (as) => {
+  const toolSets = await Promise.allSettled(
+    enabledServers.map(async (as) => {
       const { mcpServer } = as;
       const headers = parseHeaders(mcpServer.headers);
 
@@ -57,7 +40,7 @@ export async function getMCPToolsForAgent(agentId: string): Promise<AIToolSet> {
       const enabledTools = as.enabledTools as string[] | null;
       if (!enabledTools) return tools;
 
-      const filtered: MCPToolSet = {};
+      const filtered: ToolSet = {};
       for (const name of enabledTools) {
         if (tools[name]) {
           filtered[name] = tools[name];
@@ -67,19 +50,8 @@ export async function getMCPToolsForAgent(agentId: string): Promise<AIToolSet> {
     }),
   );
 
-  const merged: AIToolSet = {};
-
-  for (const result of cliToolSets) {
-    if (result.status === "fulfilled") {
-      Object.assign(merged, result.value);
-    } else {
-      logger.error("Failed to load CLI bridge tools", {
-        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-      });
-    }
-  }
-
-  for (const result of mcpToolSets) {
+  const merged: ToolSet = {};
+  for (const result of toolSets) {
     if (result.status === "fulfilled") {
       Object.assign(merged, result.value);
     } else {
@@ -90,71 +62,6 @@ export async function getMCPToolsForAgent(agentId: string): Promise<AIToolSet> {
   }
 
   return merged;
-}
-
-interface JsonSchemaProperty {
-  type: "string" | "number" | "boolean";
-  description: string;
-}
-
-function buildJsonSchema(
-  params: Record<string, { type: string; description: string; required: boolean }>,
-): { type: "object"; properties: Record<string, JsonSchemaProperty>; required: string[] } {
-  const properties: Record<string, JsonSchemaProperty> = {};
-  const required: string[] = [];
-
-  for (const [key, param] of Object.entries(params)) {
-    const schemaType = param.type === "boolean" ? "boolean" as const
-      : param.type === "number" ? "number" as const
-      : "string" as const;
-
-    properties[key] = {
-      type: schemaType,
-      description: param.description,
-    };
-    if (param.required) {
-      required.push(key);
-    }
-  }
-
-  return { type: "object" as const, properties, required };
-}
-
-export async function getCLIBridgeToolsForAgent(
-  serverId: string,
-  cliConfig: unknown,
-  enabledTools: string[] | null,
-): Promise<AIToolSet> {
-  const initResult = await initializeCLIBridge(serverId, cliConfig);
-  if (!initResult.success) {
-    logger.warn("CLI bridge initialization failed", {
-      serverId,
-      error: initResult.error,
-    });
-    return {};
-  }
-
-  const cliTools = getCLIBridgeTools(serverId);
-  const tools: AIToolSet = {};
-
-  for (const cliTool of cliTools) {
-    if (enabledTools && !enabledTools.includes(cliTool.name)) continue;
-
-    const sid = serverId;
-    const tName = cliTool.name;
-    const schema = buildJsonSchema(cliTool.parameters);
-
-    tools[cliTool.name] = dynamicTool({
-      description: cliTool.description,
-      inputSchema: jsonSchema(schema),
-      execute: async (args: unknown) => {
-        const result = await callCLITool(sid, tName, (args ?? {}) as Record<string, unknown>);
-        return result.output || result.error || "";
-      },
-    });
-  }
-
-  return tools;
 }
 
 interface TestConnectionResult {
@@ -199,14 +106,6 @@ export async function callMCPTool(
   const server = await prisma.mCPServer.findUniqueOrThrow({
     where: { id: serverId },
   });
-
-  if (server.serverType === CLI_BRIDGE_SERVER_TYPE) {
-    const result = await callCLITool(serverId, toolName, args);
-    if (!result.success) {
-      throw new Error(result.error ?? `CLI tool "${toolName}" failed with exit code ${result.exitCode}`);
-    }
-    return result.output;
-  }
 
   const headers = parseHeaders(server.headers);
   const client = await getOrCreate(serverId, server.url, server.transport, headers);

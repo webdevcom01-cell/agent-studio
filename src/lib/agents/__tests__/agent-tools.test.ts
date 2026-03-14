@@ -42,7 +42,7 @@ vi.mock("@/lib/validators/flow-content", () => ({
   parseFlowContent: vi.fn((content: unknown) => content),
 }));
 
-import { getAgentToolsForAgent, extractDesktopMetadata, type AgentToolContext } from "../agent-tools";
+import { getAgentToolsForAgent, type AgentToolContext } from "../agent-tools";
 import { checkCircuit } from "@/lib/a2a/circuit-breaker";
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
 
@@ -294,136 +294,6 @@ describe("agent tool execution", () => {
     const tools = await getAgentToolsForAgent("agent-1", makeCtx({ userId: null }));
 
     expect(Object.keys(tools)).toHaveLength(1);
-  });
-});
-
-describe("extractDesktopMetadata", () => {
-  it("returns empty metadata when agent has no flow", () => {
-    const metadata = extractDesktopMetadata({
-      id: "a1",
-      name: "Test",
-      description: null,
-      flow: null,
-    });
-
-    expect(metadata.desktopApps).toEqual([]);
-    expect(metadata.requiredCLIs).toEqual([]);
-    expect(metadata.estimatedDuration).toBe(30);
-    expect(metadata.outputTypes).toEqual([]);
-  });
-
-  it("extracts desktop_app node info from flow", () => {
-    const metadata = extractDesktopMetadata({
-      id: "a1",
-      name: "Renderer",
-      description: "Renders 3D scenes",
-      flow: {
-        content: {
-          nodes: [
-            {
-              type: "desktop_app",
-              data: {
-                appId: "blender",
-                actions: [
-                  { command: "render", parameters: {} },
-                  { command: "export-png", parameters: {} },
-                ],
-              },
-            },
-            {
-              type: "message",
-              data: { label: "Start" },
-            },
-          ],
-          edges: [],
-          variables: [],
-        },
-      },
-    });
-
-    expect(metadata.desktopApps).toEqual(["blender"]);
-    expect(metadata.requiredCLIs).toEqual(["blender"]);
-    expect(metadata.outputTypes).toContain("file");
-  });
-
-  it("handles multiple desktop_app nodes", () => {
-    const metadata = extractDesktopMetadata({
-      id: "a1",
-      name: "Pipeline",
-      description: null,
-      flow: {
-        content: {
-          nodes: [
-            {
-              type: "desktop_app",
-              data: { appId: "blender", actions: [{ command: "render" }] },
-            },
-            {
-              type: "desktop_app",
-              data: { appId: "gimp", actions: [{ command: "convert" }] },
-            },
-          ],
-        },
-      },
-    });
-
-    expect(metadata.desktopApps).toEqual(["blender", "gimp"]);
-    expect(metadata.estimatedDuration).toBe(60);
-  });
-
-  it("deduplicates app IDs", () => {
-    const metadata = extractDesktopMetadata({
-      id: "a1",
-      name: "Multi",
-      description: null,
-      flow: {
-        content: {
-          nodes: [
-            { type: "desktop_app", data: { appId: "blender", actions: [] } },
-            { type: "desktop_app", data: { appId: "blender", actions: [] } },
-          ],
-        },
-      },
-    });
-
-    expect(metadata.desktopApps).toEqual(["blender"]);
-  });
-
-  it("handles malformed flow content gracefully", () => {
-    const metadata = extractDesktopMetadata({
-      id: "a1",
-      name: "Bad",
-      description: null,
-      flow: { content: "not-json" },
-    });
-
-    expect(metadata.desktopApps).toEqual([]);
-  });
-
-  it("infers output types from commands", () => {
-    const metadata = extractDesktopMetadata({
-      id: "a1",
-      name: "Test",
-      description: null,
-      flow: {
-        content: {
-          nodes: [
-            {
-              type: "desktop_app",
-              data: {
-                appId: "inkscape",
-                actions: [
-                  { command: "export-png" },
-                  { command: "script" },
-                ],
-              },
-            },
-          ],
-        },
-      },
-    });
-
-    expect(metadata.outputTypes).toContain("file");
-    expect(metadata.outputTypes).toContain("text");
+    // Rate limiter should not be called when userId is null
   });
 });
