@@ -7,6 +7,8 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { startExecution } from "@/lib/cli-generator/executor";
 import { createInitialPhases } from "@/lib/cli-generator/pipeline";
 
+export const maxDuration = 300;
+
 const MAX_GENERATIONS_PER_USER = 50;
 const WRITE_RATE_LIMIT = 5;
 

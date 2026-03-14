@@ -35,12 +35,28 @@ type PhaseRunner = (
   previousResults: PhaseResult[],
 ) => Promise<AIPhaseOutput>;
 
+/** Summarize implement output to reduce context size for downstream phases */
+function summarizeImplementOutput(output: unknown): unknown {
+  if (typeof output !== "object" || output === null) return output;
+  const record = output as Record<string, unknown>;
+  const summary: Record<string, string> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (typeof value === "string") {
+      // Keep only filename + first 200 chars as preview
+      summary[key] = value.length > 200
+        ? `${value.substring(0, 200)}... (${value.length} chars total)`
+        : value;
+    }
+  }
+  return summary;
+}
+
 const PHASE_RUNNERS: PhaseRunner[] = [
   (config) => aiAnalyze(config),                       // 0: analyze
   (config, prev) => aiDesign(config, prev[0]?.output), // 1: design
   (config, prev) => aiImplement(config, prev[1]?.output), // 2: implement
-  (config, prev) => aiTest(config, prev[2]?.output),   // 3: plan-tests (reuses aiTest for planning)
-  (config, prev) => aiTest(config, prev[2]?.output),   // 4: write-tests (reuses aiTest for writing)
+  (config, prev) => aiTest(config, summarizeImplementOutput(prev[2]?.output)),   // 3: plan-tests
+  (config, prev) => aiTest(config, summarizeImplementOutput(prev[2]?.output)),   // 4: write-tests
   (config, prev) => aiDocs(config, prev[1]?.output),   // 5: document
   (config, prev) => aiPublish(config, prev[1]?.output), // 6: publish
 ];
