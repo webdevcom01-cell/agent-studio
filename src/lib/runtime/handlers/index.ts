@@ -30,6 +30,7 @@ import { formatTransformHandler } from "./format-transform-handler";
 import { switchHandler } from "./switch-handler";
 import { webFetchHandler } from "./web-fetch-handler";
 import { browserActionHandler } from "./browser-action-handler";
+import { desktopAppHandler } from "./desktop-app-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -63,6 +64,7 @@ const handlers: Record<string, NodeHandler> = {
   switch: switchHandler,
   web_fetch: webFetchHandler,
   browser_action: browserActionHandler,
+  desktop_app: desktopAppHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

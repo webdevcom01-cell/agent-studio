@@ -14,6 +14,7 @@ export interface AgentTemplate {
   color: string;
   vibe: string;
   systemPrompt: string;
+  tags?: string[];
 }
 
 const COLOR_CLASSES: Record<string, string> = {
@@ -35,6 +36,7 @@ const COLOR_CLASSES: Record<string, string> = {
   sky:     "bg-sky-500/10 text-sky-600 dark:text-sky-400",
   violet:  "bg-violet-500/10 text-violet-600 dark:text-violet-400",
   rose:    "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+  emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -58,6 +60,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   data:               "Data",
   education:          "Education",
   productivity:       "Productivity",
+  "desktop-automation": "Desktop Auto",
 };
 
 interface TemplateGalleryProps {
@@ -87,7 +90,8 @@ export function TemplateGallery({
         (t) =>
           t.name.toLowerCase().includes(q) ||
           t.description.toLowerCase().includes(q) ||
-          t.vibe.toLowerCase().includes(q)
+          t.vibe.toLowerCase().includes(q) ||
+          t.tags?.some((tag) => tag.toLowerCase().includes(q))
       );
     }
 
@@ -153,11 +157,18 @@ export function TemplateGallery({
             </div>
 
             {/* Category badge */}
-            <span
-              className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full mb-2 ${COLOR_CLASSES[template.color] ?? COLOR_CLASSES.gray}`}
-            >
-              {CATEGORY_LABELS[template.category] ?? template.category}
-            </span>
+            <div className="flex items-center gap-1 mb-2">
+              <span
+                className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full ${COLOR_CLASSES[template.color] ?? COLOR_CLASSES.gray}`}
+              >
+                {CATEGORY_LABELS[template.category] ?? template.category}
+              </span>
+              {template.category === "desktop-automation" && (
+                <span className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  CLI Required
+                </span>
+              )}
+            </div>
 
             {/* Vibe / description */}
             <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">

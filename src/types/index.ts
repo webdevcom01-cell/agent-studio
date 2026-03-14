@@ -56,4 +56,5 @@ export type NodeType =
   | "format_transform"
   | "switch"
   | "web_fetch"
-  | "browser_action";
+  | "browser_action"
+  | "desktop_app";
