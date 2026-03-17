@@ -5,10 +5,11 @@ import type { PipelineConfig, AIPhaseOutput, GeneratedFiles } from "./types";
 import {
   buildAnalyzePrompt,
   buildDesignPrompt,
-  buildImplementPrompt,
+  buildImplementSingleFilePrompt,
   buildTestPrompt,
   buildDocsPrompt,
   buildPublishPrompt,
+  IMPLEMENT_FILES,
 } from "./prompts";
 
 const AI_PHASE_TIMEOUT_MS = 180_000;
@@ -222,26 +223,47 @@ export async function aiDesign(
   };
 }
 
+/**
+ * Generates each implementation file in a separate AI call.
+ * This avoids streaming truncation from large multi-file JSON responses.
+ * Each file response is ~2000-4000 chars — well within streaming limits.
+ */
 export async function aiImplement(
   config: PipelineConfig,
   designResult: unknown,
 ): Promise<AIPhaseOutput> {
-  const prompt = buildImplementPrompt({
-    applicationName: config.applicationName,
-    description: config.description,
-    capabilities: config.capabilities,
-    platform: config.platform,
-    previousResults: [designResult],
-  });
+  const allFiles: GeneratedFiles = {};
+  let totalInput = 0;
+  let totalOutput = 0;
 
-  const { text, usage } = await callAI(prompt, "implement", 8192);
-  const parsed = parseJsonResponse(text);
-  const generatedFiles = extractGeneratedFiles(parsed);
+  for (const fileSpec of IMPLEMENT_FILES) {
+    const prompt = buildImplementSingleFilePrompt(
+      {
+        applicationName: config.applicationName,
+        description: config.description,
+        capabilities: config.capabilities,
+        platform: config.platform,
+        previousResults: [designResult],
+      },
+      fileSpec,
+    );
+
+    const { text, usage } = await callAI(prompt, `implement:${fileSpec.filename}`, 2048);
+    const parsed = parseJsonResponse(text);
+    const files = extractGeneratedFiles(parsed);
+
+    if (files) {
+      Object.assign(allFiles, files);
+    }
+
+    totalInput += usage?.inputTokens ?? 0;
+    totalOutput += usage?.outputTokens ?? 0;
+  }
 
   return {
-    result: parsed,
-    generatedFiles,
-    tokensUsed: buildTokensUsed(usage),
+    result: allFiles,
+    generatedFiles: Object.keys(allFiles).length > 0 ? allFiles : undefined,
+    tokensUsed: { input: totalInput, output: totalOutput },
   };
 }
 

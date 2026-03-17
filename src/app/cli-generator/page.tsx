@@ -113,6 +113,11 @@ export default function CLIGeneratorPage(): React.JSX.Element {
     setSelectedId(id);
   }
 
+  /**
+   * Creates the generation record then drives each phase by calling /advance
+   * sequentially. Each /advance call is an independent serverless function
+   * invocation — giving each phase its own 300s budget (2026 industry standard).
+   */
   async function handleCreate(data: GenerationWizardResult): Promise<void> {
     setIsCreating(true);
     try {
@@ -122,14 +127,43 @@ export default function CLIGeneratorPage(): React.JSX.Element {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (json.success) {
-        setShowWizard(false);
-        toast.success("Generation started");
-        await fetchGenerations();
-        setSelectedId(json.data.id);
-      } else {
+      if (!json.success) {
         toast.error(json.error ?? "Failed to start generation");
+        return;
       }
+
+      const generationId: string = json.data.id;
+      setShowWizard(false);
+      toast.success("Generation started");
+      await fetchGenerations();
+      setSelectedId(generationId);
+
+      // Drive the pipeline: call /advance for each phase until done or error.
+      // Config is passed in each request body since it's not stored in the DB.
+      let done = false;
+      while (!done) {
+        const advanceRes = await fetch(
+          `/api/cli-generator/${generationId}/advance`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ config: data }),
+          },
+        );
+        const advanceJson = await advanceRes.json();
+
+        if (!advanceJson.success) {
+          // Phase failed — SWR polling will pick up the FAILED status
+          break;
+        }
+
+        done = advanceJson.data?.done === true;
+
+        // Trigger SWR revalidation so UI updates after each phase
+        await mutateDetail();
+      }
+
+      await fetchGenerations();
     } catch {
       toast.error("Failed to start generation");
     } finally {

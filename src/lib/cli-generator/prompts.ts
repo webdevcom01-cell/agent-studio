@@ -87,33 +87,60 @@ Respond with ONLY a JSON array (no markdown, no code fences, no explanation):
 ]`;
 }
 
-export function buildImplementPrompt(ctx: PromptContext): string {
-  return `You are an expert Python developer specializing in CLI bridges and MCP servers. Implement the CLI bridge for "${ctx.applicationName}".
+export interface ImplementFileSpec {
+  filename: "__init__.py" | "main.py" | "server.py" | "bridge.py";
+  description: string;
+  guidance: string;
+}
 
-Application description: ${ctx.description ?? "No description provided."}
-Target capabilities: ${formatCapabilities(ctx.capabilities)}
-Target platform: ${ctx.platform ?? "cross-platform"}
+export const IMPLEMENT_FILES: ImplementFileSpec[] = [
+  {
+    filename: "__init__.py",
+    description: "Package init with version and public exports",
+    guidance: "Simple module init: __version__ = '1.0.0', __author__, and import of main Bridge class. Under 20 lines.",
+  },
+  {
+    filename: "bridge.py",
+    description: "Core bridge: argument translation and subprocess execution",
+    guidance: "Class Bridge with methods per capability. Use subprocess.run, capture stdout/stderr, configurable timeout=30. Return dict with success, output, error. Under 80 lines.",
+  },
+  {
+    filename: "server.py",
+    description: "MCP server that registers tools from the design phase",
+    guidance: "Use `mcp` package. Create Server, register each tool from design as @server.tool. Each tool calls Bridge methods. Under 80 lines.",
+  },
+  {
+    filename: "main.py",
+    description: "Click CLI entry point with subcommands",
+    guidance: "Use click. @click.group() with @cli.command() per capability. Call Bridge. Add --timeout option. Under 60 lines.",
+  },
+];
 
-Previous analysis and design results:
+export function buildImplementSingleFilePrompt(ctx: PromptContext, fileSpec: ImplementFileSpec): string {
+  return `You are an expert Python developer. Generate ONLY the file "${fileSpec.filename}" for the "${ctx.applicationName}" CLI bridge.
+
+Application: ${ctx.applicationName}
+Description: ${ctx.description ?? "No description provided."}
+Capabilities: ${formatCapabilities(ctx.capabilities)}
+Platform: ${ctx.platform ?? "cross-platform"}
+
+Design (tools to implement):
 ${formatPreviousResults(ctx.previousResults)}
 
-Generate Python files following CLI-Anything framework conventions:
-- Python 3.10+, click for CLI entry points, subprocess.run for executing commands
-- mcp package for MCP server implementation
-- Proper argument translation, stdout/stderr capture, configurable timeout
-- Clean error handling with structured error responses
+File to generate: ${fileSpec.filename}
+Purpose: ${fileSpec.description}
+Requirements: ${fileSpec.guidance}
 
-IMPORTANT: Keep each file CONCISE (under 150 lines). Focus on core functionality, avoid lengthy docstrings or comments. Use minimal but clear code.
+CRITICAL: Respond with ONLY a JSON object with a single key — the filename — mapping to the complete file content as a string.
+Newlines must be escaped as \\n. Quotes inside the code must be escaped as \\".
+No markdown, no code fences, no explanation outside the JSON.
 
-Respond with ONLY a JSON object mapping filenames to file contents (no markdown, no code fences, no explanation).
-Each value must be a complete, valid Python file as a single string. Ensure all JSON strings are properly escaped (newlines as \\n, quotes as \\").
+{"${fileSpec.filename}": "<complete Python file content with all newlines escaped as \\n>"}`;
+}
 
-{
-  "__init__.py": "<module init with version>",
-  "main.py": "<click CLI entry point with commands that call subprocess>",
-  "server.py": "<MCP server using Python mcp package, registers tools from design phase>",
-  "bridge.py": "<core logic: argument translation to CLI flags, subprocess execution with timeout, stdout/stderr parsing, structured result objects>"
-}`;
+// Legacy: kept for test compatibility
+export function buildImplementPrompt(ctx: PromptContext): string {
+  return buildImplementSingleFilePrompt(ctx, IMPLEMENT_FILES[1]);
 }
 
 export function buildTestPrompt(ctx: PromptContext): string {

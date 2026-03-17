@@ -1,10 +1,9 @@
-import { NextRequest, NextResponse, after } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { startExecution } from "@/lib/cli-generator/executor";
 import { createInitialPhases } from "@/lib/cli-generator/pipeline";
 
 export const maxDuration = 300;
@@ -101,17 +100,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
 
-    after(
-      startExecution(generation.id, {
-        applicationName,
-        description,
-        capabilities,
-        platform,
-      }).catch((err) => {
-        logger.error("Failed to start CLI generation", err);
-      }),
-    );
-
+    // Pipeline is driven by the frontend calling POST /advance for each phase.
+    // This pattern (per-phase serverless invocations) gives each phase its own
+    // 300s budget instead of sharing a single function execution window.
     return NextResponse.json(
       { success: true, data: generation },
       { status: 201 },
