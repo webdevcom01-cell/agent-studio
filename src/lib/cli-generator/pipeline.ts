@@ -144,7 +144,8 @@ export async function runPipeline(
   }
 
   const lastPhaseOutput = phases[PHASE_COUNT - 1]?.output as Record<string, unknown> | undefined;
-  const cliConfig = lastPhaseOutput?.cliConfig ?? null;
+  // Publish phase returns "mcp_config" key — support both for resilience
+  const cliConfig = lastPhaseOutput?.mcp_config ?? lastPhaseOutput?.cliConfig ?? null;
 
   const completedGeneration = await prisma.cLIGeneration.update({
     where: { id: generationId },

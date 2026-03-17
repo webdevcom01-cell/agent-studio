@@ -97,6 +97,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         applicationName,
         userId: authResult.userId,
         phases: JSON.parse(JSON.stringify(createInitialPhases())),
+        // Persist config so /advance can read it from DB — enables tab-close resume
+        // configSnapshot is a new nullable field; Prisma generates its type on Vercel build
+        ...({ configSnapshot: { applicationName, description, capabilities, platform } } as Record<string, unknown>),
       },
     });
 

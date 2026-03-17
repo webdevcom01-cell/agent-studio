@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
-import { cancelExecution } from "@/lib/cli-generator/executor";
+// executor.ts is kept for legacy compat but cancelExecution is no-op with per-phase /advance architecture
 
 const cuidSchema = z.string().cuid();
 
@@ -90,7 +90,14 @@ export async function DELETE(
       );
     }
 
-    cancelExecution(generationId);
+    // Per-phase architecture: cancellation means "stop calling /advance"
+    // We mark FAILED so stuck pipeline doesn't resume after deletion UI re-add
+    if (!["COMPLETED", "FAILED"].includes(generation.status)) {
+      await prisma.cLIGeneration.update({
+        where: { id: generationId },
+        data: { status: "FAILED", errorMessage: "Cancelled by user" },
+      }).catch(() => { /* ignore — we're deleting anyway */ });
+    }
 
     await prisma.cLIGeneration.delete({
       where: { id: generationId },

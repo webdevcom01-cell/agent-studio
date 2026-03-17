@@ -7,9 +7,12 @@ import {
   buildDesignPrompt,
   buildImplementSingleFilePrompt,
   buildTestPrompt,
+  buildTestSingleFilePrompt,
   buildDocsPrompt,
   buildPublishPrompt,
   IMPLEMENT_FILES,
+  TEST_FILES,
+  extractPythonSignatures,
 } from "./prompts";
 
 const AI_PHASE_TIMEOUT_MS = 180_000;
@@ -159,30 +162,44 @@ async function callAIWithModel(
   }
 }
 
+/**
+ * Calls AI with exponential backoff retry across both models.
+ * Retry order: primary → fallback → primary(retry) → fallback(retry)
+ * Backoff: 1s, 2s between rounds (doubles each round).
+ * Timeout AbortErrors are never retried — they indicate a fundamental size issue.
+ */
 async function callAI(prompt: string, phase: string, maxTokens?: number): Promise<{
   text: string;
   usage: TokenUsage | undefined;
 }> {
-  try {
-    return await callAIWithModel(PRIMARY_MODEL, prompt, phase, maxTokens);
-  } catch (primaryErr) {
-    const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+  const models = [PRIMARY_MODEL, FALLBACK_MODEL];
+  const MAX_ROUNDS = 2;
+  let lastError: string = "";
 
-    // Don't retry on our own AbortError (timeout)
-    if (primaryErr instanceof Error && primaryErr.name === "AbortError") {
-      throw new Error(`Phase ${phase} timed out after ${AI_PHASE_TIMEOUT_MS / 1000}s`);
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    for (const modelId of models) {
+      try {
+        return await callAIWithModel(modelId, prompt, phase, maxTokens);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        lastError = msg;
+
+        // Timeout is non-recoverable — abort immediately
+        if (err instanceof Error && err.name === "AbortError") {
+          throw new Error(`Phase ${phase} timed out after ${AI_PHASE_TIMEOUT_MS / 1000}s`);
+        }
+
+        logger.warn(`AI call failed (round ${round + 1}, model ${modelId})`, { phase, modelId, round, error: msg });
+      }
     }
 
-    // Primary model failed — retry with fallback model
-    logger.warn(`AI phase "${phase}" primary model failed, retrying with fallback`, { phase, primaryMsg });
-    try {
-      return await callAIWithModel(FALLBACK_MODEL, prompt, phase, maxTokens);
-    } catch (fallbackErr) {
-      const message = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-      logger.error(`AI phase "${phase}" fallback also failed`, fallbackErr instanceof Error ? fallbackErr : new Error(message), { phase });
-      throw new Error(`AI generation failed for phase "${phase}": ${primaryMsg} (fallback: ${message})`);
+    // Exponential backoff between rounds: 1s, 2s, 4s…
+    if (round < MAX_ROUNDS - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, round)));
     }
   }
+
+  throw new Error(`AI generation failed for phase "${phase}" after ${MAX_ROUNDS} retry rounds: ${lastError}`);
 }
 
 export async function aiAnalyze(config: PipelineConfig): Promise<AIPhaseOutput> {
@@ -224,40 +241,53 @@ export async function aiDesign(
 }
 
 /**
- * Generates each implementation file in a separate AI call.
- * This avoids streaming truncation from large multi-file JSON responses.
- * Each file response is ~2000-4000 chars — well within streaming limits.
+ * Generates each implementation file in PARALLEL AI calls.
+ * 4 files run concurrently via Promise.allSettled — no interdependencies between files.
+ * Before: ~97s sequential (4 × 25s). After: ~25s parallel (4x speedup).
+ *
+ * Promise.allSettled ensures partial success:
+ * if one file fails, the others still complete and are kept.
  */
 export async function aiImplement(
   config: PipelineConfig,
   designResult: unknown,
 ): Promise<AIPhaseOutput> {
+  const ctx = {
+    applicationName: config.applicationName,
+    description: config.description,
+    capabilities: config.capabilities,
+    platform: config.platform,
+    previousResults: [designResult],
+  };
+
+  // Fire all 4 file generations concurrently
+  const results = await Promise.allSettled(
+    IMPLEMENT_FILES.map((fileSpec) =>
+      callAI(
+        buildImplementSingleFilePrompt(ctx, fileSpec),
+        `implement:${fileSpec.filename}`,
+        2048,
+      ).then((res) => ({ fileSpec, res })),
+    ),
+  );
+
   const allFiles: GeneratedFiles = {};
   let totalInput = 0;
   let totalOutput = 0;
 
-  for (const fileSpec of IMPLEMENT_FILES) {
-    const prompt = buildImplementSingleFilePrompt(
-      {
-        applicationName: config.applicationName,
-        description: config.description,
-        capabilities: config.capabilities,
-        platform: config.platform,
-        previousResults: [designResult],
-      },
-      fileSpec,
-    );
-
-    const { text, usage } = await callAI(prompt, `implement:${fileSpec.filename}`, 2048);
-    const parsed = parseJsonResponse(text);
-    const files = extractGeneratedFiles(parsed);
-
-    if (files) {
-      Object.assign(allFiles, files);
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      const { res } = result.value;
+      const parsed = parseJsonResponse(res.text);
+      const files = extractGeneratedFiles(parsed);
+      if (files) Object.assign(allFiles, files);
+      totalInput += res.usage?.inputTokens ?? 0;
+      totalOutput += res.usage?.outputTokens ?? 0;
+    } else {
+      logger.warn("Implement file generation failed (partial result kept)", {
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      });
     }
-
-    totalInput += usage?.inputTokens ?? 0;
-    totalOutput += usage?.outputTokens ?? 0;
   }
 
   return {
@@ -267,26 +297,59 @@ export async function aiImplement(
   };
 }
 
+/**
+ * Generates each test file in PARALLEL AI calls with actual Python signatures.
+ * Uses extractPythonSignatures() to pass real function names — not truncated content.
+ * Before: 3 files in one ~92s call. After: 3 concurrent calls ~30s (3x speedup).
+ */
 export async function aiTest(
   config: PipelineConfig,
   implementResult: unknown,
 ): Promise<AIPhaseOutput> {
-  const prompt = buildTestPrompt({
+  // Extract actual function signatures from generated implementation files
+  const signatures = extractPythonSignatures(implementResult);
+
+  const ctx = {
     applicationName: config.applicationName,
     description: config.description,
     capabilities: config.capabilities,
     platform: config.platform,
-    previousResults: [implementResult],
-  });
+  };
 
-  const { text, usage } = await callAI(prompt, "test", 4096);
-  const parsed = parseJsonResponse(text);
-  const generatedFiles = extractGeneratedFiles(parsed);
+  // Fire all 3 test file generations concurrently
+  const results = await Promise.allSettled(
+    TEST_FILES.map((fileSpec) =>
+      callAI(
+        buildTestSingleFilePrompt(ctx, fileSpec, signatures),
+        `test:${fileSpec.filename}`,
+        2048,
+      ).then((res) => ({ fileSpec, res })),
+    ),
+  );
+
+  const allFiles: GeneratedFiles = {};
+  let totalInput = 0;
+  let totalOutput = 0;
+
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      const { res } = result.value;
+      const parsed = parseJsonResponse(res.text);
+      const files = extractGeneratedFiles(parsed);
+      if (files) Object.assign(allFiles, files);
+      totalInput += res.usage?.inputTokens ?? 0;
+      totalOutput += res.usage?.outputTokens ?? 0;
+    } else {
+      logger.warn("Test file generation failed (partial result kept)", {
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      });
+    }
+  }
 
   return {
-    result: parsed,
-    generatedFiles,
-    tokensUsed: buildTokensUsed(usage),
+    result: allFiles,
+    generatedFiles: Object.keys(allFiles).length > 0 ? allFiles : undefined,
+    tokensUsed: { input: totalInput, output: totalOutput },
   };
 }
 

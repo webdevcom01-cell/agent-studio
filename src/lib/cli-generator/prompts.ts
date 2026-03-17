@@ -16,6 +16,35 @@ function formatPreviousResults(results?: unknown[]): string {
   return JSON.stringify(results, null, 2);
 }
 
+/**
+ * Extracts Python class/function signatures and decorators from generated files.
+ * Used by test phase to give accurate function names/signatures without sending
+ * full file content (which gets truncated to 200 chars in summarizeOutput).
+ */
+export function extractPythonSignatures(output: unknown): Record<string, string> {
+  if (typeof output !== "object" || output === null) return {};
+  const record = output as Record<string, unknown>;
+  const signatures: Record<string, string> = {};
+
+  for (const [filename, content] of Object.entries(record)) {
+    if (typeof content !== "string") continue;
+    const lines = content.split("\\n"); // content has escaped newlines from JSON
+    const sigLines = lines.filter((line) =>
+      /^\s*(class |def |@click\.|@cli\.|@server\.)/.test(line),
+    );
+    if (sigLines.length > 0) {
+      signatures[filename] = sigLines.join("\n");
+    }
+  }
+  return signatures;
+}
+
+export interface TestFileSpec {
+  filename: "conftest.py" | "test_bridge.py" | "test_server.py";
+  description: string;
+  guidance: string;
+}
+
 export function buildAnalyzePrompt(ctx: PromptContext): string {
   return `You are an expert CLI reverse-engineer. Analyze the desktop application "${ctx.applicationName}" and determine how it can be controlled via command-line interface.
 
@@ -143,6 +172,7 @@ export function buildImplementPrompt(ctx: PromptContext): string {
   return buildImplementSingleFilePrompt(ctx, IMPLEMENT_FILES[1]);
 }
 
+// Legacy single-call test prompt (kept for backwards compat with pipeline.ts)
 export function buildTestPrompt(ctx: PromptContext): string {
   return `You are an expert Python test engineer. Write comprehensive pytest tests for the "${ctx.applicationName}" CLI bridge.
 
@@ -167,6 +197,53 @@ Respond with ONLY a JSON object mapping filenames to file contents (no markdown,
   "test_bridge.py": "<bridge tests: mocked subprocess calls, argument translation, timeout, error handling>",
   "test_server.py": "<MCP server tests: protocol compliance, tool registration, request handling>"
 }`;
+}
+
+export const TEST_FILES: TestFileSpec[] = [
+  {
+    filename: "conftest.py",
+    description: "Shared pytest fixtures",
+    guidance: "Mock CLI binary paths, sample subprocess outputs, reusable test configs. Under 40 lines.",
+  },
+  {
+    filename: "test_bridge.py",
+    description: "Bridge unit tests",
+    guidance: "Mock subprocess.run. Test each Bridge method matches function signatures below. Under 80 lines.",
+  },
+  {
+    filename: "test_server.py",
+    description: "MCP server tests",
+    guidance: "Test tool registration matches function signatures below. Test request/response cycle. Under 60 lines.",
+  },
+];
+
+export function buildTestSingleFilePrompt(
+  ctx: PromptContext,
+  fileSpec: TestFileSpec,
+  signatures: Record<string, string>,
+): string {
+  const sigSummary = Object.entries(signatures)
+    .map(([file, sigs]) => `# ${file}\n${sigs}`)
+    .join("\n\n");
+
+  return `You are an expert Python test engineer. Generate ONLY the file "${fileSpec.filename}" for the "${ctx.applicationName}" CLI bridge tests.
+
+Application: ${ctx.applicationName}
+Capabilities: ${formatCapabilities(ctx.capabilities)}
+Platform: ${ctx.platform ?? "cross-platform"}
+
+Implementation signatures (actual function names to test against):
+${sigSummary || "No signatures extracted — use bridge.py / server.py structure from design."}
+
+File to generate: ${fileSpec.filename}
+Purpose: ${fileSpec.description}
+Requirements: ${fileSpec.guidance}
+
+CRITICAL: Respond with ONLY a JSON object with a single key — the filename — mapping to the complete file content as a string.
+Newlines must be escaped as \\n. Quotes inside the code must be escaped as \\".
+No markdown, no code fences, no explanation outside the JSON.
+
+{"${fileSpec.filename}": "<complete Python test file content with all newlines escaped as \\n>"}`;
 }
 
 export function buildDocsPrompt(ctx: PromptContext): string {

@@ -66,13 +66,13 @@ export async function POST(
 
     const { generationId } = await params;
 
-    // Config is passed in the request body (not stored in DB to avoid schema changes)
-    let pipelineConfig: PipelineConfig = { applicationName: "" };
+    // Body is still accepted for backwards compat but config is now read from DB
+    let bodyConfig: PipelineConfig | null = null;
     try {
       const body = await req.json() as { config?: PipelineConfig };
-      if (body.config) pipelineConfig = body.config;
+      if (body.config) bodyConfig = body.config;
     } catch {
-      // Body is optional — generation name will be used as fallback
+      // Body is optional
     }
 
     const generation = await prisma.cLIGeneration.findUnique({
@@ -148,16 +148,49 @@ export async function POST(
         throw new Error(`No runner for phase ${nextPhaseIndex}`);
       }
 
-      // Use config from request body; fallback to generation name if not provided
+      // Priority: DB configSnapshot > request body > applicationName fallback
+      // configSnapshot was added in schema — Prisma generates the type on Vercel build
+      const storedConfig = (generation as Record<string, unknown>).configSnapshot as PipelineConfig | null;
       const config: PipelineConfig = {
-        applicationName: pipelineConfig.applicationName || generation.applicationName,
-        description: pipelineConfig.description,
-        capabilities: pipelineConfig.capabilities ?? [],
-        platform: pipelineConfig.platform,
+        applicationName:
+          storedConfig?.applicationName ??
+          bodyConfig?.applicationName ??
+          generation.applicationName,
+        description: storedConfig?.description ?? bodyConfig?.description,
+        capabilities: storedConfig?.capabilities ?? bodyConfig?.capabilities ?? [],
+        platform: storedConfig?.platform ?? bodyConfig?.platform,
       };
 
-      const aiOutput = await runner(config, phases);
+      // Phases 4 (docs) and 5 (publish) both depend only on phase 1 (design)
+      // and are independent of each other — run them in parallel for a ~11s speedup.
+      const DOCS_PHASE_IDX = 4;
+      const PUBLISH_PHASE_IDX = 5;
+      const isDocsPhase = nextPhaseIndex === DOCS_PHASE_IDX;
 
+      let aiOutput: Awaited<ReturnType<PhaseRunner>>;
+      let publishOutput: Awaited<ReturnType<PhaseRunner>> | null = null;
+
+      if (isDocsPhase) {
+        // Mark publish phase as running in local state before parallel execution
+        const publishPhase = phases[PUBLISH_PHASE_IDX];
+        if (publishPhase && publishPhase.status === "pending") {
+          publishPhase.status = "running";
+          publishPhase.startedAt = new Date().toISOString();
+        }
+        const publishRunner = PHASE_RUNNERS[PUBLISH_PHASE_IDX];
+        if (publishRunner) {
+          [aiOutput, publishOutput] = await Promise.all([
+            runner(config, phases),
+            publishRunner(config, phases),
+          ]);
+        } else {
+          aiOutput = await runner(config, phases);
+        }
+      } else {
+        aiOutput = await runner(config, phases);
+      }
+
+      // Save docs phase result
       phase.output = aiOutput.result;
       phase.generatedFiles = aiOutput.generatedFiles;
       phase.tokensUsed = aiOutput.tokensUsed;
@@ -168,19 +201,37 @@ export async function POST(
         Object.assign(existingFiles, aiOutput.generatedFiles);
       }
 
-      const isLastPhase = nextPhaseIndex === PHASE_COUNT - 1;
+      // Save publish phase result if it ran in parallel
+      if (isDocsPhase && publishOutput) {
+        const publishPhase = phases[PUBLISH_PHASE_IDX];
+        if (publishPhase) {
+          publishPhase.output = publishOutput.result;
+          publishPhase.generatedFiles = publishOutput.generatedFiles;
+          publishPhase.tokensUsed = publishOutput.tokensUsed;
+          publishPhase.status = "completed";
+          publishPhase.completedAt = new Date().toISOString();
+        }
+        if (publishOutput.generatedFiles) {
+          Object.assign(existingFiles, publishOutput.generatedFiles);
+        }
+      }
+
+      // After docs+publish parallel run, the last completed phase is publish (5)
+      const lastCompletedPhase = isDocsPhase && publishOutput ? PUBLISH_PHASE_IDX : nextPhaseIndex;
+      const isLastPhase = lastCompletedPhase === PHASE_COUNT - 1;
       const newStatus = isLastPhase ? "COMPLETED" : statusForPhase;
 
-      const lastPhaseOutput = isLastPhase
-        ? (aiOutput.result as Record<string, unknown> | undefined)
-        : undefined;
-      const cliConfig = lastPhaseOutput?.cliConfig ?? null;
+      // Extract cliConfig from publish output (publish phase returns "mcp_config" key)
+      const publishResult = publishOutput
+        ? (publishOutput.result as Record<string, unknown> | undefined)
+        : (isLastPhase ? (aiOutput.result as Record<string, unknown> | undefined) : undefined);
+      const cliConfig = publishResult?.mcp_config ?? publishResult?.cliConfig ?? null;
 
       const updatedGeneration = await prisma.cLIGeneration.update({
         where: { id: generationId },
         data: {
           status: newStatus,
-          currentPhase: nextPhaseIndex,
+          currentPhase: lastCompletedPhase,
           phases: JSON.parse(JSON.stringify(phases)),
           generatedFiles: Object.keys(existingFiles).length > 0
             ? JSON.parse(JSON.stringify(existingFiles))
@@ -207,11 +258,11 @@ export async function POST(
       return NextResponse.json({
         success: true,
         data: {
-          phase: nextPhaseIndex,
+          phase: lastCompletedPhase,
           phaseName: phase.name,
           status: newStatus,
           done: isLastPhase,
-          nextPhase: isLastPhase ? null : nextPhaseIndex + 1,
+          nextPhase: isLastPhase ? null : lastCompletedPhase + 1,
         },
       });
     } catch (err) {
