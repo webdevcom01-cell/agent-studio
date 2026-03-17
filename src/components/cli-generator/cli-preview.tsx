@@ -58,8 +58,8 @@ export function CLIPreview({
         <div>
           <h3 className="text-sm font-medium">{cliConfig.applicationName}</h3>
           <p className="text-xs text-muted-foreground">
-            v{cliConfig.version} &middot; {cliConfig.commands.length} command
-            {cliConfig.commands.length !== 1 ? "s" : ""}
+            v{cliConfig.version} &middot; {(cliConfig.commands ?? []).length} command
+            {(cliConfig.commands ?? []).length !== 1 ? "s" : ""}
           </p>
         </div>
         <span className="text-[10px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
@@ -68,7 +68,7 @@ export function CLIPreview({
       </div>
 
       <div className="flex flex-col gap-2">
-        {cliConfig.commands.map((cmd) => {
+        {(cliConfig.commands ?? []).map((cmd) => {
           const usage = buildUsageString(cmd);
           return (
             <div
@@ -95,9 +95,9 @@ export function CLIPreview({
               <p className="text-xs text-muted-foreground mb-2">
                 {cmd.description}
               </p>
-              {cmd.parameters.length > 0 && (
+              {(cmd.parameters ?? []).length > 0 && (
                 <div className="flex flex-col gap-1">
-                  {cmd.parameters.map((param) => (
+                  {(cmd.parameters ?? []).map((param) => (
                     <div
                       key={param.name}
                       className="flex items-center gap-2 text-[11px]"
