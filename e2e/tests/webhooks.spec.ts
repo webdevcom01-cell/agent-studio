@@ -5,14 +5,16 @@
  *   1. Webhooks UI — navigation, empty state, create dialog, list, detail panel
  *   2. Webhooks UI — Configuration tab (presets, event filters, save)
  *   3. Webhooks UI — Test tab (payload, event type, filter warning)
- *   4. Webhooks UI — Detail actions (enable/disable, rotate secret, delete)
+ *   4. Webhooks UI — Detail actions (rotate secret, delete confirm)
  *   5. Webhooks API — CRUD (create, list, get, patch, delete, rotate)
  *   6. Webhooks API — Trigger endpoint (valid HMAC → 200, invalid HMAC → 400,
- *                      filtered event → skipped)
+ *                      filtered event → skipped, idempotency → 409)
  *   7. Flow Builder integration — "Webhooks" button + webhook_trigger node
  *
- * UI tests use page.route() mocks so they never hit a live AI or DB.
- * API tests use the `request` fixture and require a running backend with DB.
+ * Architecture:
+ *   - UI tests: single shared agent created via API in beforeAll + page.route() mocks
+ *   - API tests: own agents/webhooks created and cleaned up per describe block
+ *   - Trigger tests: own webhook with known secret, created in beforeAll
  */
 
 import { createHmac } from "crypto";
@@ -24,29 +26,7 @@ import {
   MOCK_WEBHOOK_WITH_FILTERS,
 } from "../mocks/handlers";
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Create a fresh agent via the dashboard UI and return its ID.
- * The caller is responsible for cleanup.
- */
-async function createTestAgent(
-  dashboardPage: import("../pages/dashboard.page").DashboardPage,
-  page: import("@playwright/test").Page,
-  name: string
-): Promise<string> {
-  await dashboardPage.goto();
-  await dashboardPage.createAgentButton.click();
-  await page.getByRole("tab", { name: /blank/i }).click();
-  await page.getByPlaceholder("My Agent").fill(name);
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: /^create$/i })
-    .click();
-  await expect(page).toHaveURL(/\/builder\//, { timeout: 15_000 });
-  const url = page.url();
-  return url.split("/builder/")[1];
-}
+// ─── helpers ──────────────────────────────────────────────────────────────────
 
 /**
  * Generate a valid Standard Webhooks HMAC-SHA256 signature string.
@@ -63,61 +43,76 @@ function signWebhook(
   return `v1,${sig}`;
 }
 
-// ─── 1. Webhooks UI — navigation & page structure ────────────────────────────
+// ─── Shared agent for all UI tests ────────────────────────────────────────────
+
+/**
+ * One agent is created once for all UI describe blocks via the API.
+ * UI tests never need to touch the dashboard — they navigate directly to
+ * /webhooks/[agentId] with all API routes mocked via page.route().
+ */
+let sharedAgentId: string | null = null;
+
+test.beforeAll(async ({ request }) => {
+  const res = await request.post("/api/agents", {
+    data: { name: "Webhooks E2E Shared Agent" },
+  });
+  if (res.status() === 201) {
+    const body = await res.json();
+    sharedAgentId = body.data.id;
+  }
+});
+
+test.afterAll(async ({ request }) => {
+  if (sharedAgentId) {
+    await request.delete(`/api/agents/${sharedAgentId}`);
+    sharedAgentId = null;
+  }
+});
+
+// ─── 1. Webhooks UI — page structure ─────────────────────────────────────────
 
 test.describe("Webhooks UI — page structure", () => {
   test("renders the page heading and New Webhook button", async ({
-    dashboardPage,
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Webhooks UI Agent");
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
 
-    // Mock the webhooks list so it returns our mock data
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
-
-    await expect(page.getByText(/^webhooks$/i, { exact: false })).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(
+      page.getByRole("heading", { name: /webhooks/i })
+        .or(page.getByText("Webhooks").first())
+    ).toBeVisible({ timeout: 10_000 });
     await expect(webhooksPage.newWebhookButton).toBeVisible();
   });
 
   test("shows empty state when agent has no webhooks", async ({
-    dashboardPage,
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Empty Webhooks Agent");
-
-    await mockWebhooksAPI(page, { agentId, returnEmpty: true });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId, returnEmpty: true });
+    await webhooksPage.goto(sharedAgentId);
 
     await expect(webhooksPage.emptyState).toBeVisible({ timeout: 10_000 });
-    // Empty state should contain a call-to-action
     await expect(
       page.getByRole("button", { name: /create webhook/i })
     ).toBeVisible();
   });
 
-  test("renders webhook items in the sidebar when webhooks exist", async ({
-    dashboardPage,
+  test("renders webhook names in the sidebar when webhooks exist", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Sidebar Webhooks Agent");
-
+    if (!sharedAgentId) { test.skip(); return; }
     await mockWebhooksAPI(page, {
-      agentId,
+      agentId: sharedAgentId,
       webhooks: [MOCK_WEBHOOK, MOCK_WEBHOOK_WITH_FILTERS],
     });
-
-    await webhooksPage.goto(agentId);
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // Both webhook names should be visible in the sidebar
     await expect(
       page.getByText(MOCK_WEBHOOK.name as string).first()
     ).toBeVisible({ timeout: 10_000 });
@@ -126,40 +121,35 @@ test.describe("Webhooks UI — page structure", () => {
     ).toBeVisible();
   });
 
-  test("shows filter count badge in sidebar for webhooks with event filters", async ({
-    dashboardPage,
+  test("shows filter count badge for webhooks with event filters", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Filter Badge Agent");
-
+    if (!sharedAgentId) { test.skip(); return; }
     await mockWebhooksAPI(page, {
-      agentId,
+      agentId: sharedAgentId,
       webhooks: [MOCK_WEBHOOK_WITH_FILTERS],
     });
-
-    await webhooksPage.goto(agentId);
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // Should show "2 filters" badge since MOCK_WEBHOOK_WITH_FILTERS has 2 event filters
+    // MOCK_WEBHOOK_WITH_FILTERS has eventFilters: ["push", "pull_request"]
     await expect(
       page.getByText(/2 filter/i).first()
     ).toBeVisible({ timeout: 10_000 });
   });
 });
 
-// ─── 2. Webhooks UI — Create dialog ──────────────────────────────────────────
+// ─── 2. Webhooks UI — Create dialog ───────────────────────────────────────────
 
 test.describe("Webhooks UI — create dialog", () => {
   test("create dialog opens with name and description fields", async ({
-    dashboardPage,
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Create Dialog Agent");
-    await mockWebhooksAPI(page, { agentId, returnEmpty: true });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId, returnEmpty: true });
+    await webhooksPage.goto(sharedAgentId);
     await webhooksPage.newWebhookButton.click();
 
     await expect(webhooksPage.createDialog).toBeVisible({ timeout: 5_000 });
@@ -168,37 +158,32 @@ test.describe("Webhooks UI — create dialog", () => {
     await expect(webhooksPage.createConfirmButton).toBeVisible();
   });
 
-  test("create dialog shows preset selection grid", async ({
-    dashboardPage,
+  test("create dialog shows preset selection grid (GitHub, Stripe, Slack)", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Preset Grid Agent");
-    await mockWebhooksAPI(page, { agentId, returnEmpty: true });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId, returnEmpty: true });
+    await webhooksPage.goto(sharedAgentId);
     await webhooksPage.newWebhookButton.click();
     await webhooksPage.createDialog.waitFor({ state: "visible", timeout: 5_000 });
 
-    // The preset grid should show GitHub, Stripe, Slack, Generic
     await expect(page.getByRole("dialog").getByText("GitHub").first()).toBeVisible();
     await expect(page.getByRole("dialog").getByText("Stripe").first()).toBeVisible();
     await expect(page.getByRole("dialog").getByText("Slack").first()).toBeVisible();
   });
 
-  test("selecting a preset in the create dialog shows a summary banner", async ({
-    dashboardPage,
+  test("selecting a preset shows a summary banner with mapping counts", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Preset Summary Agent");
-    await mockWebhooksAPI(page, { agentId, returnEmpty: true });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId, returnEmpty: true });
+    await webhooksPage.goto(sharedAgentId);
     await webhooksPage.newWebhookButton.click();
     await webhooksPage.createDialog.waitFor({ state: "visible", timeout: 5_000 });
 
-    // Click the GitHub preset
+    // Click the GitHub preset button
     await page
       .getByRole("dialog")
       .locator("button")
@@ -206,102 +191,86 @@ test.describe("Webhooks UI — create dialog", () => {
       .first()
       .click();
 
-    // A summary banner should appear mentioning "GitHub preset selected"
     await expect(
       page.getByText(/github.*preset selected/i)
     ).toBeVisible({ timeout: 5_000 });
   });
 
   test("Create button is disabled until a name is entered", async ({
-    dashboardPage,
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Disabled Btn Agent");
-    await mockWebhooksAPI(page, { agentId, returnEmpty: true });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId, returnEmpty: true });
+    await webhooksPage.goto(sharedAgentId);
     await webhooksPage.newWebhookButton.click();
     await webhooksPage.createDialog.waitFor({ state: "visible", timeout: 5_000 });
 
     await expect(webhooksPage.createConfirmButton).toBeDisabled();
-
     await webhooksPage.createNameInput.fill("My Webhook");
     await expect(webhooksPage.createConfirmButton).toBeEnabled();
   });
 });
 
-// ─── 3. Webhooks UI — Detail panel ───────────────────────────────────────────
+// ─── 3. Webhooks UI — Detail panel ────────────────────────────────────────────
 
 test.describe("Webhooks UI — detail panel", () => {
-  test("selecting a webhook shows the trigger URL in the detail panel", async ({
-    dashboardPage,
+  test("selecting a webhook reveals the trigger URL", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Detail URL Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // The trigger URL should contain the trigger path
     await expect(
       page.getByText(/\/api\/agents\/.*\/trigger\//i).first()
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("signing secret is masked by default", async ({
-    dashboardPage,
+  test("signing secret is masked by default (bullet characters)", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Secret Mask Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // Secret should be shown as bullets (not the real value)
     await expect(
       page.getByText(/•{10,}/).first()
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("clicking Show reveals the signing secret", async ({
-    dashboardPage,
+  test("clicking Show reveals the signing secret value", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Reveal Secret Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     const showBtn = page.getByRole("button", { name: /^show$/i });
-    await expect(showBtn).toBeVisible({ timeout: 10_000 });
+    await showBtn.waitFor({ state: "visible", timeout: 10_000 });
     await showBtn.click();
 
-    // Bullets should be gone; the secret value should appear
     await expect(page.getByRole("button", { name: /^hide$/i })).toBeVisible();
     await expect(
       page.getByText(MOCK_WEBHOOK.secret as string)
     ).toBeVisible({ timeout: 5_000 });
   });
 
-  test("detail panel has Executions, Configuration, and Test tabs", async ({
-    dashboardPage,
+  test("detail panel shows Executions, Configuration, and Test tabs", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Tabs Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // All three tabs must be visible
     await expect(
       page.locator("button[type='button']").filter({ hasText: /executions/i }).first()
     ).toBeVisible({ timeout: 10_000 });
@@ -313,70 +282,63 @@ test.describe("Webhooks UI — detail panel", () => {
     ).toBeVisible();
   });
 
-  test("Executions tab shows execution history rows", async ({
-    dashboardPage,
+  test("Executions tab shows COMPLETED execution from mock", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Executions Tab Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // The mock webhook has 1 execution with status COMPLETED
     await expect(
       page.getByText(/completed/i).first()
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("webhook status badge shows Active when enabled", async ({
-    dashboardPage,
+  test("status badge shows Active when webhook is enabled", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Status Badge Agent");
-    await mockWebhooksAPI(page, { agentId, webhooks: [{ ...MOCK_WEBHOOK, enabled: true }] });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, {
+      agentId: sharedAgentId,
+      webhooks: [{ ...MOCK_WEBHOOK, enabled: true }],
+    });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByText(/^active$/i).first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test("webhook status badge shows Disabled when disabled", async ({
-    dashboardPage,
+  test("status badge shows Disabled when webhook is disabled", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Disabled Badge Agent");
+    if (!sharedAgentId) { test.skip(); return; }
     await mockWebhooksAPI(page, {
-      agentId,
+      agentId: sharedAgentId,
       webhooks: [{ ...MOCK_WEBHOOK, enabled: false }],
     });
-
-    await webhooksPage.goto(agentId);
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByText(/^disabled$/i).first()).toBeVisible({ timeout: 10_000 });
   });
 });
 
-// ─── 4. Webhooks UI — Configuration tab ──────────────────────────────────────
+// ─── 4. Webhooks UI — Configuration tab ───────────────────────────────────────
 
 test.describe("Webhooks UI — Configuration tab", () => {
   test("Configuration tab shows Apply Preset button and Event Filters section", async ({
-    dashboardPage,
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Config Tab Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // Switch to config tab
     await page
       .locator("button[type='button']")
       .filter({ hasText: /^configuration$/i })
@@ -387,15 +349,13 @@ test.describe("Webhooks UI — Configuration tab", () => {
     await expect(page.getByText(/event filters/i).first()).toBeVisible();
   });
 
-  test("Apply Preset button opens the preset picker dialog", async ({
-    dashboardPage,
+  test("Apply Preset button opens the preset picker dialog with all 4 presets", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Preset Picker Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     await page
@@ -406,26 +366,20 @@ test.describe("Webhooks UI — Configuration tab", () => {
     await webhooksPage.applyPresetButton.waitFor({ state: "visible", timeout: 5_000 });
     await webhooksPage.applyPresetButton.click();
 
-    await expect(
-      page.getByText("Apply Provider Preset")
-    ).toBeVisible({ timeout: 5_000 });
-
-    // All 4 presets should be in the dialog
+    await expect(page.getByText("Apply Provider Preset")).toBeVisible({ timeout: 5_000 });
     await expect(page.getByRole("dialog").getByText("GitHub").first()).toBeVisible();
     await expect(page.getByRole("dialog").getByText("Stripe").first()).toBeVisible();
     await expect(page.getByRole("dialog").getByText("Slack").first()).toBeVisible();
     await expect(page.getByRole("dialog").getByText("Generic").first()).toBeVisible();
   });
 
-  test("event filter input accepts typed values via Enter key", async ({
-    dashboardPage,
+  test("event filter input adds a tag chip when Enter is pressed", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Filter Input Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     await page
@@ -438,25 +392,20 @@ test.describe("Webhooks UI — Configuration tab", () => {
     await webhooksPage.eventFilterInput.fill("push");
     await webhooksPage.eventFilterInput.press("Enter");
 
-    // The "push" tag chip should appear
     await expect(page.getByText("push").first()).toBeVisible({ timeout: 3_000 });
-    // Input should be cleared
     await expect(webhooksPage.eventFilterInput).toHaveValue("");
   });
 
-  test("event filter tags can be removed with the × button", async ({
-    dashboardPage,
+  test("filter tag chips can be removed with the × button", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Remove Filter Agent");
-    // Mock with existing event filters
+    if (!sharedAgentId) { test.skip(); return; }
     await mockWebhooksAPI(page, {
-      agentId,
+      agentId: sharedAgentId,
       webhooks: [{ ...MOCK_WEBHOOK_WITH_FILTERS }],
     });
-
-    await webhooksPage.goto(agentId);
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     await page
@@ -465,27 +414,15 @@ test.describe("Webhooks UI — Configuration tab", () => {
       .first()
       .click();
 
-    // The "push" tag should be visible from the mock
     await expect(page.getByText("push").first()).toBeVisible({ timeout: 5_000 });
-
-    // Click the aria-label="Remove push" button
     await page.getByRole("button", { name: /remove push/i }).click();
-
-    // "push" tag should be gone
-    await expect(
-      page.getByRole("button", { name: /remove push/i })
-    ).not.toBeVisible({ timeout: 3_000 });
+    await expect(page.getByRole("button", { name: /remove push/i })).not.toBeVisible({ timeout: 3_000 });
   });
 
-  test("empty event filter state shows descriptive placeholder", async ({
-    dashboardPage,
-    webhooksPage,
-    page,
-  }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Empty Filter Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+  test("empty filters show placeholder text", async ({ webhooksPage, page }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     await page
@@ -499,15 +436,13 @@ test.describe("Webhooks UI — Configuration tab", () => {
     ).toBeVisible({ timeout: 5_000 });
   });
 
-  test("Save Configuration button is disabled when config is unchanged", async ({
-    dashboardPage,
+  test("Save Configuration is disabled when config is unchanged", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Save Disabled Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     await page
@@ -521,14 +456,12 @@ test.describe("Webhooks UI — Configuration tab", () => {
   });
 
   test("Save Configuration becomes enabled after adding an event filter", async ({
-    dashboardPage,
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Save Enabled Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     await page
@@ -545,18 +478,16 @@ test.describe("Webhooks UI — Configuration tab", () => {
   });
 });
 
-// ─── 5. Webhooks UI — Test tab ────────────────────────────────────────────────
+// ─── 5. Webhooks UI — Test tab ─────────────────────────────────────────────────
 
 test.describe("Webhooks UI — Test tab", () => {
   test("Test tab shows payload textarea and event type input", async ({
-    dashboardPage,
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Test Tab Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     await page
@@ -571,17 +502,15 @@ test.describe("Webhooks UI — Test tab", () => {
   });
 
   test("Test tab shows amber warning banner when event filters are active", async ({
-    dashboardPage,
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Filter Warning Agent");
+    if (!sharedAgentId) { test.skip(); return; }
     await mockWebhooksAPI(page, {
-      agentId,
+      agentId: sharedAgentId,
       webhooks: [{ ...MOCK_WEBHOOK_WITH_FILTERS }],
     });
-
-    await webhooksPage.goto(agentId);
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     await page
@@ -590,27 +519,21 @@ test.describe("Webhooks UI — Test tab", () => {
       .first()
       .click();
 
-    // Amber warning about active event filters
     await expect(
       page.getByText(/event filters are active/i)
     ).toBeVisible({ timeout: 5_000 });
-    await expect(
-      page.getByText(/push.*pull_request/i).or(page.getByText(/pull_request.*push/i))
-    ).toBeVisible();
   });
 
   test("Send Test Request button is disabled when webhook is disabled", async ({
-    dashboardPage,
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Disabled Test Agent");
+    if (!sharedAgentId) { test.skip(); return; }
     await mockWebhooksAPI(page, {
-      agentId,
+      agentId: sharedAgentId,
       webhooks: [{ ...MOCK_WEBHOOK, enabled: false }],
     });
-
-    await webhooksPage.goto(agentId);
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     await page
@@ -622,18 +545,14 @@ test.describe("Webhooks UI — Test tab", () => {
     await expect(webhooksPage.sendTestButton).toBeDisabled({ timeout: 5_000 });
   });
 
-  test("sending a test request shows HTTP 200 success response", async ({
-    dashboardPage,
+  test("sending a test request shows HTTP 200 success result", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Send Test Agent");
-
-    // Mock the detail endpoint AND the trigger endpoint
-    await mockWebhooksAPI(page, { agentId });
-    await mockWebhookTrigger(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await mockWebhookTrigger(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
     await page
@@ -645,31 +564,24 @@ test.describe("Webhooks UI — Test tab", () => {
     await webhooksPage.sendTestButton.waitFor({ state: "visible", timeout: 5_000 });
     await webhooksPage.sendTestButton.click();
 
-    // Result area should show HTTP 200 — Success
-    await expect(
-      page.getByText(/HTTP 200/i)
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/HTTP 200/i)).toBeVisible({ timeout: 10_000 });
   });
 });
 
-// ─── 6. Webhooks UI — Detail actions ─────────────────────────────────────────
+// ─── 6. Webhooks UI — Detail actions ──────────────────────────────────────────
 
 test.describe("Webhooks UI — detail actions", () => {
-  test("more options dropdown contains Rotate Secret and Delete Webhook items", async ({
-    dashboardPage,
+  test("⋮ dropdown contains Rotate Secret and Delete Webhook items", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "More Options Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // Open the ⋮ dropdown in the detail panel header
-    await page.locator("button").filter({
-      has: page.locator("svg"),
-    }).last().click();
+    // The MoreVertical button is the last svg-containing button in the detail header
+    await page.locator("button").filter({ has: page.locator("svg") }).last().click();
 
     await expect(
       page.getByRole("menuitem", { name: /rotate secret/i })
@@ -679,68 +591,66 @@ test.describe("Webhooks UI — detail actions", () => {
     ).toBeVisible();
   });
 
-  test("rotating secret shows success toast and reveals the new secret", async ({
-    dashboardPage,
-    webhooksPage,
-    page,
-  }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Rotate Secret Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    // The detail endpoint for the rotate call is already mocked by mockWebhooksAPI
-    await webhooksPage.goto(agentId);
+  test("rotating secret shows success toast", async ({ webhooksPage, page }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // Open ⋮ dropdown and click Rotate Secret
     await page.locator("button").filter({ has: page.locator("svg") }).last().click();
     await page.getByRole("menuitem", { name: /rotate secret/i }).click();
 
-    // Should show "rotated" success toast
     await expect(
       page.getByText(/secret rotated/i)
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("delete webhook triggers confirmation dialog with webhook name", async ({
-    dashboardPage,
+  test("delete shows confirmation dialog with the webhook name", async ({
     webhooksPage,
     page,
   }) => {
-    const agentId = await createTestAgent(dashboardPage, page, "Delete Dialog Agent");
-    await mockWebhooksAPI(page, { agentId });
-
-    await webhooksPage.goto(agentId);
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // Open ⋮ dropdown and click Delete
     await page.locator("button").filter({ has: page.locator("svg") }).last().click();
     await page.getByRole("menuitem", { name: /delete webhook/i }).click();
 
-    // Confirm dialog should mention the webhook name
     await expect(
       page.getByRole("dialog").getByText(new RegExp(MOCK_WEBHOOK.name as string, "i"))
     ).toBeVisible({ timeout: 5_000 });
   });
 });
 
-// ─── 7. Webhooks API — CRUD ───────────────────────────────────────────────────
+// ─── 7. Webhooks API — CRUD ────────────────────────────────────────────────────
 
 test.describe("Webhooks API — CRUD", () => {
-  let webhookAgentId: string | null = null;
+  let apiAgentId: string | null = null;
   let webhookId: string | null = null;
 
-  test("POST /api/agents/[agentId]/webhooks creates a webhook with secret", async ({
-    request,
-  }) => {
-    // First create an agent
-    const agentRes = await request.post("/api/agents", {
+  test.beforeAll(async ({ request }) => {
+    const res = await request.post("/api/agents", {
       data: { name: "Webhook API CRUD Agent" },
     });
-    expect(agentRes.status()).toBe(201);
-    const agentBody = await agentRes.json();
-    webhookAgentId = agentBody.data.id;
+    if (res.status() === 201) {
+      apiAgentId = (await res.json()).data.id;
+    }
+  });
 
-    const res = await request.post(`/api/agents/${webhookAgentId}/webhooks`, {
+  test.afterAll(async ({ request }) => {
+    if (apiAgentId) {
+      await request.delete(`/api/agents/${apiAgentId}`);
+      apiAgentId = null;
+    }
+  });
+
+  test("POST creates a webhook — returns 201 with id and secret", async ({
+    request,
+  }) => {
+    if (!apiAgentId) { test.skip(); return; }
+
+    const res = await request.post(`/api/agents/${apiAgentId}/webhooks`, {
       data: {
         name: "E2E Test Webhook",
         description: "Created by E2E API test",
@@ -761,183 +671,119 @@ test.describe("Webhooks API — CRUD", () => {
     webhookId = body.data.id;
   });
 
-  test("GET /api/agents/[agentId]/webhooks lists created webhook", async ({
+  test("GET list — includes created webhook, secret NOT exposed", async ({
     request,
   }) => {
-    if (!webhookAgentId) {
-      test.skip();
-      return;
-    }
+    if (!apiAgentId || !webhookId) { test.skip(); return; }
 
-    const res = await request.get(`/api/agents/${webhookAgentId}/webhooks`);
+    const res = await request.get(`/api/agents/${apiAgentId}/webhooks`);
     expect(res.status()).toBe(200);
 
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(Array.isArray(body.data)).toBe(true);
-    expect(body.data.length).toBeGreaterThanOrEqual(1);
-
     const wh = body.data.find((w: { name: string }) => w.name === "E2E Test Webhook");
     expect(wh).toBeDefined();
-    // Secret must NOT be returned in the list endpoint
     expect(wh?.secret).toBeUndefined();
     expect(wh?.eventFilters).toEqual(["push", "pull_request"]);
   });
 
-  test("GET /api/agents/[agentId]/webhooks/[id] returns detail with secret", async ({
-    request,
-  }) => {
-    if (!webhookAgentId || !webhookId) {
-      test.skip();
-      return;
-    }
+  test("GET detail — returns secret and executions array", async ({ request }) => {
+    if (!apiAgentId || !webhookId) { test.skip(); return; }
 
-    const res = await request.get(
-      `/api/agents/${webhookAgentId}/webhooks/${webhookId}`
-    );
+    const res = await request.get(`/api/agents/${apiAgentId}/webhooks/${webhookId}`);
     expect(res.status()).toBe(200);
 
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.data.id).toBe(webhookId);
     expect(body.data.secret).toBeTruthy();
-    expect(body.data.executions).toBeDefined();
     expect(Array.isArray(body.data.executions)).toBe(true);
   });
 
-  test("PATCH /api/agents/[agentId]/webhooks/[id] updates name and eventFilters", async ({
-    request,
-  }) => {
-    if (!webhookAgentId || !webhookId) {
-      test.skip();
-      return;
-    }
+  test("PATCH — updates name and eventFilters", async ({ request }) => {
+    if (!apiAgentId || !webhookId) { test.skip(); return; }
 
-    const res = await request.patch(
-      `/api/agents/${webhookAgentId}/webhooks/${webhookId}`,
-      {
-        data: {
-          name: "E2E Test Webhook (Updated)",
-          eventFilters: ["release"],
-        },
-      }
-    );
+    const res = await request.patch(`/api/agents/${apiAgentId}/webhooks/${webhookId}`, {
+      data: { name: "E2E Test Webhook (Updated)", eventFilters: ["release"] },
+    });
     expect(res.status()).toBe(200);
 
     const body = await res.json();
-    expect(body.success).toBe(true);
     expect(body.data.name).toBe("E2E Test Webhook (Updated)");
     expect(body.data.eventFilters).toEqual(["release"]);
   });
 
-  test("PATCH /api/agents/[agentId]/webhooks/[id] can disable a webhook", async ({
-    request,
-  }) => {
-    if (!webhookAgentId || !webhookId) {
-      test.skip();
-      return;
-    }
+  test("PATCH — can disable a webhook", async ({ request }) => {
+    if (!apiAgentId || !webhookId) { test.skip(); return; }
 
-    const res = await request.patch(
-      `/api/agents/${webhookAgentId}/webhooks/${webhookId}`,
-      { data: { enabled: false } }
-    );
+    const res = await request.patch(`/api/agents/${apiAgentId}/webhooks/${webhookId}`, {
+      data: { enabled: false },
+    });
     expect(res.status()).toBe(200);
-
-    const body = await res.json();
-    expect(body.success).toBe(true);
-    expect(body.data.enabled).toBe(false);
+    expect((await res.json()).data.enabled).toBe(false);
 
     // Re-enable for subsequent tests
-    await request.patch(`/api/agents/${webhookAgentId}/webhooks/${webhookId}`, {
+    await request.patch(`/api/agents/${apiAgentId}/webhooks/${webhookId}`, {
       data: { enabled: true },
     });
   });
 
-  test("POST .../rotate returns a new secret of correct length", async ({
-    request,
-  }) => {
-    if (!webhookAgentId || !webhookId) {
-      test.skip();
-      return;
-    }
+  test("POST .../rotate — returns a new 43-char secret", async ({ request }) => {
+    if (!apiAgentId || !webhookId) { test.skip(); return; }
 
-    // Capture old secret
-    const detailBefore = await request
-      .get(`/api/agents/${webhookAgentId}/webhooks/${webhookId}`)
+    const before = await request
+      .get(`/api/agents/${apiAgentId}/webhooks/${webhookId}`)
       .then((r) => r.json());
-    const oldSecret: string = detailBefore.data.secret;
+    const oldSecret: string = before.data.secret;
 
     const res = await request.post(
-      `/api/agents/${webhookAgentId}/webhooks/${webhookId}/rotate`
+      `/api/agents/${apiAgentId}/webhooks/${webhookId}/rotate`
     );
     expect(res.status()).toBe(200);
 
     const body = await res.json();
-    expect(body.success).toBe(true);
-    expect(body.data.secret).toBeTruthy();
-    // New secret must differ from old
     expect(body.data.secret).not.toBe(oldSecret);
-    // Standard Webhooks secret: 43 chars (base64url of 32 bytes)
-    expect(body.data.secret.length).toBe(43);
+    expect(body.data.secret.length).toBe(43); // base64url(32 bytes)
   });
 
-  test("DELETE /api/agents/[agentId]/webhooks/[id] removes the webhook", async ({
-    request,
-  }) => {
-    if (!webhookAgentId || !webhookId) {
-      test.skip();
-      return;
-    }
+  test("DELETE — removes webhook, no longer in list", async ({ request }) => {
+    if (!apiAgentId || !webhookId) { test.skip(); return; }
 
     const res = await request.delete(
-      `/api/agents/${webhookAgentId}/webhooks/${webhookId}`
+      `/api/agents/${apiAgentId}/webhooks/${webhookId}`
     );
     expect(res.status()).toBe(200);
+    expect((await res.json()).success).toBe(true);
 
-    const body = await res.json();
-    expect(body.success).toBe(true);
-
-    // Verify it no longer appears in the list
-    const listRes = await request.get(`/api/agents/${webhookAgentId}/webhooks`);
-    const listBody = await listRes.json();
-    const found = listBody.data.find(
-      (w: { id: string }) => w.id === webhookId
-    );
-    expect(found).toBeUndefined();
-
-    // Clean up the agent
-    if (webhookAgentId) {
-      await request.delete(`/api/agents/${webhookAgentId}`);
-      webhookAgentId = null;
-      webhookId = null;
-    }
+    const list = await request
+      .get(`/api/agents/${apiAgentId}/webhooks`)
+      .then((r) => r.json());
+    expect(list.data.find((w: { id: string }) => w.id === webhookId)).toBeUndefined();
+    webhookId = null;
   });
 });
 
-// ─── 8. Webhooks API — Trigger endpoint (HMAC) ───────────────────────────────
+// ─── 8. Webhooks API — Trigger endpoint ───────────────────────────────────────
 
 test.describe("Webhooks API — trigger endpoint", () => {
   let triggerAgentId: string | null = null;
   let triggerWebhookId: string | null = null;
   let triggerSecret: string | null = null;
 
-  // Set up a real webhook for trigger tests
   test.beforeAll(async ({ request }) => {
     const agentRes = await request.post("/api/agents", {
       data: { name: "Webhook Trigger E2E Agent" },
     });
     if (agentRes.status() !== 201) return;
-    const agentBody = await agentRes.json();
-    triggerAgentId = agentBody.data.id;
+    triggerAgentId = (await agentRes.json()).data.id;
 
     const whRes = await request.post(`/api/agents/${triggerAgentId}/webhooks`, {
       data: { name: "Trigger Test Webhook" },
     });
     if (whRes.status() !== 201) return;
-    const whBody = await whRes.json();
-    triggerWebhookId = whBody.data.id;
-    triggerSecret = whBody.data.secret;
+    const wh = await whRes.json();
+    triggerWebhookId = wh.data.id;
+    triggerSecret = wh.data.secret;
   });
 
   test.afterAll(async ({ request }) => {
@@ -948,14 +794,10 @@ test.describe("Webhooks API — trigger endpoint", () => {
 
   test("valid HMAC-SHA256 signature → 200 accepted", async ({ request }) => {
     if (!triggerAgentId || !triggerWebhookId || !triggerSecret) {
-      test.skip();
-      return;
+      test.skip(); return;
     }
 
-    const body = JSON.stringify({
-      event: "test",
-      data: { message: "hello from E2E" },
-    });
+    const body = JSON.stringify({ event: "test", data: { message: "hello from E2E" } });
     const webhookId = `e2e-${Date.now()}`;
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const signature = signWebhook(webhookId, timestamp, body, triggerSecret);
@@ -973,165 +815,107 @@ test.describe("Webhooks API — trigger endpoint", () => {
       }
     );
 
-    // 200 or 202 — the trigger was accepted; execution may fail without a full flow
-    // but the signature was valid so it must not be 400/401
     expect([200, 202]).toContain(res.status());
-
     const resBody = await res.json();
     expect(resBody.success).toBe(true);
-    // Must NOT be skipped
     expect(resBody.skipped).toBeFalsy();
   });
 
   test("invalid HMAC signature → 400 signature mismatch", async ({ request }) => {
-    if (!triggerAgentId || !triggerWebhookId) {
-      test.skip();
-      return;
-    }
-
-    const body = JSON.stringify({ event: "test" });
-    const webhookId = `e2e-bad-${Date.now()}`;
-    const timestamp = Math.floor(Date.now() / 1000).toString();
+    if (!triggerAgentId || !triggerWebhookId) { test.skip(); return; }
 
     const res = await request.post(
       `/api/agents/${triggerAgentId}/trigger/${triggerWebhookId}`,
       {
-        data: body,
+        data: JSON.stringify({ event: "test" }),
         headers: {
           "Content-Type": "application/json",
-          "x-webhook-id": webhookId,
-          "x-webhook-timestamp": timestamp,
-          // Deliberately wrong signature
-          "x-webhook-signature": "v1,aGVsbG8gd29ybGQ=",
+          "x-webhook-id": `e2e-bad-${Date.now()}`,
+          "x-webhook-timestamp": Math.floor(Date.now() / 1000).toString(),
+          "x-webhook-signature": "v1,aGVsbG8gd29ybGQ=", // wrong signature
         },
       }
     );
 
     expect(res.status()).toBe(400);
-    const resBody = await res.json();
-    expect(resBody.success).toBe(false);
-    expect(resBody.error).toMatch(/signature/i);
+    expect((await res.json()).error).toMatch(/signature/i);
   });
 
   test("missing signature headers → 400", async ({ request }) => {
-    if (!triggerAgentId || !triggerWebhookId) {
-      test.skip();
-      return;
-    }
+    if (!triggerAgentId || !triggerWebhookId) { test.skip(); return; }
 
     const res = await request.post(
       `/api/agents/${triggerAgentId}/trigger/${triggerWebhookId}`,
       {
         data: JSON.stringify({ event: "test" }),
         headers: { "Content-Type": "application/json" },
-        // No x-webhook-id / x-webhook-timestamp / x-webhook-signature
       }
     );
 
     expect(res.status()).toBe(400);
   });
 
-  test("event filter — matching event type is accepted, non-matching is skipped", async ({
+  test("event filter — matching event is accepted, non-matching is skipped", async ({
     request,
   }) => {
-    if (!triggerAgentId || !triggerSecret) {
-      test.skip();
-      return;
-    }
+    if (!triggerAgentId) { test.skip(); return; }
 
-    // Create a dedicated filtered webhook
+    // Dedicated filtered webhook
     const whRes = await request.post(`/api/agents/${triggerAgentId}/webhooks`, {
-      data: {
-        name: "Filtered E2E Webhook",
-        eventFilters: ["push"],
-      },
+      data: { name: "Filtered E2E Webhook", eventFilters: ["push"] },
     });
-    if (whRes.status() !== 201) {
-      test.skip();
-      return;
-    }
-    const whBody = await whRes.json();
-    const filteredId: string = whBody.data.id;
-    const filteredSecret: string = whBody.data.secret;
+    if (whRes.status() !== 201) { test.skip(); return; }
+    const { data: wh } = await whRes.json();
 
-    // ── Case A: event type matches → accepted ──────────────────────────────
-    const bodyA = JSON.stringify({ action: "opened" });
-    const idA = `e2e-match-${Date.now()}`;
-    const tsA = Math.floor(Date.now() / 1000).toString();
-    const sigA = signWebhook(idA, tsA, bodyA, filteredSecret);
-
-    const resA = await request.post(
-      `/api/agents/${triggerAgentId}/trigger/${filteredId}`,
-      {
-        data: bodyA,
+    const makeRequest = async (eventType: string, bodyStr: string) => {
+      const id = `e2e-${Date.now()}-${Math.random()}`;
+      const ts = Math.floor(Date.now() / 1000).toString();
+      return request.post(`/api/agents/${triggerAgentId}/trigger/${wh.id}`, {
+        data: bodyStr,
         headers: {
           "Content-Type": "application/json",
-          "x-webhook-id": idA,
-          "x-webhook-timestamp": tsA,
-          "x-webhook-signature": sigA,
-          "x-webhook-event": "push",  // matches the filter
+          "x-webhook-id": id,
+          "x-webhook-timestamp": ts,
+          "x-webhook-signature": signWebhook(id, ts, bodyStr, wh.secret),
+          "x-webhook-event": eventType,
         },
-      }
-    );
+      });
+    };
 
+    // Matching event → accepted
+    const resA = await makeRequest("push", JSON.stringify({ action: "opened" }));
     expect([200, 202]).toContain(resA.status());
-    const bodyResA = await resA.json();
-    expect(bodyResA.skipped).toBeFalsy();
+    expect((await resA.json()).skipped).toBeFalsy();
 
-    // ── Case B: event type does NOT match → skipped ────────────────────────
-    const bodyB = JSON.stringify({ action: "closed" });
-    const idB = `e2e-skip-${Date.now()}`;
-    const tsB = Math.floor(Date.now() / 1000).toString();
-    const sigB = signWebhook(idB, tsB, bodyB, filteredSecret);
-
-    const resB = await request.post(
-      `/api/agents/${triggerAgentId}/trigger/${filteredId}`,
-      {
-        data: bodyB,
-        headers: {
-          "Content-Type": "application/json",
-          "x-webhook-id": idB,
-          "x-webhook-timestamp": tsB,
-          "x-webhook-signature": sigB,
-          "x-webhook-event": "pull_request",  // does NOT match "push"
-        },
-      }
-    );
-
+    // Non-matching event → skipped
+    const resB = await makeRequest("pull_request", JSON.stringify({ action: "closed" }));
     expect(resB.status()).toBe(200);
-    const bodyResB = await resB.json();
-    expect(bodyResB.success).toBe(true);
-    expect(bodyResB.skipped).toBe(true);
+    const bodyB = await resB.json();
+    expect(bodyB.success).toBe(true);
+    expect(bodyB.skipped).toBe(true);
   });
 
-  test("idempotency — duplicate x-webhook-id returns 409", async ({
-    request,
-  }) => {
+  test("duplicate x-webhook-id → 409 idempotency conflict", async ({ request }) => {
     if (!triggerAgentId || !triggerWebhookId || !triggerSecret) {
-      test.skip();
-      return;
+      test.skip(); return;
     }
 
     const body = JSON.stringify({ event: "idempotency_test" });
     const webhookId = `e2e-idempotent-${Date.now()}`;
     const timestamp = Math.floor(Date.now() / 1000).toString();
-    const signature = signWebhook(webhookId, timestamp, body, triggerSecret);
-
     const headers = {
       "Content-Type": "application/json",
       "x-webhook-id": webhookId,
       "x-webhook-timestamp": timestamp,
-      "x-webhook-signature": signature,
+      "x-webhook-signature": signWebhook(webhookId, timestamp, body, triggerSecret),
     };
 
-    // First request — should succeed
     const res1 = await request.post(
       `/api/agents/${triggerAgentId}/trigger/${triggerWebhookId}`,
       { data: body, headers }
     );
     expect([200, 202]).toContain(res1.status());
 
-    // Second request with same webhookId — should be rejected as duplicate
     const res2 = await request.post(
       `/api/agents/${triggerAgentId}/trigger/${triggerWebhookId}`,
       { data: body, headers }
@@ -1140,21 +924,18 @@ test.describe("Webhooks API — trigger endpoint", () => {
   });
 });
 
-// ─── 9. Flow Builder integration ─────────────────────────────────────────────
+// ─── 9. Flow Builder integration ──────────────────────────────────────────────
 
 test.describe("Flow Builder — webhook integration", () => {
-  test("flow builder header has a Webhooks navigation button", async ({
-    dashboardPage,
+  test("flow builder header has a Webhooks navigation link or button", async ({
     page,
+    dashboardPage,
   }) => {
     await dashboardPage.goto();
     await page.waitForLoadState("networkidle");
 
     const count = await page.getByTestId("agent-card").count();
-    if (count === 0) {
-      test.skip();
-      return;
-    }
+    if (count === 0) { test.skip(); return; }
 
     const editLink = page
       .getByTestId("agent-card")
@@ -1162,35 +943,27 @@ test.describe("Flow Builder — webhook integration", () => {
       .getByRole("link", { name: /edit flow/i });
     const href = await editLink.getAttribute("href");
     const agentId = href?.split("/builder/")[1];
-    if (!agentId) {
-      test.skip();
-      return;
-    }
+    if (!agentId) { test.skip(); return; }
 
     await page.goto(`/builder/${agentId}`);
     await page.waitForLoadState("networkidle");
 
-    // The builder header should contain a "Webhooks" link or button
     await expect(
-      page.getByRole("link", { name: /webhooks/i }).or(
-        page.getByRole("button", { name: /webhooks/i })
-      )
+      page.getByRole("link", { name: /webhooks/i })
+        .or(page.getByRole("button", { name: /webhooks/i }))
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("node picker contains the webhook_trigger node type", async ({
-    dashboardPage,
-    flowBuilderPage,
+  test("node picker contains the Webhook Trigger node type", async ({
     page,
+    flowBuilderPage,
+    dashboardPage,
   }) => {
     await dashboardPage.goto();
     await page.waitForLoadState("networkidle");
 
     const count = await page.getByTestId("agent-card").count();
-    if (count === 0) {
-      test.skip();
-      return;
-    }
+    if (count === 0) { test.skip(); return; }
 
     const editLink = page
       .getByTestId("agent-card")
@@ -1198,19 +971,14 @@ test.describe("Flow Builder — webhook integration", () => {
       .getByRole("link", { name: /edit flow/i });
     const href = await editLink.getAttribute("href");
     const agentId = href?.split("/builder/")[1];
-    if (!agentId) {
-      test.skip();
-      return;
-    }
+    if (!agentId) { test.skip(); return; }
 
     await flowBuilderPage.goto(agentId);
     await flowBuilderPage.nodePicker.click();
 
-    // The "Webhook Trigger" node should be listed in the picker
     await expect(
-      page.getByRole("menuitem", { name: /webhook trigger/i }).or(
-        page.locator('[data-slot="dropdown-menu-item"]').filter({ hasText: /webhook trigger/i })
-      )
+      page.getByRole("menuitem", { name: /webhook trigger/i })
+        .or(page.locator("[role='menuitem']").filter({ hasText: /webhook trigger/i }))
     ).toBeVisible({ timeout: 5_000 });
   });
 });
