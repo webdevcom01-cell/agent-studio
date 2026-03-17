@@ -9,12 +9,14 @@ import {
   Plus, Bot, MessageSquare, Database, Trash2, MoreVertical,
   Download, Upload, LogOut, BarChart3, Plug, ArrowRightLeft,
   Sun, Moon, Compass, Terminal, FlaskConical, ShieldCheck,
+  Sparkles, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -47,6 +49,8 @@ export default function DashboardPage() {
   const [showCallMonitor, setShowCallMonitor] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [generatingEvalIds, setGeneratingEvalIds] = useState<Set<string>>(new Set());
+  const [isBackfilling, setIsBackfilling] = useState(false);
 
   useEffect(() => {
     fetchAgents();
@@ -114,6 +118,64 @@ export default function DashboardPage() {
     link.href = `/api/agents/${agentId}/export`;
     link.download = `${agentName.replace(/[^a-zA-Z0-9-_]/g, "_")}.agent.json`;
     link.click();
+  }
+
+  async function handleGenerateEval(agentId: string, agentName: string): Promise<void> {
+    setGeneratingEvalIds((prev) => new Set(prev).add(agentId));
+    try {
+      const res = await fetch(`/api/agents/${agentId}/evals/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetCount: 5, runOnDeploy: true }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Eval suite generated for "${agentName}"`);
+      } else {
+        toast.error(json.error ?? "Eval generation failed");
+      }
+    } catch {
+      toast.error("Eval generation failed");
+    } finally {
+      setGeneratingEvalIds((prev) => {
+        const next = new Set(prev);
+        next.delete(agentId);
+        return next;
+      });
+    }
+  }
+
+  async function handleBackfillEvals(): Promise<void> {
+    setIsBackfilling(true);
+    const toastId = toast.loading("Generating eval suites for all agents…");
+    try {
+      const res = await fetch("/api/evals/backfill", { method: "POST" });
+      const json = await res.json();
+      if (json.success) {
+        const { processed, failed, total } = json.data as {
+          processed: number;
+          failed: number;
+          total: number;
+          message?: string;
+        };
+        if (total === 0) {
+          toast.success("All agents already have eval suites.", { id: toastId });
+        } else if (failed === 0) {
+          toast.success(`Generated eval suites for ${processed} agent${processed !== 1 ? "s" : ""}.`, { id: toastId });
+        } else {
+          toast.warning(
+            `Generated ${processed}/${total} eval suites — ${failed} failed.`,
+            { id: toastId },
+          );
+        }
+      } else {
+        toast.error(json.error ?? "Backfill failed", { id: toastId });
+      }
+    } catch {
+      toast.error("Backfill failed", { id: toastId });
+    } finally {
+      setIsBackfilling(false);
+    }
   }
 
   async function handleImport(file: File): Promise<void> {
@@ -210,6 +272,21 @@ export default function DashboardPage() {
               <Link href="/evals/standards">
                 <ShieldCheck className="size-4" aria-hidden="true" />
               </Link>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleBackfillEvals}
+              disabled={isBackfilling}
+              title="Generate Eval Suites for all agents"
+              aria-label="Generate Eval Suites for all agents"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {isBackfilling
+                ? <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                : <Sparkles className="size-4" aria-hidden="true" />
+              }
             </Button>
 
             <Button
@@ -400,6 +477,17 @@ export default function DashboardPage() {
                         <Download className="size-3.5" />
                         Export
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleGenerateEval(agent.id, agent.name)}
+                        disabled={generatingEvalIds.has(agent.id)}
+                      >
+                        {generatingEvalIds.has(agent.id)
+                          ? <Loader2 className="size-3.5 animate-spin" />
+                          : <Sparkles className="size-3.5" />
+                        }
+                        Generate Eval Suite
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         variant="destructive"
                         onClick={() => setConfirmDeleteId(agent.id)}
