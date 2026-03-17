@@ -78,12 +78,13 @@ test.describe("Webhooks UI — page structure", () => {
   }) => {
     if (!sharedAgentId) { test.skip(); return; }
     await mockWebhooksAPI(page, { agentId: sharedAgentId });
-    await webhooksPage.goto(sharedAgentId);
+    // Navigate directly (skip networkidle — real /api/agents fetch for agent name
+    // can delay it; the top-bar renders immediately from the React shell)
+    await page.goto(`/webhooks/${sharedAgentId}`);
 
-    await expect(
-      page.getByRole("heading", { name: /webhooks/i })
-        .or(page.getByText("Webhooks").first())
-    ).toBeVisible({ timeout: 10_000 });
+    // h1 is in the top bar — visible before any API calls complete
+    await expect(page.locator("h1").filter({ hasText: /webhooks/i }))
+      .toBeVisible({ timeout: 10_000 });
     await expect(webhooksPage.newWebhookButton).toBeVisible();
   });
 
@@ -496,9 +497,10 @@ test.describe("Webhooks UI — Test tab", () => {
       .first()
       .click();
 
+    // <Label> is not associated via htmlFor — use structural locators instead
     await expect(webhooksPage.sendTestButton).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByLabel(/payload/i)).toBeVisible();
-    await expect(page.getByLabel(/event type/i)).toBeVisible();
+    await expect(page.locator("textarea").first()).toBeVisible();
+    await expect(page.getByPlaceholder(/push, pull_request/i)).toBeVisible();
   });
 
   test("Test tab shows amber warning banner when event filters are active", async ({
@@ -542,7 +544,11 @@ test.describe("Webhooks UI — Test tab", () => {
       .first()
       .click();
 
-    await expect(webhooksPage.sendTestButton).toBeDisabled({ timeout: 5_000 });
+    // When disabled the button text changes to "Enable webhook to test"
+    const sendBtn = page
+      .getByRole("button", { name: /enable webhook to test/i })
+      .or(page.getByRole("button", { name: /send test request/i }));
+    await expect(sendBtn).toBeDisabled({ timeout: 5_000 });
   });
 
   test("sending a test request shows HTTP 200 success result", async ({
@@ -580,8 +586,8 @@ test.describe("Webhooks UI — detail actions", () => {
     await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // The MoreVertical button is the last svg-containing button in the detail header
-    await page.locator("button").filter({ has: page.locator("svg") }).last().click();
+    // Radix DropdownMenuTrigger adds aria-haspopup="menu" — reliable for the ⋮ button
+    await page.locator('button[aria-haspopup="menu"]').click();
 
     await expect(
       page.getByRole("menuitem", { name: /rotate secret/i })
@@ -597,7 +603,7 @@ test.describe("Webhooks UI — detail actions", () => {
     await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    await page.locator("button").filter({ has: page.locator("svg") }).last().click();
+    await page.locator('button[aria-haspopup="menu"]').click();
     await page.getByRole("menuitem", { name: /rotate secret/i }).click();
 
     await expect(
@@ -614,7 +620,7 @@ test.describe("Webhooks UI — detail actions", () => {
     await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    await page.locator("button").filter({ has: page.locator("svg") }).last().click();
+    await page.locator('button[aria-haspopup="menu"]').click();
     await page.getByRole("menuitem", { name: /delete webhook/i }).click();
 
     await expect(
@@ -976,9 +982,10 @@ test.describe("Flow Builder — webhook integration", () => {
     await flowBuilderPage.goto(agentId);
     await flowBuilderPage.nodePicker.click();
 
+    // Node picker renders plain <button> elements (not DropdownMenuItems)
+    // so they have no menuitem role — match by text content instead
     await expect(
-      page.getByRole("menuitem", { name: /webhook trigger/i })
-        .or(page.locator("[role='menuitem']").filter({ hasText: /webhook trigger/i }))
+      page.locator("button").filter({ hasText: /^webhook trigger$/i })
     ).toBeVisible({ timeout: 5_000 });
   });
 });

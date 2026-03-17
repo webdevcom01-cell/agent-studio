@@ -84,15 +84,24 @@ export async function POST(
     });
 
     if (result.skipped) {
-      // Idempotent — already processed, return 409 with previous execution data
+      if (result.status === 409) {
+        // Idempotent — already processed, return 409 with previous execution data
+        const response = NextResponse.json(
+          {
+            success: true,
+            message: "Event already processed",
+            executionId: result.executionId,
+            conversationId: result.conversationId,
+          },
+          { status: 409 }
+        );
+        applySecurityHeaders(response, pathname);
+        return response;
+      }
+      // Event type not in filter list — silently skip with 200
       const response = NextResponse.json(
-        {
-          success: true,
-          message: "Event already processed",
-          executionId: result.executionId,
-          conversationId: result.conversationId,
-        },
-        { status: 409 }
+        { success: true, skipped: true },
+        { status: 200 }
       );
       applySecurityHeaders(response, pathname);
       return response;
