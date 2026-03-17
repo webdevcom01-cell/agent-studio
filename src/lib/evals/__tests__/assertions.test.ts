@@ -1,4 +1,40 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// Mock Layer 2 + 3 modules — they require network calls (embeddings / AI).
+// Real implementations are unit-tested in semantic.test.ts and llm-judge.test.ts.
+vi.mock("../semantic", () => ({
+  evaluateSemanticSimilarity: vi.fn().mockResolvedValue({
+    type: "semantic_similarity",
+    passed: true,
+    score: 0.92,
+    message: "Mock semantic similarity 0.920 meets threshold 0.8.",
+    details: { similarity: 0.92, threshold: 0.8 },
+  }),
+}));
+vi.mock("../llm-judge", () => ({
+  evaluateLLMRubric: vi.fn().mockResolvedValue({
+    type: "llm_rubric",
+    passed: true,
+    score: 0.85,
+    message: "Mock LLM rubric score 0.85 meets threshold 0.7.",
+    details: { score: 0.85, threshold: 0.7, reasoning: "Correct." },
+  }),
+  evaluateKBFaithfulness: vi.fn().mockResolvedValue({
+    type: "kb_faithfulness",
+    passed: true,
+    score: 0.9,
+    message: "Mock faithfulness score 0.90 meets threshold 0.7.",
+    details: { score: 0.9, threshold: 0.7, reasoning: "Grounded." },
+  }),
+  evaluateRelevance: vi.fn().mockResolvedValue({
+    type: "relevance",
+    passed: true,
+    score: 0.88,
+    message: "Mock relevance score 0.88 meets threshold 0.7.",
+    details: { score: 0.88, threshold: 0.7, reasoning: "Relevant." },
+  }),
+}));
+
 import { evaluateAssertion, evaluateAllAssertions } from "../assertions";
 import type { AssertionContext } from "../schemas";
 
@@ -303,41 +339,46 @@ describe("latency", () => {
   });
 });
 
-// ─── Layer 2 & 3 stubs ────────────────────────────────────────────────────────
+// ─── Layer 2 & 3 (mocked) ────────────────────────────────────────────────────
 
-describe("Phase 2 assertion stubs", () => {
-  it("semantic_similarity returns failed stub result", async () => {
+describe("Layer 2 & 3 assertions (mocked evaluators)", () => {
+  it("semantic_similarity delegates to evaluateSemanticSimilarity", async () => {
     const result = await evaluateAssertion(
-      { type: "semantic_similarity", value: "Paris", threshold: 0.8 },
+      { type: "semantic_similarity", value: "Paris is the capital.", threshold: 0.8 },
       makeCtx(),
     );
-    expect(result.passed).toBe(false);
-    expect(result.message).toMatch(/Phase 2/);
+    expect(result.type).toBe("semantic_similarity");
+    expect(result.passed).toBe(true);
+    expect(result.score).toBeGreaterThanOrEqual(0);
+    expect(result.score).toBeLessThanOrEqual(1);
   });
 
-  it("llm_rubric returns failed stub result", async () => {
+  it("llm_rubric delegates to evaluateLLMRubric", async () => {
     const result = await evaluateAssertion(
-      { type: "llm_rubric", rubric: "Is helpful?", threshold: 0.7 },
+      { type: "llm_rubric", rubric: "Response is helpful and accurate.", threshold: 0.7 },
       makeCtx(),
     );
-    expect(result.passed).toBe(false);
-    expect(result.message).toMatch(/Phase 2/);
+    expect(result.type).toBe("llm_rubric");
+    expect(result.passed).toBe(true);
+    expect(result.details).toHaveProperty("reasoning");
   });
 
-  it("kb_faithfulness returns failed stub result", async () => {
+  it("kb_faithfulness delegates to evaluateKBFaithfulness", async () => {
     const result = await evaluateAssertion(
       { type: "kb_faithfulness", threshold: 0.7 },
-      makeCtx(),
+      makeCtx({ kbContext: "France is a country in Western Europe. Paris is its capital." }),
     );
-    expect(result.passed).toBe(false);
+    expect(result.type).toBe("kb_faithfulness");
+    expect(result.passed).toBe(true);
   });
 
-  it("relevance returns failed stub result", async () => {
+  it("relevance delegates to evaluateRelevance", async () => {
     const result = await evaluateAssertion(
       { type: "relevance", threshold: 0.7 },
       makeCtx(),
     );
-    expect(result.passed).toBe(false);
+    expect(result.type).toBe("relevance");
+    expect(result.passed).toBe(true);
   });
 });
 

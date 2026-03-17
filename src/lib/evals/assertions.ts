@@ -1,11 +1,18 @@
 /**
  * Agent Evals — Assertion Evaluators
  *
- * Phase 1 implements Layer 1 (deterministic) assertions only.
- * Layer 2 (semantic_similarity) and Layer 3 (llm_rubric, kb_faithfulness,
- * relevance) are stubbed with clear errors — implemented in Phase 2.
+ * Layer 1: Deterministic (exact_match, contains, icontains, not_contains,
+ *           regex, starts_with, json_valid, latency)
+ * Layer 2: Semantic similarity (embedding cosine distance)
+ * Layer 3: LLM-as-Judge (llm_rubric, kb_faithfulness, relevance)
  */
 
+import { evaluateSemanticSimilarity } from "./semantic";
+import {
+  evaluateLLMRubric,
+  evaluateKBFaithfulness,
+  evaluateRelevance,
+} from "./llm-judge";
 import type {
   AssertionContext,
   AssertionResult,
@@ -147,17 +154,7 @@ function evaluateLatency(
   };
 }
 
-// ─── Layer 2 & 3: Stubs (implemented in Phase 2) ─────────────────────────────
-
-function stubNotImplemented(type: string): AssertionResult {
-  return {
-    type,
-    passed: false,
-    score: 0,
-    message: `Assertion type "${type}" requires Phase 2 (semantic/LLM evaluators) — not yet implemented.`,
-    details: { phase: 2 },
-  };
-}
+// (Layer 2 & 3 delegated to semantic.ts and llm-judge.ts)
 
 // ─── Main Dispatcher ──────────────────────────────────────────────────────────
 
@@ -196,16 +193,30 @@ export async function evaluateAssertion(
         return evaluateLatency(ctx.latencyMs, assertion.threshold);
 
       case "semantic_similarity":
-        return stubNotImplemented("semantic_similarity");
+        return evaluateSemanticSimilarity(
+          ctx.output,
+          assertion.value,
+          assertion.threshold,
+        );
 
       case "llm_rubric":
-        return stubNotImplemented("llm_rubric");
+        return evaluateLLMRubric(
+          ctx.input,
+          ctx.output,
+          assertion.rubric,
+          assertion.threshold,
+        );
 
       case "kb_faithfulness":
-        return stubNotImplemented("kb_faithfulness");
+        return evaluateKBFaithfulness(
+          ctx.input,
+          ctx.output,
+          ctx.kbContext,
+          assertion.threshold,
+        );
 
       case "relevance":
-        return stubNotImplemented("relevance");
+        return evaluateRelevance(ctx.input, ctx.output, assertion.threshold);
 
       default: {
         // TypeScript exhaustiveness guard
