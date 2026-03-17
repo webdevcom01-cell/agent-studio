@@ -9,7 +9,8 @@ marketplace/discovery with faceted search, 112 agent templates across 11 categor
 agent-as-tool orchestration (AI dynamically calls sibling agents), web browsing capabilities
 (fetch + browser actions via MCP), an embeddable chat widget, a CLI Generator that
 automatically produces a full MCP server bridge from any CLI application (6-phase AI pipeline:
-analyze → design → implement → test → document → publish), and an Agent Evals / Testing
+analyze → design → implement → test → document → publish, dual-target: Python FastMCP or
+TypeScript Node.js MCP SDK), and an Agent Evals / Testing
 Framework (3-layer: deterministic + semantic similarity + LLM-as-Judge, deploy-triggered runs).
 OAuth login (GitHub + Google). Simplified extraction from the enterprise "direct-solutions"
 project — no multi-tenancy, no billing, no plugins, no collaboration.
@@ -233,12 +234,12 @@ src/
       scraper.ts      ← URL content fetching (safe redirect following, DNS validation)
       ingest.ts       ← Source ingestion pipeline (scrape → parse → chunk → embed → store)
     cli-generator/
-      types.ts        ← PipelineConfig, PhaseResult, PIPELINE_PHASES, STATUS_FOR_PHASE, STUCK_THRESHOLD_MS
-      schemas.ts      ← Zod schemas for all 6 phases (generateObject-based, type-safe AI outputs)
-      prompts.ts      ← System/user prompt pairs per phase + per-file implementation prompts
-      ai-phases.ts    ← Phase runner functions: aiAnalyze, aiDesign, aiImplement, aiTest, aiDocs, aiPublish
-      mcp-registration.ts ← Auto-register generated bridge as MCP server in user's account
-      __tests__/      ← Unit tests for prompts, pipeline, schemas, MCP registration
+      types.ts        ← PipelineConfig (incl. target?: "python"|"typescript"), PhaseResult, PIPELINE_PHASES, STATUS_FOR_PHASE, STUCK_THRESHOLD_MS
+      schemas.ts      ← Zod schemas for all 6 phases; TSPublishOutputSchema for TypeScript publish phase
+      prompts.ts      ← System/user prompt pairs per phase; Python + TypeScript variants; extractPythonSignatures, extractTypeScriptSignatures
+      ai-phases.ts    ← Phase runners: aiAnalyze, aiDesign, aiImplement, aiTest, aiDocs, aiPublish — branches by config.target for phases 2–5
+      mcp-registration.ts ← Auto-register generated bridge as MCP server; extractToolsFromFiles routes by target
+      __tests__/      ← Unit tests for prompts, pipeline, schemas, MCP registration (Python + TypeScript paths)
     evals/
       schemas.ts      ← Zod schemas for all 12 assertion types, test case input, suite create/update
       assertions.ts   ← Assertion evaluator engine (all 3 layers: deterministic, semantic, LLM-judge)
@@ -310,6 +311,7 @@ HumanApprovalRequest — Human-in-the-loop workflow
 CLIGeneration — CLI Generator pipeline run
   ├── userId (required, cascade delete)
   ├── applicationName (String) — the CLI app being wrapped
+  ├── target String @default("python") — "python" (FastMCP) or "typescript" (Node.js MCP SDK)
   ├── status (CLIGenerationStatus enum)
   ├── currentPhase (Int, 0–5)
   ├── phases (Json) — PhaseResult[] array with per-phase output, tokens, errors
@@ -583,17 +585,29 @@ EvalResult — One test case result within a run
 - Applied on flow PUT route; returns `{ success, error }` with human-readable path
 
 ### CLI Generator Pipeline
-- 6-phase AI pipeline that wraps any CLI application as an MCP server (Python FastMCP)
+- 6-phase AI pipeline that wraps any CLI application as an MCP server — **dual-target: Python (FastMCP) or TypeScript (Node.js MCP SDK)**
 - Phases: `analyze` (0) → `design` (1) → `implement` (2) → `write-tests` (3) → `document` (4) → `publish` (5)
+- **Target selection:** `PipelineConfig.target` (`"python"` | `"typescript"`, default `"python"`) — stored on `CLIGeneration.target` in DB; shown as `Py` / `TS` badge in UI
+- Phases 0–1 (analyze, design) are **language-agnostic**; phases 2–5 branch by `config.target` inside `ai-phases.ts`
 - Frontend-driven loop: UI calls `/advance` repeatedly; each call runs one phase and persists results
 - Each phase uses `generateObject()` with Zod schemas (`src/lib/cli-generator/schemas.ts`) — no fragile JSON parsing
 - System/user prompt separation for prompt caching efficiency (`src/lib/cli-generator/prompts.ts`)
-- Per-file generation: implement and test phases call `buildImplementSingleFilePrompt()` once per file to avoid context overflow
-- **FastMCP pattern** (critical): `server.py` must use `from mcp.server.fastmcp import FastMCP` — `mcp.Server` does NOT exist
-- Generated files: `main.py`, `bridge.py`, `server.py`, `__init__.py`, `conftest.py`, `test_bridge.py`, `test_server.py`, `requirements.txt`, `pyproject.toml`, `README.md`
+- Per-file generation: implement and test phases call a single-file prompt builder once per file to avoid context overflow
+- **Python FastMCP pattern** (critical): `server.py` must use `from mcp.server.fastmcp import FastMCP` — `mcp.Server` does NOT exist
+  - Python generated files (10): `main.py`, `bridge.py`, `server.py`, `__init__.py`, `conftest.py`, `test_bridge.py`, `test_server.py`, `requirements.txt`, `pyproject.toml`, `README.md`
+  - Python bridge uses `subprocess.run`; tests use **pytest** (`conftest.py` fixtures)
+  - Python MCP config: `{ command: "python", args: ["server.py"] }`
+- **TypeScript Node.js MCP SDK pattern** (critical): `server.ts` must use `McpServer` from `@modelcontextprotocol/sdk/server/mcp.js` with `server.registerTool()` — NEVER `server.tool()` (deprecated)
+  - `StdioServerTransport` from `@modelcontextprotocol/sdk/server/stdio.js`; Zod v3 `inputSchema`; ESM imports with `.js` extension
+  - TypeScript bridge uses `child_process.spawnSync` (synchronous, typed `BridgeResult` interface)
+  - TypeScript tests use **Vitest** (`"test": "vitest run"` in `package.json`); `"type": "module"`, `"build": "tsc"`
+  - TypeScript generated files (8): `index.ts`, `bridge.ts`, `server.ts`, `bridge.test.ts`, `server.test.ts`, `package.json`, `tsconfig.json`, `README.md`
+  - TypeScript MCP config: `{ command: "node", args: ["dist/server.js"] }`
+  - `TSPublishOutputSchema` in `schemas.ts` outputs `package.json` + `tsconfig.json` + `mcp_config`
 - Stuck detection: `STUCK_THRESHOLD_MS = 5 min` — UI shows AlertTriangle on generations where `updatedAt` exceeds threshold without COMPLETED/FAILED
 - Resume endpoint resets the stuck phase and re-invokes the phase runner
 - Publish phase registers the generated bridge as an MCP server (`MCPServer` model) linked to the user
+- `extractToolsFromFiles()` in `mcp-registration.ts` auto-detects target: Python (parses `@server.tool()` decorators) vs TypeScript (parses `server.registerTool()` calls, ignores `.test.ts` files)
 - `STUCK_THRESHOLD_MS` lives in `src/lib/cli-generator/types.ts` — never export constants from `route.ts`
 
 ### Agent Evals / Testing Framework
