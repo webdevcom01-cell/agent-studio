@@ -13,6 +13,7 @@ import {
   IMPLEMENT_FILES,
   TEST_FILES,
   extractPythonSignatures,
+  type PromptParts,
 } from "./prompts";
 import {
   AnalyzeOutputSchema,
@@ -40,12 +41,13 @@ function buildTokensUsed(
 
 /**
  * Calls generateObject on a single model with an AbortController timeout.
+ * Uses system/user split (Phase 3 — prompt caching) for all providers.
  * Returns the typed object + token usage.
  */
 async function callAIObjectWithModel<TSchema extends z.ZodTypeAny>(
   modelId: string,
   schema: TSchema,
-  prompt: string,
+  parts: PromptParts,
   options: { maxTokens?: number } = {},
 ): Promise<{ object: z.infer<TSchema>; usage: TokenUsage | undefined }> {
   const model = getModel(modelId);
@@ -56,7 +58,8 @@ async function callAIObjectWithModel<TSchema extends z.ZodTypeAny>(
     const response = await generateObject({
       model,
       schema,
-      prompt,
+      system: parts.system,
+      prompt: parts.user,
       abortSignal: controller.signal,
       ...(options.maxTokens ? { maxTokens: options.maxTokens } : {}),
     });
@@ -72,11 +75,11 @@ async function callAIObjectWithModel<TSchema extends z.ZodTypeAny>(
  * Backoff: 1s, 2s between rounds.
  * Timeout AbortErrors are never retried — they indicate a fundamental size issue.
  *
- * Uses generateObject() + Zod schema — no JSON parsing fragility.
+ * Uses generateObject() + Zod schema (Phase 2) and system/user split (Phase 3).
  */
 async function callAIObject<TSchema extends z.ZodTypeAny>(
   schema: TSchema,
-  prompt: string,
+  parts: PromptParts,
   phase: string,
   options: { maxTokens?: number } = {},
 ): Promise<{ object: z.infer<TSchema>; usage: TokenUsage | undefined }> {
@@ -87,7 +90,7 @@ async function callAIObject<TSchema extends z.ZodTypeAny>(
   for (let round = 0; round < MAX_ROUNDS; round++) {
     for (const modelId of models) {
       try {
-        return await callAIObjectWithModel(modelId, schema, prompt, options);
+        return await callAIObjectWithModel(modelId, schema, parts, options);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         lastError = msg;

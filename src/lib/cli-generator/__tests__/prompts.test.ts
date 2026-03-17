@@ -16,163 +16,179 @@ const BASE_CTX = {
 };
 
 describe("prompt builders", () => {
+  // ─── Verify Phase 3 split: all builders return { system, user } ────────────
+  describe("PromptParts shape", () => {
+    it("buildAnalyzePrompt returns { system, user }", () => {
+      const parts = buildAnalyzePrompt(BASE_CTX);
+      expect(typeof parts.system).toBe("string");
+      expect(typeof parts.user).toBe("string");
+      expect(parts.system.length).toBeGreaterThan(0);
+      expect(parts.user.length).toBeGreaterThan(0);
+    });
+
+    it("buildDesignPrompt returns { system, user }", () => {
+      const parts = buildDesignPrompt(BASE_CTX);
+      expect(typeof parts.system).toBe("string");
+      expect(typeof parts.user).toBe("string");
+    });
+  });
+
   describe("buildAnalyzePrompt", () => {
-    it("includes application name", () => {
-      const prompt = buildAnalyzePrompt(BASE_CTX);
-      expect(prompt).toContain("Blender");
+    it("includes application name in user part", () => {
+      const { user } = buildAnalyzePrompt(BASE_CTX);
+      expect(user).toContain("Blender");
     });
 
-    it("includes description", () => {
-      const prompt = buildAnalyzePrompt(BASE_CTX);
-      expect(prompt).toContain("3D modeling and rendering tool");
+    it("includes description in user part", () => {
+      const { user } = buildAnalyzePrompt(BASE_CTX);
+      expect(user).toContain("3D modeling and rendering tool");
     });
 
-    it("includes platform", () => {
-      const prompt = buildAnalyzePrompt(BASE_CTX);
-      expect(prompt).toContain("macos");
+    it("includes platform in user part", () => {
+      const { user } = buildAnalyzePrompt(BASE_CTX);
+      expect(user).toContain("macos");
     });
 
-    it("includes capabilities", () => {
-      const prompt = buildAnalyzePrompt(BASE_CTX);
-      expect(prompt).toContain("render");
-      expect(prompt).toContain("export-png");
+    it("includes capabilities in user part", () => {
+      const { user } = buildAnalyzePrompt(BASE_CTX);
+      expect(user).toContain("render");
+      expect(user).toContain("export-png");
     });
 
     it("uses fallback when no description", () => {
-      const prompt = buildAnalyzePrompt({ applicationName: "App" });
-      expect(prompt).toContain("No description provided");
+      const { user } = buildAnalyzePrompt({ applicationName: "App" });
+      expect(user).toContain("No description provided");
     });
 
-    it("requests JSON output format", () => {
-      const prompt = buildAnalyzePrompt(BASE_CTX);
-      expect(prompt).toContain("detectedCLIPaths");
-      expect(prompt).toContain("commonSubcommands");
-      expect(prompt).toContain("scriptingInterfaces");
-      expect(prompt).toContain("platformBehaviors");
+    it("system part contains CLI analysis instructions", () => {
+      const { system } = buildAnalyzePrompt(BASE_CTX);
+      expect(system).toContain("CLI reverse-engineer");
+      expect(system).toContain("subcommands");
+      expect(system).toContain("scripting");
     });
   });
 
   describe("buildDesignPrompt", () => {
-    it("includes application name and description", () => {
-      const prompt = buildDesignPrompt(BASE_CTX);
-      expect(prompt).toContain("Blender");
-      expect(prompt).toContain("3D modeling and rendering tool");
+    it("includes application name and description in user part", () => {
+      const { user } = buildDesignPrompt(BASE_CTX);
+      expect(user).toContain("Blender");
+      expect(user).toContain("3D modeling and rendering tool");
     });
 
-    it("includes previous results when provided", () => {
-      const prompt = buildDesignPrompt({
+    it("includes previous results in user part", () => {
+      const { user } = buildDesignPrompt({
         ...BASE_CTX,
         previousResults: [{ detectedCLIPaths: ["/usr/bin/blender"] }],
       });
-      expect(prompt).toContain("/usr/bin/blender");
+      expect(user).toContain("/usr/bin/blender");
     });
 
-    it("requests MCP-compatible tool schema format", () => {
-      const prompt = buildDesignPrompt(BASE_CTX);
-      expect(prompt).toContain("parameters");
-      expect(prompt).toContain("required");
-      expect(prompt).toContain("snake_case");
+    it("system part contains MCP tool schema conventions", () => {
+      const { system } = buildDesignPrompt(BASE_CTX);
+      expect(system).toContain("Parameters");
+      expect(system).toContain("required");
+      expect(system).toContain("snake_case");
     });
   });
 
   describe("buildImplementPrompt", () => {
-    it("includes application name", () => {
-      const prompt = buildImplementPrompt(BASE_CTX);
-      expect(prompt).toContain("Blender");
+    it("includes application name in user part", () => {
+      const { user } = buildImplementPrompt(BASE_CTX);
+      expect(user).toContain("Blender");
     });
 
-    it("includes previous results", () => {
-      const prompt = buildImplementPrompt({
+    it("includes previous results in user part", () => {
+      const { user } = buildImplementPrompt({
         ...BASE_CTX,
         previousResults: [{ commands: [{ name: "blender_render" }] }],
       });
-      expect(prompt).toContain("blender_render");
+      expect(user).toContain("blender_render");
     });
 
-    it("targets bridge.py (legacy single-file wrapper)", () => {
-      const prompt = buildImplementPrompt(BASE_CTX);
+    it("system part targets bridge.py (legacy single-file wrapper)", () => {
+      const { system } = buildImplementPrompt(BASE_CTX);
       // buildImplementPrompt is a legacy wrapper for IMPLEMENT_FILES[1] = bridge.py
-      expect(prompt).toContain("bridge.py");
+      expect(system).toContain("bridge.py");
     });
 
-    it("mentions subprocess conventions", () => {
-      const prompt = buildImplementPrompt(BASE_CTX);
-      expect(prompt).toContain("subprocess");
+    it("system part mentions subprocess conventions", () => {
+      const { system } = buildImplementPrompt(BASE_CTX);
+      expect(system).toContain("subprocess");
     });
   });
 
   describe("buildTestPrompt", () => {
-    it("includes application name", () => {
-      const prompt = buildTestPrompt(BASE_CTX);
-      expect(prompt).toContain("Blender");
+    it("includes application name in user part", () => {
+      const { user } = buildTestPrompt(BASE_CTX);
+      expect(user).toContain("Blender");
     });
 
-    it("includes previous implementation results", () => {
-      const prompt = buildTestPrompt({
+    it("includes previous implementation results in user part", () => {
+      const { user } = buildTestPrompt({
         ...BASE_CTX,
         previousResults: [{ "main.py": "import click" }],
       });
-      expect(prompt).toContain("import click");
+      expect(user).toContain("import click");
     });
 
-    it("requests pytest test files", () => {
-      const prompt = buildTestPrompt(BASE_CTX);
-      expect(prompt).toContain("conftest.py");
-      expect(prompt).toContain("test_bridge.py");
-      expect(prompt).toContain("test_server.py");
+    it("system part requests pytest conventions", () => {
+      const { system } = buildTestPrompt(BASE_CTX);
+      expect(system).toContain("conftest.py");
+      expect(system).toContain("pytest");
+      expect(system).toContain("subprocess");
     });
   });
 
   describe("buildDocsPrompt", () => {
-    it("includes application name", () => {
-      const prompt = buildDocsPrompt(BASE_CTX);
-      expect(prompt).toContain("Blender");
+    it("includes application name in user part", () => {
+      const { user } = buildDocsPrompt(BASE_CTX);
+      expect(user).toContain("Blender");
     });
 
-    it("requests README structure", () => {
-      const prompt = buildDocsPrompt(BASE_CTX);
-      expect(prompt).toContain("README.md");
-      expect(prompt).toContain("Installation");
-      expect(prompt).toContain("Quick Start");
+    it("system part requests README structure", () => {
+      const { system } = buildDocsPrompt(BASE_CTX);
+      expect(system).toContain("README.md");
+      expect(system).toContain("Installation");
+      expect(system).toContain("Quick Start");
     });
   });
 
   describe("buildPublishPrompt", () => {
-    it("includes application name", () => {
-      const prompt = buildPublishPrompt(BASE_CTX);
-      expect(prompt).toContain("Blender");
+    it("includes application name in user part", () => {
+      const { user } = buildPublishPrompt(BASE_CTX);
+      expect(user).toContain("Blender");
     });
 
-    it("requests packaging files", () => {
-      const prompt = buildPublishPrompt(BASE_CTX);
-      expect(prompt).toContain("requirements.txt");
-      expect(prompt).toContain("pyproject.toml");
-      expect(prompt).toContain("mcp_config");
+    it("system part requests packaging files", () => {
+      const { system } = buildPublishPrompt(BASE_CTX);
+      expect(system).toContain("requirements.txt");
+      expect(system).toContain("pyproject.toml");
+      expect(system).toContain("mcp_config");
     });
 
-    it("mentions PEP 621", () => {
-      const prompt = buildPublishPrompt(BASE_CTX);
-      expect(prompt).toContain("PEP 621");
+    it("system part mentions PEP 621", () => {
+      const { system } = buildPublishPrompt(BASE_CTX);
+      expect(system).toContain("PEP 621");
     });
   });
 
   describe("edge cases", () => {
     it("handles empty capabilities", () => {
-      const prompt = buildAnalyzePrompt({
+      const { user } = buildAnalyzePrompt({
         applicationName: "App",
         capabilities: [],
       });
-      expect(prompt).toContain("general-purpose");
+      expect(user).toContain("general-purpose");
     });
 
     it("handles no previousResults", () => {
-      const prompt = buildDesignPrompt({ applicationName: "App" });
-      expect(prompt).toContain("None yet");
+      const { user } = buildDesignPrompt({ applicationName: "App" });
+      expect(user).toContain("None yet");
     });
 
     it("handles cross-platform default", () => {
-      const prompt = buildAnalyzePrompt({ applicationName: "App" });
-      expect(prompt).toContain("cross-platform");
+      const { user } = buildAnalyzePrompt({ applicationName: "App" });
+      expect(user).toContain("cross-platform");
     });
   });
 });

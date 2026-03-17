@@ -1,9 +1,29 @@
+/**
+ * Prompt builders for all 6 CLI generator pipeline phases.
+ *
+ * Each builder returns { system, user } parts (Phase 3 — prompt caching):
+ *   - system: stable expert persona + conventions + format schema (cacheable)
+ *   - user:   dynamic input — applicationName, capabilities, previousResults
+ *
+ * This separation enables Anthropic prompt caching (~90% cost reduction on
+ * repeated identical system prefixes) and improves behavior with all providers
+ * by using proper role-based messages instead of a single mixed string.
+ */
+
 interface PromptContext {
   applicationName: string;
   description?: string;
   capabilities?: string[];
   platform?: string;
   previousResults?: unknown[];
+}
+
+/** Structured prompt split for system/user role separation. */
+export interface PromptParts {
+  /** Static expert persona + conventions. Same across calls of the same phase type. */
+  system: string;
+  /** Dynamic input: applicationName, capabilities, previousResults, etc. */
+  user: string;
 }
 
 function formatCapabilities(capabilities?: string[]): string {
@@ -49,78 +69,52 @@ export interface TestFileSpec {
   guidance: string;
 }
 
-export function buildAnalyzePrompt(ctx: PromptContext): string {
-  return `You are an expert CLI reverse-engineer. Analyze the desktop application "${ctx.applicationName}" and determine how it can be controlled via command-line interface.
+// ─── Phase 0: Analyze ────────────────────────────────────────────────────────
 
-Application description: ${ctx.description ?? "No description provided."}
-Target capabilities: ${formatCapabilities(ctx.capabilities)}
-Target platform: ${ctx.platform ?? "cross-platform"}
+export function buildAnalyzePrompt(ctx: PromptContext): PromptParts {
+  return {
+    system: `You are an expert CLI reverse-engineer. Your task is to analyze desktop applications and determine exactly how they can be controlled via command-line interface.
 
-Investigate:
-1. Where the CLI binary is typically installed on ${ctx.platform ?? "macOS/Linux/Windows"}
+For any application provided, investigate:
+1. Where the CLI binary is typically installed on each platform (macOS/Linux/Windows absolute paths)
 2. What subcommands and flags are available
-3. Whether it supports scripting interfaces (AppleScript, COM, D-Bus, etc.)
-4. Platform-specific behaviors and path conventions
+3. Whether the app supports scripting interfaces (AppleScript, COM, D-Bus, pipes, sockets)
+4. Platform-specific behaviors, path conventions, and environment requirements
 
-Respond with ONLY a JSON object (no markdown, no code fences, no explanation):
-{
-  "detectedCLIPaths": ["<absolute path to CLI binary per platform>"],
-  "commonSubcommands": [
-    {
-      "name": "<subcommand name>",
-      "description": "<what it does>",
-      "flags": ["<common flags>"]
-    }
-  ],
-  "scriptingInterfaces": [
-    {
-      "type": "<applescript|com|dbus|pipe|socket>",
-      "description": "<how it works>",
-      "example": "<usage example>"
-    }
-  ],
-  "platformBehaviors": {
-    "macOS": "<notes>",
-    "linux": "<notes>",
-    "windows": "<notes>"
-  }
-}`;
+Respond with a JSON object matching the provided schema. No markdown, no code fences, no explanation outside the JSON.`,
+
+    user: `Application: ${ctx.applicationName}
+Description: ${ctx.description ?? "No description provided."}
+Target capabilities: ${formatCapabilities(ctx.capabilities)}
+Target platform: ${ctx.platform ?? "cross-platform"}`,
+  };
 }
 
-export function buildDesignPrompt(ctx: PromptContext): string {
-  return `You are an expert MCP tool designer. Design CLI tool schemas for "${ctx.applicationName}" that are compatible with the MCP (Model Context Protocol) tool format.
+// ─── Phase 1: Design ─────────────────────────────────────────────────────────
 
-Application description: ${ctx.description ?? "No description provided."}
+export function buildDesignPrompt(ctx: PromptContext): PromptParts {
+  return {
+    system: `You are an expert MCP tool designer. Design CLI tool schemas compatible with the MCP (Model Context Protocol) tool format.
+
+Tool design conventions:
+- Python 3.10+, click for CLI, subprocess.run for execution
+- Each tool maps to a CLI subcommand or scripting operation
+- Parameters must have type (string|number|boolean), a description, required flag, and optional default
+- Tool names must be snake_case, descriptive, and prefixed with the application name
+
+Respond with a JSON object containing a "tools" array matching the provided schema. No markdown, no code fences, no explanation outside the JSON.`,
+
+    user: `Application: ${ctx.applicationName}
+Description: ${ctx.description ?? "No description provided."}
 Target capabilities: ${formatCapabilities(ctx.capabilities)}
 Target platform: ${ctx.platform ?? "cross-platform"}
 
 Previous analysis results:
-${formatPreviousResults(ctx.previousResults)}
-
-Design tools following these conventions:
-- Python 3.10+, click for CLI, subprocess.run for execution
-- Each tool maps to a CLI subcommand or scripting operation
-- Parameters must have type (string|number|boolean), required flag, and optional default
-- Tool names must be snake_case, descriptive, and prefixed with the app name
-
-Respond with ONLY a JSON object with a "tools" array (no markdown, no code fences, no explanation):
-{
-  "tools": [
-    {
-      "name": "<app_name>_<action>",
-      "description": "<Clear description of what this tool does>",
-      "parameters": {
-        "<param_name>": {
-          "type": "string|number|boolean",
-          "description": "<what this parameter controls>",
-          "required": true|false,
-          "default": "<optional default value>"
-        }
-      }
-    }
-  ]
-}`;
+${formatPreviousResults(ctx.previousResults)}`,
+  };
 }
+
+// ─── Phase 2: Implement ──────────────────────────────────────────────────────
 
 export interface ImplementFileSpec {
   filename: "__init__.py" | "main.py" | "server.py" | "bridge.py";
@@ -151,57 +145,61 @@ export const IMPLEMENT_FILES: ImplementFileSpec[] = [
   },
 ];
 
-export function buildImplementSingleFilePrompt(ctx: PromptContext, fileSpec: ImplementFileSpec): string {
-  return `You are an expert Python developer. Generate ONLY the file "${fileSpec.filename}" for the "${ctx.applicationName}" CLI bridge.
-
-Application: ${ctx.applicationName}
-Description: ${ctx.description ?? "No description provided."}
-Capabilities: ${formatCapabilities(ctx.capabilities)}
-Platform: ${ctx.platform ?? "cross-platform"}
-
-Design (tools to implement):
-${formatPreviousResults(ctx.previousResults)}
+export function buildImplementSingleFilePrompt(
+  ctx: PromptContext,
+  fileSpec: ImplementFileSpec,
+): PromptParts {
+  return {
+    system: `You are an expert Python developer generating CLI bridge source files.
 
 File to generate: ${fileSpec.filename}
 Purpose: ${fileSpec.description}
 Requirements: ${fileSpec.guidance}
 
-CRITICAL: Respond with ONLY a JSON object with a single key "content" mapping to the complete file content.
+Respond with a JSON object with a single key "content" containing the complete file content.
 No markdown, no code fences, no explanation outside the JSON.
 
-{"content": "<complete Python file content>"}`;
+{"content": "<complete Python file content>"}`,
+
+    user: `Application: ${ctx.applicationName}
+Description: ${ctx.description ?? "No description provided."}
+Capabilities: ${formatCapabilities(ctx.capabilities)}
+Platform: ${ctx.platform ?? "cross-platform"}
+
+Design (tools to implement):
+${formatPreviousResults(ctx.previousResults)}`,
+  };
 }
 
 // Legacy: kept for test compatibility
-export function buildImplementPrompt(ctx: PromptContext): string {
+export function buildImplementPrompt(ctx: PromptContext): PromptParts {
   return buildImplementSingleFilePrompt(ctx, IMPLEMENT_FILES[1]);
 }
 
+// ─── Phase 3: Test ───────────────────────────────────────────────────────────
+
 // Legacy single-call test prompt (kept for backwards compat with pipeline.ts)
-export function buildTestPrompt(ctx: PromptContext): string {
-  return `You are an expert Python test engineer. Write comprehensive pytest tests for the "${ctx.applicationName}" CLI bridge.
+export function buildTestPrompt(ctx: PromptContext): PromptParts {
+  return {
+    system: `You are an expert Python test engineer. Write comprehensive pytest tests for CLI bridge packages.
 
-Application description: ${ctx.description ?? "No description provided."}
-Target capabilities: ${formatCapabilities(ctx.capabilities)}
-Target platform: ${ctx.platform ?? "cross-platform"}
-
-Previous implementation results:
-${formatPreviousResults(ctx.previousResults)}
-
-Generate test files following these conventions:
+Test file conventions:
 - pytest with subprocess mocking (unittest.mock.patch)
 - Test bridge.py: mock subprocess.run, verify argument translation, test timeout handling, test error cases
 - Test server.py: verify MCP protocol compliance, test tool registration, test request/response cycle
 - Fixtures in conftest.py for reusable test state
+- Keep each file CONCISE (under 120 lines). Write focused tests, avoid verbose docstrings.
 
-IMPORTANT: Keep each file CONCISE (under 120 lines). Write focused tests, avoid verbose docstrings. Ensure all JSON strings are properly escaped (newlines as \\n, quotes as \\").
+Respond with a JSON object mapping filenames to file contents. No markdown, no code fences.`,
 
-Respond with ONLY a JSON object mapping filenames to file contents (no markdown, no code fences, no explanation):
-{
-  "conftest.py": "<shared fixtures: mock CLI paths, sample outputs, test configurations>",
-  "test_bridge.py": "<bridge tests: mocked subprocess calls, argument translation, timeout, error handling>",
-  "test_server.py": "<MCP server tests: protocol compliance, tool registration, request handling>"
-}`;
+    user: `Application: ${ctx.applicationName}
+Description: ${ctx.description ?? "No description provided."}
+Target capabilities: ${formatCapabilities(ctx.capabilities)}
+Target platform: ${ctx.platform ?? "cross-platform"}
+
+Previous implementation results:
+${formatPreviousResults(ctx.previousResults)}`,
+  };
 }
 
 export const TEST_FILES: TestFileSpec[] = [
@@ -226,77 +224,76 @@ export function buildTestSingleFilePrompt(
   ctx: PromptContext,
   fileSpec: TestFileSpec,
   signatures: Record<string, string>,
-): string {
+): PromptParts {
   const sigSummary = Object.entries(signatures)
     .map(([file, sigs]) => `# ${file}\n${sigs}`)
     .join("\n\n");
 
-  return `You are an expert Python test engineer. Generate ONLY the file "${fileSpec.filename}" for the "${ctx.applicationName}" CLI bridge tests.
-
-Application: ${ctx.applicationName}
-Capabilities: ${formatCapabilities(ctx.capabilities)}
-Platform: ${ctx.platform ?? "cross-platform"}
-
-Implementation signatures (actual function names to test against):
-${sigSummary || "No signatures extracted — use bridge.py / server.py structure from design."}
+  return {
+    system: `You are an expert Python test engineer generating pytest test files for CLI bridge packages.
 
 File to generate: ${fileSpec.filename}
 Purpose: ${fileSpec.description}
 Requirements: ${fileSpec.guidance}
 
-CRITICAL: Respond with ONLY a JSON object with a single key "content" mapping to the complete file content.
+Respond with a JSON object with a single key "content" containing the complete file content.
 No markdown, no code fences, no explanation outside the JSON.
 
-{"content": "<complete Python test file content>"}`;
+{"content": "<complete Python test file content>"}`,
+
+    user: `Application: ${ctx.applicationName}
+Capabilities: ${formatCapabilities(ctx.capabilities)}
+Platform: ${ctx.platform ?? "cross-platform"}
+
+Implementation signatures (actual function names to test against):
+${sigSummary || "No signatures extracted — use bridge.py / server.py structure from design."}`,
+  };
 }
 
-export function buildDocsPrompt(ctx: PromptContext): string {
-  return `You are a technical writer specializing in developer documentation. Write documentation for the "${ctx.applicationName}" CLI bridge.
+// ─── Phase 4: Docs ───────────────────────────────────────────────────────────
 
-Application description: ${ctx.description ?? "No description provided."}
+export function buildDocsPrompt(ctx: PromptContext): PromptParts {
+  return {
+    system: `You are a technical writer specializing in developer documentation for Python CLI tools.
+
+Documentation requirements:
+- README.md: concise doc under 80 lines covering exactly these sections:
+  ## Installation (pip install command only)
+  ## Quick Start (3-step example)
+  ## Commands (brief list with 1-line descriptions per command)
+  ## MCP Server (config snippet only, no prose)
+
+Respond with a JSON object matching the provided schema. No markdown, no code fences, no explanation outside the JSON.`,
+
+    user: `Application: ${ctx.applicationName}
+Description: ${ctx.description ?? "No description provided."}
 Target capabilities: ${formatCapabilities(ctx.capabilities)}
 Target platform: ${ctx.platform ?? "cross-platform"}
 
-Previous implementation and test results:
-${formatPreviousResults(ctx.previousResults)}
-
-Generate documentation covering the key essentials only.
-
-IMPORTANT: Keep README.md CONCISE (under 80 lines total). Write short, focused sections without verbose explanations. Ensure all JSON strings are properly escaped (newlines as \\n, quotes as \\").
-
-Respond with ONLY a JSON object mapping filenames to file contents (no markdown, no code fences, no explanation):
-{
-  "README.md": "<Concise doc with: ## Installation (pip install command), ## Quick Start (3-step example), ## Commands (brief list with 1-line descriptions), ## MCP Server (config snippet only)>"
-}`;
+Previous results:
+${formatPreviousResults(ctx.previousResults)}`,
+  };
 }
 
-export function buildPublishPrompt(ctx: PromptContext): string {
-  return `You are a Python packaging expert. Generate the packaging and configuration files needed to publish the "${ctx.applicationName}" CLI bridge as a distributable package.
+// ─── Phase 5: Publish ────────────────────────────────────────────────────────
 
-Application description: ${ctx.description ?? "No description provided."}
+export function buildPublishPrompt(ctx: PromptContext): PromptParts {
+  return {
+    system: `You are a Python packaging expert. Generate packaging and configuration files for distributable Python CLI bridge packages.
+
+Follow modern Python conventions:
+- pyproject.toml: PEP 621 compliant with [project] metadata, dependencies (click>=8.0, mcp>=1.0), [project.scripts] entry points, [build-system] hatchling config
+- requirements.txt: pinned direct dependencies for pip install
+- mcp_config: JSON object for auto-registration with MCP-compatible hosts
+
+Respond with a JSON object matching the provided schema. No markdown, no code fences, no explanation outside the JSON.`,
+
+    user: `Application: ${ctx.applicationName}
+Description: ${ctx.description ?? "No description provided."}
 Target capabilities: ${formatCapabilities(ctx.capabilities)}
 Target platform: ${ctx.platform ?? "cross-platform"}
 
 Previous implementation results:
-${formatPreviousResults(ctx.previousResults)}
-
-Generate packaging files following modern Python conventions:
-- pyproject.toml with project metadata, dependencies (click, mcp), and entry points
-- requirements.txt for direct pip install
-- MCP config JSON for auto-registration with MCP-compatible hosts
-
-Respond with ONLY a JSON object (no markdown, no code fences, no explanation):
-{
-  "requirements.txt": "<pinned dependencies: click>=8.0, mcp>=1.0, plus any app-specific deps>",
-  "pyproject.toml": "<PEP 621 compliant with [project] metadata, [project.scripts] entry points, [build-system] config>",
-  "mcp_config": {
-    "name": "<mcp server name>",
-    "version": "1.0.0",
-    "description": "<what this MCP server provides>",
-    "command": "<python -m package_name.server>",
-    "args": [],
-    "env": {},
-    "tools": ["<list of tool names from design phase>"]
-  }
-}`;
+${formatPreviousResults(ctx.previousResults)}`,
+  };
 }
