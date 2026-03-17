@@ -55,10 +55,9 @@ const PHASE_RUNNERS: PhaseRunner[] = [
   (config) => aiAnalyze(config),                       // 0: analyze
   (config, prev) => aiDesign(config, prev[0]?.output), // 1: design
   (config, prev) => aiImplement(config, prev[1]?.output), // 2: implement
-  (config, prev) => aiTest(config, summarizeImplementOutput(prev[2]?.output)),   // 3: plan-tests
-  (config, prev) => aiTest(config, summarizeImplementOutput(prev[2]?.output)),   // 4: write-tests
-  (config, prev) => aiDocs(config, prev[1]?.output),   // 5: document
-  (config, prev) => aiPublish(config, prev[1]?.output), // 6: publish
+  (config, prev) => aiTest(config, summarizeImplementOutput(prev[2]?.output)),   // 3: write-tests
+  (config, prev) => aiDocs(config, prev[1]?.output),   // 4: document
+  (config, prev) => aiPublish(config, prev[1]?.output), // 5: publish
 ];
 
 export async function runPipeline(
