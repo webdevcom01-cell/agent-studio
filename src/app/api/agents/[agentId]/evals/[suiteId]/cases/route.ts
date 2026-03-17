@@ -209,7 +209,7 @@ export async function PUT(
           data: {
             ...(c.label !== undefined && { label: c.label }),
             ...(c.input !== undefined && { input: c.input }),
-            ...(c.assertions !== undefined && { assertions: c.assertions }),
+            ...(c.assertions !== undefined && { assertions: c.assertions as import("@/generated/prisma/runtime/library").InputJsonValue }),
             ...(c.tags !== undefined && { tags: c.tags }),
             ...(c.order !== undefined && { order: c.order }),
           },

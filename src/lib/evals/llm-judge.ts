@@ -56,7 +56,6 @@ async function callJudge(
     schema: JudgeOutputSchema,
     system: systemPrompt,
     prompt: userPrompt,
-    maxTokens: 256,
   });
   return object;
 }

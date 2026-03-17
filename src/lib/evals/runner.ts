@@ -59,7 +59,7 @@ export interface CaseRunResult {
   agentOutput: string | null;
   score: number;
   latencyMs: number;
-  assertionResults: ReturnType<typeof evaluateAllAssertions> extends Promise<infer T> ? T["results"] : never[];
+  assertionResults: import("./schemas").AssertionResult[];
   errorMessage?: string;
 }
 
@@ -333,7 +333,7 @@ async function runSingleTestCase(
       testCaseId: testCase.id,
       status,
       agentOutput,
-      assertions: assertionResults,
+      assertions: assertionResults as import("@/generated/prisma/runtime/library").InputJsonValue,
       score,
       latencyMs: latencyMs > 0 ? latencyMs : null,
       errorMessage,

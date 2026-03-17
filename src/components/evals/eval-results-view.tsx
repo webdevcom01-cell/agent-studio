@@ -241,7 +241,7 @@ function TrendChart({ history }: { history: RunHistoryItem[] }) {
           <Tooltip
             contentStyle={{ backgroundColor: "#18181b", border: "1px solid #3f3f46", borderRadius: 6 }}
             labelStyle={{ color: "#a1a1aa", fontSize: 11 }}
-            formatter={(v: number) => [`${v}%`, "Score"]}
+            formatter={(v) => [`${typeof v === "number" ? v : 0}%`, "Score"]}
           />
           <Line
             type="monotone"

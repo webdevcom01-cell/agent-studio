@@ -428,7 +428,7 @@ export default function EvalsPage({ params }: PageProps) {
                     <div className="flex items-center gap-1.5">
                       {suite.isDefault && <Star className="w-3 h-3 text-yellow-400 shrink-0" />}
                       {suite.runOnDeploy && (
-                        <Rocket className="w-3 h-3 text-violet-400 shrink-0" title="Runs on deploy" />
+                        <Rocket className="w-3 h-3 text-violet-400 shrink-0" aria-label="Runs on deploy" />
                       )}
                       <p className="text-sm font-medium truncate">{suite.name}</p>
                     </div>
