@@ -63,6 +63,9 @@ export const STATUS_FOR_PHASE: Record<number, CLIGenerationStatus> = {
   5: "PUBLISHING",
 };
 
+/** Generations not updated within this window are considered stuck. */
+export const STUCK_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
 /** Creates the initial phases array for a new generation (all pending). */
 export function createInitialPhases(): PhaseResult[] {
   return PIPELINE_PHASES.map(({ phase, name }) => ({

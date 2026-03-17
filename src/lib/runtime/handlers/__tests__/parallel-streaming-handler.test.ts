@@ -259,7 +259,7 @@ describe("parallelStreamingHandler", () => {
     });
 
     const writer = makeWriter();
-    const result = await parallelStreamingHandler(
+    await parallelStreamingHandler(
       makeParallelNode({ mergeStrategy: "all" }),
       ctx,
       writer

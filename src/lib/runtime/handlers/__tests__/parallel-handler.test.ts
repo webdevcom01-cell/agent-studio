@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { parallelHandler } from "../parallel-handler";
 import type { RuntimeContext } from "../../types";
 import type { FlowNode } from "@/types";
@@ -16,7 +16,7 @@ vi.mock("@/lib/logger", () => ({
 vi.mock("../index", () => ({
   getHandler: (type: string) => {
     if (type === "message") {
-      return async (node: FlowNode, ctx: RuntimeContext) => ({
+      return async (node: FlowNode, _ctx: RuntimeContext) => ({
         messages: [{ role: "assistant" as const, content: (node.data.message as string) ?? "Hello" }],
         nextNodeId: null,
         waitForInput: false,

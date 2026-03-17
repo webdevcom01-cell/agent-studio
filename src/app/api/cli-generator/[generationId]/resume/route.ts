@@ -28,11 +28,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
-import { PIPELINE_PHASES, STATUS_FOR_PHASE } from "@/lib/cli-generator/types";
+import {
+  PIPELINE_PHASES,
+  STATUS_FOR_PHASE,
+  STUCK_THRESHOLD_MS,
+} from "@/lib/cli-generator/types";
 import type { PhaseResult } from "@/lib/cli-generator/types";
-
-/** Generations not updated within this window are considered stuck. */
-export const STUCK_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
 const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED"]);
 

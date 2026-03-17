@@ -28,8 +28,8 @@ const mockAuth = vi.mocked(auth);
 const mockFindUnique = vi.mocked(prisma.cLIGeneration.findUnique);
 const mockUpdate = vi.mocked(prisma.cLIGeneration.update);
 
-// Import the constant from the route under test so the threshold stays in sync
-import { STUCK_THRESHOLD_MS } from "../[generationId]/resume/route";
+// Import the constant from types so the threshold stays in sync
+import { STUCK_THRESHOLD_MS } from "@/lib/cli-generator/types";
 
 /** A updatedAt timestamp that is older than STUCK_THRESHOLD_MS (stuck). */
 function stuckDate(): string {
