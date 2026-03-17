@@ -96,6 +96,13 @@ interface ConversationFunnelRow {
   count: bigint;
 }
 
+interface ScheduleDailyRow {
+  date: string;
+  total_runs: bigint;
+  successful_runs: bigint;
+  avg_duration_ms: number;
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const authResult = await requireAuth();
   if (isAuthError(authResult)) return authResult;
@@ -132,6 +139,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     tokenSummary,
     toolUsage,
     conversationFunnel,
+    scheduleExecData,
   ] = await Promise.all([
     // 1. Total conversations
     prisma.conversation.count({
@@ -357,6 +365,24 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         GROUP BY step
       `
     ),
+
+    // 14. Schedule execution stats by day
+    prisma.$queryRaw<ScheduleDailyRow[]>(
+      Prisma.sql`
+        SELECT
+          DATE(ae."createdAt")::text AS date,
+          COUNT(*)::bigint AS total_runs,
+          SUM(CASE WHEN (ae.metadata->>'success')::boolean = true THEN 1 ELSE 0 END)::bigint AS successful_runs,
+          AVG(ae."durationMs")::float AS avg_duration_ms
+        FROM "AnalyticsEvent" ae
+        INNER JOIN "Agent" a ON a."id" = ae."agentId"
+        WHERE ae.type = 'SCHEDULE_EXECUTION'
+          AND ae."createdAt" >= ${sinceDate}
+          AND a."userId" = ${userId}
+        GROUP BY DATE(ae."createdAt")
+        ORDER BY DATE(ae."createdAt") ASC
+      `
+    ),
   ]);
 
   // ─── Process results ────────────────────────────────────────────────────
@@ -390,6 +416,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const funnelMap = Object.fromEntries(
     conversationFunnel.map((r) => [r.step, Number(r.count)])
   );
+
+  // Schedule execution aggregates
+  const scheduleTotalRuns = scheduleExecData.reduce((sum, r) => sum + Number(r.total_runs), 0);
+  const scheduleSuccessfulRuns = scheduleExecData.reduce((sum, r) => sum + Number(r.successful_runs), 0);
+  const scheduleSuccessRate = scheduleTotalRuns > 0
+    ? Math.round((scheduleSuccessfulRuns / scheduleTotalRuns) * 100)
+    : null;
+  const scheduleAvgDurations = scheduleExecData.map((r) => r.avg_duration_ms).filter(Boolean);
+  const scheduleAvgDurationMs = scheduleAvgDurations.length > 0
+    ? Math.round(scheduleAvgDurations.reduce((a, b) => a + b, 0) / scheduleAvgDurations.length)
+    : null;
 
   return NextResponse.json({
     success: true,
@@ -465,6 +502,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         sentMessage: funnelMap["sent_message"] ?? 0,
         multiTurn: funnelMap["multi_turn"] ?? 0,
         completed: funnelMap["completed"] ?? 0,
+      },
+      scheduleStats: {
+        totalRuns: scheduleTotalRuns,
+        successfulRuns: scheduleSuccessfulRuns,
+        failedRuns: scheduleTotalRuns - scheduleSuccessfulRuns,
+        successRate: scheduleSuccessRate,
+        avgDurationMs: scheduleAvgDurationMs,
+        dailyTrend: scheduleExecData.map((r) => ({
+          date: r.date,
+          totalRuns: Number(r.total_runs),
+          successfulRuns: Number(r.successful_runs),
+          failedRuns: Number(r.total_runs) - Number(r.successful_runs),
+          avgDurationMs: r.avg_duration_ms ? Math.round(r.avg_duration_ms) : null,
+        })),
       },
     },
   });

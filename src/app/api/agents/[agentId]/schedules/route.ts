@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { CreateScheduleSchema } from "@/lib/scheduler/schemas";
 import { computeNextRunAt } from "@/lib/scheduler/cron-validator";
 
@@ -70,6 +71,15 @@ export async function POST(
     const { agentId } = await params;
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
+
+    // Rate limit: 10 schedule creates per user per minute
+    const rateResult = checkRateLimit(`schedule_create:${authResult.userId}`, 10);
+    if (!rateResult.allowed) {
+      return NextResponse.json(
+        { success: false, error: "Too many requests — try again in a moment" },
+        { status: 429 },
+      );
+    }
 
     // Enforce schedule limit
     const count = await prisma.flowSchedule.count({ where: { agentId } });
