@@ -213,7 +213,7 @@ export async function aiImplement(
     previousResults: [designResult],
   });
 
-  const { text, usage } = await callAI(prompt, "implement", 4096);
+  const { text, usage } = await callAI(prompt, "implement", 8192);
   const parsed = parseJsonResponse(text);
   const generatedFiles = extractGeneratedFiles(parsed);
 
