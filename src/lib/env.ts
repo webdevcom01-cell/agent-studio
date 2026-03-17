@@ -21,6 +21,7 @@ const envSchema = z.object({
   GROQ_API_KEY: optionalStr,
   MISTRAL_API_KEY: optionalStr,
   MOONSHOT_API_KEY: optionalStr,
+  CRON_SECRET: optionalStr,
   NOTION_CLIENT_ID: optionalStr,
   NOTION_CLIENT_SECRET: optionalStr,
   GOOGLE_WORKSPACE_CLIENT_ID: optionalStr,

@@ -241,6 +241,37 @@ export async function trackError(event: ErrorEvent): Promise<void> {
   });
 }
 
+interface ScheduleExecutionEvent {
+  agentId: string;
+  scheduleId: string;
+  executionId: string;
+  scheduleType: string;
+  durationMs: number;
+  success: boolean;
+  errorMessage?: string;
+  tokenUsage?: { input: number; output: number };
+}
+
+export async function trackScheduleExecution(event: ScheduleExecutionEvent): Promise<void> {
+  await safeTrack(async () => {
+    await prisma.analyticsEvent.create({
+      data: {
+        type: "SCHEDULE_EXECUTION",
+        agentId: event.agentId,
+        durationMs: event.durationMs,
+        metadata: {
+          scheduleId: event.scheduleId,
+          executionId: event.executionId,
+          scheduleType: event.scheduleType,
+          success: event.success,
+          errorMessage: event.errorMessage,
+          tokenUsage: event.tokenUsage,
+        },
+      },
+    });
+  });
+}
+
 export async function trackFlowExecution(event: FlowExecutionEvent): Promise<void> {
   await safeTrack(async () => {
     const totalTokens =
