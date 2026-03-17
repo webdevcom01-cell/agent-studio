@@ -50,6 +50,7 @@ export async function GET(
       name: s.name,
       description: s.description,
       isDefault: s.isDefault,
+      runOnDeploy: s.runOnDeploy,
       testCaseCount: s._count.testCases,
       runCount: s._count.runs,
       lastRun: s.runs[0] ?? null,
@@ -112,6 +113,7 @@ export async function POST(
         name: parsed.data.name,
         description: parsed.data.description,
         isDefault: parsed.data.isDefault ?? false,
+        runOnDeploy: parsed.data.runOnDeploy ?? false,
       },
       include: {
         _count: { select: { testCases: true, runs: true } },

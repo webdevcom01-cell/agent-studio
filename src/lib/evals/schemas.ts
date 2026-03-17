@@ -125,6 +125,8 @@ export const CreateEvalSuiteSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().max(1000).optional(),
   isDefault: z.boolean().optional(),
+  /** Auto-run this suite every time the agent flow is deployed */
+  runOnDeploy: z.boolean().optional(),
 });
 
 export const UpdateEvalSuiteSchema = CreateEvalSuiteSchema.partial();

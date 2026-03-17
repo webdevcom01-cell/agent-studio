@@ -3,6 +3,7 @@ import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { VersionService } from "@/lib/versioning/version-service";
 import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { triggerDeployEvals } from "@/lib/evals/deploy-hook";
 
 interface RouteParams {
   params: Promise<{ agentId: string; versionId: string }>;
@@ -34,6 +35,16 @@ export async function POST(
       authResult.userId,
       note
     );
+
+    // Fire-and-forget: run eval suites with runOnDeploy:true.
+    // Extract base URL and auth cookie from the incoming request so the
+    // internal chat API call is authenticated as the same user.
+    const origin = request.headers.get("origin") ?? request.nextUrl.origin;
+    const cookieHeader = request.headers.get("cookie") ?? undefined;
+    triggerDeployEvals(agentId, {
+      baseUrl: origin,
+      authHeader: cookieHeader,
+    });
 
     return NextResponse.json(
       { success: true, data: deployment },

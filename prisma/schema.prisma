@@ -507,18 +507,20 @@ enum EvalResultStatus {
 }
 
 model EvalSuite {
-  id          String         @id @default(cuid())
-  name        String
-  description String?
-  agentId     String
-  agent       Agent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  testCases   EvalTestCase[]
-  runs        EvalRun[]
-  isDefault   Boolean        @default(false)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id           String         @id @default(cuid())
+  name         String
+  description  String?
+  agentId      String
+  agent        Agent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  testCases    EvalTestCase[]
+  runs         EvalRun[]
+  isDefault    Boolean        @default(false)
+  runOnDeploy  Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   @@index([agentId])
+  @@index([agentId, runOnDeploy])
 }
 
 model EvalTestCase {

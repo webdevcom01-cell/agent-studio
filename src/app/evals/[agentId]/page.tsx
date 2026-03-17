@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, use } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, FlaskConical, Settings2,
-  BarChart3, Loader2, MoreVertical, Star, StarOff,
+  BarChart3, Loader2, MoreVertical, Star, StarOff, Rocket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,7 @@ interface EvalSuite {
   name: string;
   description: string | null;
   isDefault: boolean;
+  runOnDeploy: boolean;
   testCaseCount: number;
   runCount: number;
   lastRun: {
@@ -50,6 +51,7 @@ interface SuiteDetail {
   name: string;
   description: string | null;
   isDefault: boolean;
+  runOnDeploy: boolean;
   testCases: EvalTestCase[];
 }
 
@@ -65,6 +67,7 @@ function CreateSuiteDialog({
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [runOnDeploy, setRunOnDeploy] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
   async function handleCreate() {
@@ -74,13 +77,18 @@ function CreateSuiteDialog({
       const res = await fetch(`/api/agents/${agentId}/evals`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), description: description.trim() || undefined }),
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim() || undefined,
+          runOnDeploy,
+        }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       onCreated(json.data as EvalSuite);
       setName("");
       setDescription("");
+      setRunOnDeploy(false);
       onClose();
       toast.success("Eval suite created");
     } catch (err) {
@@ -117,6 +125,29 @@ function CreateSuiteDialog({
               className="bg-zinc-800 border-zinc-600 text-white resize-none"
             />
           </div>
+          {/* Run on deploy toggle */}
+          <label className="flex items-center gap-3 cursor-pointer group">
+            <div
+              role="checkbox"
+              aria-checked={runOnDeploy}
+              tabIndex={0}
+              onClick={() => setRunOnDeploy((v) => !v)}
+              onKeyDown={(e) => (e.key === " " || e.key === "Enter") && setRunOnDeploy((v) => !v)}
+              className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 ${
+                runOnDeploy ? "bg-violet-600" : "bg-zinc-700"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                  runOnDeploy ? "translate-x-4" : "translate-x-0"
+                }`}
+              />
+            </div>
+            <div>
+              <p className="text-sm text-zinc-300 font-medium">Run on deploy</p>
+              <p className="text-xs text-zinc-500">Automatically run this suite when the agent flow is deployed</p>
+            </div>
+          </label>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} className="border-zinc-600 text-zinc-300">
@@ -295,6 +326,25 @@ export default function EvalsPage({ params }: PageProps) {
     }
   }
 
+  // Toggle runOnDeploy for a suite
+  async function handleToggleRunOnDeploy(suiteId: string, current: boolean) {
+    try {
+      const res = await fetch(`/api/agents/${agentId}/evals/${suiteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runOnDeploy: !current }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setSuites((prev) =>
+        prev.map((s) => (s.id === suiteId ? { ...s, runOnDeploy: !current } : s))
+      );
+      toast.success(!current ? "Suite will run on deploy" : "Auto-run on deploy disabled");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update suite");
+    }
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -377,6 +427,9 @@ export default function EvalsPage({ params }: PageProps) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       {suite.isDefault && <Star className="w-3 h-3 text-yellow-400 shrink-0" />}
+                      {suite.runOnDeploy && (
+                        <Rocket className="w-3 h-3 text-violet-400 shrink-0" title="Runs on deploy" />
+                      )}
                       <p className="text-sm font-medium truncate">{suite.name}</p>
                     </div>
                     <p className="text-xs text-zinc-500 mt-0.5">
@@ -406,6 +459,13 @@ export default function EvalsPage({ params }: PageProps) {
                           <Star className="w-3.5 h-3.5 text-yellow-400" /> Set as Default
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuItem
+                        className="text-zinc-300 hover:bg-zinc-700 cursor-pointer text-xs gap-2"
+                        onClick={(e) => { e.stopPropagation(); handleToggleRunOnDeploy(suite.id, suite.runOnDeploy); }}
+                      >
+                        <Rocket className="w-3.5 h-3.5 text-violet-400" />
+                        {suite.runOnDeploy ? "Disable auto-run on deploy" : "Run on deploy"}
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-red-400 hover:bg-zinc-700 cursor-pointer text-xs gap-2"
                         onClick={(e) => { e.stopPropagation(); handleDeleteSuite(suite.id); }}
@@ -451,11 +511,16 @@ export default function EvalsPage({ params }: PageProps) {
               {/* Suite header */}
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-lg font-semibold text-white">{suiteDetail.name}</h1>
                     {suiteDetail.isDefault && (
                       <span className="text-xs px-2 py-0.5 bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 rounded-full">
                         Default
+                      </span>
+                    )}
+                    {suiteDetail.runOnDeploy && (
+                      <span className="flex items-center gap-1 text-xs px-2 py-0.5 bg-violet-500/15 text-violet-400 border border-violet-500/30 rounded-full">
+                        <Rocket className="w-3 h-3" /> Auto-run on deploy
                       </span>
                     )}
                   </div>
