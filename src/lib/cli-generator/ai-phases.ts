@@ -135,11 +135,13 @@ function buildTokensUsed(
   return { input: usage.inputTokens ?? 0, output: usage.outputTokens ?? 0 };
 }
 
-async function callAI(prompt: string, phase: string, maxTokens?: number): Promise<{
-  text: string;
-  usage: TokenUsage | undefined;
-}> {
-  const model = resolveModel();
+async function callAIWithModel(
+  modelId: string,
+  prompt: string,
+  phase: string,
+  maxTokens?: number,
+): Promise<{ text: string; usage: TokenUsage | undefined }> {
+  const model = getModel(modelId);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), AI_PHASE_TIMEOUT_MS);
 
@@ -150,16 +152,35 @@ async function callAI(prompt: string, phase: string, maxTokens?: number): Promis
       abortSignal: controller.signal,
       ...(maxTokens ? { maxTokens } : {}),
     });
-
     return { text: response.text, usage: response.usage };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.error(`AI phase "${phase}" failed`, err instanceof Error ? err : new Error(message), {
-      phase,
-    });
-    throw new Error(`AI generation failed for phase "${phase}": ${message}`);
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function callAI(prompt: string, phase: string, maxTokens?: number): Promise<{
+  text: string;
+  usage: TokenUsage | undefined;
+}> {
+  try {
+    return await callAIWithModel(PRIMARY_MODEL, prompt, phase, maxTokens);
+  } catch (primaryErr) {
+    const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+
+    // Don't retry on our own AbortError (timeout)
+    if (primaryErr instanceof Error && primaryErr.name === "AbortError") {
+      throw new Error(`Phase ${phase} timed out after ${AI_PHASE_TIMEOUT_MS / 1000}s`);
+    }
+
+    // Primary model failed — retry with fallback model
+    logger.warn(`AI phase "${phase}" primary model failed, retrying with fallback`, { phase, primaryMsg });
+    try {
+      return await callAIWithModel(FALLBACK_MODEL, prompt, phase, maxTokens);
+    } catch (fallbackErr) {
+      const message = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+      logger.error(`AI phase "${phase}" fallback also failed`, fallbackErr instanceof Error ? fallbackErr : new Error(message), { phase });
+      throw new Error(`AI generation failed for phase "${phase}": ${primaryMsg} (fallback: ${message})`);
+    }
   }
 }
 
