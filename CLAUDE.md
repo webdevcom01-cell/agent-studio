@@ -7,11 +7,12 @@ Visual AI agent builder with multi-agent orchestration. Build AI agents via a fl
 agent-to-agent communication (A2A protocol), and chat with agents. Features include: agent
 marketplace/discovery with faceted search, 112 agent templates across 11 categories,
 agent-as-tool orchestration (AI dynamically calls sibling agents), web browsing capabilities
-(fetch + browser actions via MCP), an embeddable chat widget, and a CLI Generator that
+(fetch + browser actions via MCP), an embeddable chat widget, a CLI Generator that
 automatically produces a full MCP server bridge from any CLI application (6-phase AI pipeline:
-analyze → design → implement → test → document → publish). OAuth login (GitHub + Google).
-Simplified extraction from the enterprise "direct-solutions" project — no multi-tenancy,
-no billing, no plugins, no collaboration.
+analyze → design → implement → test → document → publish), and an Agent Evals / Testing
+Framework (3-layer: deterministic + semantic similarity + LLM-as-Judge, deploy-triggered runs).
+OAuth login (GitHub + Google). Simplified extraction from the enterprise "direct-solutions"
+project — no multi-tenancy, no billing, no plugins, no collaboration.
 
 ---
 
@@ -47,7 +48,7 @@ no billing, no plugins, no collaboration.
 
 ```
 prisma/
-  schema.prisma         ← DB schema (22 models, pgvector, versioning, A2A, CLIGeneration)
+  schema.prisma         ← DB schema (26 models, pgvector, versioning, A2A, CLIGeneration, Evals)
   migrations/           ← auto-generated — never edit manually
 
 public/
@@ -79,6 +80,7 @@ src/
     knowledge/[agentId]/page.tsx      ← Knowledge base management
     knowledge/[agentId]/error.tsx     ← Error boundary (Knowledge Base Error)
     cli-generator/page.tsx            ← CLI Generator — 6-phase pipeline UI (stuck detection, resume, progress)
+    evals/[agentId]/page.tsx          ← Agent Evals — suite sidebar, test case editor, results view, trend chart
     api/
       auth/[...nextauth]/route.ts              ← NextAuth API route (GET, POST)
       health/route.ts                          ← Health check endpoint (DB connectivity + uptime)
@@ -120,6 +122,11 @@ src/
       cli-generator/[generationId]/download/route.ts ← GET download all files as .zip
       cli-generator/[generationId]/logs/route.ts     ← GET per-phase logs and token usage
       cli-generator/[generationId]/publish/route.ts  ← POST register generated bridge as MCP server
+      agents/[agentId]/evals/route.ts                          ← GET list suites, POST create suite
+      agents/[agentId]/evals/[suiteId]/route.ts                ← GET detail, PATCH update, DELETE
+      agents/[agentId]/evals/[suiteId]/cases/route.ts          ← GET, POST, PUT bulk, DELETE test cases
+      agents/[agentId]/evals/[suiteId]/run/route.ts            ← POST trigger run, GET run history
+      agents/[agentId]/evals/[suiteId]/run/[runId]/route.ts    ← GET full run detail + per-case results
 
   components/
     cli-generator/                ← CLI Generator UI components (pipeline progress, file preview, stuck alert)
@@ -136,6 +143,9 @@ src/
     templates/
       template-gallery.tsx    ← Agent template gallery (search + category filter)
     cli-generator/            ← CLI Generator UI components (pipeline progress, file preview, stuck alert)
+    evals/
+      eval-suite-editor.tsx   ← Suite editor: test case list, assertion builder (12 types, 3 layers)
+      eval-results-view.tsx   ← Results view: trend chart (recharts), per-case rows, run history table
     builder/
       flow-builder.tsx    ← Main ReactFlow editor (+ MCP panel, version history, deploy status)
       flow-error-boundary.tsx ← Error boundary for flow editor
@@ -229,6 +239,14 @@ src/
       ai-phases.ts    ← Phase runner functions: aiAnalyze, aiDesign, aiImplement, aiTest, aiDocs, aiPublish
       mcp-registration.ts ← Auto-register generated bridge as MCP server in user's account
       __tests__/      ← Unit tests for prompts, pipeline, schemas, MCP registration
+    evals/
+      schemas.ts      ← Zod schemas for all 12 assertion types, test case input, suite create/update
+      assertions.ts   ← Assertion evaluator engine (all 3 layers: deterministic, semantic, LLM-judge)
+      semantic.ts     ← cosine similarity + OpenAI embedding-based semantic_similarity evaluator
+      llm-judge.ts    ← LLM-as-Judge: llm_rubric, kb_faithfulness, relevance (generateObject)
+      runner.ts       ← Eval run orchestrator (load suite → call chat API → apply assertions → persist)
+      deploy-hook.ts  ← Fire-and-forget hook: runs suites with runOnDeploy:true after deploy
+      __tests__/      ← Unit tests: assertions (40), runner (15), semantic (15), llm-judge (20), deploy-hook (10)
 
   types/
     index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType (32 types)
@@ -300,9 +318,39 @@ CLIGeneration — CLI Generator pipeline run
   ├── errorMessage (String?) — last failure reason
   ├── mcpServerId (String?) — MCP server created after publish (SetNull on delete)
   └── Indexes: [userId], [userId, status], [createdAt]
+
+EvalSuite — Eval suite for an agent (collection of test cases)
+  ├── agentId (required, cascade delete)
+  ├── name, description?
+  ├── isDefault Boolean — default suite selected in UI
+  ├── runOnDeploy Boolean — auto-run after flow deploy (fire-and-forget)
+  ├── testCases EvalTestCase[], runs EvalRun[]
+  └── Indexes: [agentId], [agentId, runOnDeploy]
+
+EvalTestCase — Single test case in a suite
+  ├── suiteId (required, cascade delete)
+  ├── label, input @db.Text, order Int
+  ├── assertions Json — EvalAssertion[] (12 types, 3 layers)
+  ├── tags String[]
+  └── results EvalResult[]
+
+EvalRun — One execution of an entire suite
+  ├── suiteId (required, cascade delete)
+  ├── status EvalRunStatus, triggeredBy ("manual"|"deploy"|"schedule")
+  ├── totalCases, passedCases, failedCases, score Float?, durationMs
+  ├── errorMessage?, completedAt?
+  ├── results EvalResult[]
+  └── Indexes: [suiteId], [suiteId, createdAt]
+
+EvalResult — One test case result within a run
+  ├── runId, testCaseId (required, cascade delete)
+  ├── status EvalResultStatus
+  ├── agentOutput @db.Text?, assertions Json (AssertionResult[])
+  ├── score Float?, latencyMs?, tokensUsed Json?
+  └── Indexes: [runId], [testCaseId]
 ```
 
-**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE|KB_SEARCH), MCPTransport (STREAMABLE_HTTP|SSE), FlowVersionStatus (DRAFT|PUBLISHED|ARCHIVED), A2ATaskStatus (SUBMITTED|WORKING|INPUT_REQUIRED|COMPLETED|FAILED), CLIGenerationStatus (PENDING|ANALYZING|DESIGNING|IMPLEMENTING|TESTING|DOCUMENTING|PUBLISHING|COMPLETED|FAILED)
+**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE|KB_SEARCH), MCPTransport (STREAMABLE_HTTP|SSE), FlowVersionStatus (DRAFT|PUBLISHED|ARCHIVED), A2ATaskStatus (SUBMITTED|WORKING|INPUT_REQUIRED|COMPLETED|FAILED), CLIGenerationStatus (PENDING|ANALYZING|DESIGNING|IMPLEMENTING|TESTING|DOCUMENTING|PUBLISHING|COMPLETED|FAILED), **EvalRunStatus (PENDING|RUNNING|COMPLETED|FAILED|CANCELLED)**, **EvalResultStatus (PENDING|PASSED|FAILED|ERROR|SKIPPED)**
 
 **Key details:**
 - Agent model has: `category String?`, `tags String[]`, `isPublic Boolean` — marketplace fields
@@ -361,6 +409,11 @@ CLIGeneration — CLI Generator pipeline run
 | `/api/cli-generator/[generationId]/download` | GET | Download all generated files as a .zip archive |
 | `/api/cli-generator/[generationId]/logs` | GET | Per-phase execution logs and token usage |
 | `/api/cli-generator/[generationId]/publish` | POST | Register generated bridge as an MCP server in user's account |
+| `/api/agents/[agentId]/evals` | GET, POST | List eval suites (with last run + counts), create suite |
+| `/api/agents/[agentId]/evals/[suiteId]` | GET, PATCH, DELETE | Suite detail (test cases + last 5 runs), update (name/desc/isDefault/runOnDeploy), delete |
+| `/api/agents/[agentId]/evals/[suiteId]/cases` | GET, POST, PUT, DELETE | List/create/bulk-update/delete test cases (max 50 per suite) |
+| `/api/agents/[agentId]/evals/[suiteId]/run` | GET, POST | Run history (paginated), trigger new eval run (409 if already running) |
+| `/api/agents/[agentId]/evals/[suiteId]/run/[runId]` | GET | Full run detail with per-case results and assertion breakdowns |
 | `/api/auth/*` | GET, POST | NextAuth authentication endpoints |
 | `/api/health` | GET | Health check (DB connectivity + uptime + version) |
 | `/api/analytics` | GET | Analytics dashboard data (response times, KB stats, conversations) |
@@ -543,6 +596,21 @@ CLIGeneration — CLI Generator pipeline run
 - Publish phase registers the generated bridge as an MCP server (`MCPServer` model) linked to the user
 - `STUCK_THRESHOLD_MS` lives in `src/lib/cli-generator/types.ts` — never export constants from `route.ts`
 
+### Agent Evals / Testing Framework
+- **3-layer strategy:** Layer 1 (deterministic, free), Layer 2 (semantic similarity, ~$0.001/eval), Layer 3 (LLM-as-Judge, ~$0.01/eval)
+- **12 assertion types:**
+  - L1 deterministic: `exact_match`, `contains`, `icontains`, `not_contains`, `regex`, `starts_with`, `json_valid`, `latency`
+  - L2 semantic: `semantic_similarity` — cosine distance via OpenAI text-embedding-3-small, configurable threshold (default 0.8)
+  - L3 LLM-as-Judge: `llm_rubric` (custom criteria), `kb_faithfulness` (hallucination detection), `relevance` (addresses question)
+- **Runner architecture:** `runEvalSuite(suiteId, agentId, options)` — sequential test cases (avoids rate limits), calls `/api/agents/[agentId]/chat` with `stream: false, isEval: true`, persists EvalResult per case, updates EvalRun with score
+- **Score:** average of all assertion scores per case; overall score = average across cases (0.0–1.0)
+- **Deploy hook:** `triggerDeployEvals(agentId, { baseUrl, authHeader })` — fire-and-forget, called after `VersionService.deployVersion()`; runs all suites with `runOnDeploy: true` sequentially; per-suite errors never block remaining suites
+- **Limits:** max 20 suites per agent, max 50 test cases per suite, only one RUNNING run per suite at a time (409 on conflict)
+- **Auth:** all routes use `requireAgentOwner()` — users can only eval their own agents
+- **UI:** two-panel layout (`/evals/[agentId]`) — suite sidebar (Star = default, Rocket = runs on deploy) + tabbed main area (Test Cases / Results); recharts LineChart for score trend over time
+- **Schemas:** `src/lib/evals/schemas.ts` — `EvalAssertionSchema` discriminated union, `CreateEvalSuiteSchema` (includes `runOnDeploy`), `TriggerEvalRunSchema`
+- **LLM-as-Judge model:** uses `DEFAULT_MODEL` (deepseek-chat) for cost efficiency, `generateObject()` with `JudgeOutputSchema { score, reasoning }`, maxTokens: 256
+
 ### Analytics & Monitoring
 - `trackChatResponse()` — fire-and-forget analytics for every chat response
 - Rate limiting: 20 req/min per agentId:IP on `/api/agents/[agentId]/chat`
@@ -644,9 +712,9 @@ pnpm db:seed          # Seed dev data
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - E2E tests: Playwright, `e2e/tests/` folder, `.spec.ts` extension (8 spec files)
 - Run: `pnpm test` (unit), `pnpm test:e2e` (E2E)
-- ~1017 unit tests across 98 test files
+- 1144 unit tests across 104 test files
 - E2E coverage: auth flows, dashboard CRUD, flow editor, chat streaming, knowledge base, agent import/export, API routes, health check
-- Unit test coverage: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, web fetch handler, webhook handler, set variable handler, wait handler, URL validation, engine integration tests (multi-node flows), CLI generator (prompts, pipeline phases, Zod schemas, MCP registration, stuck detection, resume endpoint)
+- Unit test coverage: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, web fetch handler, webhook handler, set variable handler, wait handler, URL validation, engine integration tests (multi-node flows), CLI generator (prompts, pipeline phases, Zod schemas, MCP registration, stuck detection, resume endpoint), **eval assertions (all 12 types, 3 layers)**, **eval semantic similarity (cosine math + embed mocks)**, **eval LLM-as-Judge (rubric/faithfulness/relevance)**, **eval runner (suite orchestration, progress updates, error handling)**, **eval deploy hook (fire-and-forget, suite filtering, error isolation)**, **eval API routes (CRUD, 409 conflict, 422 limits)**
 - Test behavior, not implementation details
 
 ### AI Model Config
