@@ -7,12 +7,19 @@ import {
   buildAnalyzePrompt,
   buildDesignPrompt,
   buildImplementSingleFilePrompt,
+  buildTSImplementSingleFilePrompt,
   buildTestSingleFilePrompt,
+  buildTSTestSingleFilePrompt,
   buildDocsPrompt,
+  buildTSDocsPrompt,
   buildPublishPrompt,
+  buildTSPublishPrompt,
   IMPLEMENT_FILES,
+  TS_IMPLEMENT_FILES,
   TEST_FILES,
+  TS_TEST_FILES,
   extractPythonSignatures,
+  extractTypeScriptSignatures,
   type PromptParts,
 } from "./prompts";
 import {
@@ -21,6 +28,7 @@ import {
   FileContentSchema,
   DocsOutputSchema,
   PublishOutputSchema,
+  TSPublishOutputSchema,
 } from "./schemas";
 
 const AI_PHASE_TIMEOUT_MS = 180_000;
@@ -168,13 +176,15 @@ export async function aiDesign(
 
 /**
  * Generates each implementation file in PARALLEL AI calls.
- * 4 files run concurrently via Promise.allSettled.
+ * Branches on config.target: Python (FastMCP) or TypeScript (Node.js MCP SDK).
+ * Files run concurrently via Promise.allSettled.
  * generateObject() replaces parseJsonResponse() — no JSON fragility.
  */
 export async function aiImplement(
   config: PipelineConfig,
   designResult: unknown,
 ): Promise<AIPhaseOutput> {
+  const isTS = config.target === "typescript";
   const ctx = {
     applicationName: config.applicationName,
     description: config.description,
@@ -183,11 +193,14 @@ export async function aiImplement(
     previousResults: [designResult],
   };
 
+  const fileSpecs = isTS ? TS_IMPLEMENT_FILES : IMPLEMENT_FILES;
+  const buildPrompt = isTS ? buildTSImplementSingleFilePrompt : buildImplementSingleFilePrompt;
+
   const results = await Promise.allSettled(
-    IMPLEMENT_FILES.map((fileSpec) =>
+    fileSpecs.map((fileSpec) =>
       callAIObject(
         FileContentSchema,
-        buildImplementSingleFilePrompt(ctx, fileSpec),
+        buildPrompt(ctx, fileSpec),
         `implement:${fileSpec.filename}`,
         { maxTokens: 2048 },
       ).then((res) => ({ fileSpec, res })),
@@ -224,14 +237,21 @@ export async function aiImplement(
 // ─── Phase 3: Test ───────────────────────────────────────────────────────────
 
 /**
- * Generates each test file in PARALLEL AI calls with actual Python signatures.
- * extractPythonSignatures() splits on real newlines (not \\n).
+ * Generates each test file in PARALLEL AI calls with actual signatures.
+ * Branches on config.target: Python (pytest) or TypeScript (Vitest).
+ * implementResult is the pre-extracted signatures map from buildPhaseRunners().
  */
 export async function aiTest(
   config: PipelineConfig,
   implementResult: unknown,
 ): Promise<AIPhaseOutput> {
-  const signatures = extractPythonSignatures(implementResult);
+  const isTS = config.target === "typescript";
+
+  // Re-extract signatures with the correct extractor for the target.
+  // implementResult may be pre-extracted (from buildPhaseRunners) or raw files.
+  const signatures = isTS
+    ? extractTypeScriptSignatures(implementResult)
+    : extractPythonSignatures(implementResult);
 
   const ctx = {
     applicationName: config.applicationName,
@@ -240,11 +260,14 @@ export async function aiTest(
     platform: config.platform,
   };
 
+  const fileSpecs = isTS ? TS_TEST_FILES : TEST_FILES;
+  const buildPrompt = isTS ? buildTSTestSingleFilePrompt : buildTestSingleFilePrompt;
+
   const results = await Promise.allSettled(
-    TEST_FILES.map((fileSpec) =>
+    fileSpecs.map((fileSpec) =>
       callAIObject(
         FileContentSchema,
-        buildTestSingleFilePrompt(ctx, fileSpec, signatures),
+        buildPrompt(ctx, fileSpec, signatures),
         `test:${fileSpec.filename}`,
         { maxTokens: 2048 },
       ).then((res) => ({ fileSpec, res })),
@@ -284,13 +307,16 @@ export async function aiDocs(
   config: PipelineConfig,
   designResult: unknown,
 ): Promise<AIPhaseOutput> {
-  const prompt = buildDocsPrompt({
+  const ctx = {
     applicationName: config.applicationName,
     description: config.description,
     capabilities: config.capabilities,
     platform: config.platform,
     previousResults: [designResult],
-  });
+  };
+  const prompt = config.target === "typescript"
+    ? buildTSDocsPrompt(ctx)
+    : buildDocsPrompt(ctx);
 
   const { object, usage, modelUsed } = await callAIObject(DocsOutputSchema, prompt, "docs", {
     maxTokens: 3000,
@@ -310,14 +336,35 @@ export async function aiPublish(
   config: PipelineConfig,
   designResult: unknown,
 ): Promise<AIPhaseOutput> {
-  const prompt = buildPublishPrompt({
+  const isTS = config.target === "typescript";
+  const ctx = {
     applicationName: config.applicationName,
     description: config.description,
     capabilities: config.capabilities,
     platform: config.platform,
     previousResults: [designResult],
-  });
+  };
 
+  if (isTS) {
+    const prompt = buildTSPublishPrompt(ctx);
+    const { object, usage, modelUsed } = await callAIObject(
+      TSPublishOutputSchema,
+      prompt,
+      "publish",
+      { maxTokens: 2000 },
+    );
+    return {
+      result: object,
+      generatedFiles: {
+        "package.json": object["package.json"],
+        "tsconfig.json": object["tsconfig.json"],
+      },
+      tokensUsed: buildTokensUsed(usage),
+      modelUsed,
+    };
+  }
+
+  const prompt = buildPublishPrompt(ctx);
   const { object, usage, modelUsed } = await callAIObject(PublishOutputSchema, prompt, "publish", {
     maxTokens: 2000,
   });

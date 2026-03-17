@@ -92,7 +92,7 @@ export function extractTypeScriptSignatures(output: unknown): Record<string, str
 }
 
 export interface TestFileSpec {
-  filename: "conftest.py" | "test_bridge.py" | "test_server.py";
+  filename: string;
   description: string;
   guidance: string;
 }
@@ -145,7 +145,7 @@ ${formatPreviousResults(ctx.previousResults)}`,
 // ─── Phase 2: Implement ──────────────────────────────────────────────────────
 
 export interface ImplementFileSpec {
-  filename: "__init__.py" | "main.py" | "server.py" | "bridge.py";
+  filename: string;
   description: string;
   guidance: string;
 }
@@ -315,6 +315,198 @@ Follow modern Python conventions:
 - pyproject.toml: PEP 621 compliant with [project] metadata, dependencies (click>=8.0, mcp>=1.0), [project.scripts] entry points, [build-system] hatchling config
 - requirements.txt: pinned direct dependencies for pip install
 - mcp_config: JSON object for auto-registration with MCP-compatible hosts
+
+Respond with a JSON object matching the provided schema. No markdown, no code fences, no explanation outside the JSON.`,
+
+    user: `Application: ${ctx.applicationName}
+Description: ${ctx.description ?? "No description provided."}
+Target capabilities: ${formatCapabilities(ctx.capabilities)}
+Target platform: ${ctx.platform ?? "cross-platform"}
+
+Previous implementation results:
+${formatPreviousResults(ctx.previousResults)}`,
+  };
+}
+
+// ─── TypeScript / Node.js MCP SDK variants ───────────────────────────────────
+//
+// 2026 standard: @modelcontextprotocol/sdk v1.x, McpServer, registerTool(),
+// StdioServerTransport, Zod v3 inputSchema, ESM with .js imports.
+//
+
+// ─── Phase 2 (TS): Implement ─────────────────────────────────────────────────
+
+export const TS_IMPLEMENT_FILES: ImplementFileSpec[] = [
+  {
+    filename: "index.ts",
+    description: "Package entry — re-exports Bridge class and VERSION constant",
+    guidance: "Export Bridge from './bridge.js' and export const VERSION = '1.0.0'. Under 10 lines.",
+  },
+  {
+    filename: "bridge.ts",
+    description: "Core bridge: child_process execution and result wrapping",
+    guidance:
+      "Export interface BridgeResult { success: boolean; output: string; error: string }. " +
+      "Export class Bridge with constructor(timeout = 30_000) and method execute(command: string, args: string[]): BridgeResult " +
+      "using spawnSync from 'child_process' (encoding: 'utf-8', timeout). " +
+      "Return { success: status === 0, output: stdout ?? '', error: stderr ?? '' }. Under 50 lines.",
+  },
+  {
+    filename: "server.ts",
+    description: "MCP server using Node.js MCP SDK 2026 standard",
+    guidance:
+      "Use 'import { McpServer } from \"@modelcontextprotocol/sdk/server/mcp.js\"' and " +
+      "'import { StdioServerTransport } from \"@modelcontextprotocol/sdk/server/stdio.js\"'. " +
+      "Create 'export const server = new McpServer({ name, version: \"1.0.0\" })'. " +
+      "Use server.registerTool(name, { title, description, inputSchema: { param: z.string() }, " +
+      "annotations: { readOnlyHint: true } }, async (args) => ({ content: [{ type: \"text\", text: ... }] })) " +
+      "for each tool. NEVER use deprecated server.tool(). " +
+      "End with: const transport = new StdioServerTransport(); await server.connect(transport). Under 100 lines.",
+  },
+];
+
+export function buildTSImplementSingleFilePrompt(
+  ctx: PromptContext,
+  fileSpec: ImplementFileSpec,
+): PromptParts {
+  return {
+    system: `You are an expert TypeScript developer generating Node.js MCP bridge source files.
+
+File to generate: ${fileSpec.filename}
+Purpose: ${fileSpec.description}
+Requirements: ${fileSpec.guidance}
+
+CRITICAL — for server.ts only: Use the 2026 Node.js MCP SDK standard.
+Correct pattern:
+  import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+  import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+  import { z } from "zod";
+  export const server = new McpServer({ name: "app-name", version: "1.0.0" });
+  server.registerTool("tool_name", {
+    title: "Tool Title",
+    description: "What this tool does",
+    inputSchema: { param: z.string().describe("description") },
+    annotations: { readOnlyHint: true },
+  }, async ({ param }) => ({
+    content: [{ type: "text", text: JSON.stringify(bridge.execute("cmd", [param])) }],
+  }));
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+NEVER use server.tool() — it is deprecated and does not exist in 2026 SDK.
+Use ESM imports with .js extension for local imports (e.g. './bridge.js').
+Use TypeScript strict mode. Zod v3 for inputSchema.
+
+Respond with a JSON object with a single key "content" containing the complete file content.
+No markdown, no code fences, no explanation outside the JSON.
+
+{"content": "<complete TypeScript file content>"}`,
+
+    user: `Application: ${ctx.applicationName}
+Description: ${ctx.description ?? "No description provided."}
+Capabilities: ${formatCapabilities(ctx.capabilities)}
+Platform: ${ctx.platform ?? "cross-platform"}
+
+Design (tools to implement):
+${formatPreviousResults(ctx.previousResults)}`,
+  };
+}
+
+// ─── Phase 3 (TS): Test ──────────────────────────────────────────────────────
+
+export const TS_TEST_FILES: TestFileSpec[] = [
+  {
+    filename: "bridge.test.ts",
+    description: "Bridge unit tests using Vitest",
+    guidance:
+      "Import { describe, it, expect, vi, beforeEach } from 'vitest'. " +
+      "Import { Bridge } from '../bridge.js'. " +
+      "Mock spawnSync with vi.spyOn(childProcess, 'spawnSync'). " +
+      "Test: execute returns success:true with stdout, execute returns success:false on non-zero status, " +
+      "execute includes stderr in error field, timeout is passed to spawnSync. Under 70 lines.",
+  },
+  {
+    filename: "server.test.ts",
+    description: "MCP server registration tests using Vitest",
+    guidance:
+      "Import { describe, it, expect, vi } from 'vitest'. " +
+      "Mock '../bridge.js' with vi.mock. Import { server } from '../server.js'. " +
+      "Test: server is an instance of McpServer, " +
+      "verify each expected tool is registered (check server._registeredTools or call listTools()). " +
+      "Do NOT call server.connect() in tests. Under 70 lines.",
+  },
+];
+
+export function buildTSTestSingleFilePrompt(
+  ctx: PromptContext,
+  fileSpec: TestFileSpec,
+  signatures: Record<string, string>,
+): PromptParts {
+  const sigSummary = Object.entries(signatures)
+    .map(([file, sigs]) => `# ${file}\n${sigs}`)
+    .join("\n\n");
+
+  return {
+    system: `You are an expert TypeScript test engineer generating Vitest test files for Node.js MCP bridge packages.
+
+File to generate: ${fileSpec.filename}
+Purpose: ${fileSpec.description}
+Requirements: ${fileSpec.guidance}
+
+Use Vitest (import from 'vitest'). Do NOT import from 'jest' or '@jest/globals'.
+Mock child_process using vi.spyOn or vi.mock. Use ESM .js imports for local modules.
+
+Respond with a JSON object with a single key "content" containing the complete file content.
+No markdown, no code fences, no explanation outside the JSON.
+
+{"content": "<complete TypeScript test file content>"}`,
+
+    user: `Application: ${ctx.applicationName}
+Capabilities: ${formatCapabilities(ctx.capabilities)}
+Platform: ${ctx.platform ?? "cross-platform"}
+
+Implementation signatures (actual names to test against):
+${sigSummary || "No signatures extracted — use bridge.ts / server.ts structure from design."}`,
+  };
+}
+
+// ─── Phase 4 (TS): Docs ──────────────────────────────────────────────────────
+
+export function buildTSDocsPrompt(ctx: PromptContext): PromptParts {
+  return {
+    system: `You are a technical writer specializing in developer documentation for Node.js MCP bridge packages.
+
+Documentation requirements:
+- README.md: concise doc under 80 lines covering exactly these sections:
+  ## Installation (npm install command only)
+  ## Quick Start (3-step example using npx tsx server.ts or node dist/server.js)
+  ## Commands (brief list with 1-line descriptions per tool)
+  ## MCP Server (config snippet only — command: "node", args: ["dist/server.js"])
+
+Respond with a JSON object matching the provided schema. No markdown, no code fences, no explanation outside the JSON.`,
+
+    user: `Application: ${ctx.applicationName}
+Description: ${ctx.description ?? "No description provided."}
+Target capabilities: ${formatCapabilities(ctx.capabilities)}
+Target platform: ${ctx.platform ?? "cross-platform"}
+
+Previous results:
+${formatPreviousResults(ctx.previousResults)}`,
+  };
+}
+
+// ─── Phase 5 (TS): Publish ───────────────────────────────────────────────────
+
+export function buildTSPublishPrompt(ctx: PromptContext): PromptParts {
+  return {
+    system: `You are a Node.js packaging expert. Generate packaging and configuration files for distributable TypeScript MCP bridge packages.
+
+Follow modern Node.js/TypeScript conventions:
+- package.json: "type": "module", dependencies (@modelcontextprotocol/sdk ^1.0.0, zod ^3.24.0),
+  devDependencies (typescript ^5.4.0, tsx ^4.19.0, vitest ^2.0.0, @types/node ^22.0.0),
+  scripts: { "build": "tsc", "start": "node dist/server.js", "dev": "npx tsx server.ts", "test": "vitest run" }
+- tsconfig.json: strict ES2022, NodeNext module resolution, outDir: "dist"
+- mcp_config: JSON object with command: "node", args: ["dist/server.js"] for MCP-compatible hosts
 
 Respond with a JSON object matching the provided schema. No markdown, no code fences, no explanation outside the JSON.`,
 

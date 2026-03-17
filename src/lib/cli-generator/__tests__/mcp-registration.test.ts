@@ -162,4 +162,68 @@ def convert(): pass`,
       data: { mcpServerId: "mcp-3" },
     });
   });
+
+  // ─── TypeScript target: registerTool() extraction ─────────────────────────
+
+  it("extracts tools from TypeScript server.registerTool() calls", async () => {
+    mockPrisma.cLIGeneration.findUnique.mockResolvedValueOnce({
+      applicationName: "Inkscape",
+      status: "COMPLETED",
+      generatedFiles: {
+        "server.ts": `import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+const server = new McpServer({ name: "inkscape", version: "1.0.0" });
+server.registerTool("inkscape_export", {
+  title: "Export SVG",
+  description: "Export SVG to PNG format",
+  inputSchema: { file: z.string() },
+}, async ({ file }) => ({ content: [] }));
+server.registerTool("inkscape_convert", {
+  title: "Convert Format",
+  description: "Convert between vector formats",
+  inputSchema: { input: z.string(), output: z.string() },
+}, async (args) => ({ content: [] }));`,
+        "bridge.ts": `export class Bridge {}`,
+      },
+    });
+    mockPrisma.mCPServer.findFirst.mockResolvedValueOnce(null);
+    mockPrisma.mCPServer.create.mockResolvedValueOnce({
+      id: "mcp-ts-1",
+      name: "CLI Bridge - Inkscape",
+    });
+
+    await registerCLIBridgeAsMCP("gen-ts", "user-1");
+
+    const createCall = mockPrisma.mCPServer.create.mock.calls[0][0];
+    const toolsCache = createCall.data.toolsCache as Array<{ name: string; description: string }>;
+    expect(toolsCache).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "inkscape_export" }),
+        expect.objectContaining({ name: "inkscape_convert" }),
+      ]),
+    );
+  });
+
+  it("ignores .test.ts files when extracting TypeScript tools", async () => {
+    mockPrisma.cLIGeneration.findUnique.mockResolvedValueOnce({
+      applicationName: "TestApp",
+      status: "COMPLETED",
+      generatedFiles: {
+        "server.ts": `server.registerTool("real_tool", { description: "Real" }, async () => ({ content: [] }));`,
+        "server.test.ts": `server.registerTool("fake_tool", { description: "Test artifact" }, async () => ({ content: [] }));`,
+      },
+    });
+    mockPrisma.mCPServer.findFirst.mockResolvedValueOnce(null);
+    mockPrisma.mCPServer.create.mockResolvedValueOnce({
+      id: "mcp-ts-2",
+      name: "CLI Bridge - TestApp",
+    });
+
+    await registerCLIBridgeAsMCP("gen-ts2", "user-1");
+
+    const createCall = mockPrisma.mCPServer.create.mock.calls[0][0];
+    const toolsCache = createCall.data.toolsCache as Array<{ name: string }>;
+    const names = toolsCache.map((t) => t.name);
+    expect(names).toContain("real_tool");
+    expect(names).not.toContain("fake_tool");
+  });
 });

@@ -256,6 +256,83 @@ describe("ai-phases", () => {
     });
   });
 
+  // ─── TypeScript target branching ─────────────────────────────────────────
+
+  describe("TypeScript target (config.target = 'typescript')", () => {
+    const TS_CONFIG: PipelineConfig = {
+      ...DEFAULT_CONFIG,
+      target: "typescript",
+    };
+
+    it("aiImplement with typescript target generates 3 files (index.ts, bridge.ts, server.ts)", async () => {
+      mockAIResponseN([
+        { content: "export { Bridge } from './bridge.js';" },
+        { content: "export class Bridge { execute() {} }" },
+        { content: "import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';" },
+      ]);
+
+      const output = await aiImplement(TS_CONFIG, []);
+
+      const files = output.result as Record<string, string>;
+      expect(Object.keys(files)).toEqual(
+        expect.arrayContaining(["index.ts", "bridge.ts", "server.ts"]),
+      );
+      // Not Python files
+      expect(Object.keys(files)).not.toContain("main.py");
+      expect(Object.keys(files)).not.toContain("__init__.py");
+    });
+
+    it("aiTest with typescript target generates 2 files (bridge.test.ts, server.test.ts)", async () => {
+      mockAIResponseN([
+        { content: "import { describe, it } from 'vitest';" },
+        { content: "import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';" },
+      ]);
+
+      const output = await aiTest(TS_CONFIG, { "bridge.ts": "export class Bridge {}" });
+
+      const files = output.result as Record<string, string>;
+      expect(Object.keys(files)).toEqual(
+        expect.arrayContaining(["bridge.test.ts", "server.test.ts"]),
+      );
+      // Not Python files
+      expect(Object.keys(files)).not.toContain("conftest.py");
+    });
+
+    it("aiPublish with typescript target returns package.json and tsconfig.json", async () => {
+      const tsPublishData = {
+        "package.json": JSON.stringify({ name: "blender-mcp", version: "1.0.0" }),
+        "tsconfig.json": JSON.stringify({ compilerOptions: { target: "ES2022" } }),
+        mcp_config: {
+          name: "blender-mcp",
+          version: "1.0.0",
+          description: "Blender MCP bridge",
+          command: "node",
+          args: ["dist/server.js"],
+          env: {},
+          tools: ["blender_render"],
+        },
+      };
+      mockAIResponse(tsPublishData);
+
+      const output = await aiPublish(TS_CONFIG, []);
+
+      expect(output.generatedFiles).toHaveProperty("package.json");
+      expect(output.generatedFiles).toHaveProperty("tsconfig.json");
+      // Not Python files
+      expect(output.generatedFiles).not.toHaveProperty("requirements.txt");
+      expect(output.generatedFiles).not.toHaveProperty("pyproject.toml");
+    });
+
+    it("aiDocs with typescript target still returns README.md", async () => {
+      mockAIResponse({ "README.md": "# Blender MCP\n\n## Installation\nnpm install" });
+
+      const output = await aiDocs(TS_CONFIG, []);
+
+      expect(output.generatedFiles).toHaveProperty("README.md");
+      expect((output.generatedFiles?.["README.md"] as string)).toContain("npm install");
+    });
+  });
+
   describe("token usage", () => {
     it("returns undefined tokensUsed when usage is missing", async () => {
       mockGenerateObject.mockResolvedValueOnce({

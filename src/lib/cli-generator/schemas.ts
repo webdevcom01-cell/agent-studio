@@ -111,3 +111,12 @@ export const PublishOutputSchema = z.object({
 
 export type PublishOutput = z.infer<typeof PublishOutputSchema>;
 export type MCPConfig = z.infer<typeof MCPConfigSchema>;
+
+/** Publish schema for TypeScript/Node.js MCP bridge packages. */
+export const TSPublishOutputSchema = z.object({
+  "package.json": z.string().describe("npm package.json with MCP SDK + Zod dependencies"),
+  "tsconfig.json": z.string().describe("TypeScript config: ES2022 NodeNext strict"),
+  mcp_config: MCPConfigSchema,
+});
+
+export type TSPublishOutput = z.infer<typeof TSPublishOutputSchema>;

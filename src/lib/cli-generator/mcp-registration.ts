@@ -7,7 +7,7 @@ interface ToolCacheEntry {
   description: string;
 }
 
-function extractToolsFromFiles(
+function extractToolsFromPythonFiles(
   files: Record<string, string>,
 ): ToolCacheEntry[] {
   const tools: ToolCacheEntry[] = [];
@@ -40,6 +40,43 @@ function extractToolsFromFiles(
   }
 
   return tools;
+}
+
+function extractToolsFromTypeScriptFiles(
+  files: Record<string, string>,
+): ToolCacheEntry[] {
+  const tools: ToolCacheEntry[] = [];
+
+  for (const [filename, content] of Object.entries(files)) {
+    if (!filename.endsWith(".ts") || filename.endsWith(".test.ts")) continue;
+
+    // server.registerTool("tool_name", { ... }) — 2026 MCP SDK standard
+    // Match the tool name on its own line, then look for description separately.
+    const nameMatches = content.matchAll(
+      /server\.registerTool\(\s*["']([^"']+)["']/g,
+    );
+    for (const match of nameMatches) {
+      const name = match[1];
+      if (tools.some((t) => t.name === name)) continue;
+      // Find description following the tool registration block
+      const afterMatch = content.slice(match.index ?? 0, (match.index ?? 0) + 300);
+      const descMatch = /description:\s*["']([^"']*?)["']/.exec(afterMatch);
+      tools.push({ name, description: descMatch ? descMatch[1].trim() : `Tool: ${name}` });
+    }
+  }
+
+  return tools;
+}
+
+function extractToolsFromFiles(
+  files: Record<string, string>,
+): ToolCacheEntry[] {
+  const hasTSFiles = Object.keys(files).some(
+    (f) => f.endsWith(".ts") && !f.endsWith(".test.ts"),
+  );
+  return hasTSFiles
+    ? extractToolsFromTypeScriptFiles(files)
+    : extractToolsFromPythonFiles(files);
 }
 
 export async function registerCLIBridgeAsMCP(
