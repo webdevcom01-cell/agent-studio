@@ -414,7 +414,7 @@ export function PropertyPanel({
         )}
 
         {node.type === "schedule_trigger" && (
-          <ScheduleTriggerProperties data={data} update={update} />
+          <ScheduleTriggerProperties data={data} update={update} agentId={agentId ?? ""} />
         )}
 
         {node.type === "email_send" && (
@@ -1910,14 +1910,76 @@ const SCHEDULE_TYPE_MAP: Record<string, string> = {
   manual: "MANUAL",
 };
 
-function ScheduleTriggerProperties({ data, update }: SubPanelProps) {
+interface ScheduleTriggerPropertiesProps extends SubPanelProps {
+  agentId: string;
+}
+
+interface LiveSchedule {
+  id: string;
+  enabled: boolean;
+  failureCount: number;
+  maxRetries: number;
+  scheduleType: string;
+  cronExpression: string | null;
+  intervalMinutes: number | null;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  executions: Array<{
+    id: string;
+    status: string;
+    triggeredAt: string;
+    completedAt: string | null;
+    durationMs: number | null;
+    errorMessage: string | null;
+  }>;
+}
+
+function ScheduleTriggerProperties({ data, update, agentId }: ScheduleTriggerPropertiesProps) {
   const scheduleType = (data.scheduleType as string) ?? "manual";
   const cronExpression = (data.cronExpression as string) ?? "";
   const intervalMinutes = Number(data.intervalMinutes) || 60;
   const timezone = (data.timezone as string) ?? "UTC";
+  const nodeEnabled = (data.enabled as boolean) !== false; // defaults to true
 
   const [preview, setPreview] = useState<CronPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [schedules, setSchedules] = useState<LiveSchedule[] | null>(null);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [toggleLoading, setToggleLoading] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Fetch live schedules for this agent
+  useEffect(() => {
+    if (!agentId) return;
+    setScheduleLoading(true);
+    fetch(`/api/agents/${agentId}/schedules`)
+      .then((r) => r.json())
+      .then((res) => { if (res.success) setSchedules(res.data as LiveSchedule[]); })
+      .catch(() => {})
+      .finally(() => setScheduleLoading(false));
+  }, [agentId]);
+
+  async function toggleSchedule(schedule: LiveSchedule) {
+    if (!agentId || toggleLoading) return;
+    setToggleLoading(schedule.id);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/schedules/${schedule.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !schedule.enabled }),
+      });
+      const json = await res.json() as { success: boolean; data?: LiveSchedule };
+      if (json.success && json.data) {
+        setSchedules((prev) =>
+          prev?.map((s) => s.id === schedule.id ? { ...s, enabled: !schedule.enabled } : s) ?? null
+        );
+      }
+    } catch {
+      // ignore
+    } finally {
+      setToggleLoading(null);
+    }
+  }
 
   useEffect(() => {
     if (scheduleType === "manual") {
@@ -1974,8 +2036,46 @@ function ScheduleTriggerProperties({ data, update }: SubPanelProps) {
     }
   }
 
+  function statusBadge(schedule: LiveSchedule) {
+    const broken = schedule.failureCount >= schedule.maxRetries && !schedule.enabled;
+    if (broken) return (
+      <span className="rounded bg-red-900/30 px-1.5 py-0.5 text-[10px] text-red-300">circuit broken</span>
+    );
+    if (!schedule.enabled) return (
+      <span className="rounded bg-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400">disabled</span>
+    );
+    return (
+      <span className="rounded bg-green-900/30 px-1.5 py-0.5 text-[10px] text-green-300">active</span>
+    );
+  }
+
+  function execStatusColor(status: string): string {
+    if (status === "COMPLETED") return "text-green-400";
+    if (status === "FAILED") return "text-red-400";
+    if (status === "RUNNING") return "text-blue-400";
+    return "text-zinc-400";
+  }
+
   return (
     <>
+      {/* ── Enable flag stored in node data ─────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <Label>Enabled by default</Label>
+        <button
+          type="button"
+          onClick={() => update("enabled", !nodeEnabled)}
+          className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+            nodeEnabled ? "bg-blue-600" : "bg-zinc-600"
+          }`}
+        >
+          <span
+            className={`inline-block size-4 rounded-full bg-white shadow transition-transform duration-200 ${
+              nodeEnabled ? "translate-x-4" : "translate-x-0"
+            }`}
+          />
+        </button>
+      </div>
+
       <div className="space-y-2">
         <Label>Schedule Type</Label>
         <Select value={scheduleType} onValueChange={(v) => update("scheduleType", v)}>
@@ -2096,6 +2196,111 @@ function ScheduleTriggerProperties({ data, update }: SubPanelProps) {
           placeholder="trigger_info"
         />
       </div>
+
+      {/* ── Live schedules panel ─────────────────────────────────────────── */}
+      {agentId && (
+        <div className="rounded-md border border-zinc-700 bg-zinc-800/50 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-zinc-400">Live Schedules</p>
+            {scheduleLoading && (
+              <span className="text-[10px] text-zinc-500 animate-pulse">loading…</span>
+            )}
+          </div>
+
+          {!scheduleLoading && schedules !== null && schedules.length === 0 && (
+            <p className="text-xs text-zinc-500">
+              No schedules yet — create one via the Schedules API.
+            </p>
+          )}
+
+          {schedules && schedules.map((sched) => (
+            <div key={sched.id} className="rounded border border-zinc-700 bg-zinc-900/50 p-2 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {statusBadge(sched)}
+                  <span className="text-[10px] font-mono text-zinc-400 truncate">
+                    {sched.cronExpression ?? (sched.intervalMinutes ? `every ${sched.intervalMinutes}m` : sched.scheduleType.toLowerCase())}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  disabled={toggleLoading === sched.id}
+                  onClick={() => void toggleSchedule(sched)}
+                  className={`flex-shrink-0 relative inline-flex h-4 w-7 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 disabled:opacity-50 ${
+                    sched.enabled ? "bg-blue-600" : "bg-zinc-600"
+                  }`}
+                >
+                  <span
+                    className={`inline-block size-3 rounded-full bg-white shadow transition-transform duration-200 ${
+                      sched.enabled ? "translate-x-3" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+              {sched.nextRunAt && sched.enabled && (
+                <p className="text-[10px] text-zinc-500">
+                  Next: {new Date(sched.nextRunAt).toLocaleString("en-US", {
+                    month: "short", day: "numeric",
+                    hour: "2-digit", minute: "2-digit",
+                  })}
+                </p>
+              )}
+              {sched.executions[0] && (
+                <p className={`text-[10px] ${execStatusColor(sched.executions[0].status)}`}>
+                  Last: {sched.executions[0].status.toLowerCase()}
+                  {sched.executions[0].durationMs
+                    ? ` · ${sched.executions[0].durationMs}ms`
+                    : ""}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Execution History ─────────────────────────────────────────────── */}
+      {agentId && schedules && schedules.length > 0 && (
+        <div className="rounded-md border border-zinc-700 bg-zinc-800/50 p-3 space-y-2">
+          <button
+            type="button"
+            className="flex items-center justify-between w-full text-left"
+            onClick={() => setHistoryOpen((v) => !v)}
+          >
+            <p className="text-xs font-medium text-zinc-400">Execution History</p>
+            <span className="text-[10px] text-zinc-500">{historyOpen ? "▲" : "▼"}</span>
+          </button>
+
+          {historyOpen && (
+            <div className="space-y-1 pt-1 border-t border-zinc-700/50">
+              {schedules.flatMap((s) => s.executions).length === 0 ? (
+                <p className="text-xs text-zinc-500">No executions yet.</p>
+              ) : (
+                schedules.flatMap((s) => s.executions).map((exec) => (
+                  <div key={exec.id} className="flex items-center gap-2 text-[10px]">
+                    <span className={`font-medium ${execStatusColor(exec.status)}`}>
+                      {exec.status.toLowerCase()}
+                    </span>
+                    <span className="text-zinc-500">
+                      {new Date(exec.triggeredAt).toLocaleString("en-US", {
+                        month: "short", day: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </span>
+                    {exec.durationMs && (
+                      <span className="text-zinc-600">{exec.durationMs}ms</span>
+                    )}
+                    {exec.errorMessage && (
+                      <span className="text-red-400 truncate max-w-[120px]" title={exec.errorMessage}>
+                        {exec.errorMessage}
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
         <p>This node is a flow entry point. The scheduling system will trigger the flow based on the configured schedule. At runtime, trigger metadata is stored in the output variable.</p>
