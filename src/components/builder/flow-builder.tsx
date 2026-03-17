@@ -44,6 +44,7 @@ import { MemoryWriteNode } from "./nodes/memory-write-node";
 import { MemoryReadNode } from "./nodes/memory-read-node";
 import { EvaluatorNode } from "./nodes/evaluator-node";
 import { ScheduleTriggerNode } from "./nodes/schedule-trigger-node";
+import { WebhookTriggerNode } from "./nodes/webhook-trigger-node";
 import { EmailSendNode } from "./nodes/email-send-node";
 import { NotificationNode } from "./nodes/notification-node";
 import { FormatTransformNode } from "./nodes/format-transform-node";
@@ -92,6 +93,7 @@ const NODE_TYPES: NodeTypes = {
   memory_read: MemoryReadNode,
   evaluator: EvaluatorNode,
   schedule_trigger: ScheduleTriggerNode,
+  webhook_trigger: WebhookTriggerNode,
   email_send: EmailSendNode,
   notification: NotificationNode,
   format_transform: FormatTransformNode,

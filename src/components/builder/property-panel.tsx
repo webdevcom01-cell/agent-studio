@@ -417,6 +417,10 @@ export function PropertyPanel({
           <ScheduleTriggerProperties data={data} update={update} agentId={agentId ?? ""} />
         )}
 
+        {node.type === "webhook_trigger" && (
+          <WebhookTriggerProperties data={data} update={update} agentId={agentId ?? ""} nodeId={node.id} />
+        )}
+
         {node.type === "email_send" && (
           <EmailSendProperties data={data} update={update} />
         )}
@@ -2304,6 +2308,196 @@ function ScheduleTriggerProperties({ data, update, agentId }: ScheduleTriggerPro
 
       <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
         <p>This node is a flow entry point. The scheduling system will trigger the flow based on the configured schedule. At runtime, trigger metadata is stored in the output variable.</p>
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface WebhookTriggerPropertiesProps extends SubPanelProps {
+  agentId: string;
+  nodeId: string;
+}
+
+interface LiveWebhook {
+  id: string;
+  name: string;
+  enabled: boolean;
+  triggerCount: number;
+  failureCount: number;
+  lastTriggeredAt: string | null;
+  createdAt: string;
+}
+
+function WebhookTriggerProperties({ data, update, agentId, nodeId }: WebhookTriggerPropertiesProps) {
+  const [webhook, setWebhook] = useState<LiveWebhook | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Load the webhook config linked to this node
+  useEffect(() => {
+    if (!agentId) return;
+    setLoading(true);
+    fetch(`/api/agents/${agentId}/webhooks?nodeId=${nodeId}`)
+      .then((r) => r.json())
+      .then((res: { success: boolean; data?: LiveWebhook[] }) => {
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setWebhook(res.data[0]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [agentId, nodeId]);
+
+  async function toggleWebhook() {
+    if (!webhook || toggling) return;
+    setToggling(true);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/webhooks/${webhook.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !webhook.enabled }),
+      });
+      const json = await res.json() as { success: boolean; data?: LiveWebhook };
+      if (json.success && json.data) {
+        setWebhook((prev) => prev ? { ...prev, enabled: !prev.enabled } : prev);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setToggling(false);
+    }
+  }
+
+  function copyUrl() {
+    if (!webhook || !agentId) return;
+    const url = `${window.location.origin}/api/agents/${agentId}/trigger/${webhook.id}`;
+    void navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const triggerUrl = agentId && webhook
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/api/agents/${agentId}/trigger/${webhook.id}`
+    : null;
+
+  return (
+    <>
+      {/* Output variable */}
+      <div className="space-y-2">
+        <Label>Payload Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "webhook_payload"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="webhook_payload"
+        />
+        <p className="text-xs text-muted-foreground">
+          The parsed JSON body is stored here as <code>__webhook_payload</code> (or the name above).
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Event Type Variable <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <Input
+          value={(data.eventTypeVariable as string) ?? ""}
+          onChange={(e) => update("eventTypeVariable", e.target.value)}
+          placeholder="e.g. event_type"
+        />
+        <p className="text-xs text-muted-foreground">
+          If set, the <code>x-webhook-event</code> header value is stored in this variable.
+        </p>
+      </div>
+
+      {/* Live webhook info — only visible after deploy */}
+      {agentId && (
+        <div className="rounded-md border border-zinc-700 bg-zinc-800/50 p-3 space-y-2">
+          <p className="text-xs font-medium text-zinc-400">Webhook Config</p>
+
+          {loading && (
+            <p className="text-xs text-zinc-500 animate-pulse">Loading…</p>
+          )}
+
+          {!loading && !webhook && (
+            <p className="text-xs text-zinc-500">
+              Not deployed yet. Deploy the flow to create the webhook endpoint.
+            </p>
+          )}
+
+          {webhook && (
+            <>
+              {/* Status + toggle */}
+              <div className="flex items-center justify-between gap-2">
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                  webhook.enabled
+                    ? "bg-green-900/30 text-green-300"
+                    : "bg-zinc-700 text-zinc-400"
+                }`}>
+                  {webhook.enabled ? "Active" : "Disabled"}
+                </span>
+                <button
+                  type="button"
+                  disabled={toggling}
+                  onClick={() => void toggleWebhook()}
+                  className={`relative inline-flex h-4 w-7 cursor-pointer rounded-full border-2 border-transparent transition-colors disabled:opacity-50 ${
+                    webhook.enabled ? "bg-blue-600" : "bg-zinc-600"
+                  }`}
+                >
+                  <span className={`inline-block size-3 rounded-full bg-white shadow transition-transform ${
+                    webhook.enabled ? "translate-x-3" : "translate-x-0"
+                  }`} />
+                </button>
+              </div>
+
+              {/* Stats */}
+              {(webhook.triggerCount > 0 || webhook.failureCount > 0) && (
+                <p className="text-[10px] text-zinc-400">
+                  {webhook.triggerCount} trigger{webhook.triggerCount !== 1 ? "s" : ""}
+                  {webhook.failureCount > 0 && (
+                    <span className="text-red-400"> · {webhook.failureCount} failed</span>
+                  )}
+                  {webhook.lastTriggeredAt && (
+                    <span className="text-zinc-500">
+                      {" · "}last {new Date(webhook.lastTriggeredAt).toLocaleString("en-US", {
+                        month: "short", day: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </span>
+                  )}
+                </p>
+              )}
+
+              {/* Trigger URL */}
+              {triggerUrl && (
+                <div className="space-y-1">
+                  <p className="text-[10px] text-zinc-500 font-medium">Trigger URL (POST):</p>
+                  <div className="flex items-center gap-1">
+                    <code className="flex-1 truncate rounded bg-zinc-900 px-2 py-1 text-[10px] text-zinc-300 font-mono">
+                      {triggerUrl}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 shrink-0"
+                      onClick={copyUrl}
+                    >
+                      {copied ? "✓" : "Copy"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+        <p>
+          This node is a flow entry point. External systems post to the trigger URL with an
+          HMAC-SHA256 signature. The payload is injected as <code>__webhook_payload</code> and
+          mapped to your output variable before the flow continues.
+        </p>
       </div>
     </>
   );

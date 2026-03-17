@@ -51,6 +51,7 @@ export type NodeType =
   | "memory_read"
   | "evaluator"
   | "schedule_trigger"
+  | "webhook_trigger"
   | "email_send"
   | "notification"
   | "format_transform"

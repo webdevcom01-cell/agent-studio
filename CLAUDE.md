@@ -150,12 +150,12 @@ src/
     builder/
       flow-builder.tsx    ← Main ReactFlow editor (+ MCP panel, version history, deploy status)
       flow-error-boundary.tsx ← Error boundary for flow editor
-      node-picker.tsx     ← Node type selector dropdown (31 node types)
+      node-picker.tsx     ← Node type selector dropdown (32 node types)
       property-panel.tsx  ← Right sidebar for editing node properties (searchable agent selector)
       version-panel.tsx   ← Version history sidebar (SWR, rollback, compare, deploy)
       deploy-dialog.tsx   ← Deploy confirmation dialog with sandbox test
       diff-view.tsx       ← Version diff viewer (added/removed/modified nodes)
-      nodes/              ← 32 node display components (base + 31 node types)
+      nodes/              ← 33 node display components (base + 32 node types)
     theme-provider.tsx    ← Dark mode theme provider
 
   data/
@@ -250,7 +250,7 @@ src/
       __tests__/      ← Unit tests: assertions (40), runner (15), semantic (15), llm-judge (20), deploy-hook (10)
 
   types/
-    index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType (32 types)
+    index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType (33 types)
     pdf-parse.d.ts    ← Type declaration for pdf-parse
     mammoth.d.ts      ← Type declaration for mammoth
 
@@ -427,8 +427,8 @@ EvalResult — One test case result within a run
 ## 6. KEY CONVENTIONS & PATTERNS
 
 ### Runtime Engine
-- 31 node handlers registered in `src/lib/runtime/handlers/index.ts`
-- Node types (31): message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, email_send, notification, format_transform, switch, web_fetch, browser_action
+- 32 node handlers registered in `src/lib/runtime/handlers/index.ts`
+- Node types (32): message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, webhook_trigger, email_send, notification, format_transform, switch, web_fetch, browser_action
 - Safety limits: MAX_ITERATIONS=50, MAX_HISTORY=100
 - Handlers return `ExecutionResult` with messages, nextNodeId, waitForInput, updatedVariables
 - Handlers never throw — always return graceful fallback
@@ -625,6 +625,20 @@ EvalResult — One test case result within a run
 - **Schemas:** `src/lib/evals/schemas.ts` — `EvalAssertionSchema` discriminated union, `CreateEvalSuiteSchema` (includes `runOnDeploy`), `TriggerEvalRunSchema`
 - **LLM-as-Judge model:** uses `DEFAULT_MODEL` (deepseek-chat) for cost efficiency, `generateObject()` with `JudgeOutputSchema { score, reasoning }`, maxTokens: 256
 
+### Inbound Webhooks
+- **Standard Webhooks spec** (standardwebhooks.com): HMAC-SHA256, `x-webhook-id` / `x-webhook-timestamp` / `x-webhook-signature` headers, 5-min timestamp window
+- **Public trigger endpoint**: `POST /api/agents/[agentId]/trigger/[webhookId]` — no session auth, authenticated via HMAC-SHA256 signature
+- **Models**: `WebhookConfig` (config per flow node), `WebhookExecution` (idempotency + execution log)
+- **`webhook_trigger` node**: flow entry-point (like `schedule_trigger`) — no input handle; injects `__webhook_payload`, `__webhook_event_type`, `__webhook_id` into context
+- **Auto-sync on deploy**: `syncWebhooksFromFlow()` in `src/lib/webhooks/sync.ts` — upsert WebhookConfig for each `webhook_trigger` node, disable configs for removed nodes; fired after transaction commits (never blocks deploy)
+- **Secret generation**: `generateWebhookSecret()` — `randomBytes(32).toString("base64url")` (43 chars, 256-bit entropy, URL-safe)
+- **Idempotency**: `WebhookExecution.idempotencyKey` has `@@unique` — duplicate `x-webhook-id` values return 409
+- **Signature verification**: `src/lib/webhooks/verify.ts` — `timingSafeEqual`, supports multi-signature rotation (`v1,sig1 v1,sig2`)
+- **Body mapping**: JSONPath (`$.action.type`), dot notation (`event.type`), bracket notation (`items[0]`) — resolved in `execute.ts`
+- **Slack URL verification**: handled in the route before signature check — `{ type: "url_verification", challenge }` → respond immediately with `{ challenge }`
+- **Rate limit**: 60 req/min per webhookId
+- **API routes**: `GET/POST /api/agents/[agentId]/webhooks`, `GET/PATCH/DELETE /api/agents/[agentId]/webhooks/[webhookId]`, `POST /api/agents/[agentId]/webhooks/[webhookId]/rotate`
+
 ### Analytics & Monitoring
 - `trackChatResponse()` — fire-and-forget analytics for every chat response
 - Rate limiting: 20 req/min per agentId:IP on `/api/agents/[agentId]/chat`
@@ -726,9 +740,9 @@ pnpm db:seed          # Seed dev data
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - E2E tests: Playwright, `e2e/tests/` folder, `.spec.ts` extension (8 spec files)
 - Run: `pnpm test` (unit), `pnpm test:e2e` (E2E)
-- 1144 unit tests across 104 test files
+- 1199 unit tests across 107 test files
 - E2E coverage: auth flows, dashboard CRUD, flow editor, chat streaming, knowledge base, agent import/export, API routes, health check
-- Unit test coverage: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, web fetch handler, webhook handler, set variable handler, wait handler, URL validation, engine integration tests (multi-node flows), CLI generator (prompts, pipeline phases, Zod schemas, MCP registration, stuck detection, resume endpoint), **eval assertions (all 12 types, 3 layers)**, **eval semantic similarity (cosine math + embed mocks)**, **eval LLM-as-Judge (rubric/faithfulness/relevance)**, **eval runner (suite orchestration, progress updates, error handling)**, **eval deploy hook (fire-and-forget, suite filtering, error isolation)**, **eval API routes (CRUD, 409 conflict, 422 limits)**
+- Unit test coverage: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, web fetch handler, webhook handler, set variable handler, wait handler, URL validation, engine integration tests (multi-node flows), CLI generator (prompts, pipeline phases, Zod schemas, MCP registration, stuck detection, resume endpoint), **eval assertions (all 12 types, 3 layers)**, **eval semantic similarity (cosine math + embed mocks)**, **eval LLM-as-Judge (rubric/faithfulness/relevance)**, **eval runner (suite orchestration, progress updates, error handling)**, **eval deploy hook (fire-and-forget, suite filtering, error isolation)**, **eval API routes (CRUD, 409 conflict, 422 limits)**, **inbound webhooks: verify (21 tests), execute (12 tests), webhook-trigger handler (11 tests), sync (22 tests)**
 - Test behavior, not implementation details
 
 ### AI Model Config

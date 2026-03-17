@@ -24,6 +24,7 @@ import { memoryWriteHandler } from "./memory-write-handler";
 import { memoryReadHandler } from "./memory-read-handler";
 import { evaluatorHandler } from "./evaluator-handler";
 import { scheduleTriggerHandler } from "./schedule-trigger-handler";
+import { webhookTriggerHandler } from "./webhook-trigger-handler";
 import { emailSendHandler } from "./email-send-handler";
 import { notificationHandler } from "./notification-handler";
 import { formatTransformHandler } from "./format-transform-handler";
@@ -58,6 +59,7 @@ const handlers: Record<string, NodeHandler> = {
   memory_read: memoryReadHandler,
   evaluator: evaluatorHandler,
   schedule_trigger: scheduleTriggerHandler,
+  webhook_trigger: webhookTriggerHandler,
   email_send: emailSendHandler,
   notification: notificationHandler,
   format_transform: formatTransformHandler,

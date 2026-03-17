@@ -371,6 +371,19 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
     },
   },
   {
+    type: "webhook_trigger",
+    label: "Webhook Trigger",
+    description: "Start flow from an external HTTP webhook",
+    icon: Webhook,
+    color: "violet",
+    category: "Triggers",
+    defaultData: {
+      label: "Webhook Trigger",
+      outputVariable: "webhook_payload",
+      eventTypeVariable: "",
+    },
+  },
+  {
     type: "email_send",
     label: "Email Send",
     description: "Send an email via webhook",
