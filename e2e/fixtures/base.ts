@@ -4,6 +4,7 @@ import { FlowBuilderPage } from "../pages/flow-builder.page";
 import { ChatPage } from "../pages/chat.page";
 import { KnowledgePage } from "../pages/knowledge.page";
 import { LoginPage } from "../pages/login.page";
+import { WebhooksPage } from "../pages/webhooks.page";
 
 /**
  * Custom fixtures extending Playwright's base test.
@@ -18,6 +19,7 @@ type AgentStudioFixtures = {
   flowBuilderPage: FlowBuilderPage;
   chatPage: ChatPage;
   knowledgePage: KnowledgePage;
+  webhooksPage: WebhooksPage;
 };
 
 export const test = base.extend<AgentStudioFixtures>({
@@ -35,6 +37,9 @@ export const test = base.extend<AgentStudioFixtures>({
   },
   knowledgePage: async ({ page }, use) => {
     await use(new KnowledgePage(page));
+  },
+  webhooksPage: async ({ page }, use) => {
+    await use(new WebhooksPage(page));
   },
 });
 
