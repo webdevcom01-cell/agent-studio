@@ -90,6 +90,7 @@ model Agent {
   approvalRequests  HumanApprovalRequest[]
   deployments       FlowDeployment[]
   memories          AgentMemory[]
+  evalSuites        EvalSuite[]
 
   @@index([userId])
   @@index([userId, updatedAt])
@@ -485,4 +486,92 @@ model AgentMemory {
   @@unique([agentId, key])
   @@index([agentId, category])
   @@index([agentId, accessedAt])
+}
+
+// ─── Agent Evals / Testing Framework ─────────────────────────────────────────
+
+enum EvalRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum EvalResultStatus {
+  PENDING
+  PASSED
+  FAILED
+  ERROR
+  SKIPPED
+}
+
+model EvalSuite {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  agentId     String
+  agent       Agent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  testCases   EvalTestCase[]
+  runs        EvalRun[]
+  isDefault   Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([agentId])
+}
+
+model EvalTestCase {
+  id         String       @id @default(cuid())
+  suiteId    String
+  suite      EvalSuite    @relation(fields: [suiteId], references: [id], onDelete: Cascade)
+  label      String
+  input      String       @db.Text
+  assertions Json                          // EvalAssertion[]
+  tags       String[]     @default([])
+  order      Int          @default(0)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  results    EvalResult[]
+
+  @@index([suiteId])
+}
+
+model EvalRun {
+  id           String        @id @default(cuid())
+  suiteId      String
+  suite        EvalSuite     @relation(fields: [suiteId], references: [id], onDelete: Cascade)
+  status       EvalRunStatus @default(PENDING)
+  totalCases   Int           @default(0)
+  passedCases  Int           @default(0)
+  failedCases  Int           @default(0)
+  score        Float?
+  durationMs   Int?
+  triggeredBy  String?                     // "manual" | "deploy" | "schedule"
+  results      EvalResult[]
+  errorMessage String?
+  createdAt    DateTime      @default(now())
+  completedAt  DateTime?
+
+  @@index([suiteId])
+  @@index([suiteId, createdAt])
+}
+
+model EvalResult {
+  id           String           @id @default(cuid())
+  runId        String
+  run          EvalRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  testCaseId   String
+  testCase     EvalTestCase     @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  status       EvalResultStatus @default(PENDING)
+  agentOutput  String?          @db.Text
+  assertions   Json                          // AssertionResult[]
+  score        Float?
+  latencyMs    Int?
+  tokensUsed   Json?
+  errorMessage String?
+  createdAt    DateTime         @default(now())
+
+  @@index([runId])
+  @@index([testCaseId])
 }
