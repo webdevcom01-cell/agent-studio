@@ -146,11 +146,7 @@ export async function POST(
 
     try {
       // Config priority: request body > values stored in DB
-      // Cast to access `target` — the field exists in the DB schema but the
-      // generated Prisma client types may not include it yet until `prisma generate`
-      // runs on the next Vercel build.
-      const generationRecord = generation as unknown as typeof generation & { target?: string };
-      const target = (generationRecord.target ?? "python") as "python" | "typescript";
+      const target = (generation.target ?? "python") as "python" | "typescript";
       const config: PipelineConfig = {
         applicationName: bodyConfig?.applicationName ?? generation.applicationName,
         description: bodyConfig?.description,

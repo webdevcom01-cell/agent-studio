@@ -92,7 +92,7 @@ describe("CLI Generator API routes", () => {
       const generations = [
         { id: "gen-1", applicationName: "Blender", target: "python", status: "COMPLETED" },
       ];
-      mockQueryRaw.mockResolvedValueOnce(generations as never);
+      mockFindMany.mockResolvedValueOnce(generations as never);
 
       const { GET } = await import("../route");
       const res = await GET();
@@ -147,12 +147,12 @@ describe("CLI Generator API routes", () => {
       const created = {
         id: "gen-new",
         applicationName: "Blender",
+        target: "python",
         status: "PENDING",
         currentPhase: 0,
         phases: [],
       };
       mockCreate.mockResolvedValueOnce(created as never);
-      mockExecuteRaw.mockResolvedValueOnce(1 as never);
 
       const { POST } = await import("../route");
       const req = mockRequest({
