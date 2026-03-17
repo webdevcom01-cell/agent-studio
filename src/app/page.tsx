@@ -8,7 +8,7 @@ import { useSession, signOut } from "next-auth/react";
 import {
   Plus, Bot, MessageSquare, Database, Trash2, MoreVertical,
   Download, Upload, LogOut, BarChart3, Plug, ArrowRightLeft,
-  Sun, Moon, Compass, Terminal,
+  Sun, Moon, Compass, Terminal, FlaskConical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -422,6 +422,18 @@ export default function DashboardPage() {
                     className="flex-1 h-7 text-xs font-normal"
                   >
                     <Link href={`/builder/${agent.id}`}>Edit Flow</Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    asChild
+                    className="flex-1 h-7 text-xs font-normal"
+                    title="Eval suites"
+                  >
+                    <Link href={`/evals/${agent.id}`}>
+                      <FlaskConical className="size-3 mr-1" aria-hidden="true" />
+                      Evals
+                    </Link>
                   </Button>
                   <Button
                     size="sm"
