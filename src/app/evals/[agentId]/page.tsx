@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, use } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, FlaskConical, Settings2,
-  BarChart3, Loader2, MoreVertical, Star, StarOff, Rocket,
+  BarChart3, Loader2, MoreVertical, Star, StarOff, Rocket, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { EvalSuiteEditor } from "@/components/evals/eval-suite-editor";
 import { EvalResultsView } from "@/components/evals/eval-results-view";
+import { GenerateEvalDialog } from "@/components/evals/generate-eval-dialog";
 import type { EvalRunDetail, RunHistoryItem } from "@/components/evals/eval-results-view";
 import type { EvalTestCase } from "@/components/evals/eval-suite-editor";
 
@@ -195,6 +196,7 @@ export default function EvalsPage({ params }: PageProps) {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const [agentName, setAgentName] = useState<string>("");
 
   // Fetch agent name for breadcrumb
@@ -386,14 +388,26 @@ export default function EvalsPage({ params }: PageProps) {
         <div className="w-60 shrink-0 space-y-2">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-zinc-300">Eval Suites</h2>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0 text-zinc-500 hover:text-white hover:bg-zinc-800"
-              onClick={() => setShowCreateDialog(true)}
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                title="Generate with AI"
+                className="h-7 w-7 p-0 text-violet-400 hover:text-violet-300 hover:bg-zinc-800"
+                onClick={() => setShowGenerateDialog(true)}
+              >
+                <Sparkles className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                title="Create manually"
+                className="h-7 w-7 p-0 text-zinc-500 hover:text-white hover:bg-zinc-800"
+                onClick={() => setShowCreateDialog(true)}
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
 
           {isLoadingSuites ? (
@@ -401,15 +415,22 @@ export default function EvalsPage({ params }: PageProps) {
               <Loader2 className="w-5 h-5 animate-spin text-zinc-600" />
             </div>
           ) : suites.length === 0 ? (
-            <div className="text-center py-8">
+            <div className="text-center py-8 space-y-2">
               <p className="text-zinc-500 text-xs">No suites yet</p>
               <Button
                 size="sm"
+                className="mt-2 bg-violet-600 hover:bg-violet-700 text-white text-xs w-full"
+                onClick={() => setShowGenerateDialog(true)}
+              >
+                <Sparkles className="w-3.5 h-3.5 mr-1" /> Generate with AI
+              </Button>
+              <Button
+                size="sm"
                 variant="outline"
-                className="mt-3 border-zinc-700 text-zinc-400 hover:bg-zinc-800 text-xs"
+                className="border-zinc-700 text-zinc-400 hover:bg-zinc-800 text-xs w-full"
                 onClick={() => setShowCreateDialog(true)}
               >
-                <Plus className="w-3.5 h-3.5 mr-1" /> Create First Suite
+                <Plus className="w-3.5 h-3.5 mr-1" /> Create Manually
               </Button>
             </div>
           ) : (
@@ -591,7 +612,7 @@ export default function EvalsPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Create suite dialog */}
+      {/* Create suite dialog (manual) */}
       <CreateSuiteDialog
         open={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
@@ -600,6 +621,17 @@ export default function EvalsPage({ params }: PageProps) {
           setActiveSuiteId(suite.id);
         }}
         agentId={agentId}
+      />
+
+      {/* Generate suite dialog (AI) */}
+      <GenerateEvalDialog
+        agentId={agentId}
+        open={showGenerateDialog}
+        onClose={() => setShowGenerateDialog(false)}
+        onGenerated={(suiteId) => {
+          // Reload suites and auto-select the new one
+          fetchSuites().then(() => setActiveSuiteId(suiteId));
+        }}
       />
     </div>
   );
