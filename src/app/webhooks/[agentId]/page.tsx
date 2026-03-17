@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, Webhook, Copy, Eye, EyeOff, RefreshCw,
   CheckCircle2, XCircle, Loader2, MoreVertical, Clock, Zap, Send,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Filter, Layers, X, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
+import { WEBHOOK_PRESETS, type WebhookPreset } from "@/lib/webhooks/presets";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,17 @@ interface WebhookExecution {
   errorMessage: string | null;
 }
 
+interface BodyMapping {
+  jsonPath: string;
+  variableName: string;
+  type?: "string" | "number" | "boolean" | "object";
+}
+
+interface HeaderMapping {
+  headerName: string;
+  variableName: string;
+}
+
 interface WebhookSummary {
   id: string;
   name: string;
@@ -45,6 +57,7 @@ interface WebhookSummary {
   failureCount: number;
   lastTriggeredAt: string | null;
   nodeId: string | null;
+  eventFilters: string[];
   bodyMappings: BodyMapping[];
   headerMappings: HeaderMapping[];
   createdAt: string;
@@ -55,17 +68,6 @@ interface WebhookSummary {
 interface WebhookDetail extends WebhookSummary {
   secret: string;
   executions: WebhookExecution[];
-}
-
-interface BodyMapping {
-  jsonPath: string;
-  variableName: string;
-  type?: "string" | "number" | "boolean" | "object";
-}
-
-interface HeaderMapping {
-  headerName: string;
-  variableName: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -105,6 +107,479 @@ function formatDate(iso: string): string {
   });
 }
 
+// ─── Preset Picker Dialog ─────────────────────────────────────────────────────
+
+function PresetPickerDialog({
+  open, onClose, onApply,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onApply: (preset: WebhookPreset) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Apply Provider Preset</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Pre-configure body/header mappings and event filters for a known webhook provider.
+            Existing mappings will be replaced.
+          </p>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          {WEBHOOK_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => { onApply(preset); onClose(); }}
+              className="text-left rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 hover:border-violet-700/60 hover:bg-violet-900/10 transition-colors group"
+            >
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-lg">{preset.icon}</span>
+                <span className="text-sm font-medium">{preset.name}</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">{preset.description}</p>
+              {preset.id !== "generic" && (
+                <p className="text-[10px] text-violet-400 mt-2">
+                  {preset.bodyMappings.length} body · {preset.headerMappings.length} header mappings
+                </p>
+              )}
+            </button>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Event Filter Editor ──────────────────────────────────────────────────────
+
+function EventFilterEditor({
+  filters,
+  suggestions,
+  onAdd,
+  onRemove,
+}: {
+  filters: string[];
+  suggestions: string[];
+  onAdd: (val: string) => void;
+  onRemove: (val: string) => void;
+}) {
+  const [input, setInput] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const filtered = suggestions.filter(
+    (s) => !filters.includes(s) && s.toLowerCase().includes(input.toLowerCase())
+  );
+
+  function add(val: string) {
+    const trimmed = val.trim();
+    if (!trimmed || filters.includes(trimmed)) return;
+    onAdd(trimmed);
+    setInput("");
+    setShowSuggestions(false);
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Current filters as tags */}
+      <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+        {filters.length === 0 ? (
+          <span className="text-xs text-zinc-600 italic">No filters — all events are accepted</span>
+        ) : (
+          filters.map((f) => (
+            <span
+              key={f}
+              className="inline-flex items-center gap-1 rounded-full bg-violet-900/30 border border-violet-700/40 px-2 py-0.5 text-xs text-violet-300"
+            >
+              {f}
+              <button
+                type="button"
+                onClick={() => onRemove(f)}
+                className="hover:text-violet-100 transition-colors"
+                aria-label={`Remove ${f}`}
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))
+        )}
+      </div>
+
+      {/* Input */}
+      <div className="relative">
+        <Input
+          value={input}
+          onChange={(e) => { setInput(e.target.value); setShowSuggestions(true); }}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); add(input); }
+          }}
+          placeholder="e.g. push, payment_intent.succeeded …"
+          className="h-8 text-xs"
+        />
+        {input.trim() && !filters.includes(input.trim()) && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-6 px-2 text-xs"
+            onClick={() => add(input)}
+          >
+            Add
+          </Button>
+        )}
+
+        {/* Suggestions dropdown */}
+        {showSuggestions && filtered.length > 0 && (
+          <div className="absolute z-50 top-full mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 shadow-lg py-1 max-h-48 overflow-y-auto">
+            {filtered.slice(0, 20).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); add(s); }}
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-zinc-800 transition-colors"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <p className="text-[11px] text-zinc-600">
+        Leave empty to accept all events. Press Enter or click Add to add a filter.
+      </p>
+    </div>
+  );
+}
+
+// ─── Mappings Editor ──────────────────────────────────────────────────────────
+
+function BodyMappingsEditor({
+  mappings,
+  onChange,
+}: {
+  mappings: BodyMapping[];
+  onChange: (m: BodyMapping[]) => void;
+}) {
+  function updateRow(idx: number, field: keyof BodyMapping, val: string) {
+    const next = mappings.map((m, i) =>
+      i === idx ? { ...m, [field]: val } : m
+    );
+    onChange(next);
+  }
+
+  function removeRow(idx: number) {
+    onChange(mappings.filter((_, i) => i !== idx));
+  }
+
+  function addRow() {
+    onChange([...mappings, { jsonPath: "", variableName: "", type: "string" }]);
+  }
+
+  return (
+    <div className="space-y-2">
+      {mappings.length > 0 ? (
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-1.5 text-[10px] text-zinc-500 px-0.5">
+            <span>JSONPath</span><span>Variable name</span><span>Type</span><span />
+          </div>
+          {mappings.map((m, i) => (
+            <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] gap-1.5 items-center">
+              <Input
+                value={m.jsonPath}
+                onChange={(e) => updateRow(i, "jsonPath", e.target.value)}
+                placeholder="$.action"
+                className="h-7 text-xs font-mono"
+              />
+              <Input
+                value={m.variableName}
+                onChange={(e) => updateRow(i, "variableName", e.target.value)}
+                placeholder="my_var"
+                className="h-7 text-xs font-mono"
+              />
+              <select
+                value={m.type ?? "string"}
+                onChange={(e) => updateRow(i, "type", e.target.value)}
+                className="h-7 rounded-md border border-input bg-background px-1.5 text-[11px]"
+              >
+                <option>string</option>
+                <option>number</option>
+                <option>boolean</option>
+                <option>object</option>
+              </select>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => removeRow(i)}
+              >
+                <X className="size-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-zinc-600 italic">No body mappings configured.</p>
+      )}
+      {mappings.length < 20 && (
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addRow}>
+          <Plus className="size-3 mr-1" /> Add Mapping
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function HeaderMappingsEditor({
+  mappings,
+  onChange,
+}: {
+  mappings: HeaderMapping[];
+  onChange: (m: HeaderMapping[]) => void;
+}) {
+  function updateRow(idx: number, field: keyof HeaderMapping, val: string) {
+    const next = mappings.map((m, i) =>
+      i === idx ? { ...m, [field]: val } : m
+    );
+    onChange(next);
+  }
+
+  function removeRow(idx: number) {
+    onChange(mappings.filter((_, i) => i !== idx));
+  }
+
+  function addRow() {
+    onChange([...mappings, { headerName: "", variableName: "" }]);
+  }
+
+  return (
+    <div className="space-y-2">
+      {mappings.length > 0 ? (
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 text-[10px] text-zinc-500 px-0.5">
+            <span>Header name</span><span>Variable name</span><span />
+          </div>
+          {mappings.map((m, i) => (
+            <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-1.5 items-center">
+              <Input
+                value={m.headerName}
+                onChange={(e) => updateRow(i, "headerName", e.target.value)}
+                placeholder="x-custom-header"
+                className="h-7 text-xs font-mono"
+              />
+              <Input
+                value={m.variableName}
+                onChange={(e) => updateRow(i, "variableName", e.target.value)}
+                placeholder="my_header"
+                className="h-7 text-xs font-mono"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => removeRow(i)}
+              >
+                <X className="size-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-zinc-600 italic">No header mappings configured.</p>
+      )}
+      {mappings.length < 20 && (
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addRow}>
+          <Plus className="size-3 mr-1" /> Add Mapping
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ─── Config Tab ───────────────────────────────────────────────────────────────
+
+function ConfigTab({
+  agentId,
+  webhookId,
+  detail,
+  onUpdated,
+}: {
+  agentId: string;
+  webhookId: string;
+  detail: WebhookDetail;
+  onUpdated: (changes: Partial<WebhookDetail>) => void;
+}) {
+  const [showPresetPicker, setShowPresetPicker] = useState(false);
+  const [eventFilters, setEventFilters] = useState<string[]>(detail.eventFilters ?? []);
+  const [bodyMappings, setBodyMappings] = useState<BodyMapping[]>(
+    (detail.bodyMappings as BodyMapping[]) ?? []
+  );
+  const [headerMappings, setHeaderMappings] = useState<HeaderMapping[]>(
+    (detail.headerMappings as HeaderMapping[]) ?? []
+  );
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  // Track dirtiness
+  useEffect(() => {
+    const filtersChanged = JSON.stringify(eventFilters) !== JSON.stringify(detail.eventFilters ?? []);
+    const bodyChanged = JSON.stringify(bodyMappings) !== JSON.stringify(detail.bodyMappings ?? []);
+    const headerChanged = JSON.stringify(headerMappings) !== JSON.stringify(detail.headerMappings ?? []);
+    setDirty(filtersChanged || bodyChanged || headerChanged);
+  }, [eventFilters, bodyMappings, headerMappings, detail]);
+
+  // Collect all known event suggestions from all presets
+  const allSuggestions = Array.from(
+    new Set(WEBHOOK_PRESETS.flatMap((p) => p.commonEvents))
+  ).sort();
+
+  async function saveConfig() {
+    // Validate variable names
+    const varNameRegex = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+    for (const m of bodyMappings) {
+      if (!m.jsonPath.trim() || !m.variableName.trim()) {
+        toast.error("Body mappings must have a JSONPath and variable name");
+        return;
+      }
+      if (!varNameRegex.test(m.variableName)) {
+        toast.error(`Invalid variable name: "${m.variableName}" — use letters, numbers, and underscores`);
+        return;
+      }
+    }
+    for (const m of headerMappings) {
+      if (!m.headerName.trim() || !m.variableName.trim()) {
+        toast.error("Header mappings must have a header name and variable name");
+        return;
+      }
+      if (!varNameRegex.test(m.variableName)) {
+        toast.error(`Invalid variable name: "${m.variableName}" — use letters, numbers, and underscores`);
+        return;
+      }
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/webhooks/${webhookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventFilters, bodyMappings, headerMappings }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (!json.success) throw new Error(json.error ?? "Failed to save");
+      onUpdated({ eventFilters, bodyMappings, headerMappings });
+      setDirty(false);
+      toast.success("Configuration saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save configuration");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function applyPreset(preset: WebhookPreset) {
+    // Apply preset values locally — user still needs to save
+    setEventFilters(preset.eventFilters);
+    setBodyMappings(preset.bodyMappings);
+    setHeaderMappings(preset.headerMappings);
+    toast.success(`${preset.name} preset applied — review and save when ready`);
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Preset picker banner */}
+      <div className="flex items-center justify-between rounded-lg border border-dashed border-zinc-700 bg-zinc-900/30 px-4 py-3">
+        <div>
+          <p className="text-sm font-medium">Provider Presets</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Instantly configure mappings for GitHub, Stripe, Slack, or a custom webhook.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowPresetPicker(true)}
+        >
+          <Layers className="size-3.5 mr-1.5" />
+          Apply Preset
+        </Button>
+      </div>
+
+      {/* Event Filters */}
+      <div className="space-y-2.5">
+        <div className="flex items-center gap-2">
+          <Filter className="size-3.5 text-violet-400" />
+          <h3 className="text-sm font-medium">Event Filters</h3>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Only trigger the flow when the incoming event type matches one of these values.
+          The event type is read from provider-specific headers (e.g.{" "}
+          <code className="text-[10px]">x-github-event</code>) or from the body
+          (e.g. Stripe&apos;s <code className="text-[10px]">$.type</code>).
+        </p>
+        <EventFilterEditor
+          filters={eventFilters}
+          suggestions={allSuggestions}
+          onAdd={(v) => setEventFilters((prev) => [...prev, v])}
+          onRemove={(v) => setEventFilters((prev) => prev.filter((f) => f !== v))}
+        />
+      </div>
+
+      {/* Body Mappings */}
+      <div className="space-y-2.5">
+        <h3 className="text-sm font-medium">Body Mappings</h3>
+        <p className="text-xs text-muted-foreground">
+          Extract values from the request body using JSONPath expressions and assign them to
+          flow variables.
+        </p>
+        <BodyMappingsEditor
+          mappings={bodyMappings}
+          onChange={setBodyMappings}
+        />
+      </div>
+
+      {/* Header Mappings */}
+      <div className="space-y-2.5">
+        <h3 className="text-sm font-medium">Header Mappings</h3>
+        <p className="text-xs text-muted-foreground">
+          Pass specific request headers into flow variables.
+        </p>
+        <HeaderMappingsEditor
+          mappings={headerMappings}
+          onChange={setHeaderMappings}
+        />
+      </div>
+
+      {/* Save bar */}
+      <div className={`flex items-center justify-between rounded-lg border px-4 py-3 transition-colors ${
+        dirty ? "border-blue-800/50 bg-blue-900/10" : "border-zinc-800 bg-zinc-900/20"
+      }`}>
+        <p className="text-xs text-muted-foreground">
+          {dirty ? "You have unsaved changes" : "Configuration is up to date"}
+        </p>
+        <Button
+          size="sm"
+          disabled={!dirty || saving}
+          onClick={() => void saveConfig()}
+        >
+          {saving ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : null}
+          Save Configuration
+        </Button>
+      </div>
+
+      <PresetPickerDialog
+        open={showPresetPicker}
+        onClose={() => setShowPresetPicker(false)}
+        onApply={(preset) => void applyPreset(preset)}
+      />
+    </div>
+  );
+}
+
 // ─── Create Webhook Dialog ────────────────────────────────────────────────────
 
 function CreateWebhookDialog({
@@ -117,23 +592,38 @@ function CreateWebhookDialog({
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState<WebhookPreset | null>(null);
   const [saving, setSaving] = useState(false);
+
+  function reset() {
+    setName("");
+    setDescription("");
+    setSelectedPreset(null);
+  }
 
   async function handleCreate() {
     if (!name.trim()) return;
     setSaving(true);
     try {
+      const body: Record<string, unknown> = {
+        name: name.trim(),
+        description: description.trim() || undefined,
+      };
+      if (selectedPreset) {
+        body.eventFilters = selectedPreset.eventFilters;
+        body.bodyMappings = selectedPreset.bodyMappings;
+        body.headerMappings = selectedPreset.headerMappings;
+      }
       const res = await fetch(`/api/agents/${agentId}/webhooks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), description: description.trim() || undefined }),
+        body: JSON.stringify(body),
       });
       const json = await res.json() as { success: boolean; data?: WebhookSummary; error?: string };
       if (!json.success) throw new Error(json.error ?? "Failed to create");
       toast.success("Webhook created");
       onCreated(json.data!);
-      setName("");
-      setDescription("");
+      reset();
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create webhook");
@@ -143,7 +633,7 @@ function CreateWebhookDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(); onClose(); } }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create Webhook</DialogTitle>
@@ -167,12 +657,59 @@ function CreateWebhookDialog({
               rows={2}
             />
           </div>
-          <div className="rounded-md bg-muted/30 border border-dashed p-3 text-xs text-muted-foreground">
-            A signing secret will be generated automatically. Use it to verify incoming payloads.
+
+          {/* Quick preset selection */}
+          <div className="space-y-2">
+            <Label>Start with a preset <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <div className="grid grid-cols-4 gap-2">
+              {WEBHOOK_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => setSelectedPreset(selectedPreset?.id === preset.id ? null : preset)}
+                  className={`rounded-lg border p-2 text-center transition-colors ${
+                    selectedPreset?.id === preset.id
+                      ? "border-violet-600 bg-violet-900/20 text-violet-300"
+                      : "border-zinc-800 hover:border-zinc-600 text-zinc-400"
+                  }`}
+                >
+                  <div className="text-xl mb-1">{preset.icon}</div>
+                  <div className="text-[10px] font-medium leading-tight">{preset.name}</div>
+                </button>
+              ))}
+            </div>
+            {selectedPreset && (
+              <div className="rounded-md border border-dashed border-violet-700/40 bg-violet-900/10 px-3 py-2 text-xs text-violet-300">
+                <strong>{selectedPreset.name}</strong> preset selected —{" "}
+                {selectedPreset.bodyMappings.length} body mappings,{" "}
+                {selectedPreset.headerMappings.length} header mappings
+                {selectedPreset.eventFilters.length > 0 && (
+                  <>, filters: {selectedPreset.eventFilters.join(", ")}</>
+                )}{" "}
+                will be applied.
+                {selectedPreset.docs && (
+                  <a
+                    href={selectedPreset.docs}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 ml-2 text-violet-400 hover:text-violet-300"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Docs <ExternalLink className="size-2.5" />
+                  </a>
+                )}
+              </div>
+            )}
           </div>
+
+          {!selectedPreset && (
+            <div className="rounded-md bg-muted/30 border border-dashed p-3 text-xs text-muted-foreground">
+              A signing secret will be generated automatically. You can configure mappings and filters after creation.
+            </div>
+          )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={() => { reset(); onClose(); }}>Cancel</Button>
           <Button onClick={() => void handleCreate()} disabled={!name.trim() || saving}>
             {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="mr-2 size-4" />}
             Create
@@ -246,6 +783,12 @@ function TestPanel({
 
   return (
     <div className="space-y-4">
+      {webhook.eventFilters.length > 0 && (
+        <div className="rounded-md border border-amber-800/50 bg-amber-900/10 px-3 py-2 text-xs text-amber-300">
+          <Filter className="inline size-3 mr-1" />
+          Event filters are active: {webhook.eventFilters.join(", ")}. Make sure your test event type matches.
+        </div>
+      )}
       <div className="space-y-2">
         <Label>Payload (JSON)</Label>
         <Textarea
@@ -377,7 +920,7 @@ function WebhookDetailPanel({
   const [rotating, setRotating] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [tab, setTab] = useState<"executions" | "test">("executions");
+  const [tab, setTab] = useState<"executions" | "config" | "test">("executions");
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
 
@@ -451,6 +994,11 @@ function WebhookDetailPanel({
     } catch {
       toast.error("Failed to delete webhook");
     }
+  }
+
+  function handleConfigUpdated(changes: Partial<WebhookDetail>) {
+    setDetail((d) => d ? { ...d, ...changes } : d);
+    onUpdated(changes);
   }
 
   function copyUrl() {
@@ -547,6 +1095,12 @@ function WebhookDetailPanel({
               Linked to flow node
             </span>
           )}
+          {detail.eventFilters.length > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs text-violet-400">
+              <Filter className="size-3" />
+              {detail.eventFilters.length} filter{detail.eventFilters.length !== 1 ? "s" : ""}
+            </span>
+          )}
           <span className="text-xs text-zinc-500">
             <Zap className="inline size-3 mr-0.5" />
             {detail.triggerCount} trigger{detail.triggerCount !== 1 ? "s" : ""}
@@ -606,9 +1160,9 @@ function WebhookDetailPanel({
         </div>
       </div>
 
-      {/* Tabs: Execution History / Test */}
+      {/* Tabs: Execution History / Config / Test */}
       <div className="flex border-b">
-        {(["executions", "test"] as const).map((t) => (
+        {(["executions", "config", "test"] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -619,7 +1173,7 @@ function WebhookDetailPanel({
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t === "executions" ? `Executions (${detail._count.executions})` : "Test"}
+            {t === "executions" ? `Executions (${detail._count.executions})` : t === "config" ? "Configuration" : "Test"}
           </button>
         ))}
         {tab === "executions" && (
@@ -651,6 +1205,15 @@ function WebhookDetailPanel({
               ))
             )}
           </div>
+        )}
+
+        {tab === "config" && (
+          <ConfigTab
+            agentId={agentId}
+            webhookId={webhookId}
+            detail={detail}
+            onUpdated={handleConfigUpdated}
+          />
         )}
 
         {tab === "test" && (
@@ -733,8 +1296,6 @@ export default function WebhooksPage({
     );
   }
 
-  const selectedWebhook = webhooks.find((w) => w.id === selectedId);
-
   return (
     <div className="flex h-screen flex-col">
       {/* Top bar */}
@@ -799,12 +1360,18 @@ export default function WebhooksPage({
                       wh.enabled ? "bg-green-500" : "bg-zinc-600"
                     }`} />
                   </div>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-xs text-muted-foreground">
                       {wh.triggerCount} trigger{wh.triggerCount !== 1 ? "s" : ""}
                     </span>
                     {wh.failureCount > 0 && (
                       <span className="text-[10px] text-red-400">{wh.failureCount} failed</span>
+                    )}
+                    {wh.eventFilters.length > 0 && (
+                      <span className="text-[10px] text-violet-400">
+                        <Filter className="inline size-2.5 mr-0.5" />
+                        {wh.eventFilters.length} filter{wh.eventFilters.length !== 1 ? "s" : ""}
+                      </span>
                     )}
                     {wh.lastTriggeredAt && (
                       <span className="text-[10px] text-zinc-500 ml-auto">

@@ -17,6 +17,7 @@ const UpdateWebhookSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).nullable().optional(),
   enabled: z.boolean().optional(),
+  eventFilters: z.array(z.string().min(1).max(100)).max(50).optional(),
   bodyMappings: z
     .array(
       z.object({
@@ -133,6 +134,7 @@ export async function PATCH(
         name: true,
         description: true,
         enabled: true,
+        eventFilters: true,
         bodyMappings: true,
         headerMappings: true,
         updatedAt: true,

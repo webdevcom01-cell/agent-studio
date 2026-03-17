@@ -73,9 +73,10 @@ function extractEventType(
   const candidates = [
     "x-github-event",
     "x-gitlab-event",
-    "stripe-webhook-event", // Note: Stripe uses $.type in body, but we check headers first
+    "stripe-webhook-event",
     "x-slack-event",
     "x-event-type",
+    "x-webhook-event",
     "webhook-event-type",
   ];
 
@@ -87,6 +88,32 @@ function extractEventType(
     const val = normalised[key];
     if (val) return Array.isArray(val) ? val[0] : val;
   }
+  return null;
+}
+
+/**
+ * Extracts event type from parsed body for providers that embed it there.
+ * Priority:
+ *   1. Slack Events API: $.event.type (e.g. "app_mention", "message")
+ *      Slack's top-level $.type is always "event_callback" — not useful for filtering.
+ *   2. Stripe / generic: $.type (e.g. "payment_intent.succeeded")
+ * Falls back to null.
+ */
+function extractEventTypeFromBody(parsedBody: unknown): string | null {
+  if (typeof parsedBody !== "object" || parsedBody === null) return null;
+  const body = parsedBody as Record<string, unknown>;
+
+  // Slack Events API: { "event": { "type": "app_mention", ... }, "type": "event_callback" }
+  // Check $.event.type first — the inner event type is what users configure filters on.
+  const event = body.event;
+  if (typeof event === "object" && event !== null) {
+    const eventObj = event as Record<string, unknown>;
+    if (typeof eventObj.type === "string") return eventObj.type;
+  }
+
+  // Stripe / generic: { "type": "payment_intent.succeeded", ... }
+  if (typeof body.type === "string") return body.type;
+
   return null;
 }
 
@@ -108,6 +135,7 @@ export async function executeWebhookTrigger(
       secret: true,
       bodyMappings: true,
       headerMappings: true,
+      eventFilters: true,
     },
   });
 
@@ -176,7 +204,30 @@ export async function executeWebhookTrigger(
     parsedBody = { __raw: rawBody };
   }
 
-  const eventType = extractEventType(headers);
+  // Resolve event type: prefer provider-specific headers, fall back to body
+  const headerEventType = extractEventType(headers);
+  const eventType = headerEventType ?? extractEventTypeFromBody(parsedBody);
+
+  // ── 5a. Event filter check ─────────────────────────────────────────────────
+  const eventFilters = webhookConfig.eventFilters as string[];
+  if (eventFilters.length > 0) {
+    if (eventType === null || !eventFilters.includes(eventType)) {
+      logger.info("Webhook event filtered out (event type not in filter list)", {
+        webhookId,
+        agentId,
+        eventType,
+        eventFilters,
+      });
+      return {
+        success: true,
+        status: 200,
+        skipped: true,
+        error: eventType
+          ? `Event type '${eventType}' not in filter list`
+          : "No event type detected; event filters are configured",
+      };
+    }
+  }
 
   // Start with full payload in __webhook_payload
   const webhookVariables: Record<string, unknown> = {

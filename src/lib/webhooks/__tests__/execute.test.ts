@@ -97,6 +97,7 @@ function makeWebhookConfig(overrides: Record<string, unknown> = {}) {
     id: WEBHOOK_ID,
     enabled: true,
     secret: SECRET,
+    eventFilters: [] as string[],
     bodyMappings: [],
     headerMappings: [],
     ...overrides,
@@ -332,6 +333,261 @@ describe("executeWebhookTrigger", () => {
       const { executeFlow } = await import("@/lib/runtime/engine");
       const contextArg = (executeFlow as ReturnType<typeof vi.fn>).mock.calls[0][0];
       expect((contextArg.variables.__webhook_payload as { __raw: string }).__raw).toBe(textBody);
+    });
+  });
+
+  describe("event filtering", () => {
+    it("allows request when eventFilters is empty (accept all)", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ eventFilters: [] }) as never
+      );
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders({ "x-github-event": "push" }),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.status).toBe(200);
+      expect(result.skipped).toBeUndefined();
+    });
+
+    it("allows request when event type matches a filter", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ eventFilters: ["push", "pull_request"] }) as never
+      );
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders({ "x-github-event": "push" }),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.status).toBe(200);
+      expect(result.skipped).toBeUndefined();
+    });
+
+    it("skips (200 + skipped=true) when event type does not match filters", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ eventFilters: ["pull_request"] }) as never
+      );
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders({ "x-github-event": "push" }),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.status).toBe(200);
+      expect(result.skipped).toBe(true);
+      expect(result.error).toMatch(/push/i);
+    });
+
+    it("skips when filters are set and no event type is detectable", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ eventFilters: ["payment_intent.succeeded"] }) as never
+      );
+      // No event type header and plain JSON body without $.type
+      const body = JSON.stringify({ custom: "data" });
+      const ts = makeTimestamp();
+      const id = "msg_no_event_type";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, body, SECRET),
+      };
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: body,
+        headers,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.status).toBe(200);
+      expect(result.skipped).toBe(true);
+      expect(result.error).toMatch(/no event type/i);
+    });
+
+    it("does not create execution record for a filtered-out event", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ eventFilters: ["pull_request"] }) as never
+      );
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders({ "x-github-event": "push" }),
+      });
+
+      // WebhookExecution.create should NOT be called for filtered events
+      expect(prisma.webhookExecution.create).not.toHaveBeenCalled();
+    });
+
+    it("does not call executeFlow for a filtered-out event", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ eventFilters: ["deployment"] }) as never
+      );
+      const { executeFlow } = await import("@/lib/runtime/engine");
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders({ "x-github-event": "push" }),
+      });
+
+      expect(executeFlow).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("body-based event type extraction", () => {
+    it("extracts event type from Stripe $.type field", async () => {
+      const stripeBody = JSON.stringify({
+        type: "payment_intent.succeeded",
+        id: "evt_test123",
+        data: { object: { id: "pi_test456" } },
+      });
+      const ts = makeTimestamp();
+      const id = "msg_stripe_01";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, stripeBody, SECRET),
+      };
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ eventFilters: ["payment_intent.succeeded"] }) as never
+      );
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: stripeBody,
+        headers,
+      });
+
+      // Should pass the filter because body $.type matches
+      expect(result.success).toBe(true);
+      expect(result.status).toBe(200);
+      expect(result.skipped).toBeUndefined();
+    });
+
+    it("extracts event type from Stripe body and filters correctly", async () => {
+      const stripeBody = JSON.stringify({
+        type: "charge.failed",
+        id: "evt_test456",
+      });
+      const ts = makeTimestamp();
+      const id = "msg_stripe_02";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, stripeBody, SECRET),
+      };
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ eventFilters: ["payment_intent.succeeded"] }) as never
+      );
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: stripeBody,
+        headers,
+      });
+
+      // charge.failed doesn't match payment_intent.succeeded
+      expect(result.skipped).toBe(true);
+    });
+
+    it("extracts event type from Slack $.event.type field", async () => {
+      const slackBody = JSON.stringify({
+        type: "event_callback",
+        event: { type: "app_mention", user: "U123456", text: "Hello" },
+        team_id: "T123456",
+      });
+      const ts = makeTimestamp();
+      const id = "msg_slack_01";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, slackBody, SECRET),
+      };
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ eventFilters: ["app_mention"] }) as never
+      );
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: slackBody,
+        headers,
+      });
+
+      // $.event.type = app_mention matches the filter
+      expect(result.success).toBe(true);
+      expect(result.status).toBe(200);
+      expect(result.skipped).toBeUndefined();
+    });
+
+    it("prefers header event type over body event type", async () => {
+      // Body has $.type = "push" but header has x-github-event = "pull_request"
+      const body = JSON.stringify({ type: "push", repo: "test" });
+      const ts = makeTimestamp();
+      const id = "msg_header_priority";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, body, SECRET),
+        "x-github-event": "pull_request",
+      };
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ eventFilters: ["pull_request"] }) as never
+      );
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: body,
+        headers,
+      });
+
+      // Header event type (pull_request) is used → matches filter
+      expect(result.success).toBe(true);
+      expect(result.status).toBe(200);
+      expect(result.skipped).toBeUndefined();
+    });
+
+    it("sets __webhook_event_type to body-derived event type when no header", async () => {
+      const stripeBody = JSON.stringify({ type: "invoice.paid", id: "evt_xyz" });
+      const ts = makeTimestamp();
+      const id = "msg_body_event_type";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, stripeBody, SECRET),
+      };
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ eventFilters: [] }) as never
+      );
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: stripeBody,
+        headers,
+      });
+
+      const { executeFlow } = await import("@/lib/runtime/engine");
+      const contextArg = (executeFlow as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(contextArg.variables.__webhook_event_type).toBe("invoice.paid");
     });
   });
 });

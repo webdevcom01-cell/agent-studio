@@ -628,6 +628,12 @@ model WebhookConfig {
   /// e.g. [{ "headerName": "X-GitHub-Event", "variableName": "github_event" }]
   headerMappings Json @default("[]")
 
+  /// Event filter list — if non-empty, only events whose type matches one of the values
+  /// will trigger the flow. Empty array means "accept all events".
+  /// Event type is read from provider-specific headers (x-github-event, x-slack-event, etc.)
+  /// or from the request body (e.g. Stripe uses $.type).
+  eventFilters String[] @default([])
+
   /// Flow node ID that this config was synced from (set by deploy auto-sync).
   /// Null for webhooks created manually via API.
   nodeId String?

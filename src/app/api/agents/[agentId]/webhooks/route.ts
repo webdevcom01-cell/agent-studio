@@ -16,6 +16,7 @@ import { generateWebhookSecret } from "@/lib/webhooks/verify";
 const CreateWebhookSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
+  eventFilters: z.array(z.string().min(1).max(100)).max(50).optional().default([]),
   bodyMappings: z
     .array(
       z.object({
@@ -60,6 +61,7 @@ export async function GET(
         failureCount: true,
         lastTriggeredAt: true,
         nodeId: true,
+        eventFilters: true,
         bodyMappings: true,
         headerMappings: true,
         createdAt: true,
@@ -103,7 +105,7 @@ export async function POST(
       return response;
     }
 
-    const { name, description, bodyMappings, headerMappings } = parsed.data;
+    const { name, description, eventFilters, bodyMappings, headerMappings } = parsed.data;
 
     const webhook = await prisma.webhookConfig.create({
       data: {
@@ -111,6 +113,7 @@ export async function POST(
         name,
         description,
         secret: generateWebhookSecret(),
+        eventFilters,
         bodyMappings,
         headerMappings,
       },
@@ -120,6 +123,7 @@ export async function POST(
         description: true,
         secret: true,
         enabled: true,
+        eventFilters: true,
         bodyMappings: true,
         headerMappings: true,
         createdAt: true,
