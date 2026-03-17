@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { ArrowLeft, MessageSquare, Database, FlaskConical } from "lucide-react";
+import { ArrowLeft, MessageSquare, Database, FlaskConical, Webhook } from "lucide-react";
 import { FlowBuilder } from "@/components/builder/flow-builder";
 import { Button } from "@/components/ui/button";
 import type { FlowContent } from "@/types";
@@ -86,6 +86,12 @@ export default function BuilderPage({
           <Link href={`/evals/${agentId}`}>
             <FlaskConical className="mr-1.5 size-4" />
             Evals
+          </Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link href={`/webhooks/${agentId}`}>
+            <Webhook className="mr-1.5 size-4" />
+            Webhooks
           </Link>
         </Button>
         <Button size="sm" asChild>

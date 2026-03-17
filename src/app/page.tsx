@@ -9,7 +9,7 @@ import {
   Plus, Bot, MessageSquare, Database, Trash2, MoreVertical,
   Download, Upload, LogOut, BarChart3, Plug, ArrowRightLeft,
   Sun, Moon, Compass, Terminal, FlaskConical, ShieldCheck,
-  Sparkles, Loader2,
+  Sparkles, Loader2, Webhook,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -493,6 +493,12 @@ export default function DashboardPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="text-sm">
+                      <DropdownMenuItem asChild>
+                        <Link href={`/webhooks/${agent.id}`}>
+                          <Webhook className="size-3.5" />
+                          Webhooks
+                        </Link>
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleExport(agent.id, agent.name)}>
                         <Download className="size-3.5" />
                         Export
