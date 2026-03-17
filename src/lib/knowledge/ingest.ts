@@ -92,7 +92,7 @@ export async function ingestSource(
           VALUES ${Prisma.join(values)}
         `;
       }
-    });
+    }, { maxWait: 30000, timeout: 120000 });
 
     await prisma.kBSource.update({
       where: { id: sourceId },

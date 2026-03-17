@@ -86,14 +86,14 @@ export async function searchKnowledgeBase(
     Prisma.sql`
       SELECT
         c."id", c."content",
-        1 - (c."embedding" <=> ${Prisma.raw(vectorStr)}::vector) as similarity,
+        1 - (c."embedding" <=> ${vectorStr}::vector) as similarity,
         c."sourceId", s."name" as "sourceName", c."metadata"
       FROM "KBChunk" c
       INNER JOIN "KBSource" s ON c."sourceId" = s."id"
       WHERE s."knowledgeBaseId" = ${knowledgeBaseId}
         AND s."status" = 'READY'
         AND c."embedding" IS NOT NULL
-      ORDER BY c."embedding" <=> ${Prisma.raw(vectorStr)}::vector
+      ORDER BY c."embedding" <=> ${vectorStr}::vector
       LIMIT ${topK}
     `
   );
