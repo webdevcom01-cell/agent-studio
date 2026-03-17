@@ -1871,8 +1871,108 @@ function EvaluatorProperties({ data, update }: SubPanelProps) {
   );
 }
 
+interface CronPreview {
+  description: string;
+  nextRuns: string[];
+  valid: boolean;
+  error?: string;
+}
+
+const CRON_PRESETS = [
+  { label: "Daily 9am", value: "0 9 * * *" },
+  { label: "Weekdays 9am", value: "0 9 * * 1-5" },
+  { label: "Hourly", value: "0 * * * *" },
+  { label: "Mon 9am", value: "0 9 * * 1" },
+];
+
+const INTERVAL_PRESETS = [
+  { label: "5 min", value: 5 },
+  { label: "15 min", value: 15 },
+  { label: "30 min", value: 30 },
+  { label: "1 hr", value: 60 },
+  { label: "6 hr", value: 360 },
+  { label: "12 hr", value: 720 },
+  { label: "Daily", value: 1440 },
+  { label: "Weekly", value: 10080 },
+];
+
+const COMMON_TIMEZONES = [
+  "UTC", "America/New_York", "America/Chicago", "America/Denver",
+  "America/Los_Angeles", "America/Sao_Paulo", "Europe/London",
+  "Europe/Paris", "Europe/Berlin", "Europe/Belgrade", "Europe/Moscow",
+  "Asia/Dubai", "Asia/Kolkata", "Asia/Shanghai", "Asia/Tokyo",
+  "Asia/Seoul", "Australia/Sydney", "Pacific/Auckland",
+];
+
+const SCHEDULE_TYPE_MAP: Record<string, string> = {
+  cron: "CRON",
+  interval: "INTERVAL",
+  manual: "MANUAL",
+};
+
 function ScheduleTriggerProperties({ data, update }: SubPanelProps) {
   const scheduleType = (data.scheduleType as string) ?? "manual";
+  const cronExpression = (data.cronExpression as string) ?? "";
+  const intervalMinutes = Number(data.intervalMinutes) || 60;
+  const timezone = (data.timezone as string) ?? "UTC";
+
+  const [preview, setPreview] = useState<CronPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  useEffect(() => {
+    if (scheduleType === "manual") {
+      setPreview({
+        description: "Triggered manually only — no automatic runs.",
+        nextRuns: [],
+        valid: true,
+      });
+      return;
+    }
+
+    const body: Record<string, unknown> = {
+      scheduleType: SCHEDULE_TYPE_MAP[scheduleType] ?? "MANUAL",
+      timezone,
+    };
+    if (scheduleType === "cron") body.cronExpression = cronExpression;
+    if (scheduleType === "interval") body.intervalMinutes = intervalMinutes;
+
+    const timer = setTimeout(() => {
+      setPreviewLoading(true);
+      fetch("/api/schedules/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+        .then((res) => res.json() as Promise<{ success: boolean; data?: CronPreview; error?: string }>)
+        .then((json) => {
+          if (json.success && json.data) {
+            setPreview(json.data);
+          } else {
+            setPreview({ description: "", nextRuns: [], valid: false, error: json.error ?? "Invalid schedule" });
+          }
+        })
+        .catch(() => setPreview(null))
+        .finally(() => setPreviewLoading(false));
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [scheduleType, cronExpression, intervalMinutes, timezone]);
+
+  function formatNextRun(isoString: string): string {
+    try {
+      return new Date(isoString).toLocaleString("en-US", {
+        timeZone: timezone || "UTC",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZoneName: "short",
+      });
+    } catch {
+      return isoString;
+    }
+  }
 
   return (
     <>
@@ -1894,12 +1994,28 @@ function ScheduleTriggerProperties({ data, update }: SubPanelProps) {
         <div className="space-y-2">
           <Label>Cron Expression</Label>
           <Input
-            value={(data.cronExpression as string) ?? ""}
+            value={cronExpression}
             onChange={(e) => update("cronExpression", e.target.value)}
-            placeholder="0 9 * * 1-5 (weekdays at 9am)"
+            placeholder="0 9 * * 1-5"
             className="font-mono"
           />
-          <p className="text-xs text-muted-foreground">Format: minute hour day month weekday</p>
+          <p className="text-xs text-muted-foreground">minute · hour · day · month · weekday</p>
+          <div className="flex flex-wrap gap-1">
+            {CRON_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                onClick={() => update("cronExpression", preset.value)}
+                className={`rounded border px-2 py-0.5 text-xs transition-colors ${
+                  cronExpression === preset.value
+                    ? "border-blue-500 bg-blue-900/30 text-blue-300"
+                    : "border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1910,19 +2026,66 @@ function ScheduleTriggerProperties({ data, update }: SubPanelProps) {
             type="number"
             min={1}
             max={10080}
-            value={Number(data.intervalMinutes) || 60}
+            value={intervalMinutes}
             onChange={(e) => update("intervalMinutes", parseInt(e.target.value) || 60)}
           />
+          <div className="flex flex-wrap gap-1">
+            {INTERVAL_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                onClick={() => update("intervalMinutes", preset.value)}
+                className={`rounded border px-2 py-0.5 text-xs transition-colors ${
+                  intervalMinutes === preset.value
+                    ? "border-blue-500 bg-blue-900/30 text-blue-300"
+                    : "border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
       <div className="space-y-2">
         <Label>Timezone</Label>
         <Input
-          value={(data.timezone as string) ?? "UTC"}
+          value={timezone}
           onChange={(e) => update("timezone", e.target.value)}
           placeholder="UTC"
+          list="schedule-tz-list"
         />
+        <datalist id="schedule-tz-list">
+          {COMMON_TIMEZONES.map((tz) => (
+            <option key={tz} value={tz} />
+          ))}
+        </datalist>
+        <p className="text-xs text-muted-foreground">IANA timezone (e.g. Europe/Belgrade)</p>
+      </div>
+
+      {/* Live preview panel */}
+      <div className="rounded-md border border-zinc-700 bg-zinc-800/50 p-3 space-y-2">
+        <p className="text-xs font-medium text-zinc-400">Schedule Preview</p>
+        {previewLoading && (
+          <p className="text-xs text-zinc-500 animate-pulse">Computing…</p>
+        )}
+        {!previewLoading && preview?.valid && preview.description && (
+          <p className="text-xs text-green-400">{preview.description}</p>
+        )}
+        {!previewLoading && preview && !preview.valid && preview.error && (
+          <p className="text-xs text-red-400">{preview.error}</p>
+        )}
+        {!previewLoading && preview?.valid && preview.nextRuns.length > 0 && (
+          <div className="space-y-1 pt-1 border-t border-zinc-700/50">
+            <p className="text-xs text-zinc-500">Next runs:</p>
+            {preview.nextRuns.map((run, i) => (
+              <p key={i} className="text-xs font-mono text-zinc-300">
+                {formatNextRun(run)}
+              </p>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">

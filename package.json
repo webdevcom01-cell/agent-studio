@@ -44,6 +44,8 @@
     "ai": "^6.0.116",
     "archiver": "^7.0.1",
     "cheerio": "^1.2.0",
+    "cron-parser": "^5.5.0",
+    "cronstrue": "^2.60.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.513.0",
