@@ -222,13 +222,15 @@ export async function expandChunksWithContext(
     const indices = Array.from(indexSet).sort((a, b) => a - b);
     if (indices.length === 0) continue;
 
-    const indicesJson = JSON.stringify(indices);
+    // Use a PostgreSQL array literal string (e.g. '{0,1}') — valid int[] syntax.
+    // Note: jsonb::int[] cast is not supported in PostgreSQL; text::int[] works.
+    const indicesLiteral = `{${indices.join(",")}}`;
     const neighbors = await prisma.$queryRaw<NeighborChunkRow[]>(
       Prisma.sql`
         SELECT c."id", c."content", c."sourceId", c."metadata"
         FROM "KBChunk" c
         WHERE c."sourceId" = ${sourceId}
-          AND (c."metadata"->>'index')::int = ANY(${indicesJson}::jsonb::int[])
+          AND (c."metadata"->>'index')::int = ANY(${indicesLiteral}::int[])
         ORDER BY (c."metadata"->>'index')::int ASC
       `
     );
