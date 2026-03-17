@@ -63,7 +63,7 @@ async function callAIWithRetry(
           system,
           prompt: user,
           abortSignal: controller.signal,
-          maxTokens: 4096,
+          maxOutputTokens: 4096,
         });
 
         clearTimeout(timeout);

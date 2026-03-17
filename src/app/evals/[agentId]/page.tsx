@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, use } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, FlaskConical, Settings2,
-  BarChart3, Loader2, MoreVertical, Star, StarOff, Rocket, Sparkles,
+  BarChart3, Loader2, MoreVertical, Star, StarOff, Rocket, Sparkles, ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -368,6 +368,12 @@ export default function EvalsPage({ params }: PageProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/evals/standards" title="Eval Standards">
+              <Button size="sm" variant="ghost" className="text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 gap-1.5">
+                <ShieldCheck className="w-4 h-4" />
+                <span className="hidden sm:inline">Standards</span>
+              </Button>
+            </Link>
             <Link href={`/builder/${agentId}`}>
               <Button size="sm" variant="outline" className="border-zinc-700 text-zinc-400 hover:bg-zinc-800">
                 <Settings2 className="w-4 h-4 mr-1.5" /> Flow Builder
