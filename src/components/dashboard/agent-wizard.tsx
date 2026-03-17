@@ -47,6 +47,8 @@ export interface WizardResult {
   description: string;
   systemPrompt: string;
   model: string;
+  /** Template ID — if set, a starter flow will be applied after agent creation. */
+  templateId?: string;
 }
 
 interface AgentWizardProps {
@@ -442,7 +444,7 @@ export function AgentWizard({ open, onOpenChange, onSubmit, isSubmitting = false
   }
 
   async function handleCreate() {
-    await onSubmit({ name, description, model, systemPrompt });
+    await onSubmit({ name, description, model, systemPrompt, templateId: template?.id });
     reset();
   }
 

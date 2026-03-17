@@ -538,6 +538,10 @@ model FlowSchedule {
   /// Maximum consecutive failures before auto-disable (0 = never auto-disable).
   maxRetries       Int            @default(3)
 
+  /// Flow node ID that this schedule was synced from (set by deploy auto-sync).
+  /// Null for schedules created manually via API.
+  nodeId           String?
+
   executions       ScheduledExecution[]
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
@@ -545,6 +549,7 @@ model FlowSchedule {
   @@index([agentId])
   @@index([enabled, nextRunAt])
   @@index([agentId, enabled])
+  @@unique([agentId, nodeId])
 }
 
 /// Log of every scheduled execution attempt.

@@ -3,6 +3,8 @@ import { PrismaClient } from "@/generated/prisma";
 import { generateChangesSummary, computeFlowDiff } from "./diff-engine";
 import type { FlowContent } from "@/types";
 import { parseFlowContent } from "@/lib/validators/flow-content";
+import { syncSchedulesFromFlow } from "@/lib/scheduler/sync";
+import { logger } from "@/lib/logger";
 import type { FlowDiff } from "./diff-engine";
 import type {
   FlowVersion,
@@ -160,6 +162,13 @@ export class VersionService {
           note: note ?? null,
         },
       });
+    }).then((deployment) => {
+      // Fire-and-forget: sync FlowSchedule records from deployed flow nodes.
+      // Runs after the transaction commits so it never blocks the deploy response.
+      syncSchedulesFromFlow(agentId, content).catch((err) =>
+        logger.warn("schedule_sync_error_on_deploy", { agentId, versionId, err }),
+      );
+      return deployment;
     });
   }
 

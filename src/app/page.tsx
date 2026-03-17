@@ -25,6 +25,7 @@ import { AgentCallMonitor } from "@/components/a2a/agent-call-monitor";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useTheme } from "@/components/theme-provider";
 import { AgentWizard, type WizardResult } from "@/components/dashboard/agent-wizard";
+import { STARTER_FLOWS } from "@/data/starter-flows";
 
 interface Agent {
   id: string;
@@ -79,15 +80,34 @@ export default function DashboardPage() {
       const json = await res.json();
       if (json.success) {
         setShowCreate(false);
+        const agentId: string = json.data.id;
+
+        // If a starter flow exists for this template, inject it now.
+        // Fire-and-forget — user is redirected immediately, flow loads in builder.
+        if (data.templateId) {
+          const starterFlow = STARTER_FLOWS[data.templateId];
+          if (starterFlow) {
+            fetch(`/api/agents/${agentId}/flow`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content: starterFlow }),
+            }).catch(() => {/* silent — starter flow injection is best-effort */});
+          }
+        }
+
         // Fire-and-forget: generate eval suite in background.
-        // Non-blocking — user navigates to builder immediately.
-        fetch(`/api/agents/${json.data.id}/evals/generate`, {
+        fetch(`/api/agents/${agentId}/evals/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ targetCount: 5, runOnDeploy: true }),
         }).catch(() => {/* silent — eval generation is best-effort */});
-        toast.success("Agent created — eval suite generating in background");
-        router.push(`/builder/${json.data.id}`);
+
+        toast.success(
+          data.templateId && STARTER_FLOWS[data.templateId]
+            ? "Agent created with starter flow — opening builder"
+            : "Agent created — eval suite generating in background"
+        );
+        router.push(`/builder/${agentId}`);
       } else {
         toast.error(json.error ?? "Failed to create agent");
       }
