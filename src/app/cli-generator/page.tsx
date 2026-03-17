@@ -11,6 +11,8 @@ import {
   RefreshCw,
   Loader2,
   Download,
+  RotateCcw,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -48,11 +50,22 @@ interface GenerationDetail {
 
 const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED"]);
 const POLLING_INTERVAL_MS = 2000;
+/** Generations not updated within this window are flagged as stuck. */
+const STUCK_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes — matches server constant
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 function isInProgress(status: string): boolean {
   return !TERMINAL_STATUSES.has(status);
+}
+
+function isStuck(gen: Generation): boolean {
+  if (TERMINAL_STATUSES.has(gen.status)) return false;
+  return Date.now() - new Date(gen.updatedAt).getTime() > STUCK_THRESHOLD_MS;
+}
+
+function isResumable(gen: Generation): boolean {
+  return gen.status === "FAILED" || isStuck(gen);
 }
 
 export default function CLIGeneratorPage(): React.JSX.Element {
@@ -63,6 +76,7 @@ export default function CLIGeneratorPage(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isResumingId, setIsResumingId] = useState<string | null>(null);
 
   const {
     data: detailResponse,
@@ -200,6 +214,62 @@ export default function CLIGeneratorPage(): React.JSX.Element {
     await fetchGenerations();
   }
 
+  /**
+   * Resumes a FAILED or stuck generation.
+   *
+   * Calls POST /resume to reset failed/running phases back to "pending",
+   * then re-drives the pipeline by looping over /advance until done.
+   * Works like handleCreate but picks up from the last failed phase instead
+   * of starting from scratch — completed phase outputs remain intact in the DB.
+   */
+  async function handleResume(generationId: string): Promise<void> {
+    setIsResumingId(generationId);
+    try {
+      const resumeRes = await fetch(
+        `/api/cli-generator/${generationId}/resume`,
+        { method: "POST" },
+      );
+      const resumeJson = await resumeRes.json();
+
+      if (!resumeJson.success) {
+        toast.error(resumeJson.error ?? "Failed to resume generation");
+        return;
+      }
+
+      if (resumeJson.data?.done) {
+        // Edge case: all phases were already complete — nothing left to run
+        await Promise.all([mutateDetail(), fetchGenerations()]);
+        return;
+      }
+
+      setSelectedId(generationId);
+      toast.success("Resuming generation…");
+
+      // Drive the pipeline forward from the reset phase
+      let done = false;
+      while (!done) {
+        const advanceRes = await fetch(
+          `/api/cli-generator/${generationId}/advance`,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) },
+        );
+        const advanceJson = await advanceRes.json();
+
+        if (!advanceJson.success) {
+          break;
+        }
+
+        done = advanceJson.data?.done === true;
+        await mutateDetail();
+      }
+
+      await fetchGenerations();
+    } catch {
+      toast.error("Failed to resume generation");
+    } finally {
+      setIsResumingId(null);
+    }
+  }
+
   const isCompleted = detail?.status === "COMPLETED";
   const hasFiles = isCompleted && detail.generatedFiles && Object.keys(detail.generatedFiles).length > 0;
 
@@ -269,42 +339,79 @@ export default function CLIGeneratorPage(): React.JSX.Element {
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                {generations.map((gen) => (
-                  <button
-                    key={gen.id}
-                    type="button"
-                    onClick={() => handleSelect(gen.id)}
-                    className={cn(
-                      "group flex items-center justify-between rounded-lg border p-3 text-left transition-all hover:border-foreground/20",
-                      selectedId === gen.id
-                        ? "border-primary bg-primary/5"
-                        : "border-border bg-card",
-                    )}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium truncate">
-                        {gen.applicationName}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <StatusBadge status={gen.status} />
-                        <span className="text-[10px] text-muted-foreground">
-                          {new Date(gen.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmDeleteId(gen.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 shrink-0"
+                {generations.map((gen) => {
+                  const stuck = isStuck(gen);
+                  const resumable = isResumable(gen);
+                  const resuming = isResumingId === gen.id;
+                  return (
+                    <button
+                      key={gen.id}
+                      type="button"
+                      onClick={() => handleSelect(gen.id)}
+                      className={cn(
+                        "group flex items-center justify-between rounded-lg border p-3 text-left transition-all hover:border-foreground/20",
+                        selectedId === gen.id
+                          ? "border-primary bg-primary/5"
+                          : "border-border bg-card",
+                        stuck && "border-yellow-500/40",
+                      )}
                     >
-                      <Trash2 className="size-3" />
-                    </Button>
-                  </button>
-                ))}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          {stuck && (
+                            <AlertTriangle className="size-3 shrink-0 text-yellow-500" title="Stuck — click Resume to continue" />
+                          )}
+                          <span className="text-sm font-medium truncate">
+                            {gen.applicationName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <StatusBadge status={gen.status} />
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(gen.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {resumable && (
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            disabled={resuming}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleResume(gen.id);
+                            }}
+                            title={stuck ? "Resume stuck generation" : "Retry failed generation"}
+                            className={cn(
+                              "opacity-0 group-hover:opacity-100",
+                              gen.status === "FAILED"
+                                ? "text-red-500 hover:text-red-400"
+                                : "text-yellow-500 hover:text-yellow-400",
+                            )}
+                          >
+                            {resuming ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              <RotateCcw className="size-3" />
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDeleteId(gen.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="size-3" />
+                        </Button>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
