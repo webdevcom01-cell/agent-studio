@@ -140,17 +140,25 @@ async function callAgentChat(
     );
   }
 
-  const data = (await response.json()) as { success: boolean; data?: { message?: string; response?: string }; error?: string };
+  const data = (await response.json()) as {
+    success: boolean;
+    data?: {
+      message?: string;
+      response?: string;
+      messages?: { role: string; content: string }[];
+    };
+    error?: string;
+  };
 
   if (!data.success) {
     throw new Error(data.error ?? "Chat API returned success: false");
   }
 
-  // The chat route returns { success: true, data: { message: string } }
-  const output =
-    data.data?.message ??
-    data.data?.response ??
-    "";
+  // The chat route returns { success: true, data: { messages: [{role, content}] } }
+  // Support legacy message/response fields as fallback
+  const assistantMessages = data.data?.messages?.filter((m) => m.role === "assistant") ?? [];
+  const fromMessages = assistantMessages.map((m) => m.content).join("\n").trim();
+  const output = fromMessages || (data.data?.message ?? data.data?.response ?? "");
 
   return { output, latencyMs };
 }
