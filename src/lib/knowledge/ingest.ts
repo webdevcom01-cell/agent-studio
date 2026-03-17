@@ -68,31 +68,33 @@ export async function ingestSource(
       }
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.kBChunk.deleteMany({ where: { sourceId } });
+    // Delete existing chunks first, then insert new ones.
+    // Note: intentionally NOT using $transaction here — PgBouncer in
+    // transaction-pooling mode doesn't support Prisma interactive transactions.
+    // Each statement gets its own connection from the pool instead.
+    await prisma.kBChunk.deleteMany({ where: { sourceId } });
 
-      for (let batchStart = 0; batchStart < chunks.length; batchStart += BATCH_SIZE) {
-        const batchEnd = Math.min(batchStart + BATCH_SIZE, chunks.length);
-        const values = [];
+    for (let batchStart = 0; batchStart < chunks.length; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, chunks.length);
+      const values = [];
 
-        for (let i = batchStart; i < batchEnd; i++) {
-          const content = chunks[i];
-          const embedding = embeddings[i];
-          const tokens = estimateTokens(content);
-          const vectorStr = `[${embedding.join(",")}]`;
-          const metadata = JSON.stringify({ index: i, total: chunks.length });
+      for (let i = batchStart; i < batchEnd; i++) {
+        const content = chunks[i];
+        const embedding = embeddings[i];
+        const tokens = estimateTokens(content);
+        const vectorStr = `[${embedding.join(",")}]`;
+        const metadata = JSON.stringify({ index: i, total: chunks.length });
 
-          values.push(
-            Prisma.sql`(gen_random_uuid()::text, ${content}, ${vectorStr}::vector, ${tokens}, ${metadata}::jsonb, NOW(), ${sourceId})`
-          );
-        }
-
-        await tx.$executeRaw`
-          INSERT INTO "KBChunk" ("id", "content", "embedding", "tokens", "metadata", "createdAt", "sourceId")
-          VALUES ${Prisma.join(values)}
-        `;
+        values.push(
+          Prisma.sql`(gen_random_uuid()::text, ${content}, ${vectorStr}::vector, ${tokens}, ${metadata}::jsonb, NOW(), ${sourceId})`
+        );
       }
-    }, { maxWait: 30000, timeout: 120000 });
+
+      await prisma.$executeRaw`
+        INSERT INTO "KBChunk" ("id", "content", "embedding", "tokens", "metadata", "createdAt", "sourceId")
+        VALUES ${Prisma.join(values)}
+      `;
+    }
 
     await prisma.kBSource.update({
       where: { id: sourceId },
