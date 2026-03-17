@@ -213,7 +213,7 @@ export async function aiImplement(
     previousResults: [designResult],
   });
 
-  const { text, usage } = await callAI(prompt, "implement", 8192);
+  const { text, usage } = await callAI(prompt, "implement", 4096);
   const parsed = parseJsonResponse(text);
   const generatedFiles = extractGeneratedFiles(parsed);
 
@@ -236,7 +236,7 @@ export async function aiTest(
     previousResults: [implementResult],
   });
 
-  const { text, usage } = await callAI(prompt, "test", 8192);
+  const { text, usage } = await callAI(prompt, "test", 4096);
   const parsed = parseJsonResponse(text);
   const generatedFiles = extractGeneratedFiles(parsed);
 
@@ -259,7 +259,7 @@ export async function aiDocs(
     previousResults: [designResult],
   });
 
-  const { text, usage } = await callAI(prompt, "docs");
+  const { text, usage } = await callAI(prompt, "docs", 3000);
   const parsed = parseJsonResponse(text);
   const generatedFiles = extractGeneratedFiles(parsed);
 
@@ -282,7 +282,7 @@ export async function aiPublish(
     previousResults: [designResult],
   });
 
-  const { text, usage } = await callAI(prompt, "publish");
+  const { text, usage } = await callAI(prompt, "publish", 2000);
   const parsed = parseJsonResponse(text);
 
   const generatedFiles: GeneratedFiles = {};

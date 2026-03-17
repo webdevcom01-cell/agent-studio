@@ -152,17 +152,13 @@ Target platform: ${ctx.platform ?? "cross-platform"}
 Previous implementation and test results:
 ${formatPreviousResults(ctx.previousResults)}
 
-Generate documentation covering:
-- Installation instructions (pip install, requirements)
-- Quick start guide
-- Detailed usage examples for each command/tool
-- MCP server configuration and connection
-- Troubleshooting common issues
-- API reference for programmatic usage
+Generate documentation covering the key essentials only.
+
+IMPORTANT: Keep README.md CONCISE (under 80 lines total). Write short, focused sections without verbose explanations. Ensure all JSON strings are properly escaped (newlines as \\n, quotes as \\").
 
 Respond with ONLY a JSON object mapping filenames to file contents (no markdown, no code fences, no explanation):
 {
-  "README.md": "<Complete documentation with: ## Installation, ## Quick Start, ## Commands (with examples for each), ## MCP Server Setup, ## Troubleshooting, ## API Reference>"
+  "README.md": "<Concise doc with: ## Installation (pip install command), ## Quick Start (3-step example), ## Commands (brief list with 1-line descriptions), ## MCP Server (config snippet only)>"
 }`;
 }
 
