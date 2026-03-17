@@ -91,6 +91,7 @@ model Agent {
   deployments       FlowDeployment[]
   memories          AgentMemory[]
   evalSuites        EvalSuite[]
+  schedules         FlowSchedule[]
 
   @@index([userId])
   @@index([userId, updatedAt])
@@ -174,6 +175,7 @@ enum AnalyticsEventType {
   AGENT_CALL
   ERROR
   FLOW_EXECUTION
+  SCHEDULE_EXECUTION
 }
 
 model AnalyticsEvent {
@@ -486,6 +488,96 @@ model AgentMemory {
   @@unique([agentId, key])
   @@index([agentId, category])
   @@index([agentId, accessedAt])
+}
+
+// ─── Schedule Trigger (Cron) ─────────────────────────────────────────────────
+
+enum ScheduleType {
+  CRON
+  INTERVAL
+  MANUAL
+}
+
+enum ScheduledExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+/// Persistent schedule configuration for an agent's flow.
+/// Created when a user configures a schedule_trigger node and activates it.
+/// The Vercel Cron endpoint scans enabled schedules and triggers executions.
+model FlowSchedule {
+  id               String         @id @default(cuid())
+  agentId          String
+  agent            Agent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  /// Schedule type: CRON (cron expression), INTERVAL (every N minutes), MANUAL (on-demand only)
+  scheduleType     ScheduleType   @default(CRON)
+  /// Standard cron expression (e.g., "0 9 * * 1" = every Monday at 9:00 AM)
+  cronExpression   String?
+  /// Interval in minutes (1–10080 = 1 week). Used when scheduleType = INTERVAL.
+  intervalMinutes  Int?
+  /// IANA timezone (e.g., "Europe/Belgrade", "America/New_York"). Cron evaluated in this TZ.
+  timezone         String         @default("UTC")
+
+  /// Whether this schedule is actively being triggered by the cron endpoint.
+  enabled          Boolean        @default(true)
+  /// Display label for the schedule (optional, user-defined).
+  label            String?
+
+  /// Computed by the scheduler after each execution — the next UTC time this should fire.
+  nextRunAt        DateTime?
+  /// Last time this schedule was successfully triggered.
+  lastRunAt        DateTime?
+
+  /// Consecutive failure count. If >= maxRetries, schedule is auto-disabled.
+  failureCount     Int            @default(0)
+  /// Maximum consecutive failures before auto-disable (0 = never auto-disable).
+  maxRetries       Int            @default(3)
+
+  executions       ScheduledExecution[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([agentId])
+  @@index([enabled, nextRunAt])
+  @@index([agentId, enabled])
+}
+
+/// Log of every scheduled execution attempt.
+/// One row per trigger — tracks status, duration, token usage, and errors.
+model ScheduledExecution {
+  id               String                    @id @default(cuid())
+  flowScheduleId   String
+  flowSchedule     FlowSchedule              @relation(fields: [flowScheduleId], references: [id], onDelete: Cascade)
+
+  status           ScheduledExecutionStatus  @default(PENDING)
+  /// ISO timestamp when the cron endpoint picked up this schedule.
+  triggeredAt      DateTime                  @default(now())
+  /// ISO timestamp when execution completed (success or failure).
+  completedAt      DateTime?
+  /// Execution wall-clock time in milliseconds.
+  durationMs       Int?
+
+  /// Error message if status = FAILED.
+  errorMessage     String?                   @db.Text
+  /// Token usage breakdown: { inputTokens, outputTokens, totalTokens }
+  tokenUsage       Json?
+  /// Estimated cost in USD for this execution.
+  costUsd          Decimal?                  @db.Decimal(10, 6)
+
+  /// Idempotency key = "${flowScheduleId}_${triggerTimestamp}" — prevents duplicate runs.
+  idempotencyKey   String                    @unique
+
+  createdAt        DateTime                  @default(now())
+
+  @@index([flowScheduleId])
+  @@index([flowScheduleId, createdAt])
+  @@index([status])
+  @@index([triggeredAt])
 }
 
 // ─── Agent Evals / Testing Framework ─────────────────────────────────────────
