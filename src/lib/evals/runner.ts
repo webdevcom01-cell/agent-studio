@@ -98,6 +98,11 @@ interface ChatResponse {
   latencyMs: number;
 }
 
+interface KBSearchResult {
+  content: string;
+  score?: number;
+}
+
 /**
  * Send a single message to the agent chat API (non-streaming).
  * Creates a temporary conversation that will be cleaned up.
@@ -161,6 +166,57 @@ async function callAgentChat(
   const output = fromMessages || (data.data?.message ?? data.data?.response ?? "");
 
   return { output, latencyMs };
+}
+
+// ─── KB Context fetcher (for kb_faithfulness assertions) ─────────────────────
+
+/**
+ * Fetch KB context for a given query by calling the knowledge search API.
+ * Returns the concatenated text of all search results, or undefined on failure.
+ * This is only called when the test case includes kb_faithfulness assertions.
+ */
+async function fetchKBContext(
+  agentId: string,
+  query: string,
+  baseUrl: string,
+  authHeader?: string,
+): Promise<string | undefined> {
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (authHeader) {
+      headers["Cookie"] = authHeader;
+    }
+
+    const response = await fetch(
+      `${baseUrl}/api/agents/${agentId}/knowledge/search`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ query, topK: 10 }),
+      },
+    );
+
+    if (!response.ok) return undefined;
+
+    const data = (await response.json()) as {
+      success: boolean;
+      data?: KBSearchResult[];
+    };
+
+    if (!data.success || !Array.isArray(data.data) || data.data.length === 0) {
+      return undefined;
+    }
+
+    return data.data.map((r) => r.content).join("\n\n");
+  } catch (err) {
+    logger.warn("eval_kb_context_fetch_failed", {
+      agentId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return undefined;
+  }
 }
 
 // ─── Main orchestrator ────────────────────────────────────────────────────────
@@ -309,11 +365,19 @@ async function runSingleTestCase(
     agentOutput = chat.output;
     latencyMs = chat.latencyMs;
 
+    // Fetch KB context if any assertions need it (kb_faithfulness)
+    let kbContext: string | undefined;
+    const needsKBContext = assertions.some((a) => a.type === "kb_faithfulness");
+    if (needsKBContext) {
+      kbContext = await fetchKBContext(agentId, testCase.input, baseUrl, authHeader);
+    }
+
     // Build assertion context
     const ctx: AssertionContext = {
       input: testCase.input,
       output: agentOutput,
       latencyMs,
+      ...(kbContext ? { kbContext } : {}),
     };
 
     // Evaluate assertions
