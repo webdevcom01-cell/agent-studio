@@ -136,7 +136,7 @@ export const IMPLEMENT_FILES: ImplementFileSpec[] = [
   {
     filename: "server.py",
     description: "MCP server that registers tools from the design phase",
-    guidance: "Use `mcp` package. Create Server, register each tool from design as @server.tool. Each tool calls Bridge methods. Under 80 lines.",
+    guidance: "Use FastMCP: `from mcp.server.fastmcp import FastMCP`. Create `server = FastMCP('app-name')`. Register each tool from design as `@server.tool()`. Each tool calls Bridge instance methods. Under 80 lines. Do NOT use `mcp.Server` — that API does not exist.",
   },
   {
     filename: "main.py",
@@ -155,6 +155,13 @@ export function buildImplementSingleFilePrompt(
 File to generate: ${fileSpec.filename}
 Purpose: ${fileSpec.description}
 Requirements: ${fileSpec.guidance}
+
+CRITICAL — for server.py only: Use FastMCP, NOT mcp.Server (which does not exist).
+Correct pattern:
+  from mcp.server.fastmcp import FastMCP
+  server = FastMCP("app-name")
+  @server.tool()
+  def my_tool(arg: str) -> str: ...
 
 Respond with a JSON object with a single key "content" containing the complete file content.
 No markdown, no code fences, no explanation outside the JSON.
@@ -181,7 +188,7 @@ export function buildTestPrompt(ctx: PromptContext): PromptParts {
 Test file conventions:
 - pytest with subprocess mocking (unittest.mock.patch)
 - Test bridge.py: mock subprocess.run, verify argument translation, test timeout handling, test error cases
-- Test server.py: verify MCP protocol compliance, test tool registration, test request/response cycle
+- Test server.py: verify FastMCP tool registration (from mcp.server.fastmcp import FastMCP), test each @server.tool() function exists and calls Bridge correctly
 - Fixtures in conftest.py for reusable test state
 - Keep each file CONCISE (under 120 lines). Write focused tests, avoid verbose docstrings.
 
@@ -211,7 +218,7 @@ export const TEST_FILES: TestFileSpec[] = [
   {
     filename: "test_server.py",
     description: "MCP server tests",
-    guidance: "Test tool registration matches function signatures below. Test request/response cycle. Under 60 lines.",
+    guidance: "Test FastMCP server: import server from server.py, verify all tool functions exist and have correct signatures. Mock Bridge._execute via unittest.mock.patch. Test each tool returns expected dict. Under 80 lines. Import Bridge from log_analyzer_bridge.bridge.",
   },
 ];
 
