@@ -452,6 +452,8 @@ enum CLIGenerationStatus {
 model CLIGeneration {
   id              String               @id @default(cuid())
   applicationName String
+  /// Target language for the generated MCP bridge: "python" (FastMCP) or "typescript" (Node.js MCP SDK).
+  target          String               @default("python")
   status          CLIGenerationStatus  @default(PENDING)
   currentPhase    Int                  @default(0)
   phases          Json                 @default("[]")

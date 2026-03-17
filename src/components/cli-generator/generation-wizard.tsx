@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { ArrowLeft, ArrowRight, Loader2, Terminal } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +36,8 @@ export interface GenerationWizardResult {
   description: string;
   capabilities: string[];
   platform: string;
+  /** Target runtime for the generated MCP bridge. */
+  target: "python" | "typescript";
 }
 
 interface GenerationWizardProps {
@@ -56,6 +59,7 @@ export function GenerationWizard({
   const [description, setDescription] = useState("");
   const [capabilities, setCapabilities] = useState("");
   const [platform, setPlatform] = useState("cross-platform");
+  const [target, setTarget] = useState<"python" | "typescript">("python");
 
   const appName = selectedAppId
     ? (getDesktopApp(selectedAppId)?.label ?? selectedAppId)
@@ -71,6 +75,7 @@ export function GenerationWizard({
     setDescription("");
     setCapabilities("");
     setPlatform("cross-platform");
+    setTarget("python");
   }, []);
 
   function handleOpenChange(nextOpen: boolean): void {
@@ -100,6 +105,7 @@ export function GenerationWizard({
       description: description || `CLI bridge for ${appName}`,
       capabilities: caps,
       platform,
+      target,
     });
   }
 
@@ -170,6 +176,27 @@ export function GenerationWizard({
         {step === 1 && (
           <div className="flex flex-col gap-4">
             <div>
+              <Label className="text-xs">Language / Runtime</Label>
+              <div className="flex gap-2 mt-1">
+                {(["python", "typescript"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTarget(t)}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition-colors",
+                      target === t
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-muted/30 text-muted-foreground hover:border-primary/50",
+                    )}
+                  >
+                    <span className="font-mono text-sm">{t === "python" ? "🐍" : "⬡"}</span>
+                    {t === "python" ? "Python (FastMCP)" : "TypeScript (Node.js)"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
               <Label className="text-xs">Description</Label>
               <Textarea
                 value={description}
@@ -231,6 +258,12 @@ export function GenerationWizard({
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Application</span>
               <span className="font-medium">{appName}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Language</span>
+              <span className="font-medium">
+                {target === "python" ? "🐍 Python (FastMCP)" : "⬡ TypeScript (Node.js)"}
+              </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Platform</span>

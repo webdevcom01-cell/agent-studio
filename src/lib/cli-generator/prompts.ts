@@ -63,6 +63,34 @@ export function extractPythonSignatures(output: unknown): Record<string, string>
   return signatures;
 }
 
+/**
+ * Extracts TypeScript class/function/tool signatures from generated files.
+ * Parses export class, export function, export const (arrow functions),
+ * and server.registerTool() calls.
+ * Used by the test phase to give accurate names/signatures without sending
+ * full file content.
+ */
+export function extractTypeScriptSignatures(output: unknown): Record<string, string> {
+  if (typeof output !== "object" || output === null) return {};
+  const record = output as Record<string, unknown>;
+  const signatures: Record<string, string> = {};
+
+  for (const [filename, content] of Object.entries(record)) {
+    if (typeof content !== "string") continue;
+    if (!filename.endsWith(".ts")) continue;
+    const lines = content.includes("\\n")
+      ? content.split("\\n")
+      : content.split("\n");
+    const sigLines = lines.filter((line) =>
+      /^\s*(export\s+(class|function|const|async\s+function)|server\.(registerTool|registerResource)|import\s+)/.test(line),
+    );
+    if (sigLines.length > 0) {
+      signatures[filename] = sigLines.join("\n");
+    }
+  }
+  return signatures;
+}
+
 export interface TestFileSpec {
   filename: "conftest.py" | "test_bridge.py" | "test_server.py";
   description: string;

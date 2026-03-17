@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
@@ -19,27 +20,38 @@ const createGenerationSchema = z.object({
   description: z.string().max(2000).optional(),
   capabilities: z.array(z.string().max(100)).max(50).optional(),
   platform: z.enum(["cross-platform", "linux", "macos", "windows"]).optional(),
+  target: z.enum(["python", "typescript"]).default("python"),
 });
+
+/** Row shape returned by the raw generations list query. */
+interface GenerationRow {
+  id: string;
+  applicationName: string;
+  target: string;
+  status: string;
+  currentPhase: number;
+  createdAt: Date;
+  updatedAt: Date;
+  mcpServerId: string | null;
+  errorMessage: string | null;
+}
 
 export async function GET(): Promise<NextResponse> {
   try {
     const authResult = await requireAuth();
     if (isAuthError(authResult)) return authResult;
 
-    const generations = await prisma.cLIGeneration.findMany({
-      where: { userId: authResult.userId },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        applicationName: true,
-        status: true,
-        currentPhase: true,
-        createdAt: true,
-        updatedAt: true,
-        mcpServerId: true,
-        errorMessage: true,
-      },
-    });
+    // Use $queryRaw to include the `target` column which may not yet exist in the
+    // generated Prisma client types until `prisma generate` runs on the next build.
+    const generations = await prisma.$queryRaw<GenerationRow[]>(
+      Prisma.sql`
+        SELECT id, "applicationName", "target", status, "currentPhase",
+               "createdAt", "updatedAt", "mcpServerId", "errorMessage"
+        FROM   "CLIGeneration"
+        WHERE  "userId" = ${authResult.userId}
+        ORDER  BY "createdAt" DESC
+      `,
+    );
 
     return NextResponse.json({ success: true, data: generations });
   } catch (err) {
@@ -89,9 +101,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const { applicationName, description, capabilities, platform } =
+    const { applicationName, description, capabilities, platform, target } =
       parsed.data;
 
+    // Create the generation record without `target` first (generated types don't
+    // include it yet), then immediately set it via raw SQL.
+    // On Vercel, `prisma generate` runs from the updated schema so both fields
+    // will be typed correctly after the next build.
     const generation = await prisma.cLIGeneration.create({
       data: {
         applicationName,
@@ -100,11 +116,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
 
+    // Persist the target language selection.
+    await prisma.$executeRaw`
+      UPDATE "CLIGeneration" SET "target" = ${target} WHERE "id" = ${generation.id}
+    `;
+
     // Pipeline is driven by the frontend calling POST /advance for each phase.
     // This pattern (per-phase serverless invocations) gives each phase its own
     // 300s budget instead of sharing a single function execution window.
     return NextResponse.json(
-      { success: true, data: generation },
+      { success: true, data: { ...generation, target } },
       { status: 201 },
     );
   } catch (err) {

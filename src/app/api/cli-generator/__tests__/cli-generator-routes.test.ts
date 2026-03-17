@@ -14,6 +14,8 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    $queryRaw: vi.fn(),
+    $executeRaw: vi.fn(),
     cLIGeneration: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -51,6 +53,8 @@ import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const mockAuth = vi.mocked(auth);
+const mockQueryRaw = vi.mocked(prisma.$queryRaw);
+const mockExecuteRaw = vi.mocked(prisma.$executeRaw);
 const mockFindMany = vi.mocked(prisma.cLIGeneration.findMany);
 const mockFindUnique = vi.mocked(prisma.cLIGeneration.findUnique);
 const mockCount = vi.mocked(prisma.cLIGeneration.count);
@@ -86,9 +90,9 @@ describe("CLI Generator API routes", () => {
 
     it("returns list of generations", async () => {
       const generations = [
-        { id: "gen-1", applicationName: "Blender", status: "COMPLETED" },
+        { id: "gen-1", applicationName: "Blender", target: "python", status: "COMPLETED" },
       ];
-      mockFindMany.mockResolvedValueOnce(generations as never);
+      mockQueryRaw.mockResolvedValueOnce(generations as never);
 
       const { GET } = await import("../route");
       const res = await GET();
@@ -148,6 +152,7 @@ describe("CLI Generator API routes", () => {
         phases: [],
       };
       mockCreate.mockResolvedValueOnce(created as never);
+      mockExecuteRaw.mockResolvedValueOnce(1 as never);
 
       const { POST } = await import("../route");
       const req = mockRequest({

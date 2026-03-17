@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 interface Generation {
   id: string;
   applicationName: string;
+  target: string;
   status: string;
   currentPhase: number;
   createdAt: string;
@@ -367,6 +368,9 @@ export default function CLIGeneratorPage(): React.JSX.Element {
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <StatusBadge status={gen.status} />
+                          <span className="text-[10px] text-muted-foreground">
+                            {gen.target === "typescript" ? "⬡ TS" : "🐍 Py"}
+                          </span>
                           <span className="text-[10px] text-muted-foreground">
                             {new Date(gen.createdAt).toLocaleDateString()}
                           </span>

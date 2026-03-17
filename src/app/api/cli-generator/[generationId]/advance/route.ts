@@ -24,7 +24,7 @@ import {
   aiPublish,
 } from "@/lib/cli-generator/ai-phases";
 import { registerCLIBridgeAsMCP } from "@/lib/cli-generator/mcp-registration";
-import { extractPythonSignatures } from "@/lib/cli-generator/prompts";
+import { extractPythonSignatures, extractTypeScriptSignatures } from "@/lib/cli-generator/prompts";
 
 export const maxDuration = 300;
 
@@ -33,17 +33,28 @@ type PhaseRunner = (
   previousResults: PhaseResult[],
 ) => Promise<{ result: unknown; generatedFiles?: Record<string, string>; tokensUsed?: { input: number; output: number }; modelUsed?: string }>;
 
-const PHASE_RUNNERS: PhaseRunner[] = [
-  (config) => aiAnalyze(config),
-  (config, prev) => aiDesign(config, prev[0]?.output),
-  (config, prev) => aiImplement(config, prev[1]?.output),
-  // Pass extracted Python function/class signatures instead of truncated raw content.
-  // This gives the test phase actual function names and parameter lists rather than
-  // the first 200 chars of each file (which is typically just imports).
-  (config, prev) => aiTest(config, extractPythonSignatures(prev[2]?.output)),
-  (config, prev) => aiDocs(config, prev[1]?.output),
-  (config, prev) => aiPublish(config, prev[1]?.output),
-];
+/**
+ * Builds the phase runner array for a given target.
+ * Phases 0 (analyze) and 1 (design) are language-agnostic and shared.
+ * Phase 3 (test) uses the correct signature extractor for the target.
+ * Phases 2, 4, 5 branch internally in ai-phases.ts based on config.target.
+ */
+function buildPhaseRunners(target: "python" | "typescript"): PhaseRunner[] {
+  const extractSignatures =
+    target === "typescript" ? extractTypeScriptSignatures : extractPythonSignatures;
+
+  return [
+    (config) => aiAnalyze(config),
+    (config, prev) => aiDesign(config, prev[0]?.output),
+    (config, prev) => aiImplement(config, prev[1]?.output),
+    // Pass extracted function/class signatures instead of truncated raw file content.
+    // This gives the test phase actual function names and parameter lists rather than
+    // the first 200 chars of each file (which is typically just imports).
+    (config, prev) => aiTest(config, extractSignatures(prev[2]?.output)),
+    (config, prev) => aiDocs(config, prev[1]?.output),
+    (config, prev) => aiPublish(config, prev[1]?.output),
+  ];
+}
 
 export async function POST(
   req: NextRequest,
@@ -134,18 +145,27 @@ export async function POST(
     const phaseStartMs = Date.now();
 
     try {
-      const runner = PHASE_RUNNERS[nextPhaseIndex];
-      if (!runner) {
-        throw new Error(`No runner for phase ${nextPhaseIndex}`);
-      }
-
-      // Config priority: request body > applicationName stored in DB
+      // Config priority: request body > values stored in DB
+      // Cast to access `target` — the field exists in the DB schema but the
+      // generated Prisma client types may not include it yet until `prisma generate`
+      // runs on the next Vercel build.
+      const generationRecord = generation as unknown as typeof generation & { target?: string };
+      const target = (generationRecord.target ?? "python") as "python" | "typescript";
       const config: PipelineConfig = {
         applicationName: bodyConfig?.applicationName ?? generation.applicationName,
         description: bodyConfig?.description,
         capabilities: bodyConfig?.capabilities ?? [],
         platform: bodyConfig?.platform,
+        target,
       };
+
+      // Build phase runners for the correct target language
+      const PHASE_RUNNERS = buildPhaseRunners(target);
+
+      const runner = PHASE_RUNNERS[nextPhaseIndex];
+      if (!runner) {
+        throw new Error(`No runner for phase ${nextPhaseIndex}`);
+      }
 
       // Phases 4 (docs) and 5 (publish) both depend only on phase 1 (design)
       // and are independent of each other — run them in parallel for a ~11s speedup.

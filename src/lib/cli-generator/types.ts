@@ -27,6 +27,8 @@ export interface PipelineConfig {
   description?: string;
   capabilities?: string[];
   platform?: string;
+  /** Target runtime for the generated MCP bridge. Defaults to "python" (FastMCP). */
+  target?: "python" | "typescript";
 }
 
 export interface PipelineProgress {
