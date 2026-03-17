@@ -148,17 +148,12 @@ export async function POST(
         throw new Error(`No runner for phase ${nextPhaseIndex}`);
       }
 
-      // Priority: DB configSnapshot > request body > applicationName fallback
-      // configSnapshot was added in schema — Prisma generates the type on Vercel build
-      const storedConfig = (generation as Record<string, unknown>).configSnapshot as PipelineConfig | null;
+      // Config priority: request body > applicationName stored in DB
       const config: PipelineConfig = {
-        applicationName:
-          storedConfig?.applicationName ??
-          bodyConfig?.applicationName ??
-          generation.applicationName,
-        description: storedConfig?.description ?? bodyConfig?.description,
-        capabilities: storedConfig?.capabilities ?? bodyConfig?.capabilities ?? [],
-        platform: storedConfig?.platform ?? bodyConfig?.platform,
+        applicationName: bodyConfig?.applicationName ?? generation.applicationName,
+        description: bodyConfig?.description,
+        capabilities: bodyConfig?.capabilities ?? [],
+        platform: bodyConfig?.platform,
       };
 
       // Phases 4 (docs) and 5 (publish) both depend only on phase 1 (design)
