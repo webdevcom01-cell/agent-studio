@@ -167,10 +167,27 @@ Use these insights to improve your agent's knowledge base and flow. See [11-anal
 
 ---
 
+## Step 9: Generate an MCP Server from a CLI App
+
+If you have a CLI application you want your agents to call as a tool, the CLI Generator can
+automatically produce a complete MCP server bridge:
+
+1. Navigate to `/cli-generator`
+2. Enter the application name (e.g. `ffmpeg`, `git`, `log-analyzer`)
+3. Add a short description of what the app does
+4. Click **Generate** — the 6-phase pipeline runs automatically
+5. Once complete, click **Download** to get all generated files, or **Publish** to register the
+   MCP server directly in your account
+
+See [12-cli-generator.md](./12-cli-generator.md) for a full guide.
+
+---
+
 ## Next Steps
 
 - Add more sources to the Knowledge Base → [09-knowledge-base-guide.md](./09-knowledge-base-guide.md)
 - Learn about all node types → [02-nodes-osnovno.md](./02-nodes-osnovno.md), [03-nodes-ai.md](./03-nodes-ai.md)
 - Check out advanced flow patterns → [06-flow-patterns.md](./06-flow-patterns.md)
 - Monitor agent usage → [11-analytics.md](./11-analytics.md)
+- Generate MCP servers from CLI apps → [12-cli-generator.md](./12-cli-generator.md)
 - Troubleshooting → [07-faq-troubleshooting.md](./07-faq-troubleshooting.md)

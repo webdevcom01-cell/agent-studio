@@ -7,7 +7,9 @@ Visual AI agent builder with multi-agent orchestration. Build AI agents via a fl
 agent-to-agent communication (A2A protocol), and chat with agents. Features include: agent
 marketplace/discovery with faceted search, 112 agent templates across 11 categories,
 agent-as-tool orchestration (AI dynamically calls sibling agents), web browsing capabilities
-(fetch + browser actions via MCP), and an embeddable chat widget. OAuth login (GitHub + Google).
+(fetch + browser actions via MCP), an embeddable chat widget, and a CLI Generator that
+automatically produces a full MCP server bridge from any CLI application (6-phase AI pipeline:
+analyze → design → implement → test → document → publish). OAuth login (GitHub + Google).
 Simplified extraction from the enterprise "direct-solutions" project — no multi-tenancy,
 no billing, no plugins, no collaboration.
 
@@ -45,7 +47,7 @@ no billing, no plugins, no collaboration.
 
 ```
 prisma/
-  schema.prisma         ← DB schema (20 models, pgvector, versioning, A2A)
+  schema.prisma         ← DB schema (22 models, pgvector, versioning, A2A, CLIGeneration)
   migrations/           ← auto-generated — never edit manually
 
 public/
@@ -76,6 +78,7 @@ src/
     embed/layout.tsx                  ← Dedicated embed layout (no embed.js, no SessionProvider)
     knowledge/[agentId]/page.tsx      ← Knowledge base management
     knowledge/[agentId]/error.tsx     ← Error boundary (Knowledge Base Error)
+    cli-generator/page.tsx            ← CLI Generator — 6-phase pipeline UI (stuck detection, resume, progress)
     api/
       auth/[...nextauth]/route.ts              ← NextAuth API route (GET, POST)
       health/route.ts                          ← Health check endpoint (DB connectivity + uptime)
@@ -109,8 +112,17 @@ src/
       mcp-servers/route.ts                        ← GET list, POST create MCP servers
       mcp-servers/[serverId]/route.ts             ← GET, PATCH, DELETE MCP server
       mcp-servers/[serverId]/test/route.ts        ← POST test MCP connection
+      cli-generator/route.ts                      ← GET list, POST create generation
+      cli-generator/[generationId]/route.ts       ← GET single generation (with files + phases)
+      cli-generator/[generationId]/advance/route.ts  ← POST advance pipeline one phase (frontend-driven loop)
+      cli-generator/[generationId]/resume/route.ts   ← POST resume stuck generation (reset + re-advance)
+      cli-generator/[generationId]/files/route.ts    ← GET list of generated files by name
+      cli-generator/[generationId]/download/route.ts ← GET download all files as .zip
+      cli-generator/[generationId]/logs/route.ts     ← GET per-phase logs and token usage
+      cli-generator/[generationId]/publish/route.ts  ← POST register generated bridge as MCP server
 
   components/
+    cli-generator/                ← CLI Generator UI components (pipeline progress, file preview, stuck alert)
     ui/               ← 13 UI primitives (badge, button, card, dialog, dropdown-menu, input, label, select, skeleton, tabs, textarea, tooltip, error-display)
       error-display.tsx ← Shared error boundary UI component
       __tests__/        ← UI component tests
@@ -123,6 +135,7 @@ src/
       agent-call-monitor.tsx  ← Agent-to-agent call monitoring UI
     templates/
       template-gallery.tsx    ← Agent template gallery (search + category filter)
+    cli-generator/            ← CLI Generator UI components (pipeline progress, file preview, stuck alert)
     builder/
       flow-builder.tsx    ← Main ReactFlow editor (+ MCP panel, version history, deploy status)
       flow-error-boundary.tsx ← Error boundary for flow editor
@@ -209,6 +222,13 @@ src/
       reranker.ts     ← LLM-based result re-ranking
       scraper.ts      ← URL content fetching (safe redirect following, DNS validation)
       ingest.ts       ← Source ingestion pipeline (scrape → parse → chunk → embed → store)
+    cli-generator/
+      types.ts        ← PipelineConfig, PhaseResult, PIPELINE_PHASES, STATUS_FOR_PHASE, STUCK_THRESHOLD_MS
+      schemas.ts      ← Zod schemas for all 6 phases (generateObject-based, type-safe AI outputs)
+      prompts.ts      ← System/user prompt pairs per phase + per-file implementation prompts
+      ai-phases.ts    ← Phase runner functions: aiAnalyze, aiDesign, aiImplement, aiTest, aiDocs, aiPublish
+      mcp-registration.ts ← Auto-register generated bridge as MCP server in user's account
+      __tests__/      ← Unit tests for prompts, pipeline, schemas, MCP registration
 
   types/
     index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType (32 types)
@@ -228,6 +248,7 @@ User
   ├── Session[] (1:N, database sessions)
   ├── MCPServer[] (1:N, userId required)
   │     └── AgentMCPServer[] (1:N, cascade delete — join table)
+  ├── CLIGeneration[] (1:N, cascade delete — CLI generator pipeline runs)
   └── Agent[] (1:N, userId is optional)
         ├── Flow (1:1, cascade delete)
         │     ├── FlowVersion[] (1:N, cascade delete — immutable content snapshots)
@@ -267,9 +288,21 @@ HumanApprovalRequest — Human-in-the-loop workflow
   ├── agentId, conversationId (required)
   ├── title, description, options (Json)
   └── status (PENDING|APPROVED|REJECTED|EXPIRED), respondedAt
+
+CLIGeneration — CLI Generator pipeline run
+  ├── userId (required, cascade delete)
+  ├── applicationName (String) — the CLI app being wrapped
+  ├── status (CLIGenerationStatus enum)
+  ├── currentPhase (Int, 0–5)
+  ├── phases (Json) — PhaseResult[] array with per-phase output, tokens, errors
+  ├── cliConfig (Json?) — final MCPConfig produced by publish phase
+  ├── generatedFiles (Json?) — Record<filename, content> for all generated files
+  ├── errorMessage (String?) — last failure reason
+  ├── mcpServerId (String?) — MCP server created after publish (SetNull on delete)
+  └── Indexes: [userId], [userId, status], [createdAt]
 ```
 
-**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE|KB_SEARCH), MCPTransport (STREAMABLE_HTTP|SSE), FlowVersionStatus (DRAFT|PUBLISHED|ARCHIVED), A2ATaskStatus (SUBMITTED|WORKING|INPUT_REQUIRED|COMPLETED|FAILED)
+**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE|KB_SEARCH), MCPTransport (STREAMABLE_HTTP|SSE), FlowVersionStatus (DRAFT|PUBLISHED|ARCHIVED), A2ATaskStatus (SUBMITTED|WORKING|INPUT_REQUIRED|COMPLETED|FAILED), CLIGenerationStatus (PENDING|ANALYZING|DESIGNING|IMPLEMENTING|TESTING|DOCUMENTING|PUBLISHING|COMPLETED|FAILED)
 
 **Key details:**
 - Agent model has: `category String?`, `tags String[]`, `isPublic Boolean` — marketplace fields
@@ -320,6 +353,14 @@ HumanApprovalRequest — Human-in-the-loop workflow
 | `/api/mcp-servers` | GET, POST | List all user's MCP servers, create new server |
 | `/api/mcp-servers/[serverId]` | GET, PATCH, DELETE | Get/update/delete MCP server (ownership enforced) |
 | `/api/mcp-servers/[serverId]/test` | POST | Test MCP connection, auto-refresh toolsCache |
+| `/api/cli-generator` | GET, POST | List user's generations, create new generation (starts PENDING) |
+| `/api/cli-generator/[generationId]` | GET | Full generation detail incl. generatedFiles + phases |
+| `/api/cli-generator/[generationId]/advance` | POST | Advance pipeline one phase; frontend polls this in a loop until COMPLETED/FAILED |
+| `/api/cli-generator/[generationId]/resume` | POST | Resume stuck generation — resets status and re-runs current phase |
+| `/api/cli-generator/[generationId]/files` | GET | List filenames of all generated files |
+| `/api/cli-generator/[generationId]/download` | GET | Download all generated files as a .zip archive |
+| `/api/cli-generator/[generationId]/logs` | GET | Per-phase execution logs and token usage |
+| `/api/cli-generator/[generationId]/publish` | POST | Register generated bridge as an MCP server in user's account |
 | `/api/auth/*` | GET, POST | NextAuth authentication endpoints |
 | `/api/health` | GET | Health check (DB connectivity + uptime + version) |
 | `/api/analytics` | GET | Analytics dashboard data (response times, KB stats, conversations) |
@@ -488,6 +529,20 @@ HumanApprovalRequest — Human-in-the-loop workflow
 - Validates node types against `NodeType` union, position values must be finite
 - Applied on flow PUT route; returns `{ success, error }` with human-readable path
 
+### CLI Generator Pipeline
+- 6-phase AI pipeline that wraps any CLI application as an MCP server (Python FastMCP)
+- Phases: `analyze` (0) → `design` (1) → `implement` (2) → `write-tests` (3) → `document` (4) → `publish` (5)
+- Frontend-driven loop: UI calls `/advance` repeatedly; each call runs one phase and persists results
+- Each phase uses `generateObject()` with Zod schemas (`src/lib/cli-generator/schemas.ts`) — no fragile JSON parsing
+- System/user prompt separation for prompt caching efficiency (`src/lib/cli-generator/prompts.ts`)
+- Per-file generation: implement and test phases call `buildImplementSingleFilePrompt()` once per file to avoid context overflow
+- **FastMCP pattern** (critical): `server.py` must use `from mcp.server.fastmcp import FastMCP` — `mcp.Server` does NOT exist
+- Generated files: `main.py`, `bridge.py`, `server.py`, `__init__.py`, `conftest.py`, `test_bridge.py`, `test_server.py`, `requirements.txt`, `pyproject.toml`, `README.md`
+- Stuck detection: `STUCK_THRESHOLD_MS = 5 min` — UI shows AlertTriangle on generations where `updatedAt` exceeds threshold without COMPLETED/FAILED
+- Resume endpoint resets the stuck phase and re-invokes the phase runner
+- Publish phase registers the generated bridge as an MCP server (`MCPServer` model) linked to the user
+- `STUCK_THRESHOLD_MS` lives in `src/lib/cli-generator/types.ts` — never export constants from `route.ts`
+
 ### Analytics & Monitoring
 - `trackChatResponse()` — fire-and-forget analytics for every chat response
 - Rate limiting: 20 req/min per agentId:IP on `/api/agents/[agentId]/chat`
@@ -589,9 +644,9 @@ pnpm db:seed          # Seed dev data
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - E2E tests: Playwright, `e2e/tests/` folder, `.spec.ts` extension (8 spec files)
 - Run: `pnpm test` (unit), `pnpm test:e2e` (E2E)
-- ~905 unit tests across 85 test files
+- ~1017 unit tests across 98 test files
 - E2E coverage: auth flows, dashboard CRUD, flow editor, chat streaming, knowledge base, agent import/export, API routes, health check
-- Unit test coverage: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, web fetch handler, webhook handler, set variable handler, wait handler, URL validation, engine integration tests (multi-node flows)
+- Unit test coverage: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, web fetch handler, webhook handler, set variable handler, wait handler, URL validation, engine integration tests (multi-node flows), CLI generator (prompts, pipeline phases, Zod schemas, MCP registration, stuck detection, resume endpoint)
 - Test behavior, not implementation details
 
 ### AI Model Config

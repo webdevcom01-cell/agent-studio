@@ -18,7 +18,10 @@ Every agent has a public chat link you can share with users. It is available at 
 ### 4. MCP Servers
 Connect external tool servers via the Model Context Protocol (MCP). Agents can call tools on remote servers — search APIs, databases, code interpreters, and more. Manage servers globally from the dashboard, then enable per-agent.
 
-### 5. Test Chat
+### 5. CLI Generator
+Automatically wraps any CLI application as a fully functional MCP server. Enter the application name and description — a 6-phase AI pipeline (Analyze → Design → Implement → Test → Document → Publish) generates production-ready Python files: a FastMCP server (`server.py`), CLI bridge (`bridge.py`), full test suite, and a `README.md`. The generated MCP server can be registered directly in your account with one click. Available at `/cli-generator`.
+
+### 6. Test Chat
 A button in the top right corner of the Builder that opens a chat for testing the agent in real time.
 
 ---
