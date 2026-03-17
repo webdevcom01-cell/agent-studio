@@ -82,7 +82,7 @@ async function callAIObject<TSchema extends z.ZodTypeAny>(
   parts: PromptParts,
   phase: string,
   options: { maxTokens?: number } = {},
-): Promise<{ object: z.infer<TSchema>; usage: TokenUsage | undefined }> {
+): Promise<{ object: z.infer<TSchema>; usage: TokenUsage | undefined; modelUsed: string }> {
   const models = [PRIMARY_MODEL, FALLBACK_MODEL];
   const MAX_ROUNDS = 2;
   let lastError = "";
@@ -90,7 +90,8 @@ async function callAIObject<TSchema extends z.ZodTypeAny>(
   for (let round = 0; round < MAX_ROUNDS; round++) {
     for (const modelId of models) {
       try {
-        return await callAIObjectWithModel(modelId, schema, parts, options);
+        const result = await callAIObjectWithModel(modelId, schema, parts, options);
+        return { ...result, modelUsed: modelId };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         lastError = msg;
@@ -130,11 +131,12 @@ export async function aiAnalyze(config: PipelineConfig): Promise<AIPhaseOutput> 
     platform: config.platform,
   });
 
-  const { object, usage } = await callAIObject(AnalyzeOutputSchema, prompt, "analyze");
+  const { object, usage, modelUsed } = await callAIObject(AnalyzeOutputSchema, prompt, "analyze");
 
   return {
     result: object,
     tokensUsed: buildTokensUsed(usage),
+    modelUsed,
   };
 }
 
@@ -152,12 +154,13 @@ export async function aiDesign(
     previousResults: [analysisResult],
   });
 
-  const { object, usage } = await callAIObject(DesignOutputSchema, prompt, "design");
+  const { object, usage, modelUsed } = await callAIObject(DesignOutputSchema, prompt, "design");
 
   return {
     // Store just the tools array for backward compat with downstream prompts
     result: object.tools,
     tokensUsed: buildTokensUsed(usage),
+    modelUsed,
   };
 }
 
@@ -194,6 +197,7 @@ export async function aiImplement(
   const allFiles: GeneratedFiles = {};
   let totalInput = 0;
   let totalOutput = 0;
+  let firstModelUsed: string | undefined;
 
   for (const result of results) {
     if (result.status === "fulfilled") {
@@ -201,6 +205,7 @@ export async function aiImplement(
       allFiles[fileSpec.filename] = res.object.content;
       totalInput += res.usage?.inputTokens ?? 0;
       totalOutput += res.usage?.outputTokens ?? 0;
+      firstModelUsed ??= res.modelUsed;
     } else {
       logger.warn("Implement file generation failed (partial result kept)", {
         error: result.reason instanceof Error ? result.reason.message : String(result.reason),
@@ -212,6 +217,7 @@ export async function aiImplement(
     result: allFiles,
     generatedFiles: Object.keys(allFiles).length > 0 ? allFiles : undefined,
     tokensUsed: { input: totalInput, output: totalOutput },
+    modelUsed: firstModelUsed,
   };
 }
 
@@ -248,6 +254,7 @@ export async function aiTest(
   const allFiles: GeneratedFiles = {};
   let totalInput = 0;
   let totalOutput = 0;
+  let firstModelUsed: string | undefined;
 
   for (const result of results) {
     if (result.status === "fulfilled") {
@@ -255,6 +262,7 @@ export async function aiTest(
       allFiles[fileSpec.filename] = res.object.content;
       totalInput += res.usage?.inputTokens ?? 0;
       totalOutput += res.usage?.outputTokens ?? 0;
+      firstModelUsed ??= res.modelUsed;
     } else {
       logger.warn("Test file generation failed (partial result kept)", {
         error: result.reason instanceof Error ? result.reason.message : String(result.reason),
@@ -266,6 +274,7 @@ export async function aiTest(
     result: allFiles,
     generatedFiles: Object.keys(allFiles).length > 0 ? allFiles : undefined,
     tokensUsed: { input: totalInput, output: totalOutput },
+    modelUsed: firstModelUsed,
   };
 }
 
@@ -283,7 +292,7 @@ export async function aiDocs(
     previousResults: [designResult],
   });
 
-  const { object, usage } = await callAIObject(DocsOutputSchema, prompt, "docs", {
+  const { object, usage, modelUsed } = await callAIObject(DocsOutputSchema, prompt, "docs", {
     maxTokens: 3000,
   });
 
@@ -291,6 +300,7 @@ export async function aiDocs(
     result: object,
     generatedFiles: { "README.md": object["README.md"] },
     tokensUsed: buildTokensUsed(usage),
+    modelUsed,
   };
 }
 
@@ -308,7 +318,7 @@ export async function aiPublish(
     previousResults: [designResult],
   });
 
-  const { object, usage } = await callAIObject(PublishOutputSchema, prompt, "publish", {
+  const { object, usage, modelUsed } = await callAIObject(PublishOutputSchema, prompt, "publish", {
     maxTokens: 2000,
   });
 
@@ -319,5 +329,6 @@ export async function aiPublish(
       "pyproject.toml": object["pyproject.toml"],
     },
     tokensUsed: buildTokensUsed(usage),
+    modelUsed,
   };
 }

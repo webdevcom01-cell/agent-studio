@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { createInitialPhases } from "@/lib/cli-generator/pipeline";
+import { createInitialPhases } from "@/lib/cli-generator/types";
 
 export const maxDuration = 300;
 

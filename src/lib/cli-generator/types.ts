@@ -6,6 +6,8 @@ export interface AIPhaseOutput {
   result: unknown;
   generatedFiles?: GeneratedFiles;
   tokensUsed?: { input: number; output: number };
+  /** Which AI model actually ran (primary or fallback). */
+  modelUsed?: string;
 }
 
 export interface PhaseResult {
@@ -60,3 +62,12 @@ export const STATUS_FOR_PHASE: Record<number, CLIGenerationStatus> = {
   4: "DOCUMENTING",
   5: "PUBLISHING",
 };
+
+/** Creates the initial phases array for a new generation (all pending). */
+export function createInitialPhases(): PhaseResult[] {
+  return PIPELINE_PHASES.map(({ phase, name }) => ({
+    phase,
+    name,
+    status: "pending" as const,
+  }));
+}

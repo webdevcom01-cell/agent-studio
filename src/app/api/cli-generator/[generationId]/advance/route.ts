@@ -24,23 +24,9 @@ import {
   aiPublish,
 } from "@/lib/cli-generator/ai-phases";
 import { registerCLIBridgeAsMCP } from "@/lib/cli-generator/mcp-registration";
+import { extractPythonSignatures } from "@/lib/cli-generator/prompts";
 
 export const maxDuration = 300;
-
-/** Truncate large file content to 200 chars to reduce downstream context size */
-function summarizeOutput(output: unknown): unknown {
-  if (typeof output !== "object" || output === null) return output;
-  const record = output as Record<string, unknown>;
-  const summary: Record<string, string> = {};
-  for (const [key, value] of Object.entries(record)) {
-    if (typeof value === "string") {
-      summary[key] = value.length > 200
-        ? `${value.substring(0, 200)}... (${value.length} chars total)`
-        : value;
-    }
-  }
-  return summary;
-}
 
 type PhaseRunner = (
   config: PipelineConfig,
@@ -51,7 +37,10 @@ const PHASE_RUNNERS: PhaseRunner[] = [
   (config) => aiAnalyze(config),
   (config, prev) => aiDesign(config, prev[0]?.output),
   (config, prev) => aiImplement(config, prev[1]?.output),
-  (config, prev) => aiTest(config, summarizeOutput(prev[2]?.output)),
+  // Pass extracted Python function/class signatures instead of truncated raw content.
+  // This gives the test phase actual function names and parameter lists rather than
+  // the first 200 chars of each file (which is typically just imports).
+  (config, prev) => aiTest(config, extractPythonSignatures(prev[2]?.output)),
   (config, prev) => aiDocs(config, prev[1]?.output),
   (config, prev) => aiPublish(config, prev[1]?.output),
 ];
@@ -141,6 +130,8 @@ export async function POST(
     if (generation.generatedFiles && typeof generation.generatedFiles === "object") {
       Object.assign(existingFiles, generation.generatedFiles);
     }
+
+    const phaseStartMs = Date.now();
 
     try {
       const runner = PHASE_RUNNERS[nextPhaseIndex];
@@ -250,6 +241,12 @@ export async function POST(
         }
       }
 
+      // Aggregate token usage across both phases when docs+publish ran in parallel
+      const totalTokens = {
+        input: (aiOutput.tokensUsed?.input ?? 0) + (publishOutput?.tokensUsed?.input ?? 0),
+        output: (aiOutput.tokensUsed?.output ?? 0) + (publishOutput?.tokensUsed?.output ?? 0),
+      };
+
       return NextResponse.json({
         success: true,
         data: {
@@ -258,6 +255,9 @@ export async function POST(
           status: newStatus,
           done: isLastPhase,
           nextPhase: isLastPhase ? null : lastCompletedPhase + 1,
+          durationMs: Date.now() - phaseStartMs,
+          tokensUsed: totalTokens.input > 0 ? totalTokens : undefined,
+          modelUsed: aiOutput.modelUsed ?? publishOutput?.modelUsed,
         },
       });
     } catch (err) {

@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   buildAnalyzePrompt,
   buildDesignPrompt,
-  buildImplementPrompt,
   buildTestPrompt,
   buildDocsPrompt,
   buildPublishPrompt,
@@ -88,32 +87,6 @@ describe("prompt builders", () => {
       expect(system).toContain("Parameters");
       expect(system).toContain("required");
       expect(system).toContain("snake_case");
-    });
-  });
-
-  describe("buildImplementPrompt", () => {
-    it("includes application name in user part", () => {
-      const { user } = buildImplementPrompt(BASE_CTX);
-      expect(user).toContain("Blender");
-    });
-
-    it("includes previous results in user part", () => {
-      const { user } = buildImplementPrompt({
-        ...BASE_CTX,
-        previousResults: [{ commands: [{ name: "blender_render" }] }],
-      });
-      expect(user).toContain("blender_render");
-    });
-
-    it("system part targets bridge.py (legacy single-file wrapper)", () => {
-      const { system } = buildImplementPrompt(BASE_CTX);
-      // buildImplementPrompt is a legacy wrapper for IMPLEMENT_FILES[1] = bridge.py
-      expect(system).toContain("bridge.py");
-    });
-
-    it("system part mentions subprocess conventions", () => {
-      const { system } = buildImplementPrompt(BASE_CTX);
-      expect(system).toContain("subprocess");
     });
   });
 

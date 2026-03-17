@@ -1,77 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createInitialPhases } from "../pipeline";
+/**
+ * Tests for pipeline utilities now living in types.ts.
+ * runPipeline() was removed in the Phase 7 dead-code cleanup — the per-phase
+ * /advance architecture replaced it.  These tests cover the remaining exported
+ * helpers that are still used by the production code.
+ */
+import { describe, it, expect } from "vitest";
+import { createInitialPhases } from "../types";
 import { PIPELINE_PHASES, PHASE_COUNT } from "../types";
-import type { AIPhaseOutput } from "../types";
-
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    cLIGeneration: {
-      update: vi.fn().mockResolvedValue({ userId: "user-1" }),
-    },
-  },
-}));
-
-vi.mock("@/lib/logger", () => ({
-  logger: {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
-function makePhaseOutput(data: Record<string, unknown> = {}): AIPhaseOutput {
-  return {
-    result: { phase: "mock", ...data },
-    tokensUsed: { input: 50, output: 100 },
-  };
-}
-
-function makeFilePhaseOutput(files: Record<string, string>): AIPhaseOutput {
-  return {
-    result: files,
-    generatedFiles: files,
-    tokensUsed: { input: 80, output: 150 },
-  };
-}
-
-vi.mock("../ai-phases", () => ({
-  aiAnalyze: vi.fn().mockImplementation(() =>
-    Promise.resolve(makePhaseOutput({ detectedCLIPaths: ["/usr/bin/app"] })),
-  ),
-  aiDesign: vi.fn().mockImplementation(() =>
-    Promise.resolve(makePhaseOutput({ commands: [{ name: "app_run" }] })),
-  ),
-  aiImplement: vi.fn().mockImplementation(() =>
-    Promise.resolve(makeFilePhaseOutput({ "main.py": "import click", "bridge.py": "import subprocess" })),
-  ),
-  aiTest: vi.fn().mockImplementation(() =>
-    Promise.resolve(makeFilePhaseOutput({ "test_bridge.py": "def test(): pass" })),
-  ),
-  aiDocs: vi.fn().mockImplementation(() =>
-    Promise.resolve(makeFilePhaseOutput({ "README.md": "# App" })),
-  ),
-  aiPublish: vi.fn().mockImplementation(() =>
-    Promise.resolve({
-      result: { mcp_config: { name: "app-mcp" }, "requirements.txt": "click>=8.0" },
-      generatedFiles: { "requirements.txt": "click>=8.0" },
-      tokensUsed: { input: 60, output: 120 },
-    }),
-  ),
-}));
-
-vi.mock("../mcp-registration", () => ({
-  registerCLIBridgeAsMCP: vi.fn().mockResolvedValue({ id: "mcp-1" }),
-}));
-
-import { prisma } from "@/lib/prisma";
-const mockUpdate = vi.mocked(prisma.cLIGeneration.update);
 
 describe("pipeline", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockUpdate.mockResolvedValue({ userId: "user-1" } as ReturnType<typeof mockUpdate> extends Promise<infer T> ? T : never);
-  });
-
   describe("createInitialPhases", () => {
     it("returns correct number of phases", () => {
       const phases = createInitialPhases();
@@ -97,76 +34,6 @@ describe("pipeline", () => {
       PIPELINE_PHASES.forEach(({ phase, name }) => {
         expect(phases[phase].name).toBe(name);
       });
-    });
-  });
-
-  describe("runPipeline", () => {
-    it("runs all phases to completion", async () => {
-      const { runPipeline } = await import("../pipeline");
-
-      const result = await runPipeline("gen-1", {
-        applicationName: "TestApp",
-        capabilities: ["render", "export"],
-      });
-
-      expect(result.status).toBe("COMPLETED");
-      expect(result.currentPhase).toBe(PHASE_COUNT - 1);
-      expect(result.phases).toHaveLength(PHASE_COUNT);
-      for (const phase of result.phases) {
-        expect(phase.status).toBe("completed");
-        expect(phase.startedAt).toBeDefined();
-        expect(phase.completedAt).toBeDefined();
-      }
-    });
-
-    it("updates prisma at each phase", async () => {
-      const { runPipeline } = await import("../pipeline");
-
-      await runPipeline("gen-2", {
-        applicationName: "Blender",
-      });
-
-      expect(mockUpdate.mock.calls.length).toBeGreaterThanOrEqual(PHASE_COUNT);
-    });
-
-    it("accumulates generatedFiles across phases", async () => {
-      const { runPipeline } = await import("../pipeline");
-
-      const result = await runPipeline("gen-3", {
-        applicationName: "GIMP",
-      });
-
-      expect(result.status).toBe("COMPLETED");
-
-      const implementPhase = result.phases[2];
-      expect(implementPhase.generatedFiles).toBeDefined();
-      expect(implementPhase.generatedFiles?.["main.py"]).toBeDefined();
-    });
-
-    it("stores tokensUsed in phase results", async () => {
-      const { runPipeline } = await import("../pipeline");
-
-      const result = await runPipeline("gen-4", {
-        applicationName: "FFmpeg",
-      });
-
-      expect(result.phases[0].tokensUsed).toBeDefined();
-      expect(result.phases[0].tokensUsed?.input).toBeGreaterThan(0);
-    });
-
-    it("handles AI phase failure gracefully", async () => {
-      const { aiAnalyze } = await import("../ai-phases");
-      vi.mocked(aiAnalyze).mockRejectedValueOnce(new Error("AI unavailable"));
-
-      const { runPipeline } = await import("../pipeline");
-
-      const result = await runPipeline("gen-fail", {
-        applicationName: "FailApp",
-      });
-
-      expect(result.status).toBe("FAILED");
-      expect(result.phases[0].status).toBe("failed");
-      expect(result.phases[0].error).toContain("AI unavailable");
     });
   });
 

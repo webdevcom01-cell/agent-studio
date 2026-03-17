@@ -171,14 +171,9 @@ ${formatPreviousResults(ctx.previousResults)}`,
   };
 }
 
-// Legacy: kept for test compatibility
-export function buildImplementPrompt(ctx: PromptContext): PromptParts {
-  return buildImplementSingleFilePrompt(ctx, IMPLEMENT_FILES[1]);
-}
-
 // ─── Phase 3: Test ───────────────────────────────────────────────────────────
 
-// Legacy single-call test prompt (kept for backwards compat with pipeline.ts)
+// Legacy single-call test prompt (kept for backwards compat)
 export function buildTestPrompt(ctx: PromptContext): PromptParts {
   return {
     system: `You are an expert Python test engineer. Write comprehensive pytest tests for CLI bridge packages.
