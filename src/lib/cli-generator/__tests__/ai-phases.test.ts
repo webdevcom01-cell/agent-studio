@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockGenerateText = vi.fn();
+const mockGenerateObject = vi.fn();
 
 vi.mock("ai", () => ({
-  generateText: (...args: unknown[]) => mockGenerateText(...args),
+  generateObject: (...args: unknown[]) => mockGenerateObject(...args),
 }));
 
 vi.mock("@/lib/ai", () => ({
@@ -34,15 +34,31 @@ const DEFAULT_CONFIG: PipelineConfig = {
 const MOCK_USAGE = {
   inputTokens: 100,
   outputTokens: 200,
-  inputTokenDetails: { noCacheTokens: undefined, cacheReadTokens: undefined, cacheWriteTokens: undefined },
-  outputTokenDetails: { reasoningTokens: undefined, acceptedPredictionTokens: undefined, rejectedPredictionTokens: undefined },
+  inputTokenDetails: {
+    noCacheTokens: undefined,
+    cacheReadTokens: undefined,
+    cacheWriteTokens: undefined,
+  },
+  outputTokenDetails: {
+    reasoningTokens: undefined,
+    acceptedPredictionTokens: undefined,
+    rejectedPredictionTokens: undefined,
+  },
 };
 
+/** Mock a single generateObject call returning a typed object result. */
 function mockAIResponse(data: unknown): void {
-  mockGenerateText.mockResolvedValueOnce({
-    text: JSON.stringify(data),
+  mockGenerateObject.mockResolvedValueOnce({
+    object: data,
     usage: MOCK_USAGE,
   });
+}
+
+/** Mock N successive generateObject calls, each with the same base usage. */
+function mockAIResponseN(items: unknown[]): void {
+  for (const data of items) {
+    mockGenerateObject.mockResolvedValueOnce({ object: data, usage: MOCK_USAGE });
+  }
 }
 
 describe("ai-phases", () => {
@@ -51,7 +67,7 @@ describe("ai-phases", () => {
   });
 
   describe("aiAnalyze", () => {
-    it("returns parsed analysis result", async () => {
+    it("returns structured analysis result", async () => {
       const analysisData = {
         detectedCLIPaths: ["/usr/bin/blender"],
         commonSubcommands: [{ name: "render", description: "Render scene", flags: ["-o"] }],
@@ -68,37 +84,17 @@ describe("ai-phases", () => {
     });
 
     it("throws on AI failure", async () => {
-      mockGenerateText.mockRejectedValueOnce(new Error("API timeout"));
+      mockGenerateObject.mockRejectedValue(new Error("API timeout"));
 
       await expect(aiAnalyze(DEFAULT_CONFIG)).rejects.toThrow(
         'AI generation failed for phase "analyze"',
       );
     });
-
-    it("throws on invalid JSON response", async () => {
-      mockGenerateText.mockResolvedValueOnce({
-        text: "not valid json at all",
-        usage: MOCK_USAGE,
-      });
-
-      await expect(aiAnalyze(DEFAULT_CONFIG)).rejects.toThrow();
-    });
-
-    it("strips markdown code fences from response", async () => {
-      const data = { detectedCLIPaths: ["/usr/bin/blender"] };
-      mockGenerateText.mockResolvedValueOnce({
-        text: "```json\n" + JSON.stringify(data) + "\n```",
-        usage: MOCK_USAGE,
-      });
-
-      const output = await aiAnalyze(DEFAULT_CONFIG);
-      expect(output.result).toEqual(data);
-    });
   });
 
   describe("aiDesign", () => {
-    it("returns parsed design result", async () => {
-      const designData = [
+    it("returns tools array as result", async () => {
+      const tools = [
         {
           name: "blender_render",
           description: "Render a scene",
@@ -107,16 +103,18 @@ describe("ai-phases", () => {
           },
         },
       ];
-      mockAIResponse(designData);
+      // generateObject returns { tools: [...] } via DesignOutputSchema
+      mockAIResponse({ tools });
 
       const output = await aiDesign(DEFAULT_CONFIG, { detectedCLIPaths: [] });
 
-      expect(output.result).toEqual(designData);
+      // Result is stored as the raw array for backward compat
+      expect(output.result).toEqual(tools);
       expect(output.tokensUsed).toEqual({ input: 100, output: 200 });
     });
 
     it("throws on AI failure", async () => {
-      mockGenerateText.mockRejectedValueOnce(new Error("Rate limited"));
+      mockGenerateObject.mockRejectedValue(new Error("Rate limited"));
 
       await expect(aiDesign(DEFAULT_CONFIG, {})).rejects.toThrow(
         'AI generation failed for phase "design"',
@@ -125,60 +123,79 @@ describe("ai-phases", () => {
   });
 
   describe("aiImplement", () => {
-    it("returns result with generatedFiles", async () => {
-      const implData = {
+    it("returns result with generatedFiles from parallel file generation", async () => {
+      // IMPLEMENT_FILES: __init__.py, bridge.py, server.py, main.py
+      mockAIResponseN([
+        { content: "# Blender CLI Bridge\n__version__ = '1.0.0'" },
+        { content: "import subprocess" },
+        { content: "from mcp import Server" },
+        { content: "import click\n@click.group()\ndef cli(): pass" },
+      ]);
+
+      const output = await aiImplement(DEFAULT_CONFIG, []);
+
+      const expected = {
         "__init__.py": "# Blender CLI Bridge\n__version__ = '1.0.0'",
-        "main.py": "import click\n@click.group()\ndef cli(): pass",
-        "server.py": "from mcp import Server",
         "bridge.py": "import subprocess",
+        "server.py": "from mcp import Server",
+        "main.py": "import click\n@click.group()\ndef cli(): pass",
       };
-      mockAIResponse(implData);
-
-      const output = await aiImplement(DEFAULT_CONFIG, []);
-
-      expect(output.result).toEqual(implData);
-      expect(output.generatedFiles).toEqual(implData);
-      expect(output.tokensUsed).toEqual({ input: 100, output: 200 });
+      expect(output.result).toEqual(expected);
+      expect(output.generatedFiles).toEqual(expected);
+      // 4 files × 100 input + 4 files × 200 output
+      expect(output.tokensUsed).toEqual({ input: 400, output: 800 });
     });
 
-    it("returns undefined generatedFiles when response has no string values", async () => {
-      mockAIResponse({ status: 42, nested: { deep: true } });
+    it("returns partial result when some files fail (Promise.allSettled)", async () => {
+      // Only 2 of 4 files succeed
+      mockGenerateObject
+        .mockResolvedValueOnce({ object: { content: "# init" }, usage: MOCK_USAGE })
+        .mockRejectedValue(new Error("Server error"));
 
-      const output = await aiImplement(DEFAULT_CONFIG, []);
+      const output = await aiImplement(DEFAULT_CONFIG, {});
 
+      // One file succeeded, three failed
+      expect(output.result).toEqual({ "__init__.py": "# init" });
+      expect(output.generatedFiles).toEqual({ "__init__.py": "# init" });
+    });
+
+    it("returns empty result when all files fail (graceful degradation)", async () => {
+      mockGenerateObject.mockRejectedValue(new Error("All failed"));
+
+      const output = await aiImplement(DEFAULT_CONFIG, {});
+
+      expect(output.result).toEqual({});
       expect(output.generatedFiles).toBeUndefined();
-    });
-
-    it("throws on AI failure", async () => {
-      mockGenerateText.mockRejectedValueOnce(new Error("Server error"));
-
-      await expect(aiImplement(DEFAULT_CONFIG, {})).rejects.toThrow(
-        'AI generation failed for phase "implement"',
-      );
+      expect(output.tokensUsed).toEqual({ input: 0, output: 0 });
     });
   });
 
   describe("aiTest", () => {
-    it("returns result with test file generatedFiles", async () => {
-      const testData = {
-        "conftest.py": "import pytest\n@pytest.fixture\ndef mock_cli(): pass",
-        "test_bridge.py": "def test_render(): assert True",
-        "test_server.py": "def test_tool_registration(): assert True",
-      };
-      mockAIResponse(testData);
+    it("returns result with test file generatedFiles from parallel generation", async () => {
+      // TEST_FILES: conftest.py, test_bridge.py, test_server.py
+      mockAIResponseN([
+        { content: "import pytest\n@pytest.fixture\ndef mock_cli(): pass" },
+        { content: "def test_render(): assert True" },
+        { content: "def test_tool_registration(): assert True" },
+      ]);
 
       const output = await aiTest(DEFAULT_CONFIG, {});
 
-      expect(output.result).toEqual(testData);
-      expect(output.generatedFiles).toEqual(testData);
+      expect(output.result).toEqual({
+        "conftest.py": "import pytest\n@pytest.fixture\ndef mock_cli(): pass",
+        "test_bridge.py": "def test_render(): assert True",
+        "test_server.py": "def test_tool_registration(): assert True",
+      });
+      expect(output.generatedFiles).toEqual(output.result);
     });
 
-    it("throws on AI failure", async () => {
-      mockGenerateText.mockRejectedValueOnce(new Error("Timeout"));
+    it("returns empty result when all test files fail (graceful degradation)", async () => {
+      mockGenerateObject.mockRejectedValue(new Error("Timeout"));
 
-      await expect(aiTest(DEFAULT_CONFIG, {})).rejects.toThrow(
-        'AI generation failed for phase "test"',
-      );
+      const output = await aiTest(DEFAULT_CONFIG, {});
+
+      expect(output.result).toEqual({});
+      expect(output.generatedFiles).toBeUndefined();
     });
   });
 
@@ -196,7 +213,7 @@ describe("ai-phases", () => {
     });
 
     it("throws on AI failure", async () => {
-      mockGenerateText.mockRejectedValueOnce(new Error("Network error"));
+      mockGenerateObject.mockRejectedValue(new Error("Network error"));
 
       await expect(aiDocs(DEFAULT_CONFIG, {})).rejects.toThrow(
         'AI generation failed for phase "docs"',
@@ -205,13 +222,17 @@ describe("ai-phases", () => {
   });
 
   describe("aiPublish", () => {
-    it("returns result with requirements.txt and pyproject.toml", async () => {
+    it("returns result with requirements.txt, pyproject.toml, and mcp_config", async () => {
       const publishData = {
         "requirements.txt": "click>=8.0\nmcp>=1.0",
         "pyproject.toml": "[project]\nname = 'blender-cli'",
         mcp_config: {
           name: "blender-mcp",
           version: "1.0.0",
+          description: "Blender MCP server",
+          command: "python -m blender_cli.server",
+          args: [],
+          env: {},
           tools: ["blender_render"],
         },
       };
@@ -226,16 +247,8 @@ describe("ai-phases", () => {
       });
     });
 
-    it("returns undefined generatedFiles when no packaging files present", async () => {
-      mockAIResponse({ mcp_config: { name: "test" } });
-
-      const output = await aiPublish(DEFAULT_CONFIG, []);
-
-      expect(output.generatedFiles).toBeUndefined();
-    });
-
     it("throws on AI failure", async () => {
-      mockGenerateText.mockRejectedValueOnce(new Error("Quota exceeded"));
+      mockGenerateObject.mockRejectedValue(new Error("Quota exceeded"));
 
       await expect(aiPublish(DEFAULT_CONFIG, {})).rejects.toThrow(
         'AI generation failed for phase "publish"',
@@ -245,8 +258,8 @@ describe("ai-phases", () => {
 
   describe("token usage", () => {
     it("returns undefined tokensUsed when usage is missing", async () => {
-      mockGenerateText.mockResolvedValueOnce({
-        text: JSON.stringify({ test: true }),
+      mockGenerateObject.mockResolvedValueOnce({
+        object: { detectedCLIPaths: [] },
         usage: undefined,
       });
 
@@ -256,8 +269,8 @@ describe("ai-phases", () => {
     });
 
     it("handles undefined token counts as 0", async () => {
-      mockGenerateText.mockResolvedValueOnce({
-        text: JSON.stringify({ test: true }),
+      mockGenerateObject.mockResolvedValueOnce({
+        object: { detectedCLIPaths: [] },
         usage: {
           inputTokens: undefined,
           outputTokens: undefined,

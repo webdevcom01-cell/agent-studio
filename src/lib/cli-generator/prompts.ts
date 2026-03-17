@@ -28,7 +28,11 @@ export function extractPythonSignatures(output: unknown): Record<string, string>
 
   for (const [filename, content] of Object.entries(record)) {
     if (typeof content !== "string") continue;
-    const lines = content.split("\\n"); // content has escaped newlines from JSON
+    // Content now has real newlines (generateObject returns unescaped strings).
+    // Also handle legacy \\n-escaped content from older DB records.
+    const lines = content.includes("\\n")
+      ? content.split("\\n")
+      : content.split("\n");
     const sigLines = lines.filter((line) =>
       /^\s*(class |def |@click\.|@cli\.|@server\.)/.test(line),
     );
@@ -99,21 +103,23 @@ Design tools following these conventions:
 - Parameters must have type (string|number|boolean), required flag, and optional default
 - Tool names must be snake_case, descriptive, and prefixed with the app name
 
-Respond with ONLY a JSON array (no markdown, no code fences, no explanation):
-[
-  {
-    "name": "<app_name>_<action>",
-    "description": "<Clear description of what this tool does>",
-    "parameters": {
-      "<param_name>": {
-        "type": "string|number|boolean",
-        "description": "<what this parameter controls>",
-        "required": true|false,
-        "default": "<optional default value>"
+Respond with ONLY a JSON object with a "tools" array (no markdown, no code fences, no explanation):
+{
+  "tools": [
+    {
+      "name": "<app_name>_<action>",
+      "description": "<Clear description of what this tool does>",
+      "parameters": {
+        "<param_name>": {
+          "type": "string|number|boolean",
+          "description": "<what this parameter controls>",
+          "required": true|false,
+          "default": "<optional default value>"
+        }
       }
     }
-  }
-]`;
+  ]
+}`;
 }
 
 export interface ImplementFileSpec {
@@ -160,11 +166,10 @@ File to generate: ${fileSpec.filename}
 Purpose: ${fileSpec.description}
 Requirements: ${fileSpec.guidance}
 
-CRITICAL: Respond with ONLY a JSON object with a single key — the filename — mapping to the complete file content as a string.
-Newlines must be escaped as \\n. Quotes inside the code must be escaped as \\".
+CRITICAL: Respond with ONLY a JSON object with a single key "content" mapping to the complete file content.
 No markdown, no code fences, no explanation outside the JSON.
 
-{"${fileSpec.filename}": "<complete Python file content with all newlines escaped as \\n>"}`;
+{"content": "<complete Python file content>"}`;
 }
 
 // Legacy: kept for test compatibility
@@ -239,11 +244,10 @@ File to generate: ${fileSpec.filename}
 Purpose: ${fileSpec.description}
 Requirements: ${fileSpec.guidance}
 
-CRITICAL: Respond with ONLY a JSON object with a single key — the filename — mapping to the complete file content as a string.
-Newlines must be escaped as \\n. Quotes inside the code must be escaped as \\".
+CRITICAL: Respond with ONLY a JSON object with a single key "content" mapping to the complete file content.
 No markdown, no code fences, no explanation outside the JSON.
 
-{"${fileSpec.filename}": "<complete Python test file content with all newlines escaped as \\n>"}`;
+{"content": "<complete Python test file content>"}`;
 }
 
 export function buildDocsPrompt(ctx: PromptContext): string {

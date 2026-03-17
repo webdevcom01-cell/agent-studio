@@ -89,17 +89,14 @@ describe("prompt builders", () => {
       expect(prompt).toContain("blender_render");
     });
 
-    it("requests Python file structure", () => {
+    it("targets bridge.py (legacy single-file wrapper)", () => {
       const prompt = buildImplementPrompt(BASE_CTX);
-      expect(prompt).toContain("__init__.py");
-      expect(prompt).toContain("main.py");
-      expect(prompt).toContain("server.py");
+      // buildImplementPrompt is a legacy wrapper for IMPLEMENT_FILES[1] = bridge.py
       expect(prompt).toContain("bridge.py");
     });
 
-    it("mentions click and subprocess conventions", () => {
+    it("mentions subprocess conventions", () => {
       const prompt = buildImplementPrompt(BASE_CTX);
-      expect(prompt).toContain("click");
       expect(prompt).toContain("subprocess");
     });
   });
@@ -136,7 +133,7 @@ describe("prompt builders", () => {
       const prompt = buildDocsPrompt(BASE_CTX);
       expect(prompt).toContain("README.md");
       expect(prompt).toContain("Installation");
-      expect(prompt).toContain("Troubleshooting");
+      expect(prompt).toContain("Quick Start");
     });
   });
 

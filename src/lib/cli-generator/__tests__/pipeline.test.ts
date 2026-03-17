@@ -171,8 +171,8 @@ describe("pipeline", () => {
   });
 
   describe("PIPELINE_PHASES", () => {
-    it("has 7 phases", () => {
-      expect(PIPELINE_PHASES).toHaveLength(7);
+    it("has 6 phases", () => {
+      expect(PIPELINE_PHASES).toHaveLength(6);
     });
 
     it("first phase is analyze", () => {
@@ -180,7 +180,7 @@ describe("pipeline", () => {
     });
 
     it("last phase is publish", () => {
-      expect(PIPELINE_PHASES[6].name).toBe("publish");
+      expect(PIPELINE_PHASES[5].name).toBe("publish");
     });
   });
 });

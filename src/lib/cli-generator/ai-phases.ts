@@ -1,4 +1,5 @@
-import { generateText } from "ai";
+import { generateObject } from "ai";
+import type { z } from "zod";
 import { getModel } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import type { PipelineConfig, AIPhaseOutput, GeneratedFiles } from "./types";
@@ -6,7 +7,6 @@ import {
   buildAnalyzePrompt,
   buildDesignPrompt,
   buildImplementSingleFilePrompt,
-  buildTestPrompt,
   buildTestSingleFilePrompt,
   buildDocsPrompt,
   buildPublishPrompt,
@@ -14,118 +14,17 @@ import {
   TEST_FILES,
   extractPythonSignatures,
 } from "./prompts";
+import {
+  AnalyzeOutputSchema,
+  DesignOutputSchema,
+  FileContentSchema,
+  DocsOutputSchema,
+  PublishOutputSchema,
+} from "./schemas";
 
 const AI_PHASE_TIMEOUT_MS = 180_000;
 const PRIMARY_MODEL = "deepseek-chat";
 const FALLBACK_MODEL = "gpt-4o-mini";
-
-function resolveModel(): ReturnType<typeof getModel> {
-  try {
-    return getModel(PRIMARY_MODEL);
-  } catch {
-    return getModel(FALLBACK_MODEL);
-  }
-}
-
-function stripCodeFences(text: string): string {
-  return text
-    .replace(/^```(?:json)?\s*\n?/i, "")
-    .replace(/\n?```\s*$/i, "")
-    .trim();
-}
-
-function tryRepairJson(text: string): string {
-  let repaired = text.trim();
-
-  // Count open/close braces and brackets
-  const openBraces = (repaired.match(/{/g) || []).length;
-  const closeBraces = (repaired.match(/}/g) || []).length;
-  const openBrackets = (repaired.match(/\[/g) || []).length;
-  const closeBrackets = (repaired.match(/]/g) || []).length;
-
-  // If the JSON appears truncated (unterminated string), try to close it
-  // Find the last complete key-value pair by looking for last complete string
-  if (openBraces > closeBraces || openBrackets > closeBrackets) {
-    // Check if we're inside an unterminated string value
-    const lastQuote = repaired.lastIndexOf('"');
-    const lastColon = repaired.lastIndexOf(":");
-    const lastComma = repaired.lastIndexOf(",");
-
-    // If the last significant char suggests we're mid-value, truncate to last complete entry
-    if (lastComma > lastQuote || lastColon > lastQuote) {
-      // We're likely mid-value — truncate to the last comma or complete entry
-      const truncateAt = Math.max(
-        repaired.lastIndexOf('",'),
-        repaired.lastIndexOf('"}'),
-        repaired.lastIndexOf('"]'),
-      );
-      if (truncateAt > 0) {
-        repaired = repaired.substring(0, truncateAt + 1);
-      }
-    }
-
-    // Close remaining brackets/braces
-    const missingBrackets = openBrackets - (repaired.match(/]/g) || []).length;
-    const missingBraces = openBraces - (repaired.match(/}/g) || []).length;
-    repaired += "]".repeat(Math.max(0, missingBrackets));
-    repaired += "}".repeat(Math.max(0, missingBraces));
-  }
-
-  return repaired;
-}
-
-function parseJsonResponse(text: string): unknown {
-  const cleaned = stripCodeFences(text);
-
-  // Try direct parse first
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    // Try repair on malformed/truncated JSON
-    logger.warn("JSON parse failed, attempting repair", { textLength: cleaned.length });
-    try {
-      const repaired = tryRepairJson(cleaned);
-      return JSON.parse(repaired);
-    } catch (repairErr) {
-      // Last resort: extract any valid JSON object from the text
-      const objectMatch = cleaned.match(/\{[\s\S]*\}/);
-      if (objectMatch) {
-        try {
-          return JSON.parse(objectMatch[0]);
-        } catch {
-          // Try repair on extracted object too
-          try {
-            return JSON.parse(tryRepairJson(objectMatch[0]));
-          } catch {
-            // Give up
-          }
-        }
-      }
-      throw new Error(
-        `Failed to parse AI response as JSON (length: ${cleaned.length}): ${
-          repairErr instanceof Error ? repairErr.message : String(repairErr)
-        }`,
-      );
-    }
-  }
-}
-
-function extractGeneratedFiles(parsed: unknown): GeneratedFiles | undefined {
-  if (typeof parsed !== "object" || parsed === null) return undefined;
-
-  const record = parsed as Record<string, unknown>;
-  const files: GeneratedFiles = {};
-  let hasFiles = false;
-
-  for (const [key, value] of Object.entries(record)) {
-    if (typeof value === "string") {
-      files[key] = value;
-      hasFiles = true;
-    }
-  }
-
-  return hasFiles ? files : undefined;
-}
 
 interface TokenUsage {
   inputTokens: number | undefined;
@@ -139,24 +38,29 @@ function buildTokensUsed(
   return { input: usage.inputTokens ?? 0, output: usage.outputTokens ?? 0 };
 }
 
-async function callAIWithModel(
+/**
+ * Calls generateObject on a single model with an AbortController timeout.
+ * Returns the typed object + token usage.
+ */
+async function callAIObjectWithModel<TSchema extends z.ZodTypeAny>(
   modelId: string,
+  schema: TSchema,
   prompt: string,
-  phase: string,
-  maxTokens?: number,
-): Promise<{ text: string; usage: TokenUsage | undefined }> {
+  options: { maxTokens?: number } = {},
+): Promise<{ object: z.infer<TSchema>; usage: TokenUsage | undefined }> {
   const model = getModel(modelId);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), AI_PHASE_TIMEOUT_MS);
 
   try {
-    const response = await generateText({
+    const response = await generateObject({
       model,
+      schema,
       prompt,
       abortSignal: controller.signal,
-      ...(maxTokens ? { maxTokens } : {}),
+      ...(options.maxTokens ? { maxTokens: options.maxTokens } : {}),
     });
-    return { text: response.text, usage: response.usage };
+    return { object: response.object, usage: response.usage };
   } finally {
     clearTimeout(timeout);
   }
@@ -165,21 +69,25 @@ async function callAIWithModel(
 /**
  * Calls AI with exponential backoff retry across both models.
  * Retry order: primary → fallback → primary(retry) → fallback(retry)
- * Backoff: 1s, 2s between rounds (doubles each round).
+ * Backoff: 1s, 2s between rounds.
  * Timeout AbortErrors are never retried — they indicate a fundamental size issue.
+ *
+ * Uses generateObject() + Zod schema — no JSON parsing fragility.
  */
-async function callAI(prompt: string, phase: string, maxTokens?: number): Promise<{
-  text: string;
-  usage: TokenUsage | undefined;
-}> {
+async function callAIObject<TSchema extends z.ZodTypeAny>(
+  schema: TSchema,
+  prompt: string,
+  phase: string,
+  options: { maxTokens?: number } = {},
+): Promise<{ object: z.infer<TSchema>; usage: TokenUsage | undefined }> {
   const models = [PRIMARY_MODEL, FALLBACK_MODEL];
   const MAX_ROUNDS = 2;
-  let lastError: string = "";
+  let lastError = "";
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     for (const modelId of models) {
       try {
-        return await callAIWithModel(modelId, prompt, phase, maxTokens);
+        return await callAIObjectWithModel(modelId, schema, prompt, options);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         lastError = msg;
@@ -189,7 +97,12 @@ async function callAI(prompt: string, phase: string, maxTokens?: number): Promis
           throw new Error(`Phase ${phase} timed out after ${AI_PHASE_TIMEOUT_MS / 1000}s`);
         }
 
-        logger.warn(`AI call failed (round ${round + 1}, model ${modelId})`, { phase, modelId, round, error: msg });
+        logger.warn(`AI object call failed (round ${round + 1}, model ${modelId})`, {
+          phase,
+          modelId,
+          round,
+          error: msg,
+        });
       }
     }
 
@@ -199,8 +112,12 @@ async function callAI(prompt: string, phase: string, maxTokens?: number): Promis
     }
   }
 
-  throw new Error(`AI generation failed for phase "${phase}" after ${MAX_ROUNDS} retry rounds: ${lastError}`);
+  throw new Error(
+    `AI generation failed for phase "${phase}" after ${MAX_ROUNDS} retry rounds: ${lastError}`,
+  );
 }
+
+// ─── Phase 0: Analyze ────────────────────────────────────────────────────────
 
 export async function aiAnalyze(config: PipelineConfig): Promise<AIPhaseOutput> {
   const prompt = buildAnalyzePrompt({
@@ -210,14 +127,15 @@ export async function aiAnalyze(config: PipelineConfig): Promise<AIPhaseOutput> 
     platform: config.platform,
   });
 
-  const { text, usage } = await callAI(prompt, "analyze");
-  const result = parseJsonResponse(text);
+  const { object, usage } = await callAIObject(AnalyzeOutputSchema, prompt, "analyze");
 
   return {
-    result,
+    result: object,
     tokensUsed: buildTokensUsed(usage),
   };
 }
+
+// ─── Phase 1: Design ─────────────────────────────────────────────────────────
 
 export async function aiDesign(
   config: PipelineConfig,
@@ -231,22 +149,21 @@ export async function aiDesign(
     previousResults: [analysisResult],
   });
 
-  const { text, usage } = await callAI(prompt, "design");
-  const result = parseJsonResponse(text);
+  const { object, usage } = await callAIObject(DesignOutputSchema, prompt, "design");
 
   return {
-    result,
+    // Store just the tools array for backward compat with downstream prompts
+    result: object.tools,
     tokensUsed: buildTokensUsed(usage),
   };
 }
 
+// ─── Phase 2: Implement ──────────────────────────────────────────────────────
+
 /**
  * Generates each implementation file in PARALLEL AI calls.
- * 4 files run concurrently via Promise.allSettled — no interdependencies between files.
- * Before: ~97s sequential (4 × 25s). After: ~25s parallel (4x speedup).
- *
- * Promise.allSettled ensures partial success:
- * if one file fails, the others still complete and are kept.
+ * 4 files run concurrently via Promise.allSettled.
+ * generateObject() replaces parseJsonResponse() — no JSON fragility.
  */
 export async function aiImplement(
   config: PipelineConfig,
@@ -260,13 +177,13 @@ export async function aiImplement(
     previousResults: [designResult],
   };
 
-  // Fire all 4 file generations concurrently
   const results = await Promise.allSettled(
     IMPLEMENT_FILES.map((fileSpec) =>
-      callAI(
+      callAIObject(
+        FileContentSchema,
         buildImplementSingleFilePrompt(ctx, fileSpec),
         `implement:${fileSpec.filename}`,
-        2048,
+        { maxTokens: 2048 },
       ).then((res) => ({ fileSpec, res })),
     ),
   );
@@ -277,10 +194,8 @@ export async function aiImplement(
 
   for (const result of results) {
     if (result.status === "fulfilled") {
-      const { res } = result.value;
-      const parsed = parseJsonResponse(res.text);
-      const files = extractGeneratedFiles(parsed);
-      if (files) Object.assign(allFiles, files);
+      const { fileSpec, res } = result.value;
+      allFiles[fileSpec.filename] = res.object.content;
       totalInput += res.usage?.inputTokens ?? 0;
       totalOutput += res.usage?.outputTokens ?? 0;
     } else {
@@ -297,16 +212,16 @@ export async function aiImplement(
   };
 }
 
+// ─── Phase 3: Test ───────────────────────────────────────────────────────────
+
 /**
  * Generates each test file in PARALLEL AI calls with actual Python signatures.
- * Uses extractPythonSignatures() to pass real function names — not truncated content.
- * Before: 3 files in one ~92s call. After: 3 concurrent calls ~30s (3x speedup).
+ * extractPythonSignatures() splits on real newlines (not \\n).
  */
 export async function aiTest(
   config: PipelineConfig,
   implementResult: unknown,
 ): Promise<AIPhaseOutput> {
-  // Extract actual function signatures from generated implementation files
   const signatures = extractPythonSignatures(implementResult);
 
   const ctx = {
@@ -316,13 +231,13 @@ export async function aiTest(
     platform: config.platform,
   };
 
-  // Fire all 3 test file generations concurrently
   const results = await Promise.allSettled(
     TEST_FILES.map((fileSpec) =>
-      callAI(
+      callAIObject(
+        FileContentSchema,
         buildTestSingleFilePrompt(ctx, fileSpec, signatures),
         `test:${fileSpec.filename}`,
-        2048,
+        { maxTokens: 2048 },
       ).then((res) => ({ fileSpec, res })),
     ),
   );
@@ -333,10 +248,8 @@ export async function aiTest(
 
   for (const result of results) {
     if (result.status === "fulfilled") {
-      const { res } = result.value;
-      const parsed = parseJsonResponse(res.text);
-      const files = extractGeneratedFiles(parsed);
-      if (files) Object.assign(allFiles, files);
+      const { fileSpec, res } = result.value;
+      allFiles[fileSpec.filename] = res.object.content;
       totalInput += res.usage?.inputTokens ?? 0;
       totalOutput += res.usage?.outputTokens ?? 0;
     } else {
@@ -353,6 +266,8 @@ export async function aiTest(
   };
 }
 
+// ─── Phase 4: Docs ───────────────────────────────────────────────────────────
+
 export async function aiDocs(
   config: PipelineConfig,
   designResult: unknown,
@@ -365,16 +280,18 @@ export async function aiDocs(
     previousResults: [designResult],
   });
 
-  const { text, usage } = await callAI(prompt, "docs", 3000);
-  const parsed = parseJsonResponse(text);
-  const generatedFiles = extractGeneratedFiles(parsed);
+  const { object, usage } = await callAIObject(DocsOutputSchema, prompt, "docs", {
+    maxTokens: 3000,
+  });
 
   return {
-    result: parsed,
-    generatedFiles,
+    result: object,
+    generatedFiles: { "README.md": object["README.md"] },
     tokensUsed: buildTokensUsed(usage),
   };
 }
+
+// ─── Phase 5: Publish ────────────────────────────────────────────────────────
 
 export async function aiPublish(
   config: PipelineConfig,
@@ -388,25 +305,16 @@ export async function aiPublish(
     previousResults: [designResult],
   });
 
-  const { text, usage } = await callAI(prompt, "publish", 2000);
-  const parsed = parseJsonResponse(text);
-
-  const generatedFiles: GeneratedFiles = {};
-  if (typeof parsed === "object" && parsed !== null) {
-    const record = parsed as Record<string, unknown>;
-    if (typeof record["requirements.txt"] === "string") {
-      generatedFiles["requirements.txt"] = record["requirements.txt"];
-    }
-    if (typeof record["pyproject.toml"] === "string") {
-      generatedFiles["pyproject.toml"] = record["pyproject.toml"];
-    }
-  }
-
-  const hasFiles = Object.keys(generatedFiles).length > 0;
+  const { object, usage } = await callAIObject(PublishOutputSchema, prompt, "publish", {
+    maxTokens: 2000,
+  });
 
   return {
-    result: parsed,
-    generatedFiles: hasFiles ? generatedFiles : undefined,
+    result: object,
+    generatedFiles: {
+      "requirements.txt": object["requirements.txt"],
+      "pyproject.toml": object["pyproject.toml"],
+    },
     tokensUsed: buildTokensUsed(usage),
   };
 }
