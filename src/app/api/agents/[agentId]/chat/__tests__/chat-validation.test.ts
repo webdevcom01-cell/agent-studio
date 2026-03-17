@@ -15,12 +15,24 @@ vi.mock("@/lib/runtime/context", () => ({
 }));
 vi.mock("@/lib/analytics", () => ({
   trackChatResponse: vi.fn().mockResolvedValue(undefined),
+  trackError: vi.fn().mockResolvedValue(undefined),
+  trackToolCall: vi.fn().mockResolvedValue(undefined),
+  trackAgentCall: vi.fn().mockResolvedValue(undefined),
+  trackFlowExecution: vi.fn().mockResolvedValue(undefined),
+  trackKBSearch: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true, remaining: 19, retryAfterMs: 0 }),
 }));
 vi.mock("@/lib/logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    agent: {
+      findUnique: vi.fn().mockResolvedValue({ model: "deepseek-chat" }),
+    },
+  },
 }));
 
 import { POST } from "../route";
