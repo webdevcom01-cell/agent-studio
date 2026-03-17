@@ -16,6 +16,9 @@ function isPublicPath(pathname: string): boolean {
 
   if (pathname.match(/^\/api\/agents\/[^/]+\/chat$/)) return true;
 
+  // Inbound webhook trigger — public, authenticated via HMAC-SHA256 signature
+  if (pathname.match(/^\/api\/agents\/[^/]+\/trigger\/[^/]+$/)) return true;
+
   // Internal MCP proxy — called server-to-server by the MCP client pool, no session cookie
   if (pathname.startsWith("/api/mcp/proxy/")) return true;
 

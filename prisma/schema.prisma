@@ -92,6 +92,7 @@ model Agent {
   memories          AgentMemory[]
   evalSuites        EvalSuite[]
   schedules         FlowSchedule[]
+  webhooks          WebhookConfig[]
 
   @@index([userId])
   @@index([userId, updatedAt])
@@ -585,6 +586,101 @@ model ScheduledExecution {
   @@index([flowScheduleId, createdAt])
   @@index([status])
   @@index([triggeredAt])
+}
+
+// ─── Inbound Webhooks ─────────────────────────────────────────────────────────
+
+enum WebhookExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  /// Duplicate idempotencyKey — skipped to prevent re-processing
+  SKIPPED
+}
+
+/// Inbound webhook configuration for an agent.
+/// Each config generates a unique public trigger URL that external systems
+/// (Slack, GitHub, Stripe, etc.) can POST to in order to start a flow execution.
+model WebhookConfig {
+  id          String  @id @default(cuid())
+  agentId     String
+  agent       Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  /// Human-readable name for this webhook (e.g., "GitHub Push Events")
+  name        String
+  /// Optional description
+  description String?
+
+  /// HMAC-SHA256 signing secret — generated on creation, used to verify incoming requests.
+  /// Stored in plaintext (no hash) because verification needs the raw secret.
+  /// Rotatable via POST /rotate endpoint.
+  secret      String
+
+  /// Whether this webhook is accepting incoming requests
+  enabled     Boolean @default(true)
+
+  /// JSONPath-style mappings from request body → flow variables
+  /// e.g. [{ "jsonPath": "$.repository.name", "variableName": "repo_name", "type": "string" }]
+  bodyMappings Json @default("[]")
+
+  /// Header-to-variable mappings
+  /// e.g. [{ "headerName": "X-GitHub-Event", "variableName": "github_event" }]
+  headerMappings Json @default("[]")
+
+  /// Flow node ID that this config was synced from (set by deploy auto-sync).
+  /// Null for webhooks created manually via API.
+  nodeId String?
+
+  /// Aggregate stats
+  triggerCount Int      @default(0)
+  failureCount Int      @default(0)
+  lastTriggeredAt DateTime?
+
+  executions  WebhookExecution[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([agentId])
+  @@index([agentId, enabled])
+  @@unique([agentId, nodeId])
+}
+
+/// Log of every inbound webhook trigger attempt.
+/// One row per incoming request — tracks status, idempotency, and execution result.
+model WebhookExecution {
+  id              String               @id @default(cuid())
+  webhookConfigId String
+  webhookConfig   WebhookConfig        @relation(fields: [webhookConfigId], references: [id], onDelete: Cascade)
+
+  /// x-webhook-id header value (Standard Webhooks spec).
+  /// Unique constraint enforces idempotency — same event ID is never processed twice.
+  idempotencyKey  String               @unique
+
+  status          WebhookExecutionStatus @default(PENDING)
+
+  triggeredAt     DateTime             @default(now())
+  completedAt     DateTime?
+  /// Wall-clock execution time in milliseconds
+  durationMs      Int?
+
+  /// Source IP address of the caller
+  sourceIp        String?
+  /// Event type extracted from provider-specific header (X-GitHub-Event, Stripe event type, etc.)
+  eventType       String?
+
+  /// Conversation created by this execution (null if execution failed before context creation)
+  conversationId  String?
+
+  /// Error details if status = FAILED
+  errorMessage    String?              @db.Text
+
+  createdAt       DateTime             @default(now())
+
+  @@index([webhookConfigId])
+  @@index([webhookConfigId, createdAt])
+  @@index([status])
 }
 
 // ─── Agent Evals / Testing Framework ─────────────────────────────────────────
