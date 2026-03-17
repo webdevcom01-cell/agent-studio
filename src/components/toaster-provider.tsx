@@ -1,12 +1,7 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const DynamicToaster = dynamic(
-  () => import("sonner").then((mod) => ({ default: mod.Toaster })),
-  { ssr: false }
-);
+import { Toaster } from "sonner";
 
 export function ToasterProvider() {
-  return <DynamicToaster richColors position="bottom-right" />;
+  return <Toaster richColors position="bottom-right" />;
 }
