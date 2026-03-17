@@ -31,7 +31,7 @@ export const maxDuration = 300;
 type PhaseRunner = (
   config: PipelineConfig,
   previousResults: PhaseResult[],
-) => Promise<{ result: unknown; generatedFiles?: Record<string, string>; tokensUsed?: { input: number; output: number } }>;
+) => Promise<{ result: unknown; generatedFiles?: Record<string, string>; tokensUsed?: { input: number; output: number }; modelUsed?: string }>;
 
 const PHASE_RUNNERS: PhaseRunner[] = [
   (config) => aiAnalyze(config),

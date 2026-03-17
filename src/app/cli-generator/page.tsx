@@ -359,7 +359,7 @@ export default function CLIGeneratorPage(): React.JSX.Element {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           {stuck && (
-                            <AlertTriangle className="size-3 shrink-0 text-yellow-500" title="Stuck — click Resume to continue" />
+                            <AlertTriangle className="size-3 shrink-0 text-yellow-500" aria-label="Stuck — click Resume to continue" />
                           )}
                           <span className="text-sm font-medium truncate">
                             {gen.applicationName}
