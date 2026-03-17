@@ -140,7 +140,7 @@ describe("ingestSource", () => {
     const result = await ingestSource("s1", "text");
 
     expect(result.chunksCreated).toBe(120);
-    expect(mockTx.$executeRaw).toHaveBeenCalledTimes(3);
+    expect(mockPrisma.$executeRaw).toHaveBeenCalledTimes(3);
   });
 
   it("throws when no chunks generated", async () => {
