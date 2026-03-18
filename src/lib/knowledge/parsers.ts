@@ -10,7 +10,9 @@ export async function parsePDF(buffer: Buffer): Promise<string> {
     throw new Error(`File size (${(buffer.length / 1024 / 1024).toFixed(1)} MB) exceeds 10 MB limit`);
   }
 
-  const pdfParse = (await import("pdf-parse")).default;
+  // Import from lib/pdf-parse directly to avoid pdf-parse/index.js
+  // which loads a test PDF at module level and breaks Next.js builds
+  const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
   const result = await pdfParse(buffer);
   const text = result.text?.trim();
 

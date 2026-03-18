@@ -1,9 +1,9 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "pnpm install --force && pnpm run build"
+buildCommand = "pnpm install --force && pnpm run build && cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/static"
 
 [deploy]
-startCommand = "npx prisma migrate deploy && pnpm run start"
+startCommand = "npx prisma migrate deploy && node .next/standalone/server.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
