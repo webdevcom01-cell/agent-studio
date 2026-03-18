@@ -50,7 +50,9 @@ export async function POST(
   const file = formData.get("file");
   const nameField = formData.get("name");
 
-  if (!file || !(file instanceof File)) {
+  // Use typeof checks instead of instanceof File to avoid
+  // ReferenceError during Next.js build (File may not be defined in build context)
+  if (!file || typeof file === "string") {
     return NextResponse.json(
       { success: false, error: "File is required" },
       { status: 400 }
