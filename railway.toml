@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "pnpm install --frozen-lockfile && pnpm run build"
+buildCommand = "pnpm install && pnpm run build"
 
 [deploy]
 startCommand = "npx prisma migrate deploy && pnpm run start"
