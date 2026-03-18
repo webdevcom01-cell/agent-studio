@@ -3,7 +3,7 @@ builder = "NIXPACKS"
 buildCommand = "pnpm install --force && pnpm run build"
 
 [deploy]
-startCommand = "npx prisma migrate deploy && pnpm run start -- -p ${PORT:-3000}"
+startCommand = "npx prisma migrate deploy || echo 'Migrations skipped' && PORT=${PORT:-3000} node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3000}"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
