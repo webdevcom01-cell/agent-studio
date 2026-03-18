@@ -4,13 +4,15 @@ import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 
+const providers = [
+  ...(process.env.AUTH_GITHUB_ID ? [GitHub] : []),
+  ...(process.env.AUTH_GOOGLE_ID ? [Google] : []),
+];
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt", maxAge: 24 * 60 * 60 },
-  providers: [
-    GitHub,
-    Google,
-  ],
+  providers,
   pages: {
     signIn: "/login",
   },
