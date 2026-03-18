@@ -220,10 +220,12 @@ export async function mockWebhooksAPI(
     });
   });
 
-  // GET detail / PATCH update / DELETE
+  // GET detail / PATCH update / DELETE / POST rotate
+  // Use ** (not *) so the rotate sub-path (/webhooks/[id]/rotate) is also matched —
+  // Playwright's * glob stops at slashes, ** crosses them.
   const detailBase = options?.agentId
-    ? `**/api/agents/${options.agentId}/webhooks/*`
-    : "**/api/agents/*/webhooks/*";
+    ? `**/api/agents/${options.agentId}/webhooks/**`
+    : "**/api/agents/*/webhooks/**";
 
   await page.route(detailBase, (route) => {
     const method = route.request().method();
