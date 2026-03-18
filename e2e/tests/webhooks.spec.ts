@@ -577,6 +577,31 @@ test.describe("Webhooks UI — Test tab", () => {
 // ─── 6. Webhooks UI — Detail actions ──────────────────────────────────────────
 
 test.describe("Webhooks UI — detail actions", () => {
+  /**
+   * Helper: wait for the detail panel's MoreVertical (⋮) dropdown trigger to appear.
+   *
+   * The detail panel loads in two network hops:
+   *   1. GET /webhooks  → list (mocked, fast)
+   *   2. GET /webhooks/[id] → detail (mocked, fast, but triggered by React state update)
+   *
+   * `networkidle` can fire between hops 1 and 2 (after React renders the list but before
+   * the detail component's useEffect fires).  We therefore wait explicitly for the Trigger
+   * URL text — the first element that only renders once the detail response has arrived.
+   */
+  async function waitForDetailPanel(page: import("@playwright/test").Page) {
+    await page
+      .getByText(/\/api\/agents\/.*\/trigger\//i)
+      .first()
+      .waitFor({ state: "visible", timeout: 10_000 });
+  }
+
+  /** Click the ⋮ button. Button component renders data-variant + data-size attributes. */
+  async function openMoreMenu(page: import("@playwright/test").Page) {
+    await waitForDetailPanel(page);
+    // variant="ghost" size="icon" is unique to the MoreVertical button on this page
+    await page.locator('[data-variant="ghost"][data-size="icon"]').click();
+  }
+
   test("⋮ dropdown contains Rotate Secret and Delete Webhook items", async ({
     webhooksPage,
     page,
@@ -584,10 +609,8 @@ test.describe("Webhooks UI — detail actions", () => {
     if (!sharedAgentId) { test.skip(); return; }
     await mockWebhooksAPI(page, { agentId: sharedAgentId });
     await webhooksPage.goto(sharedAgentId);
-    await page.waitForLoadState("networkidle");
 
-    // Radix DropdownMenuTrigger adds aria-haspopup="menu" — reliable for the ⋮ button
-    await page.locator('button[aria-haspopup="menu"]').click();
+    await openMoreMenu(page);
 
     await expect(
       page.getByRole("menuitem", { name: /rotate secret/i })
@@ -601,9 +624,8 @@ test.describe("Webhooks UI — detail actions", () => {
     if (!sharedAgentId) { test.skip(); return; }
     await mockWebhooksAPI(page, { agentId: sharedAgentId });
     await webhooksPage.goto(sharedAgentId);
-    await page.waitForLoadState("networkidle");
 
-    await page.locator('button[aria-haspopup="menu"]').click();
+    await openMoreMenu(page);
     await page.getByRole("menuitem", { name: /rotate secret/i }).click();
 
     await expect(
@@ -618,9 +640,8 @@ test.describe("Webhooks UI — detail actions", () => {
     if (!sharedAgentId) { test.skip(); return; }
     await mockWebhooksAPI(page, { agentId: sharedAgentId });
     await webhooksPage.goto(sharedAgentId);
-    await page.waitForLoadState("networkidle");
 
-    await page.locator('button[aria-haspopup="menu"]').click();
+    await openMoreMenu(page);
     await page.getByRole("menuitem", { name: /delete webhook/i }).click();
 
     await expect(
@@ -982,10 +1003,14 @@ test.describe("Flow Builder — webhook integration", () => {
     await flowBuilderPage.goto(agentId);
     await flowBuilderPage.nodePicker.click();
 
-    // Node picker renders plain <button> elements (not DropdownMenuItems)
-    // so they have no menuitem role — match by text content instead
+    // Node picker renders plain <button> elements (not DropdownMenuItems).
+    // Each button contains a <p class="text-sm font-medium">{label}</p> and a
+    // description <p> — match via the label <p> to avoid anchor issues with
+    // concatenated text ("Webhook TriggerTrigger a flow on inbound webhook").
     await expect(
-      page.locator("button").filter({ hasText: /^webhook trigger$/i })
+      page.locator("button").filter({
+        has: page.locator("p").filter({ hasText: /^webhook trigger$/i }),
+      })
     ).toBeVisible({ timeout: 5_000 });
   });
 });
