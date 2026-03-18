@@ -52,3 +52,6 @@ services/
 
 # Vercel env secrets
 .env.vercel
+
+# Railway
+.env.railway
