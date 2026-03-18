@@ -11,8 +11,3 @@ declare module "pdf-parse" {
   function pdfParse(dataBuffer: Buffer): Promise<PDFParseResult>;
   export default pdfParse;
 }
-
-declare module "pdf-parse/lib/pdf-parse.js" {
-  import type pdfParse from "pdf-parse";
-  export default typeof pdfParse;
-}
