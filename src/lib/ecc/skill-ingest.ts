@@ -88,10 +88,56 @@ async function upsertSkill(
   }
 }
 
+const ECC_VIRTUAL_AGENT_ID = "ecc-skills-virtual-agent";
+const ECC_VIRTUAL_KB_ID = "ecc-skills-virtual-kb";
+const ECC_VIRTUAL_SOURCE_ID = "ecc-skills-virtual-source";
+
+async function ensureVirtualSource(): Promise<void> {
+  const existing = await prisma.kBSource.findUnique({
+    where: { id: ECC_VIRTUAL_SOURCE_ID },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  await prisma.agent.upsert({
+    where: { id: ECC_VIRTUAL_AGENT_ID },
+    create: {
+      id: ECC_VIRTUAL_AGENT_ID,
+      name: "ECC Skills (System)",
+      description: "Virtual agent for ECC skill vectorization",
+      systemPrompt: "",
+      model: "deepseek-chat",
+    },
+    update: {},
+  });
+
+  await prisma.knowledgeBase.upsert({
+    where: { id: ECC_VIRTUAL_KB_ID },
+    create: {
+      id: ECC_VIRTUAL_KB_ID,
+      name: "ECC Skills KB",
+      agentId: ECC_VIRTUAL_AGENT_ID,
+    },
+    update: {},
+  });
+
+  await prisma.kBSource.create({
+    data: {
+      id: ECC_VIRTUAL_SOURCE_ID,
+      type: "TEXT",
+      name: "ECC Skills Collection",
+      status: "READY",
+      knowledgeBaseId: ECC_VIRTUAL_KB_ID,
+    },
+  });
+}
+
 export async function vectorizeSkills(): Promise<{
   chunksCreated: number;
   skillsProcessed: number;
 }> {
+  await ensureVirtualSource();
+
   const skills = await prisma.skill.findMany({
     select: { id: true, name: true, description: true, content: true },
   });
@@ -120,7 +166,7 @@ export async function vectorizeSkills(): Promise<{
             ${vectorLiteral}::vector(1536),
             ${estimateTokens(batch[j])},
             ${JSON.stringify({ skillId: skill.id, skillName: skill.name, type: "ecc-skill" })}::jsonb,
-            ${"ecc-skills-virtual-source"},
+            ${ECC_VIRTUAL_SOURCE_ID},
             NOW()
           )
           ON CONFLICT (id) DO UPDATE SET
