@@ -12,10 +12,10 @@ describe("feature-flag", () => {
     vi.resetModules();
   });
 
-  it("isECCEnabled returns true by default", async () => {
+  it("isECCEnabled returns false by default (opt-in)", async () => {
     delete process.env.ECC_ENABLED;
     const { isECCEnabled } = await import("../feature-flag");
-    expect(isECCEnabled()).toBe(true);
+    expect(isECCEnabled()).toBe(false);
   });
 
   it("isECCEnabled returns true when set to 'true'", async () => {
@@ -31,7 +31,7 @@ describe("feature-flag", () => {
   });
 
   it("isECCEnabledForAgent checks both global and per-agent flags", async () => {
-    delete process.env.ECC_ENABLED;
+    process.env.ECC_ENABLED = "true";
     const { isECCEnabledForAgent } = await import("../feature-flag");
 
     expect(isECCEnabledForAgent(true)).toBe(true);
@@ -39,7 +39,7 @@ describe("feature-flag", () => {
   });
 
   it("isECCEnabledForAgent returns false when global is disabled", async () => {
-    process.env.ECC_ENABLED = "false";
+    delete process.env.ECC_ENABLED;
     const { isECCEnabledForAgent } = await import("../feature-flag");
 
     expect(isECCEnabledForAgent(true)).toBe(false);
