@@ -11,6 +11,7 @@ export {
   decayStaleInstincts,
 } from "./instinct-engine";
 export { createObsidianAdapter } from "./obsidian-adapter";
+export { isECCEnabled, isECCEnabledForAgent } from "./feature-flag";
 export type {
   SkillFrontmatter,
   ParsedSkill,
