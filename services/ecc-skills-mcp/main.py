@@ -81,7 +81,7 @@ async def list_skills(language: str = "", category: str = "") -> str:
 
 
 # ASGI app: /health + MCP at /mcp
-app = Starlette(routes=[
+app = Starlette(redirect_slashes=False, routes=[
     Route("/health", health, methods=["GET"]),
     Mount("/mcp", app=mcp.streamable_http_app()),
 ])
