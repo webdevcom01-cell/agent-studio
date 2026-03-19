@@ -78,34 +78,48 @@ async def list_skills(language: str = "", category: str = "") -> str:
     return json.dumps([dict(r) for r in rows], default=str, ensure_ascii=False)
 
 
-# ASGI middleware: handles /health + rewrites Host header for FastMCP validation
+# ASGI middleware: health check + FastMCP host-validation bypass
 class RailwayMiddleware:
     """
-    Sits in front of FastMCP ASGI app.
-    1. Intercepts GET /health → returns plain "ok" (no DB needed)
-    2. Rewrites Host header to 'localhost' so FastMCP host-validation passes
-       regardless of Railway's public domain name.
+    1. GET /health → plain "ok" (no DB, fast Railway healthcheck)
+    2. All other requests → FastMCP, with Host header set to 'localhost'
+       FastMCP validates Host against its configured host (defaults to localhost).
+       We strip port from host to avoid redirect-loop issues.
     """
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] == "http":
-            path = scope.get("path", "")
-            if path == "/health":
-                await send({
-                    "type": "http.response.start",
-                    "status": 200,
-                    "headers": [(b"content-type", b"text/plain; charset=utf-8")],
-                })
-                await send({"type": "http.response.body", "body": b"ok", "more_body": False})
-                return
-            # Rewrite Host → localhost so FastMCP accepts the request
-            headers = [
-                (b"host", b"localhost") if k.lower() == b"host" else (k, v)
-                for k, v in scope.get("headers", [])
-            ]
-            scope = {**scope, "headers": headers}
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+
+        if path == "/health":
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [(b"content-type", b"text/plain; charset=utf-8")],
+            })
+            await send({"type": "http.response.body", "body": b"ok", "more_body": False})
+            return
+
+        # Rewrite Host to localhost — FastMCP validates against localhost by default
+        # Also ensure path is /mcp (no trailing slash) to avoid internal redirects
+        if path == "/mcp/":
+            # Redirect internally to /mcp without trailing slash
+            scope = dict(scope)
+            scope["path"] = "/mcp"
+            scope["raw_path"] = b"/mcp"
+
+        new_headers = [
+            (b"host", b"localhost") if k.lower() == b"host" else (k, v)
+            for k, v in scope.get("headers", [])
+        ]
+        scope = dict(scope)
+        scope["headers"] = new_headers
+
         await self.app(scope, receive, send)
 
 # FastMCP at root + Railway-aware middleware
