@@ -23,6 +23,10 @@ function pos(row: number): { x: number; y: number } {
   return { x: 250, y: 50 + row * 160 };
 }
 
+function ppos(row: number, col: number): { x: number; y: number } {
+  return { x: 250 + col * 280, y: 50 + row * 160 };
+}
+
 // ─── Catalog ──────────────────────────────────────────────────────────────────
 
 export const STARTER_FLOWS: Record<string, FlowContent> = {
@@ -257,6 +261,90 @@ export const STARTER_FLOWS: Record<string, FlowContent> = {
       { id: "notify",    type: "notification",     position: pos(3), data: { label: "Consolidation Complete", message: "✅ Data consolidation complete\n\n{{normalized}}", channel: "in_app" } },
     ],
     edges: [edge("trigger","fetch"), edge("fetch","fmt"), edge("fmt","notify")],
+    variables: [],
+  },
+
+  // ── ECC Developer Agent Pipelines ──────────────────────────────────────────
+
+  "ecc-tdd-pipeline": {
+    nodes: [
+      { id: "input",     type: "message",     position: pos(0), data: { label: "Task Input", message: "{{user_input}}" } },
+      { id: "planner",   type: "call_agent",  position: pos(1), data: { label: "Planner", mode: "internal", targetAgentId: "", outputVariable: "plan", inputMapping: [{ key: "task", value: "{{user_input}}" }], onError: "continue" } },
+      { id: "tdd",       type: "call_agent",  position: pos(2), data: { label: "TDD Guide", mode: "internal", targetAgentId: "", outputVariable: "tests_and_code", inputMapping: [{ key: "task", value: "{{plan}}" }], onError: "continue" } },
+      { id: "review",    type: "parallel",    position: ppos(3, 0), data: { label: "Review (parallel)", mergeStrategy: "all", timeoutSeconds: 60, branches: [{ branchId: "b_code", label: "Code Review", outputVariable: "code_review" }, { branchId: "b_sec", label: "Security Review", outputVariable: "sec_review" }] } },
+      { id: "reviewer",  type: "call_agent",  position: ppos(4, -1), data: { label: "Code Reviewer", mode: "internal", targetAgentId: "", outputVariable: "code_review", inputMapping: [{ key: "code", value: "{{tests_and_code}}" }], onError: "continue" } },
+      { id: "security",  type: "call_agent",  position: ppos(4, 1), data: { label: "Security Reviewer", mode: "internal", targetAgentId: "", outputVariable: "sec_review", inputMapping: [{ key: "code", value: "{{tests_and_code}}" }], onError: "continue" } },
+      { id: "summary",   type: "ai_response", position: pos(5), data: { label: "Merge Results", prompt: "Summarize the TDD pipeline results:\n\nPlan: {{plan}}\nCode: {{tests_and_code}}\nCode Review: {{code_review}}\nSecurity Review: {{sec_review}}", outputVariable: "final_output" } },
+      { id: "output",    type: "message",     position: pos(6), data: { label: "Result", message: "{{final_output}}" } },
+    ],
+    edges: [
+      edge("input", "planner"), edge("planner", "tdd"), edge("tdd", "review"),
+      { id: "e_review_reviewer", source: "review", target: "reviewer", sourceHandle: "b_code" },
+      { id: "e_review_security", source: "review", target: "security", sourceHandle: "b_sec" },
+      edge("review", "summary"), edge("summary", "output"),
+    ],
+    variables: [],
+  },
+
+  "ecc-full-dev-workflow": {
+    nodes: [
+      { id: "input",     type: "message",     position: pos(0), data: { label: "Feature Request", message: "{{user_input}}" } },
+      { id: "planner",   type: "call_agent",  position: pos(1), data: { label: "Planner", mode: "internal", targetAgentId: "", outputVariable: "plan", inputMapping: [{ key: "task", value: "{{user_input}}" }], onError: "continue" } },
+      { id: "architect",  type: "call_agent",  position: pos(2), data: { label: "Architect", mode: "internal", targetAgentId: "", outputVariable: "architecture", inputMapping: [{ key: "plan", value: "{{plan}}" }], onError: "continue" } },
+      { id: "impl",      type: "parallel",    position: ppos(3, 0), data: { label: "Implement (parallel)", mergeStrategy: "all", timeoutSeconds: 90, branches: [{ branchId: "b_backend", label: "Backend", outputVariable: "backend_result" }, { branchId: "b_sec", label: "Security", outputVariable: "sec_result" }, { branchId: "b_docs", label: "Docs", outputVariable: "docs_result" }] } },
+      { id: "backend",   type: "ai_response", position: ppos(4, -1), data: { label: "Backend Implementation", prompt: "Implement the backend based on:\n\nArchitecture: {{architecture}}\nPlan: {{plan}}", outputVariable: "backend_result" } },
+      { id: "sec_check", type: "call_agent",  position: ppos(4, 0), data: { label: "Security Check", mode: "internal", targetAgentId: "", outputVariable: "sec_result", inputMapping: [{ key: "architecture", value: "{{architecture}}" }], onError: "continue" } },
+      { id: "docs",      type: "call_agent",  position: ppos(4, 1), data: { label: "Doc Updater", mode: "internal", targetAgentId: "", outputVariable: "docs_result", inputMapping: [{ key: "plan", value: "{{plan}}" }], onError: "continue" } },
+      { id: "reviewer",  type: "call_agent",  position: pos(5), data: { label: "Code Reviewer", mode: "internal", targetAgentId: "", outputVariable: "review", inputMapping: [{ key: "code", value: "{{backend_result}}" }, { key: "security", value: "{{sec_result}}" }], onError: "continue" } },
+      { id: "output",    type: "message",     position: pos(6), data: { label: "Result", message: "Plan: {{plan}}\n\nArchitecture: {{architecture}}\n\nReview: {{review}}\n\nDocs: {{docs_result}}" } },
+    ],
+    edges: [
+      edge("input", "planner"), edge("planner", "architect"), edge("architect", "impl"),
+      { id: "e_impl_backend", source: "impl", target: "backend", sourceHandle: "b_backend" },
+      { id: "e_impl_sec",     source: "impl", target: "sec_check", sourceHandle: "b_sec" },
+      { id: "e_impl_docs",    source: "impl", target: "docs", sourceHandle: "b_docs" },
+      edge("impl", "reviewer"), edge("reviewer", "output"),
+    ],
+    variables: [],
+  },
+
+  "ecc-security-audit": {
+    nodes: [
+      { id: "input",      type: "message",     position: pos(0), data: { label: "Audit Target", message: "{{user_input}}" } },
+      { id: "sec_review", type: "call_agent",  position: pos(1), data: { label: "Security Reviewer", mode: "internal", targetAgentId: "", outputVariable: "initial_findings", inputMapping: [{ key: "target", value: "{{user_input}}" }], onError: "continue" } },
+      { id: "deep_scan",  type: "parallel",    position: ppos(2, 0), data: { label: "Deep Scan (parallel)", mergeStrategy: "all", timeoutSeconds: 90, branches: [{ branchId: "b_owasp", label: "OWASP Check", outputVariable: "owasp_results" }, { branchId: "b_secrets", label: "Secret Scan", outputVariable: "secret_results" }, { branchId: "b_deps", label: "Dependency Audit", outputVariable: "dep_results" }] } },
+      { id: "owasp",      type: "ai_response", position: ppos(3, -1), data: { label: "OWASP Top 10", prompt: "Check for OWASP Top 10 vulnerabilities in:\n\n{{initial_findings}}\n\nTarget: {{user_input}}", outputVariable: "owasp_results" } },
+      { id: "secrets",    type: "ai_response", position: ppos(3, 0), data: { label: "Secret Scanner", prompt: "Scan for hardcoded secrets, API keys, credentials in:\n\n{{user_input}}", outputVariable: "secret_results" } },
+      { id: "deps",       type: "ai_response", position: ppos(3, 1), data: { label: "Dependency Audit", prompt: "Audit dependencies for known CVEs and outdated packages in:\n\n{{user_input}}", outputVariable: "dep_results" } },
+      { id: "doc_update", type: "call_agent",  position: pos(4), data: { label: "Doc Updater", mode: "internal", targetAgentId: "", outputVariable: "audit_report", inputMapping: [{ key: "findings", value: "OWASP: {{owasp_results}}\nSecrets: {{secret_results}}\nDeps: {{dep_results}}" }], onError: "continue" } },
+      { id: "output",     type: "message",     position: pos(5), data: { label: "Audit Report", message: "{{audit_report}}" } },
+    ],
+    edges: [
+      edge("input", "sec_review"), edge("sec_review", "deep_scan"),
+      { id: "e_scan_owasp",   source: "deep_scan", target: "owasp",   sourceHandle: "b_owasp" },
+      { id: "e_scan_secrets", source: "deep_scan", target: "secrets", sourceHandle: "b_secrets" },
+      { id: "e_scan_deps",    source: "deep_scan", target: "deps",    sourceHandle: "b_deps" },
+      edge("deep_scan", "doc_update"), edge("doc_update", "output"),
+    ],
+    variables: [],
+  },
+
+  "ecc-code-review-pipeline": {
+    nodes: [
+      { id: "input",     type: "message",     position: pos(0), data: { label: "Code to Review", message: "{{user_input}}" } },
+      { id: "planner",   type: "call_agent",  position: pos(1), data: { label: "Planner", mode: "internal", targetAgentId: "", outputVariable: "review_plan", inputMapping: [{ key: "task", value: "Review this code: {{user_input}}" }], onError: "continue" } },
+      { id: "reviews",   type: "parallel",    position: ppos(2, 0), data: { label: "Reviews (parallel)", mergeStrategy: "all", timeoutSeconds: 60, branches: [{ branchId: "b_general", label: "General Review", outputVariable: "general_review" }, { branchId: "b_lang", label: "Language-Specific", outputVariable: "lang_review" }] } },
+      { id: "general",   type: "call_agent",  position: ppos(3, -1), data: { label: "Code Reviewer", mode: "internal", targetAgentId: "", outputVariable: "general_review", inputMapping: [{ key: "code", value: "{{user_input}}" }], onError: "continue" } },
+      { id: "lang_rev",  type: "ai_response", position: ppos(3, 1), data: { label: "Language Review", prompt: "Perform a language-specific code review focusing on idioms, patterns, and best practices:\n\n{{user_input}}", outputVariable: "lang_review" } },
+      { id: "summary",   type: "ai_response", position: pos(4), data: { label: "Review Summary", prompt: "Consolidate these code reviews into a single prioritized report:\n\nGeneral: {{general_review}}\nLanguage-specific: {{lang_review}}\nPlan context: {{review_plan}}", outputVariable: "final_review" } },
+      { id: "output",    type: "message",     position: pos(5), data: { label: "Review Report", message: "{{final_review}}" } },
+    ],
+    edges: [
+      edge("input", "planner"), edge("planner", "reviews"),
+      { id: "e_reviews_general", source: "reviews", target: "general", sourceHandle: "b_general" },
+      { id: "e_reviews_lang",    source: "reviews", target: "lang_rev", sourceHandle: "b_lang" },
+      edge("reviews", "summary"), edge("summary", "output"),
+    ],
     variables: [],
   },
 };
