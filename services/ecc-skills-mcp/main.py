@@ -80,10 +80,13 @@ async def list_skills(language: str = "", category: str = "") -> str:
     return json.dumps([dict(r) for r in rows], default=str, ensure_ascii=False)
 
 
-# ASGI app: /health + MCP at /mcp
+# ASGI app: /health + MCP at /mcp (both with and without trailing slash)
+_mcp_app = mcp.streamable_http_app()
+
 app = Starlette(redirect_slashes=False, routes=[
     Route("/health", health, methods=["GET"]),
-    Mount("/mcp", app=mcp.streamable_http_app()),
+    Mount("/mcp/", app=_mcp_app),
+    Mount("/mcp",  app=_mcp_app),
 ])
 
 if __name__ == "__main__":
