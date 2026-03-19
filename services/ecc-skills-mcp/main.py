@@ -11,6 +11,7 @@ import uvicorn
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
 from starlette.routing import Route, Mount
+from starlette.middleware.base import BaseHTTPMiddleware
 from mcp.server.fastmcp import FastMCP
 
 logging.basicConfig(level=logging.INFO)
@@ -27,9 +28,6 @@ async def get_pool() -> asyncpg.Pool:
         pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
     return pool
 
-
-async def health(request):
-    return PlainTextResponse("ok")
 
 # MCP Server — only name, no extra kwargs
 mcp = FastMCP("ECC Skills")
@@ -80,14 +78,16 @@ async def list_skills(language: str = "", category: str = "") -> str:
     return json.dumps([dict(r) for r in rows], default=str, ensure_ascii=False)
 
 
-# ASGI app: /health + MCP at /mcp (both with and without trailing slash)
-_mcp_app = mcp.streamable_http_app()
+# Health middleware — intercepts /health before MCP handles it
+class HealthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.url.path == "/health":
+            return PlainTextResponse("ok")
+        return await call_next(request)
 
-app = Starlette(redirect_slashes=False, routes=[
-    Route("/health", health, methods=["GET"]),
-    Mount("/mcp/", app=_mcp_app),
-    Mount("/mcp",  app=_mcp_app),
-])
+# FastMCP at root — handles all MCP protocol traffic
+# HealthMiddleware sits in front for Railway healthcheck
+app = HealthMiddleware(mcp.streamable_http_app())
 
 if __name__ == "__main__":
     logger.info("Starting on 0.0.0.0:%d", PORT)
