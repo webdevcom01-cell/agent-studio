@@ -755,3 +755,439 @@ pnpm db:seed          # Seed dev data
 - `src/lib/models.ts` is client-safe — no server imports, no env access; import `ALL_MODELS` in client components
 - DeepSeek has no embedding support — OPENAI_API_KEY is required for KB features
 - Adding a new provider: (1) add `@ai-sdk/[provider]` package, (2) add env key to `src/lib/env.ts`, (3) add factory + routing to `src/lib/ai.ts`, (4) add models to `src/lib/models.ts`
+
+---
+
+## 9. ECC INTEGRATION — everything-claude-code
+
+### 9.1 What is ECC?
+
+`everything-claude-code` (GitHub: affaan-m/everything-claude-code) is an advanced orchestration
+framework for Claude Code: 25 specialized agents, 108+ skill modules, 57 slash commands,
+15+ hook event types, language-specific rules, and an instinct-based continuous learning system.
+
+**Architecture decision:** ECC integrates as a MODULE inside agent-studio (`src/lib/ecc/`),
+NOT as a separate project or fork. Agent-studio already has 80%+ of the needed infrastructure.
+
+### 9.2 ECC → Agent Studio Component Mapping
+
+| ECC Component          | Studio Equivalent                    | Integration Action                    |
+|------------------------|--------------------------------------|---------------------------------------|
+| 25 Agent definitions   | Agent Templates (133 existing)       | Import as new "Developer Agents" category |
+| 108+ SKILL.md files    | Knowledge Base (RAG pipeline)        | Ingest into shared KB + new Skill model |
+| 57 slash commands      | CLI Generator / Flow Templates       | Map to flow triggers + API routes     |
+| Hook system (15+ types)| Webhook system (existing)            | Extend webhook events + new hook middleware |
+| Rules (language-specific)| Agent system prompts               | Embed in agent template configs       |
+| Instinct system        | NEW — continuous learning            | New Instinct model + Learn node + /evolve API |
+| .clauderc config       | Agent settings JSON                  | Map to agent metadata fields          |
+
+### 9.3 ECC Agent Roster (25 agents)
+
+Model routing per ECC spec:
+- **Opus** (complex reasoning): planner, architect, chief-of-staff, meta-orchestrator
+- **Sonnet** (balanced): code-reviewer, tdd-guide, security-reviewer, debugger, refactor-planner, api-designer, performance-optimizer
+- **Haiku** (fast): doc-updater, refactor-cleaner, test-writer, commit-message-writer, changelog-generator
+
+All 25 agents get imported as Studio templates in `src/data/ecc-agent-templates.json` with:
+- YAML frontmatter → JSON config (name, description, model, tools, skills)
+- Agent Card endpoint: `GET /api/agents/[agentId]/card.json` (Google A2A v0.3 spec)
+- Linked to shared ECC Skills KB automatically
+
+### 9.4 ECC Skill Structure
+
+Each skill is a `SKILL.md` with YAML frontmatter:
+```yaml
+---
+name: skill-name
+version: "1.0.0"
+description: "What this skill does"
+inputs:
+  - name: param1
+    type: string
+    required: true
+outputs:
+  - name: result
+    type: string
+tags: [typescript, testing, security]
+category: development
+language: typescript
+---
+# Skill content (Markdown)
+Instructions, examples, patterns...
+```
+
+Skills are stored in the new `Skill` Prisma model AND vectorized into the Knowledge Base
+for RAG retrieval. The ECC Skills MCP server exposes them via MCP protocol.
+
+### 9.5 New File Structure (ECC additions)
+
+```
+src/lib/ecc/                          # ← ECC module root
+  ├── index.ts                        # Barrel exports, feature flag check
+  ├── skill-parser.ts                 # Parse SKILL.md YAML frontmatter
+  ├── agent-importer.ts               # Convert ECC agent .md → Studio template
+  ├── meta-orchestrator.ts            # Autonomous agent routing
+  ├── instinct-engine.ts              # Pattern extraction + confidence scoring
+  ├── obsidian-adapter.ts             # Stub for future Obsidian integration
+  └── types.ts                        # ECC-specific TypeScript interfaces
+
+src/data/
+  └── ecc-agent-templates.json        # 25 ECC agent templates (separate from existing 133)
+
+src/app/skills/
+  └── page.tsx                        # Skill Browser UI (search, filter, cards)
+
+src/app/api/ecc/
+  ├── ingest-skills/route.ts          # POST — async bulk skill ingestion
+  └── card/[agentId]/route.ts         # GET — Agent Card (A2A v0.3)
+
+src/app/api/skills/
+  └── evolve/route.ts                 # POST — instinct → skill promotion
+
+services/ecc-skills-mcp/              # ← Separate Railway service
+  ├── main.py                         # Python FastMCP server
+  ├── requirements.txt                # FastMCP, psycopg2, etc.
+  ├── railway.toml                    # Railway config for this service
+  └── Dockerfile                      # Optional, Nixpacks auto-detects Python
+
+scripts/
+  ├── import-ecc-agents.mjs           # One-time agent import script
+  └── import-ecc-skills.mjs           # One-time skill import script
+```
+
+---
+
+## 10. ECC IMPLEMENTATION PLAN — 10 Phases
+
+### Phase 0: Prisma Schema Foundation (1-2 days)
+**Blocker for ALL other phases. Do this first.**
+
+New models to add to `prisma/schema.prisma`:
+
+```prisma
+model AgentExecution {
+  id                String   @id @default(cuid())
+  agentId           String
+  agent             Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  status            ExecutionStatus @default(PENDING)
+  startedAt         DateTime @default(now())
+  completedAt       DateTime?
+  durationMs        Int?
+  inputParams       Json?
+  outputResult      Json?
+  traceId           String?
+  parentExecutionId String?
+  parentExecution   AgentExecution? @relation("ExecutionTree", fields: [parentExecutionId], references: [id])
+  childExecutions   AgentExecution[] @relation("ExecutionTree")
+  error             String?
+  tokenUsage        Json?    // { input: number, output: number, model: string }
+  createdAt         DateTime @default(now())
+
+  @@index([agentId, status])
+  @@index([traceId])
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  TIMEOUT
+}
+
+model Skill {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  version      String   @default("1.0.0")
+  description  String
+  content      String   @db.Text  // Full SKILL.md content
+  inputSchema  Json?
+  outputSchema Json?
+  tags         String[]
+  category     String?
+  language     String?
+  eccOrigin    Boolean  @default(true)
+  permissions  AgentSkillPermission[]
+  instincts    Instinct[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([slug])
+  @@index([language])
+}
+
+model AgentSkillPermission {
+  id          String      @id @default(cuid())
+  agentId     String
+  agent       Agent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  skillId     String
+  skill       Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  accessLevel AccessLevel @default(READ)
+
+  @@unique([agentId, skillId])
+}
+
+enum AccessLevel {
+  READ
+  EXECUTE
+  ADMIN
+}
+
+model Instinct {
+  id               String   @id @default(cuid())
+  name             String
+  description      String
+  confidence       Float    @default(0.0) // 0.0 - 1.0
+  frequency        Int      @default(1)
+  origin           String?
+  examples         Json?
+  agentId          String
+  agent            Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  promotedToSkillId String?
+  promotedToSkill  Skill?   @relation(fields: [promotedToSkillId], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([agentId, confidence])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  action       String   // CREATE, UPDATE, DELETE, EXECUTE, ACCESS
+  resourceType String   // Agent, Skill, Flow, KB, etc.
+  resourceId   String
+  before       Json?
+  after        Json?
+  ipAddress    String?
+  userAgent    String?
+  timestamp    DateTime @default(now())
+
+  @@index([resourceType, resourceId])
+  @@index([userId, timestamp])
+}
+```
+
+**Also add to existing Agent model:**
+```prisma
+// Add these relations to the Agent model:
+executions         AgentExecution[]
+skillPermissions   AgentSkillPermission[]
+instincts          Instinct[]
+eccEnabled         Boolean  @default(false)
+```
+
+Migration command: `prisma migrate dev --name ecc_foundation`
+Railway auto-applies via startCommand: `npx prisma migrate deploy`
+
+### Phase 1: Import 25 ECC Agents as Templates (2-3 days)
+- New category "Developer Agents" in `src/lib/constants/agent-categories.ts`
+- `src/data/ecc-agent-templates.json` — 25 templates, separate from existing 133
+- Import script: `scripts/import-ecc-agents.mjs` — parses YAML frontmatter from ECC .md files
+- Agent Card endpoint: `GET /api/agents/[agentId]/card.json` (A2A v0.3 JSON-LD)
+- Tests: schema validation for all 25, snapshot tests
+
+### Phase 2: 108+ Skills → Knowledge Base + Skill Browser (2-3 days)
+- `scripts/import-ecc-skills.mjs` — parse SKILL.md → Skill model + KB vectorization
+- `POST /api/ecc/ingest-skills` — **ASYNC** (not in startup path! Railway healthcheck = 120s)
+- Protected by `CRON_SECRET` header
+- New page: `src/app/skills/page.tsx` — search bar, faceted filters (language, category, agent)
+- **RAILWAY**: incremental re-ingest via Cron Service (daily)
+
+### Phase 3: Meta-Orchestrator + Flow Templates (3-4 days)
+- Meta-Orchestrator agent based on ECC chief-of-staff
+- 4 pre-built flow templates:
+  1. **TDD Pipeline**: Planner → TDD Guide → parallel[Code Reviewer + Security] → end
+  2. **Full Dev Workflow**: Planner → Architect → parallel[Backend+Security+Docs] → Reviewer → end
+  3. **Security Audit**: Security Reviewer → parallel[OWASP + Secret scan + Deps] → Doc Updater → end
+  4. **Code Review Pipeline**: Planner → parallel[Reviewer + language-specific] → summary → end
+- Add to `src/data/starter-flows.ts`
+- **RAILWAY**: no serverless timeout — multi-agent pipelines run unlimited
+
+### Phase 4: ECC Skills MCP Server — Separate Railway Service (4-5 days)
+**Most complex phase. Creates a new Railway service.**
+
+- `services/ecc-skills-mcp/main.py` — Python FastMCP with 3 tools:
+  - `get_skill(name)` → returns skill content
+  - `search_skills(query, tag?)` → vector search
+  - `list_skills(language?)` → filtered listing
+- Deploy as Railway service: Nixpacks Python, Port 8000, Private Networking ONLY
+- Internal URL: `http://ecc-skills-mcp.railway.internal:8000`
+- Env-aware in `featured-servers.ts`: prod → railway.internal, dev → localhost:8000
+- MCP Roots: agent workspaces as roots. MCP Resources: `kb://agent-id/skill-name`
+- MCP pool: min=5, max=20, HTTP/2, timeout tiers (2s/10s/30s)
+
+### Phase 5: Continuous Learning + Instinct System (5-7 days)
+- "Learn" node in Flow Builder — extracts patterns from AgentExecution history
+- Instinct storage: confidence 0.0-1.0, frequency counter, >0.85 → promote to KB skill
+- `POST /api/skills/evolve` — AI clusters instincts, generates new SKILL.md
+- **RAILWAY**: evolve in Cron Service at 3AM daily
+- Execution Dashboard: timeline, decision trace, replay mode
+- `src/lib/ecc/obsidian-adapter.ts` — interface stub for future Obsidian phase
+
+### Phase 6: Observability — OpenTelemetry + Metrics (2-3 days, parallel from F1)
+- `@opentelemetry/api` + `@opentelemetry/sdk-node`
+- gen_ai.* semantic conventions (AAIF 2026): system, model, input_tokens, tool use spans
+- Pino structured logging → Railway log drain → Grafana Loki
+- **RAILWAY**: OTLP push exporter (NOT Prometheus pull — Railway doesn't support scrape)
+- `OTEL_EXPORTER_OTLP_ENDPOINT` env var → Grafana Cloud
+
+### Phase 7: Security Hardening (3-4 days, parallel from F1)
+- Prompt injection defense: JSON Schema validation on all skill inputs, output PII filtering
+- RBAC enforcement: middleware checks AgentSkillPermission before skill calls
+- Webhook HMAC-SHA256: X-Webhook-ID, X-Webhook-Signature, X-Webhook-Timestamp
+- Audit log: all agent CRUD, executions, skill calls → AuditLog model
+- **RAILWAY**: PostgreSQL → Disable Public Networking. ECC MCP → Disable Public Networking
+- Security test suite: injection, RBAC bypass, replay, secret leakage
+
+### Phase 8: Performance Testing & Optimization (2-3 days)
+- k6 load test: 100 concurrent users, 25 agents, 30 min
+- DB indexes: AgentExecution(agentId, status), Skill(slug, language), Instinct(agentId, confidence)
+- Caching: skill metadata (10min), KB search (2min), agent card (5min) — target >80% hit rate
+- RAG quality benchmark: 20 queries, MRR target >0.7
+- **RAILWAY**: target single replica. Scaling runbook for 2+ replicas (Redis)
+- SLA targets: P95 <5s flow exec, P99 <2s KB search, P95 <100ms skill metadata
+
+### Phase 9: Production Deploy + Obsidian Onboarding (1-2 days)
+- Deploy ECC Skills MCP as Railway service (Private Networking only)
+- Cron Service: add /api/skills/evolve (3AM daily) alongside existing scheduled flows (5min)
+- Feature flag: `ECC_ENABLED` env var for killswitch
+- Rollback procedure: Railway rollback, DB snapshot, MCP rollback (RTO: <5 min)
+- `docs/obsidian-integration.md` — onboarding guide for future Obsidian phase
+- Smoke test: health, login, agent create, KB ingest, chat, MCP call, webhook, cron
+
+### Parallelization Strategy
+```
+Sequential (strict order): F0 → F1 → F2 → F3 → F4 → F5
+Parallel with above:       F6 (Observability) + F7 (Security) start from F1
+Final:                     F8 (Performance) + F9 (Deploy) after everything works
+Realistic timeline:        ~25 working days (not 37 sequential)
+```
+
+---
+
+## 11. RAILWAY DEPLOYMENT — ECC Multi-Service Architecture
+
+### 11.1 Service Topology
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                   Railway Project: agent-studio                  │
+│                                                                  │
+│  ┌─────────────────────┐    ┌──────────────────────────────┐    │
+│  │  agent-studio        │    │  PostgreSQL + pgvector        │    │
+│  │  Next.js 15.5        │←──→│  pgvector/pgvector:pg16      │    │
+│  │  Nixpacks · Port $PORT│   │  Port 5432 · Persistent Vol  │    │
+│  │  numReplicas: 1      │    │  HNSW index for embeddings   │    │
+│  └────────┬────────────┘    └──────────────────────────────┘    │
+│           │                                                      │
+│           │ railway.internal                                     │
+│           │                                                      │
+│  ┌────────▼────────────┐    ┌──────────────────────────────┐    │
+│  │  ECC Skills MCP      │    │  Cron Service                │    │
+│  │  Python FastMCP      │    │  */5 * * * * (flows)         │    │
+│  │  Streamable HTTP     │    │  0 3 * * * (evolve)          │    │
+│  │  Port 8000           │    │  → /api/cron/*               │    │
+│  │  /health endpoint    │    │  Internal networking only    │    │
+│  └─────────────────────┘    └──────────────────────────────┘    │
+│                                                                  │
+│  Private Network: *.railway.internal (all services)              │
+│  Public:  agent-studio → *.up.railway.app (only Next.js)        │
+│  Private: ecc-skills-mcp → ecc-skills.railway.internal          │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 11.2 Railway-Specific Constraints
+
+- **No serverless timeout** — multi-agent pipelines can run unlimited (better than Vercel 300s)
+- **Ephemeral /tmp** — agent workspace cleared on redeploy. All persistent data → PostgreSQL
+- **Vercel cron NOT available** — use Railway Cron Service for scheduled flows + /evolve
+- **Nixpacks build** — Python MCP server needs `requirements.txt` for auto-detection
+- **Internal networking** — MCP server communicates via `*.railway.internal` (faster, no egress cost)
+- **Single replica** — in-memory rate limiter + MCP pool OK for 1 replica. Redis needed for scaling
+- **Healthcheck timeout** — 120s. Skill ingestion MUST be async POST, not in startup path
+
+### 11.3 New Environment Variables
+
+| Service          | Variable                      | Value                                           | Phase |
+|------------------|-------------------------------|-------------------------------------------------|-------|
+| agent-studio     | `ECC_MCP_URL`                 | `http://ecc-skills-mcp.railway.internal:8000`   | F4    |
+| agent-studio     | `ECC_ENABLED`                 | `true`                                          | F9    |
+| agent-studio     | `OTEL_EXPORTER_OTLP_ENDPOINT` | `https://otlp-gateway-*.grafana.net/otlp`      | F6    |
+| agent-studio     | `OTEL_SERVICE_NAME`           | `agent-studio`                                  | F6    |
+| ecc-skills-mcp   | `DATABASE_URL`                | Reference → PostgreSQL (read-only recommended)  | F4    |
+| ecc-skills-mcp   | `PORT`                        | `8000`                                          | F4    |
+| ecc-skills-mcp   | `MCP_TRANSPORT`               | `streamable-http`                               | F4    |
+| cron-service     | `STUDIO_URL`                  | `http://agent-studio.railway.internal:$PORT`    | F9    |
+
+---
+
+## 12. 2026 STANDARDS COMPLIANCE
+
+### MCP 2025-11-25 Spec
+- Streamable HTTP transport (replacing SSE-only)
+- MCP Roots: agent workspaces as root URIs
+- MCP Resources: KB documents exposed as `kb://` URIs
+- Tasks primitive: long-running skill executions with progress
+
+### Google A2A v0.3
+- Agent Card: `GET /api/agents/[agentId]/card.json` — JSON-LD with capabilities, inputs, outputs
+- Discovery: agents register cards, Meta-Orchestrator reads cards for routing
+
+### OpenTelemetry gen_ai.* Semantic Conventions
+- `gen_ai.system`: provider name
+- `gen_ai.request.model`: model ID
+- `gen_ai.usage.input_tokens` / `gen_ai.usage.output_tokens`
+- Span events for tool use calls
+- AAIF (AI Agent Interoperability Framework, 150+ orgs) 2026 standard
+
+### OAuth 2.1 + PKCE
+- All new OAuth flows use PKCE (already in NextAuth v5 config)
+- MCP server auth: OAuth 2.1 for external MCP connections
+
+---
+
+## 13. FUTURE: OBSIDIAN INTEGRATION (deferred to after ECC)
+
+**Purpose:** Persistent memory layer that survives Railway's ephemeral /tmp filesystem.
+
+### Architecture
+- Obsidian vault on GitHub (Git-synced via Obsidian Git plugin, free)
+- GitMCP as bridge: exposes vault as MCP server
+- Local REST API plugin (free community plugin) for direct Obsidian read/write
+- Write-back pattern: agent learns → instinct → skill → Obsidian vault document
+
+### Why After ECC
+- ECC skills become the initial vault content
+- Instinct system (Phase 5) generates new knowledge → Obsidian stores it persistently
+- Adapter stub in `src/lib/ecc/obsidian-adapter.ts` ready from Phase 5
+
+### Obsidian Plans
+- **Free version** + community plugins is sufficient
+- Paid plans (Sync, Publish) don't help technically — Git sync is better for this use case
+
+---
+
+## 14. CLAUDE WORKING GUIDELINES — ECC Extension
+
+### When implementing ECC phases:
+1. **Always check feature flag**: wrap ECC code with `if (process.env.ECC_ENABLED !== 'false')` or the per-agent `eccEnabled` field
+2. **Prisma schema changes FIRST**: Phase 0 blocks everything. Run `prisma migrate dev` before any code
+3. **Async ingestion ONLY**: Never put skill ingestion in startup path (Railway healthcheck = 120s)
+4. **Railway internal networking**: MCP server URL via `process.env.ECC_MCP_URL`, never hardcode
+5. **Test each phase**: write tests before moving to next phase. ECC agents test: schema validation + snapshot
+6. **Existing patterns**: follow the same patterns as existing code (Zod validation, SWR hooks, API route handlers, Prisma queries)
+7. **No new CSS frameworks**: Tailwind CSS v4 ONLY. No inline styles.
+8. **MCP pool awareness**: timeout tiers matter — metadata=2s, search=10s, compute=30s
+9. **Push metrics, not pull**: Railway doesn't support Prometheus scrape. Use OTLP push exporter
+10. **Separate MCP service**: ECC Skills MCP is a separate Railway service (Python), not embedded in Next.js
+
+### Phase implementation order:
+```
+START → Phase 0 (Prisma) → Phase 1 (Agents) → Phase 2 (Skills) →
+        Phase 3 (Orchestrator) → Phase 4 (MCP Server) → Phase 5 (Learning) →
+        Phase 8 (Performance) → Phase 9 (Deploy)
+
+PARALLEL: Phase 6 (Observability) + Phase 7 (Security) — start anytime after Phase 0
+```

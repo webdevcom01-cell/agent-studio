@@ -93,6 +93,10 @@ model Agent {
   evalSuites        EvalSuite[]
   schedules         FlowSchedule[]
   webhooks          WebhookConfig[]
+  executions        AgentExecution[]
+  skillPermissions  AgentSkillPermission[]
+  instincts         Instinct[]
+  eccEnabled        Boolean        @default(false)
 
   @@index([userId])
   @@index([userId, updatedAt])
@@ -682,6 +686,20 @@ model WebhookExecution {
   /// Error details if status = FAILED
   errorMessage    String?              @db.Text
 
+  /// Raw request body stored for replay. Null for executions created before
+  /// replay support was added, or if the body was empty.
+  rawPayload      String?              @db.Text
+
+  /// Sanitized request headers stored for replay (sensitive values redacted).
+  /// Stored as a flat Record<string, string>.
+  rawHeaders      Json?
+
+  /// True when this execution was triggered by a Replay action (not a live inbound request).
+  isReplay        Boolean              @default(false)
+
+  /// If this is a replay, points to the original execution that was replayed.
+  replayOf        String?
+
   createdAt       DateTime             @default(now())
 
   @@index([webhookConfigId])
@@ -777,4 +795,109 @@ model EvalResult {
 
   @@index([runId])
   @@index([testCaseId])
+}
+
+// ─── ECC Foundation ─────────────────────────────────────────────────────────
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  TIMEOUT
+}
+
+model AgentExecution {
+  id                String          @id @default(cuid())
+  agentId           String
+  agent             Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  status            ExecutionStatus @default(PENDING)
+  startedAt         DateTime        @default(now())
+  completedAt       DateTime?
+  durationMs        Int?
+  inputParams       Json?
+  outputResult      Json?
+  traceId           String?
+  parentExecutionId String?
+  parentExecution   AgentExecution?  @relation("ExecutionTree", fields: [parentExecutionId], references: [id])
+  childExecutions   AgentExecution[] @relation("ExecutionTree")
+  error             String?
+  tokenUsage        Json?
+  createdAt         DateTime        @default(now())
+
+  @@index([agentId, status])
+  @@index([traceId])
+}
+
+model Skill {
+  id           String                 @id @default(cuid())
+  name         String
+  slug         String                 @unique
+  version      String                 @default("1.0.0")
+  description  String
+  content      String                 @db.Text
+  inputSchema  Json?
+  outputSchema Json?
+  tags         String[]               @default([])
+  category     String?
+  language     String?
+  eccOrigin    Boolean                @default(true)
+  permissions  AgentSkillPermission[]
+  instincts    Instinct[]
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@index([slug])
+  @@index([language])
+}
+
+enum AccessLevel {
+  READ
+  EXECUTE
+  ADMIN
+}
+
+model AgentSkillPermission {
+  id          String      @id @default(cuid())
+  agentId     String
+  agent       Agent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  skillId     String
+  skill       Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  accessLevel AccessLevel @default(READ)
+
+  @@unique([agentId, skillId])
+}
+
+model Instinct {
+  id                String   @id @default(cuid())
+  name              String
+  description       String
+  confidence        Float    @default(0.0)
+  frequency         Int      @default(1)
+  origin            String?
+  examples          Json?
+  agentId           String
+  agent             Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  promotedToSkillId String?
+  promotedToSkill   Skill?   @relation(fields: [promotedToSkillId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([agentId, confidence])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  action       String
+  resourceType String
+  resourceId   String
+  before       Json?
+  after        Json?
+  ipAddress    String?
+  userAgent    String?
+  timestamp    DateTime @default(now())
+
+  @@index([resourceType, resourceId])
+  @@index([userId, timestamp])
 }
