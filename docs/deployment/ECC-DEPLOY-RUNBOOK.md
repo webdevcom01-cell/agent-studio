@@ -4,7 +4,7 @@
 
 - [ ] All tests pass: `pnpm test` (1500+ tests)
 - [ ] TypeScript clean: `pnpm typecheck`
-- [ ] Prisma schema matches DB: `npx prisma db push --dry-run`
+- [ ] Prisma schema matches DB: `pnpm db:push --dry-run`
 - [ ] ECC_ENABLED env var set on Railway
 - [ ] CRON_SECRET set on Railway
 
@@ -18,39 +18,55 @@ Railway auto-deploys from main.
 
 ### 2. Verify health
 ```bash
-curl https://<domain>.up.railway.app/api/health
+curl https://agent-studio-production-c43e.up.railway.app/api/health
 ```
 
 ### 3. Run smoke tests
 ```bash
-./scripts/smoke-test.sh https://<domain>.up.railway.app
+./scripts/smoke-test.sh https://agent-studio-production-c43e.up.railway.app
 ```
 
 ### 4. Deploy ECC Skills MCP (separate service)
-1. Railway Dashboard → agent-studio project → "+" → "GitHub Repo"
-2. Set root directory to `services/ecc-skills-mcp`
-3. Set env vars:
+
+Railway service name: `positive-inspiration`
+
+1. Railway Dashboard → agent-studio project → `positive-inspiration` service
+2. Root directory: `services/ecc-skills-mcp`
+3. Env vars:
    - `DATABASE_URL` → Reference PostgreSQL (read-only)
    - `PORT` → `8000`
-4. Disable Public Networking
-5. Verify: `curl http://ecc-skills-mcp.railway.internal:8000/health`
+4. Public Networking disabled (internal only)
+5. Verify health:
+   ```bash
+   # From within Railway internal network (e.g., via agent-studio service logs)
+   curl http://positive-inspiration.railway.internal:8000/health
+   ```
+
+MCP endpoint: `http://positive-inspiration.railway.internal:8000/mcp`
 
 ### 5. Link MCP to Next.js
 Set on agent-studio service:
 ```
-ECC_MCP_URL=http://ecc-skills-mcp.railway.internal:8000
+ECC_MCP_URL=http://positive-inspiration.railway.internal:8000
 ```
 
-### 6. Ingest skills (one-time)
+### 6. Sync Prisma schema
+```bash
+pnpm db:push
+```
+
+### 7. Ingest skills
 ```bash
 curl -X POST \
   -H "Authorization: Bearer $CRON_SECRET" \
   -H "Content-Type: application/json" \
-  -d '{"skills": [...], "vectorize": true}' \
-  https://<domain>.up.railway.app/api/ecc/ingest-skills
+  -d @/tmp/ecc-skills-payload.json \
+  https://agent-studio-production-c43e.up.railway.app/api/ecc/ingest-skills
 ```
 
-### 7. Configure Cron Service
+Payload format: `{ "skills": [{ "slug": "name", "content": "SKILL.md content" }], "vectorize": true }`
+
+### 8. Configure Cron Service
 Add to Railway Cron Service:
 ```bash
 # Every 5 min — scheduled flows (existing)
@@ -71,7 +87,7 @@ Railway PostgreSQL has daily point-in-time recovery backups.
 RTO: < 5 min
 
 ### MCP Server
-Railway Dashboard → ecc-skills-mcp → Deployments → "Redeploy"
+Railway Dashboard → `positive-inspiration` → Deployments → "Redeploy"
 RTO: < 2 min
 
 ### Emergency Killswitch
@@ -82,7 +98,7 @@ All ECC features disabled without redeploy. Takes effect on next request.
 
 | Flag | Default | Effect |
 |------|---------|--------|
-| `ECC_ENABLED` | `true` | Global ECC killswitch |
+| `ECC_ENABLED` | `false` | Global ECC killswitch (opt-in) |
 | `Agent.eccEnabled` | `false` | Per-agent ECC features |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | Enables OTLP metrics push |
 

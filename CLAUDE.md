@@ -2,18 +2,21 @@
 
 ## 1. PROJECT OVERVIEW
 
-Visual AI agent builder with multi-agent orchestration. Build AI agents via a flow editor
-(XyFlow), manage knowledge bases with RAG (chunking + embeddings + hybrid search), enable
-agent-to-agent communication (A2A protocol), and chat with agents. Features include: agent
-marketplace/discovery with faceted search, 112 agent templates across 11 categories,
-agent-as-tool orchestration (AI dynamically calls sibling agents), web browsing capabilities
-(fetch + browser actions via MCP), an embeddable chat widget, a CLI Generator that
-automatically produces a full MCP server bridge from any CLI application (6-phase AI pipeline:
-analyze → design → implement → test → document → publish, dual-target: Python FastMCP or
-TypeScript Node.js MCP SDK), and an Agent Evals / Testing
-Framework (3-layer: deterministic + semantic similarity + LLM-as-Judge, deploy-triggered runs).
-OAuth login (GitHub + Google). Simplified extraction from the enterprise "direct-solutions"
-project — no multi-tenancy, no billing, no plugins, no collaboration.
+Visual AI agent builder with multi-agent orchestration and continuous learning. Build AI agents
+via a flow editor (XyFlow), manage knowledge bases with RAG (chunking + embeddings + hybrid
+search), enable agent-to-agent communication (A2A protocol), and chat with agents. Features
+include: agent marketplace/discovery with faceted search, 137 agent templates across 12
+categories (including 25 ECC Developer Agents), agent-as-tool orchestration (AI dynamically
+calls sibling agents), web browsing capabilities (fetch + browser actions via MCP), an
+embeddable chat widget, a CLI Generator that automatically produces a full MCP server bridge
+from any CLI application (6-phase AI pipeline: analyze → design → implement → test → document →
+publish, dual-target: Python FastMCP or TypeScript Node.js MCP SDK), an Agent Evals / Testing
+Framework (3-layer: deterministic + semantic similarity + LLM-as-Judge, deploy-triggered runs),
+inbound webhooks (Standard Webhooks spec, HMAC-SHA256, provider presets), and ECC integration
+(everything-claude-code) — a Skills Browser (`/skills`), Meta-Orchestrator for autonomous agent
+routing, Learn node for pattern extraction, and a continuous learning system with instinct-based
+knowledge evolution. OAuth login (GitHub + Google). Simplified extraction from the enterprise
+"direct-solutions" project — no multi-tenancy, no billing, no plugins, no collaboration.
 
 ---
 
@@ -857,12 +860,13 @@ scripts/
 
 ---
 
-## 10. ECC IMPLEMENTATION PLAN — 10 Phases
+## 10. ECC IMPLEMENTATION — Completed Phases
 
-### Phase 0: Prisma Schema Foundation (1-2 days)
-**Blocker for ALL other phases. Do this first.**
+All 10 phases have been implemented and deployed to production.
 
-New models to add to `prisma/schema.prisma`:
+### Phase 0: Prisma Schema Foundation (COMPLETED)
+
+Models added to `prisma/schema.prisma`:
 
 ```prisma
 model AgentExecution {
@@ -978,24 +982,23 @@ instincts          Instinct[]
 eccEnabled         Boolean  @default(false)
 ```
 
-Migration command: `prisma migrate dev --name ecc_foundation`
-Railway auto-applies via startCommand: `npx prisma migrate deploy`
+Applied via: `pnpm db:push`
 
-### Phase 1: Import 25 ECC Agents as Templates (2-3 days)
+### Phase 1: Import 25 ECC Agents as Templates (COMPLETED)
 - New category "Developer Agents" in `src/lib/constants/agent-categories.ts`
 - `src/data/ecc-agent-templates.json` — 25 templates, separate from existing 133
 - Import script: `scripts/import-ecc-agents.mjs` — parses YAML frontmatter from ECC .md files
 - Agent Card endpoint: `GET /api/agents/[agentId]/card.json` (A2A v0.3 JSON-LD)
 - Tests: schema validation for all 25, snapshot tests
 
-### Phase 2: 108+ Skills → Knowledge Base + Skill Browser (2-3 days)
+### Phase 2: 60+ Skills → Knowledge Base + Skill Browser (COMPLETED)
 - `scripts/import-ecc-skills.mjs` — parse SKILL.md → Skill model + KB vectorization
 - `POST /api/ecc/ingest-skills` — **ASYNC** (not in startup path! Railway healthcheck = 120s)
 - Protected by `CRON_SECRET` header
 - New page: `src/app/skills/page.tsx` — search bar, faceted filters (language, category, agent)
 - **RAILWAY**: incremental re-ingest via Cron Service (daily)
 
-### Phase 3: Meta-Orchestrator + Flow Templates (3-4 days)
+### Phase 3: Meta-Orchestrator + Flow Templates (COMPLETED)
 - Meta-Orchestrator agent based on ECC chief-of-staff
 - 4 pre-built flow templates:
   1. **TDD Pipeline**: Planner → TDD Guide → parallel[Code Reviewer + Security] → end
@@ -1005,8 +1008,8 @@ Railway auto-applies via startCommand: `npx prisma migrate deploy`
 - Add to `src/data/starter-flows.ts`
 - **RAILWAY**: no serverless timeout — multi-agent pipelines run unlimited
 
-### Phase 4: ECC Skills MCP Server — Separate Railway Service (4-5 days)
-**Most complex phase. Creates a new Railway service.**
+### Phase 4: ECC Skills MCP Server — Separate Railway Service (COMPLETED)
+Railway service name: `positive-inspiration`. MCP endpoint: `/mcp`.
 
 - `services/ecc-skills-mcp/main.py` — Python FastMCP with 3 tools:
   - `get_skill(name)` → returns skill content
@@ -1018,7 +1021,7 @@ Railway auto-applies via startCommand: `npx prisma migrate deploy`
 - MCP Roots: agent workspaces as roots. MCP Resources: `kb://agent-id/skill-name`
 - MCP pool: min=5, max=20, HTTP/2, timeout tiers (2s/10s/30s)
 
-### Phase 5: Continuous Learning + Instinct System (5-7 days)
+### Phase 5: Continuous Learning + Instinct System (COMPLETED)
 - "Learn" node in Flow Builder — extracts patterns from AgentExecution history
 - Instinct storage: confidence 0.0-1.0, frequency counter, >0.85 → promote to KB skill
 - `POST /api/skills/evolve` — AI clusters instincts, generates new SKILL.md
@@ -1026,14 +1029,14 @@ Railway auto-applies via startCommand: `npx prisma migrate deploy`
 - Execution Dashboard: timeline, decision trace, replay mode
 - `src/lib/ecc/obsidian-adapter.ts` — interface stub for future Obsidian phase
 
-### Phase 6: Observability — OpenTelemetry + Metrics (2-3 days, parallel from F1)
+### Phase 6: Observability — OpenTelemetry + Metrics (COMPLETED)
 - `@opentelemetry/api` + `@opentelemetry/sdk-node`
 - gen_ai.* semantic conventions (AAIF 2026): system, model, input_tokens, tool use spans
 - Pino structured logging → Railway log drain → Grafana Loki
 - **RAILWAY**: OTLP push exporter (NOT Prometheus pull — Railway doesn't support scrape)
 - `OTEL_EXPORTER_OTLP_ENDPOINT` env var → Grafana Cloud
 
-### Phase 7: Security Hardening (3-4 days, parallel from F1)
+### Phase 7: Security Hardening (COMPLETED)
 - Prompt injection defense: JSON Schema validation on all skill inputs, output PII filtering
 - RBAC enforcement: middleware checks AgentSkillPermission before skill calls
 - Webhook HMAC-SHA256: X-Webhook-ID, X-Webhook-Signature, X-Webhook-Timestamp
@@ -1041,7 +1044,7 @@ Railway auto-applies via startCommand: `npx prisma migrate deploy`
 - **RAILWAY**: PostgreSQL → Disable Public Networking. ECC MCP → Disable Public Networking
 - Security test suite: injection, RBAC bypass, replay, secret leakage
 
-### Phase 8: Performance Testing & Optimization (2-3 days)
+### Phase 8: Performance Testing & Optimization (COMPLETED)
 - k6 load test: 100 concurrent users, 25 agents, 30 min
 - DB indexes: AgentExecution(agentId, status), Skill(slug, language), Instinct(agentId, confidence)
 - Caching: skill metadata (10min), KB search (2min), agent card (5min) — target >80% hit rate
@@ -1049,7 +1052,7 @@ Railway auto-applies via startCommand: `npx prisma migrate deploy`
 - **RAILWAY**: target single replica. Scaling runbook for 2+ replicas (Redis)
 - SLA targets: P95 <5s flow exec, P99 <2s KB search, P95 <100ms skill metadata
 
-### Phase 9: Production Deploy + Obsidian Onboarding (1-2 days)
+### Phase 9: Production Deploy + Obsidian Onboarding (COMPLETED)
 - Deploy ECC Skills MCP as Railway service (Private Networking only)
 - Cron Service: add /api/skills/evolve (3AM daily) alongside existing scheduled flows (5min)
 - Feature flag: `ECC_ENABLED` env var for killswitch
@@ -1057,13 +1060,9 @@ Railway auto-applies via startCommand: `npx prisma migrate deploy`
 - `docs/obsidian-integration.md` — onboarding guide for future Obsidian phase
 - Smoke test: health, login, agent create, KB ingest, chat, MCP call, webhook, cron
 
-### Parallelization Strategy
-```
-Sequential (strict order): F0 → F1 → F2 → F3 → F4 → F5
-Parallel with above:       F6 (Observability) + F7 (Security) start from F1
-Final:                     F8 (Performance) + F9 (Deploy) after everything works
-Realistic timeline:        ~25 working days (not 37 sequential)
-```
+### Implementation Summary
+All 10 phases completed and deployed to production on Railway (service: `positive-inspiration`).
+60 skills ingested and vectorized (255 KB chunks). ECC_ENABLED defaults to `false` (opt-in).
 
 ---
 
@@ -1085,16 +1084,16 @@ Realistic timeline:        ~25 working days (not 37 sequential)
 │           │ railway.internal                                     │
 │           │                                                      │
 │  ┌────────▼────────────┐    ┌──────────────────────────────┐    │
-│  │  ECC Skills MCP      │    │  Cron Service                │    │
-│  │  Python FastMCP      │    │  */5 * * * * (flows)         │    │
-│  │  Streamable HTTP     │    │  0 3 * * * (evolve)          │    │
-│  │  Port 8000           │    │  → /api/cron/*               │    │
-│  │  /health endpoint    │    │  Internal networking only    │    │
+│  │  positive-inspiration │    │  Cron Service                │    │
+│  │  (ECC Skills MCP)     │    │  */5 * * * * (flows)         │    │
+│  │  Python FastMCP       │    │  0 3 * * * (evolve)          │    │
+│  │  Port 8000 · /mcp     │    │  → /api/cron/*               │    │
+│  │  /health endpoint     │    │  Internal networking only    │    │
 │  └─────────────────────┘    └──────────────────────────────┘    │
 │                                                                  │
 │  Private Network: *.railway.internal (all services)              │
-│  Public:  agent-studio → *.up.railway.app (only Next.js)        │
-│  Private: ecc-skills-mcp → ecc-skills.railway.internal          │
+│  Public:  agent-studio → agent-studio-production-c43e.up.railway.app │
+│  Private: positive-inspiration → positive-inspiration.railway.internal │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1112,13 +1111,13 @@ Realistic timeline:        ~25 working days (not 37 sequential)
 
 | Service          | Variable                      | Value                                           | Phase |
 |------------------|-------------------------------|-------------------------------------------------|-------|
-| agent-studio     | `ECC_MCP_URL`                 | `http://ecc-skills-mcp.railway.internal:8000`   | F4    |
+| agent-studio     | `ECC_MCP_URL`                 | `http://positive-inspiration.railway.internal:8000` | F4    |
 | agent-studio     | `ECC_ENABLED`                 | `true`                                          | F9    |
 | agent-studio     | `OTEL_EXPORTER_OTLP_ENDPOINT` | `https://otlp-gateway-*.grafana.net/otlp`      | F6    |
 | agent-studio     | `OTEL_SERVICE_NAME`           | `agent-studio`                                  | F6    |
-| ecc-skills-mcp   | `DATABASE_URL`                | Reference → PostgreSQL (read-only recommended)  | F4    |
-| ecc-skills-mcp   | `PORT`                        | `8000`                                          | F4    |
-| ecc-skills-mcp   | `MCP_TRANSPORT`               | `streamable-http`                               | F4    |
+| positive-inspiration | `DATABASE_URL`            | Reference → PostgreSQL (read-only recommended)  | F4    |
+| positive-inspiration | `PORT`                    | `8000`                                          | F4    |
+| positive-inspiration | `MCP_TRANSPORT`           | `streamable-http`                               | F4    |
 | cron-service     | `STUDIO_URL`                  | `http://agent-studio.railway.internal:$PORT`    | F9    |
 
 ---
@@ -1169,25 +1168,16 @@ Realistic timeline:        ~25 working days (not 37 sequential)
 
 ---
 
-## 14. CLAUDE WORKING GUIDELINES — ECC Extension
+## 14. CLAUDE WORKING GUIDELINES — ECC Module
 
-### When implementing ECC phases:
+### When working with ECC code:
 1. **Always check feature flag**: wrap ECC code with `if (process.env.ECC_ENABLED !== 'false')` or the per-agent `eccEnabled` field
-2. **Prisma schema changes FIRST**: Phase 0 blocks everything. Run `prisma migrate dev` before any code
+2. **Schema changes**: run `pnpm db:push` after any Prisma schema modifications
 3. **Async ingestion ONLY**: Never put skill ingestion in startup path (Railway healthcheck = 120s)
-4. **Railway internal networking**: MCP server URL via `process.env.ECC_MCP_URL`, never hardcode
-5. **Test each phase**: write tests before moving to next phase. ECC agents test: schema validation + snapshot
-6. **Existing patterns**: follow the same patterns as existing code (Zod validation, SWR hooks, API route handlers, Prisma queries)
-7. **No new CSS frameworks**: Tailwind CSS v4 ONLY. No inline styles.
-8. **MCP pool awareness**: timeout tiers matter — metadata=2s, search=10s, compute=30s
-9. **Push metrics, not pull**: Railway doesn't support Prometheus scrape. Use OTLP push exporter
-10. **Separate MCP service**: ECC Skills MCP is a separate Railway service (Python), not embedded in Next.js
-
-### Phase implementation order:
-```
-START → Phase 0 (Prisma) → Phase 1 (Agents) → Phase 2 (Skills) →
-        Phase 3 (Orchestrator) → Phase 4 (MCP Server) → Phase 5 (Learning) →
-        Phase 8 (Performance) → Phase 9 (Deploy)
-
-PARALLEL: Phase 6 (Observability) + Phase 7 (Security) — start anytime after Phase 0
-```
+4. **Railway internal networking**: MCP server URL via `process.env.ECC_MCP_URL`, never hardcode. Service name: `positive-inspiration`, MCP path: `/mcp`
+5. **Existing patterns**: follow the same patterns as existing code (Zod validation, SWR hooks, API route handlers, Prisma queries)
+6. **No new CSS frameworks**: Tailwind CSS v4 ONLY. No inline styles.
+7. **MCP pool awareness**: timeout tiers matter — metadata=2s, search=10s, compute=30s
+8. **Push metrics, not pull**: Railway doesn't support Prometheus scrape. Use OTLP push exporter
+9. **Separate MCP service**: ECC Skills MCP is a separate Railway service (Python), not embedded in Next.js
+10. **Production URL**: `https://agent-studio-production-c43e.up.railway.app`
