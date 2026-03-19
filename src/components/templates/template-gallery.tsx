@@ -37,6 +37,7 @@ const COLOR_CLASSES: Record<string, string> = {
   violet:  "bg-violet-500/10 text-violet-600 dark:text-violet-400",
   rose:    "bg-rose-500/10 text-rose-600 dark:text-rose-400",
   emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  fuchsia: "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -61,6 +62,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   education:          "Education",
   productivity:       "Productivity",
   "desktop-automation": "Desktop Auto",
+  "developer-agents":  "Dev Agents",
 };
 
 interface TemplateGalleryProps {

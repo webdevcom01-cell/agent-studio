@@ -16,6 +16,9 @@ function isPublicPath(pathname: string): boolean {
 
   if (pathname.match(/^\/api\/agents\/[^/]+\/chat$/)) return true;
 
+  // A2A agent card — public discovery endpoint
+  if (pathname.match(/^\/api\/agents\/[^/]+\/card\.json$/)) return true;
+
   // Inbound webhook trigger — public, authenticated via HMAC-SHA256 signature
   if (pathname.match(/^\/api\/agents\/[^/]+\/trigger\/[^/]+$/)) return true;
 
@@ -24,6 +27,9 @@ function isPublicPath(pathname: string): boolean {
 
   // Cron jobs — called by Vercel infrastructure, authenticated via CRON_SECRET header
   if (pathname.startsWith("/api/cron/")) return true;
+
+  // ECC skill ingestion — authenticated via CRON_SECRET header
+  if (pathname.startsWith("/api/ecc/")) return true;
 
   if (pathname === "/favicon.ico") return true;
   if (pathname === "/embed.js") return true;

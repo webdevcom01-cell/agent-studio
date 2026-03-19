@@ -35,6 +35,7 @@ export const AGENT_CATEGORY_METADATA: CategoryMeta[] = [
   { id: "spatial-computing",  label: "Spatial Computing",  emoji: "🥽", color: "rose",   description: "XR/AR/VR applications" },
   { id: "paid-media",         label: "Paid Media",         emoji: "💰", color: "red",    description: "Advertising and paid campaigns" },
   { id: "desktop-automation", label: "Desktop Automation", emoji: "🖥️", color: "emerald", description: "Desktop app control via CLI bridge" },
+  { id: "developer-agents",  label: "Developer Agents",  emoji: "🛠️", color: "fuchsia", description: "ECC specialized development agents" },
 ];
 
 export const AGENT_CATEGORIES = AGENT_CATEGORY_METADATA.map(
@@ -74,4 +75,5 @@ export const CATEGORY_COLOR_CLASSES: Record<string, string> = {
   rose:   "bg-rose-500/10 text-rose-600 dark:text-rose-400",
   red:    "bg-red-500/10 text-red-600 dark:text-red-400",
   emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  fuchsia: "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400",
 };

@@ -36,7 +36,16 @@ import {
 } from "@/components/templates/template-gallery";
 import { ALL_MODELS } from "@/lib/models";
 import templateData from "@/data/agent-templates.json";
+import eccTemplateData from "@/data/ecc-agent-templates.json";
 import { cn } from "@/lib/utils";
+
+const mergedTemplates = [
+  ...templateData.templates,
+  ...eccTemplateData.templates,
+];
+const mergedCategories = [
+  ...new Set([...templateData.categories, ...eccTemplateData.categories]),
+];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -144,8 +153,8 @@ function Step1Choose({ onSelectTemplate, onSelectBlank }: Step1Props) {
         </button>
         <div className="flex-1 min-h-0 overflow-hidden">
           <TemplateGallery
-            templates={templateData.templates as AgentTemplate[]}
-            categories={templateData.categories}
+            templates={mergedTemplates as AgentTemplate[]}
+            categories={mergedCategories}
             onSelect={onSelectTemplate}
           />
         </div>
@@ -184,7 +193,7 @@ function Step1Choose({ onSelectTemplate, onSelectBlank }: Step1Props) {
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium">Browse templates</p>
             <Badge variant="secondary" className="text-xs px-1.5 py-0">
-              {templateData.templates.length}
+              {mergedTemplates.length}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
