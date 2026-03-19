@@ -78,16 +78,38 @@ async def list_skills(language: str = "", category: str = "") -> str:
     return json.dumps([dict(r) for r in rows], default=str, ensure_ascii=False)
 
 
-# Health middleware — intercepts /health before MCP handles it
-class HealthMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        if request.url.path == "/health":
-            return PlainTextResponse("ok")
-        return await call_next(request)
+# ASGI middleware: handles /health + rewrites Host header for FastMCP validation
+class RailwayMiddleware:
+    """
+    Sits in front of FastMCP ASGI app.
+    1. Intercepts GET /health → returns plain "ok" (no DB needed)
+    2. Rewrites Host header to 'localhost' so FastMCP host-validation passes
+       regardless of Railway's public domain name.
+    """
+    def __init__(self, app):
+        self.app = app
 
-# FastMCP at root — handles all MCP protocol traffic
-# HealthMiddleware sits in front for Railway healthcheck
-app = HealthMiddleware(mcp.streamable_http_app())
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path == "/health":
+                await send({
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [(b"content-type", b"text/plain; charset=utf-8")],
+                })
+                await send({"type": "http.response.body", "body": b"ok", "more_body": False})
+                return
+            # Rewrite Host → localhost so FastMCP accepts the request
+            headers = [
+                (b"host", b"localhost") if k.lower() == b"host" else (k, v)
+                for k, v in scope.get("headers", [])
+            ]
+            scope = {**scope, "headers": headers}
+        await self.app(scope, receive, send)
+
+# FastMCP at root + Railway-aware middleware
+app = RailwayMiddleware(mcp.streamable_http_app())
 
 if __name__ == "__main__":
     logger.info("Starting on 0.0.0.0:%d", PORT)
