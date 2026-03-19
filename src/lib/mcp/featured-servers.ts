@@ -57,7 +57,33 @@ export interface FeaturedMCPServer {
   comingSoonNote?: string;
 }
 
+const ECC_MCP_URL =
+  process.env.ECC_MCP_URL ?? "http://localhost:8000";
+
 export const FEATURED_MCP_SERVERS: FeaturedMCPServer[] = [
+  // ── ECC Skills (internal) ─────────────────────────────────────────────────
+  {
+    id: "ecc-skills",
+    name: "ECC Skills",
+    icon: "🛠️",
+    description:
+      "Search and retrieve 100+ development skills from everything-claude-code. Covers TypeScript, Python, Go, security, testing, and more.",
+    capabilities: [
+      "Get skill content by name",
+      "Search skills by keyword",
+      "Filter by language or category",
+      "List all available skills",
+    ],
+    url: `${ECC_MCP_URL}/mcp`,
+    transport: "STREAMABLE_HTTP",
+    setupType: "api_key",
+    authHeader: "Authorization",
+    authPrefix: "Bearer ",
+    keyLabel: "ECC Skills Server Key (optional in dev)",
+    keyPlaceholder: "your-ecc-key",
+    keyHelpText: "Leave empty for local development. In production, set via ECC_MCP_KEY env var.",
+  },
+
   // ── Developer tools ─────────────────────────────────────────────────────────
   {
     id: "github-official",

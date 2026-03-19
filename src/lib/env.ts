@@ -26,6 +26,8 @@ const envSchema = z.object({
   NOTION_CLIENT_SECRET: optionalStr,
   GOOGLE_WORKSPACE_CLIENT_ID: optionalStr,
   GOOGLE_WORKSPACE_CLIENT_SECRET: optionalStr,
+  ECC_MCP_URL: optionalStr,
+  ECC_ENABLED: optionalStr,
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),

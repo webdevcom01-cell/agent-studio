@@ -48,6 +48,7 @@ e2e/.auth/
 # Local dev scripts and external services
 scripts/
 services/
+!services/ecc-skills-mcp/
 *.mjs
 
 # Vercel env secrets
