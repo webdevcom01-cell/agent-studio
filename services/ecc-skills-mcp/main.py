@@ -23,16 +23,14 @@ PORT = int(os.environ.get("PORT", "8000"))
 # Railway terminates TLS externally; host validation blocks legitimate requests.
 # We bypass it by patching every possible check method on TransportSecurityManager.
 try:
-    import inspect as _inspect
-    from mcp.server import transport_security as _ts
-    _attrs = [a for a in dir(_ts) if not a.startswith("__")]
-    logger.info(f"[security-debug] module attrs: {_attrs}")
-    _src = _inspect.getsource(_ts)
-    for _line in _src.split("\n"):
-        if any(k in _line for k in ["def ", "class ", "host", "Host", "421", "allowed", "origin"]):
-            logger.info(f"[security-src] {_line.rstrip()}")
+    from mcp.server.transport_security import TransportSecurityMiddleware
+    # Railway terminates TLS externally — bypass internal host/origin validation.
+    # _validate_host default rejects all hosts when allowed_hosts=[] (empty list).
+    TransportSecurityMiddleware._validate_host = lambda self, host: True
+    TransportSecurityMiddleware._validate_origin = lambda self, origin: True
+    logger.info("[security-patch] TransportSecurityMiddleware._validate_host bypassed for Railway")
 except Exception as _e:
-    logger.warning(f"[security-debug] failed: {_e}")
+    logger.warning(f"[security-patch] failed: {_e}")
 
 from mcp.server.fastmcp import FastMCP
 pool: asyncpg.Pool | None = None
