@@ -28,6 +28,8 @@ const envSchema = z.object({
   GOOGLE_WORKSPACE_CLIENT_SECRET: optionalStr,
   ECC_MCP_URL: optionalStr,
   ECC_ENABLED: optionalStr,
+  OTEL_EXPORTER_OTLP_ENDPOINT: optionalStr,
+  OTEL_SERVICE_NAME: optionalStr,
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
