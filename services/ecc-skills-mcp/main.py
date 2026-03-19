@@ -19,6 +19,16 @@ logger = logging.getLogger("ecc-skills-mcp")
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 PORT = int(os.environ.get("PORT", "8000"))
+
+# ── Transport Security: allow Railway public domain + localhost ───────────────
+# Must be set BEFORE FastMCP is initialized so TransportSecuritySettings picks it up
+_railway_host = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+_allowed_hosts = ["localhost", "127.0.0.1", "0.0.0.0"]
+if _railway_host:
+    _allowed_hosts.append(_railway_host)
+# Pydantic v2 BaseSettings reads JSON array from env var
+os.environ["MCP_ALLOWED_HOSTS"] = json.dumps(_allowed_hosts)
+os.environ["MCP_ALLOWED_ORIGINS"] = json.dumps(["*"])
 pool: asyncpg.Pool | None = None
 
 
@@ -105,20 +115,11 @@ class RailwayMiddleware:
             await send({"type": "http.response.body", "body": b"ok", "more_body": False})
             return
 
-        # Rewrite Host to localhost — FastMCP validates against localhost by default
-        # Also ensure path is /mcp (no trailing slash) to avoid internal redirects
+        # Normalize /mcp/ → /mcp to avoid Starlette internal redirect loop
         if path == "/mcp/":
-            # Redirect internally to /mcp without trailing slash
             scope = dict(scope)
             scope["path"] = "/mcp"
             scope["raw_path"] = b"/mcp"
-
-        new_headers = [
-            (b"host", b"localhost") if k.lower() == b"host" else (k, v)
-            for k, v in scope.get("headers", [])
-        ]
-        scope = dict(scope)
-        scope["headers"] = new_headers
 
         await self.app(scope, receive, send)
 
