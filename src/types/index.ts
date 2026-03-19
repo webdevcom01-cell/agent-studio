@@ -58,4 +58,5 @@ export type NodeType =
   | "switch"
   | "web_fetch"
   | "browser_action"
-  | "desktop_app";
+  | "desktop_app"
+  | "learn";

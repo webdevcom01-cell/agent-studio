@@ -34,6 +34,7 @@ import {
   Shuffle,
   Route,
   AppWindow,
+  Lightbulb,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -465,6 +466,20 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       actions: [],
       outputVariable: "desktop_result",
       sessionMode: "new",
+    },
+  },
+  {
+    type: "learn",
+    label: "Learn",
+    description: "Extract and reinforce patterns as instincts",
+    icon: Lightbulb,
+    color: "fuchsia",
+    category: "ECC",
+    defaultData: {
+      label: "Learn Pattern",
+      patternName: "",
+      patternDescription: "",
+      outputVariable: "learn_result",
     },
   },
 ];
