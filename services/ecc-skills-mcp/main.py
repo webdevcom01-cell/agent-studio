@@ -23,20 +23,18 @@ PORT = int(os.environ.get("PORT", "8000"))
 # Railway terminates TLS externally; host validation blocks legitimate requests.
 # We bypass it by patching every possible check method on TransportSecurityManager.
 try:
+    import inspect as _inspect
     from mcp.server import transport_security as _ts
-    if hasattr(_ts, "TransportSecurityManager"):
-        _allow = lambda self, *a, **kw: True
-        for _m in [
-            "_check_host", "is_host_allowed", "validate_host",
-            "_is_valid_host", "check_host", "_check_origin",
-            "is_origin_allowed", "validate_origin",
-        ]:
-            if hasattr(_ts.TransportSecurityManager, _m):
-                setattr(_ts.TransportSecurityManager, _m, _allow)
-                logger.info(f"[security-patch] bypassed {_m}")
-    logger.info("[security-patch] TransportSecurityManager patched for Railway")
+    # Log ALL methods so we know exactly what to patch
+    _all_methods = [m for m in dir(_ts.TransportSecurityManager) if not m.startswith("__")]
+    logger.info(f"[security-patch] TransportSecurityManager methods: {_all_methods}")
+    # Also log source snippet around 'host' to find the right method
+    _src = _inspect.getsource(_ts)
+    for _line in _src.split("\n"):
+        if "host" in _line.lower() or "origin" in _line.lower() or "421" in _line or "allowed" in _line.lower():
+            logger.info(f"[security-src] {_line.rstrip()}")
 except Exception as _e:
-    logger.warning(f"[security-patch] failed: {_e}")
+    logger.warning(f"[security-inspect] failed: {_e}")
 
 from mcp.server.fastmcp import FastMCP
 pool: asyncpg.Pool | None = None
