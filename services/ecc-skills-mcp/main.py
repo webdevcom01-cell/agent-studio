@@ -25,16 +25,14 @@ PORT = int(os.environ.get("PORT", "8000"))
 try:
     import inspect as _inspect
     from mcp.server import transport_security as _ts
-    # Log ALL methods so we know exactly what to patch
-    _all_methods = [m for m in dir(_ts.TransportSecurityManager) if not m.startswith("__")]
-    logger.info(f"[security-patch] TransportSecurityManager methods: {_all_methods}")
-    # Also log source snippet around 'host' to find the right method
+    _attrs = [a for a in dir(_ts) if not a.startswith("__")]
+    logger.info(f"[security-debug] module attrs: {_attrs}")
     _src = _inspect.getsource(_ts)
     for _line in _src.split("\n"):
-        if "host" in _line.lower() or "origin" in _line.lower() or "421" in _line or "allowed" in _line.lower():
+        if any(k in _line for k in ["def ", "class ", "host", "Host", "421", "allowed", "origin"]):
             logger.info(f"[security-src] {_line.rstrip()}")
 except Exception as _e:
-    logger.warning(f"[security-inspect] failed: {_e}")
+    logger.warning(f"[security-debug] failed: {_e}")
 
 from mcp.server.fastmcp import FastMCP
 pool: asyncpg.Pool | None = None
