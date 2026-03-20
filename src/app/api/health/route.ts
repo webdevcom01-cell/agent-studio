@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isECCEnabled } from "@/lib/ecc";
+import { getRedis, isRedisConfigured } from "@/lib/redis";
+import { randomBytes } from "crypto";
 
 export const dynamic = "force-dynamic";
+
+/** Stable per-process replica ID — survives requests but changes on redeploy. */
+const REPLICA_ID = randomBytes(4).toString("hex");
 
 interface ECCStatus {
   enabled: boolean;
@@ -56,16 +61,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const ecc = await getECCStatus();
 
+  let redisStatus: "ok" | "not-configured" | "fail" = "not-configured";
+  if (isRedisConfigured()) {
+    try {
+      const redis = await getRedis();
+      redisStatus = redis ? "ok" : "fail";
+    } catch {
+      redisStatus = "fail";
+    }
+  }
+
   const status = dbStatus === "ok" ? "healthy" : "degraded";
   const statusCode = dbStatus === "ok" ? 200 : 503;
 
-  // Rollback: set ECC_ENABLED=false on Railway to disable all ECC features
-  // without redeploy. Takes effect on next request. See docs/deployment/ECC-DEPLOY-RUNBOOK.md
   return NextResponse.json(
     {
       status,
       version: process.env.npm_package_version ?? "0.1.0",
+      replicaId: REPLICA_ID,
       db: dbStatus,
+      redis: redisStatus,
       ecc: {
         enabled: ecc.enabled,
         skills: ecc.skillCount,

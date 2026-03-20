@@ -13,6 +13,10 @@ vi.mock("@/lib/rate-limit", () => ({
 vi.mock("@/lib/ecc", () => ({
   isECCEnabled: vi.fn(() => false),
 }));
+vi.mock("@/lib/redis", () => ({
+  getRedis: vi.fn(async () => null),
+  isRedisConfigured: vi.fn(() => false),
+}));
 
 import { GET } from "../route";
 import { prisma } from "@/lib/prisma";
@@ -108,5 +112,37 @@ describe("GET /api/health", () => {
     const body = await response.json();
 
     expect(body.ecc.mcp).toBeDefined();
+  });
+
+  it("includes replicaId in response", async () => {
+    mockQueryRaw.mockResolvedValue([{ "?column?": 1 }]);
+
+    const response = await GET(makeRequest());
+    const body = await response.json();
+
+    expect(body.replicaId).toBeDefined();
+    expect(typeof body.replicaId).toBe("string");
+    expect(body.replicaId.length).toBe(8);
+  });
+
+  it("returns same replicaId across requests (stable per process)", async () => {
+    mockQueryRaw.mockResolvedValue([{ "?column?": 1 }]);
+
+    const r1 = await GET(makeRequest());
+    const r2 = await GET(makeRequest());
+
+    const b1 = await r1.json();
+    const b2 = await r2.json();
+
+    expect(b1.replicaId).toBe(b2.replicaId);
+  });
+
+  it("reports redis as not-configured when REDIS_URL not set", async () => {
+    mockQueryRaw.mockResolvedValue([{ "?column?": 1 }]);
+
+    const response = await GET(makeRequest());
+    const body = await response.json();
+
+    expect(body.redis).toBe("not-configured");
   });
 });
