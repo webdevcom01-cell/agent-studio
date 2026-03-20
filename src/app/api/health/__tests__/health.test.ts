@@ -4,15 +4,20 @@ import { NextRequest } from "next/server";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     $queryRaw: vi.fn(),
+    skill: { count: vi.fn().mockResolvedValue(60) },
   },
 }));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true, remaining: 29, retryAfterMs: 0 }),
 }));
+vi.mock("@/lib/ecc", () => ({
+  isECCEnabled: vi.fn(() => false),
+}));
 
 import { GET } from "../route";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { isECCEnabled } from "@/lib/ecc";
 
 const mockQueryRaw = vi.mocked(prisma.$queryRaw);
 const mockCheckRateLimit = vi.mocked(checkRateLimit);
@@ -69,5 +74,39 @@ describe("GET /api/health", () => {
       expect.stringContaining("health:"),
       30
     );
+  });
+
+  it("includes ECC status when disabled", async () => {
+    mockQueryRaw.mockResolvedValue([{ "?column?": 1 }]);
+    vi.mocked(isECCEnabled).mockReturnValue(false);
+
+    const response = await GET(makeRequest());
+    const body = await response.json();
+
+    expect(body.ecc).toBeDefined();
+    expect(body.ecc.enabled).toBe(false);
+    expect(body.ecc.skills).toBe(0);
+  });
+
+  it("includes ECC status with skill count when enabled", async () => {
+    mockQueryRaw.mockResolvedValue([{ "?column?": 1 }]);
+    vi.mocked(isECCEnabled).mockReturnValue(true);
+    vi.mocked(prisma.skill.count).mockResolvedValue(60);
+
+    const response = await GET(makeRequest());
+    const body = await response.json();
+
+    expect(body.ecc.enabled).toBe(true);
+    expect(body.ecc.skills).toBe(60);
+  });
+
+  it("reports ECC MCP status", async () => {
+    mockQueryRaw.mockResolvedValue([{ "?column?": 1 }]);
+    vi.mocked(isECCEnabled).mockReturnValue(true);
+
+    const response = await GET(makeRequest());
+    const body = await response.json();
+
+    expect(body.ecc.mcp).toBeDefined();
   });
 });
