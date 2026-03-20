@@ -44,6 +44,7 @@ knowledge evolution. OAuth login (GitHub + Google). Simplified extraction from t
 - **Toasts:** Sonner
 - **Unit tests:** Vitest + @vitest/coverage-v8
 - **E2E tests:** Playwright (7 spec files — auth, dashboard, flow editor, KB, chat, import/export, API)
+- **Redis:** ioredis v5 — cross-replica shared state (rate limiting, cache, session, MCP pool coordination). Dynamic import, graceful fallback to in-memory when unavailable
 - **Utilities:** class-variance-authority (cva), clsx, tailwind-merge
 
 ---
@@ -54,6 +55,10 @@ knowledge evolution. OAuth login (GitHub + Google). Simplified extraction from t
 prisma/
   schema.prisma         ← DB schema (26 models, pgvector, versioning, A2A, CLIGeneration, Evals)
   migrations/           ← auto-generated — never edit manually
+
+railway.toml            ← Railway deploy config (Nixpacks, healthcheck, 2 replicas)
+nixpacks.toml           ← Nixpacks install phase override (--no-frozen-lockfile)
+.npmrc                  ← pnpm config (frozen-lockfile=false for Railway compat)
 
 public/
   embed.js              ← Embeddable widget script (bubble + iframe)
@@ -172,7 +177,8 @@ src/
     env.ts            ← Environment variable validation (Zod schema)
     logger.ts         ← Structured JSON logger (server-only, info/warn/error)
     prisma.ts         ← Prisma client singleton
-    rate-limit.ts     ← In-memory sliding window rate limiter
+    redis.ts          ← Redis client singleton (ioredis, dynamic import, graceful fallback)
+    rate-limit.ts     ← Sliding window rate limiter (Redis when available, in-memory fallback)
     utils.ts          ← cn() utility (clsx + tailwind-merge)
     api/
       auth-guard.ts       ← requireAuth(), requireAgentOwner(), isAuthError()
@@ -645,10 +651,18 @@ EvalResult — One test case result within a run
 - **Webhooks management UI**: `/webhooks/[agentId]` — two-panel (list + detail), three tabs per webhook (Executions / Configuration / Test). Configuration tab: preset picker grid, event filter tag editor with autocomplete, body/header mapping editors with row-level CRUD. Create dialog includes inline preset picker.
 - **API routes**: `GET/POST /api/agents/[agentId]/webhooks`, `GET/PATCH/DELETE /api/agents/[agentId]/webhooks/[webhookId]`, `POST /api/agents/[agentId]/webhooks/[webhookId]/rotate`
 
+### Redis — Cross-Replica Shared State
+- `src/lib/redis.ts` — singleton client using `ioredis` via dynamic `await import("ioredis")`
+- Graceful fallback: if `REDIS_URL` not set or connection fails, returns `null` — all callers fall back to in-memory
+- `connectionFailed` flag — once Redis fails, all subsequent calls return `null` immediately (no retry storm)
+- Retry strategy: 3 retries max, exponential backoff (200ms, 400ms, 600ms), then permanent fail
+- Features: generic cache (get/set/del with TTL), session cache (5min TTL), MCP pool coordination (10min TTL), rate limiting (Lua EVAL)
+- `resetRedis()` for testing — quits client, clears singleton + `connectionFailed` flag
+
 ### Analytics & Monitoring
 - `trackChatResponse()` — fire-and-forget analytics for every chat response
-- Rate limiting: 20 req/min per agentId:IP on `/api/agents/[agentId]/chat`
-- Health check: `/api/health` returns DB status, uptime, version
+- Rate limiting: 20 req/min per agentId:IP on `/api/agents/[agentId]/chat` (Redis-backed when available, in-memory fallback)
+- Health check: `/api/health` returns DB status, Redis status, uptime, version
 - Structured JSON logger (`src/lib/logger.ts`) — server-only, levels: info/warn/error
 - `instrumentation.ts` — validates critical env variables at startup
 
@@ -670,6 +684,8 @@ cp .env.example .env.local
 #   AUTH_SECRET                    — NextAuth JWT secret (openssl rand -base64 32)
 #   AUTH_GITHUB_ID / AUTH_GITHUB_SECRET  — GitHub OAuth App
 #   AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET  — Google OAuth client
+# Optional (add keys to enable additional features):
+#   REDIS_URL                      — Redis connection URL (enables cross-replica rate limiting, caching, session sharing)
 # Optional (add keys to enable additional models):
 #   ANTHROPIC_API_KEY              — console.anthropic.com — Claude Haiku/Sonnet/Opus
 #   GOOGLE_GENERATIVE_AI_API_KEY   — aistudio.google.com — Gemini 2.5 Flash/Pro (free tier)
@@ -1049,7 +1065,7 @@ Railway service name: `positive-inspiration`. MCP endpoint: `/mcp`.
 - DB indexes: AgentExecution(agentId, status), Skill(slug, language), Instinct(agentId, confidence)
 - Caching: skill metadata (10min), KB search (2min), agent card (5min) — target >80% hit rate
 - RAG quality benchmark: 20 queries, MRR target >0.7
-- **RAILWAY**: target single replica. Scaling runbook for 2+ replicas (Redis)
+- **RAILWAY**: 2 replicas with Redis for cross-replica state. Further scaling → increase replicas + Redis cluster
 - SLA targets: P95 <5s flow exec, P99 <2s KB search, P95 <100ms skill metadata
 
 ### Phase 9: Production Deploy + Obsidian Onboarding (COMPLETED)
@@ -1078,22 +1094,29 @@ All 10 phases completed and deployed to production on Railway (service: `positiv
 │  │  agent-studio        │    │  PostgreSQL + pgvector        │    │
 │  │  Next.js 15.5        │←──→│  pgvector/pgvector:pg16      │    │
 │  │  Nixpacks · Port $PORT│   │  Port 5432 · Persistent Vol  │    │
-│  │  numReplicas: 1      │    │  HNSW index for embeddings   │    │
+│  │  numReplicas: 2      │    │  HNSW index for embeddings   │    │
 │  └────────┬────────────┘    └──────────────────────────────┘    │
 │           │                                                      │
 │           │ railway.internal                                     │
 │           │                                                      │
 │  ┌────────▼────────────┐    ┌──────────────────────────────┐    │
-│  │  positive-inspiration │    │  Cron Service                │    │
-│  │  (ECC Skills MCP)     │    │  */5 * * * * (flows)         │    │
-│  │  Python FastMCP       │    │  0 3 * * * (evolve)          │    │
-│  │  Port 8000 · /mcp     │    │  → /api/cron/*               │    │
-│  │  /health endpoint     │    │  Internal networking only    │    │
-│  └─────────────────────┘    └──────────────────────────────┘    │
+│  │  Redis               │    │  Cron Service                │    │
+│  │  redis.railway.internal│   │  */5 * * * * (flows)         │    │
+│  │  Port 6379            │    │  0 3 * * * (evolve)          │    │
+│  │  Cross-replica state  │    │  → /api/cron/*               │    │
+│  └──────────────────────┘    │  Internal networking only    │    │
+│                               └──────────────────────────────┘    │
+│  ┌──────────────────────┐                                        │
+│  │  positive-inspiration │                                        │
+│  │  (ECC Skills MCP)     │                                        │
+│  │  Python FastMCP       │                                        │
+│  │  Port 8000 · /mcp     │                                        │
+│  └──────────────────────┘                                        │
 │                                                                  │
 │  Private Network: *.railway.internal (all services)              │
 │  Public:  agent-studio → agent-studio-production-c43e.up.railway.app │
 │  Private: positive-inspiration → positive-inspiration.railway.internal │
+│  Private: redis → redis.railway.internal:6379                    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1104,7 +1127,9 @@ All 10 phases completed and deployed to production on Railway (service: `positiv
 - **Vercel cron NOT available** — use Railway Cron Service for scheduled flows + /evolve
 - **Nixpacks build** — Python MCP server needs `requirements.txt` for auto-detection
 - **Internal networking** — MCP server communicates via `*.railway.internal` (faster, no egress cost)
-- **Single replica** — in-memory rate limiter + MCP pool OK for 1 replica. Redis needed for scaling
+- **Two replicas** — `numReplicas: 2` with Redis for cross-replica rate limiting, session cache, and MCP pool coordination. Falls back to in-memory if Redis unavailable
+- **Redis** — `redis.railway.internal:6379` via private networking. REDIS_URL uses `${{Redis.REDIS_PUBLIC_URL}}` variable reference (Railway auto-routes to internal)
+- **ioredis workaround** — `pnpm add ioredis` in `buildCommand` because lockfile was out of sync. `.npmrc` has `frozen-lockfile=false`, `nixpacks.toml` overrides install phase
 - **Healthcheck timeout** — 120s. Skill ingestion MUST be async POST, not in startup path
 
 ### 11.3 New Environment Variables
@@ -1115,6 +1140,7 @@ All 10 phases completed and deployed to production on Railway (service: `positiv
 | agent-studio     | `ECC_ENABLED`                 | `true`                                          | F9    |
 | agent-studio     | `OTEL_EXPORTER_OTLP_ENDPOINT` | `https://otlp-gateway-*.grafana.net/otlp`      | F6    |
 | agent-studio     | `OTEL_SERVICE_NAME`           | `agent-studio`                                  | F6    |
+| agent-studio     | `REDIS_URL`                   | `${{Redis.REDIS_PUBLIC_URL}}` (auto-routes to internal) | —     |
 | positive-inspiration | `DATABASE_URL`            | Reference → PostgreSQL (read-only recommended)  | F4    |
 | positive-inspiration | `PORT`                    | `8000`                                          | F4    |
 | positive-inspiration | `MCP_TRANSPORT`           | `streamable-http`                               | F4    |
