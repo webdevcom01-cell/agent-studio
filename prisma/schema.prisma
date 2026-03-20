@@ -550,6 +550,10 @@ model FlowSchedule {
   /// Maximum consecutive failures before auto-disable (0 = never auto-disable).
   maxRetries       Int            @default(3)
 
+  /// Webhook URL for failure notifications (Slack, Discord, PagerDuty, etc.).
+  /// POST with JSON payload on schedule failure or circuit breaker open.
+  failureWebhookUrl String?
+
   /// Flow node ID that this schedule was synced from (set by deploy auto-sync).
   /// Null for schedules created manually via API.
   nodeId           String?

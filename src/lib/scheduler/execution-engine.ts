@@ -20,6 +20,7 @@ import { executeFlow } from "@/lib/runtime/engine";
 import { parseFlowContent } from "@/lib/validators/flow-content";
 import { trackScheduleExecution } from "@/lib/analytics";
 import { computeNextRunAt } from "@/lib/scheduler/cron-validator";
+import { notifyScheduleFailure, notifyCircuitBreakerOpen } from "@/lib/scheduler/failure-notify";
 import type { FlowSchedule, ScheduleType } from "@/generated/prisma";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -308,13 +309,26 @@ async function finalise(
       }),
     ]);
 
-    if (shouldDisable) {
-      logger.warn("Schedule auto-disabled after repeated failures (circuit breaker)", {
+    // Fire-and-forget failure notifications
+    if (!succeeded) {
+      const failureEvent = {
         scheduleId: schedule.id,
         agentId: schedule.agentId,
+        executionId,
+        error: errorMessage ?? "Unknown error",
+        durationMs,
         failureCount: newFailureCount,
-        maxRetries: schedule.maxRetries,
-      });
+        maxRetries: schedule.maxRetries ?? 3,
+        autoDisabled: shouldDisable,
+        scheduledAt: schedule.nextRunAt?.toISOString() ?? new Date().toISOString(),
+        failureWebhookUrl: schedule.failureWebhookUrl,
+      };
+
+      if (shouldDisable) {
+        notifyCircuitBreakerOpen(failureEvent).catch(() => {});
+      } else {
+        notifyScheduleFailure(failureEvent).catch(() => {});
+      }
     }
   } catch (err) {
     // Bookkeeping failure — log and continue (don't re-throw)
