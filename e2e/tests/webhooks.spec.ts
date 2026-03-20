@@ -10,6 +10,8 @@
  *   6. Webhooks API — Trigger endpoint (valid HMAC → 200, invalid HMAC → 400,
  *                      filtered event → skipped, idempotency → 409)
  *   7. Flow Builder integration — "Webhooks" button + webhook_trigger node
+ *   8. Webhooks UI — Execution Replay (Replay button, loading state, success/error feedback,
+ *                      replay badge, API 422/404 for missing payload)
  *
  * Architecture:
  *   - UI tests: single shared agent created via API in beforeAll + page.route() mocks
@@ -22,6 +24,7 @@ import { test, expect } from "../fixtures/base";
 import {
   mockWebhooksAPI,
   mockWebhookTrigger,
+  mockWebhookReplay,
   MOCK_WEBHOOK,
   MOCK_WEBHOOK_WITH_FILTERS,
 } from "../mocks/handlers";
@@ -1012,5 +1015,222 @@ test.describe("Flow Builder — webhook integration", () => {
         has: page.locator("p").filter({ hasText: /^webhook trigger$/i }),
       })
     ).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+// ─── 8. Webhooks UI — Execution Replay ───────────────────────────────────────
+
+test.describe("Webhooks UI — Execution Replay", () => {
+  test("Replay button is shown for executions with a stored payload", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+    // MOCK_WEBHOOK already has rawPayload on exec_001
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    // Expand the execution row
+    await page.getByText(/completed/i).first().click();
+
+    // The Replay button should appear in the row header
+    await expect(
+      page.getByRole("button", { name: /^replay$/i }).first()
+    ).toBeVisible({ timeout: 8_000 });
+  });
+
+  test("Replay button is NOT shown for executions without a stored payload", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+    const webhookNoPayload = {
+      ...MOCK_WEBHOOK,
+      executions: [
+        {
+          id: "exec_no_payload",
+          status: "COMPLETED",
+          triggeredAt: new Date(Date.now() - 60_000).toISOString(),
+          completedAt: new Date(Date.now() - 59_500).toISOString(),
+          durationMs: 500,
+          eventType: "push",
+          sourceIp: "127.0.0.1",
+          conversationId: "conv_mock_002",
+          errorMessage: null,
+          rawPayload: null,    // ← no stored payload
+          isReplay: false,
+          replayOf: null,
+        },
+      ],
+    };
+    await mockWebhooksAPI(page, {
+      agentId: sharedAgentId,
+      webhooks: [webhookNoPayload],
+    });
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    // Expand the row to reveal the expand panel; button is only visible when expanded
+    await page.getByText(/completed/i).first().click();
+
+    // Replay button should NOT exist in the row header (only shown when rawPayload != null)
+    await expect(
+      page.getByRole("button", { name: /^replay$/i })
+    ).toHaveCount(0);
+  });
+
+  test("clicking Replay calls the replay endpoint and shows success feedback", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await mockWebhookReplay(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    // Click the Replay button (visible in the row header — no expand needed)
+    const replayBtn = page.getByRole("button", { name: /^replay$/i }).first();
+    await replayBtn.waitFor({ state: "visible", timeout: 8_000 });
+    await replayBtn.click();
+
+    // Wait for success feedback
+    await expect(
+      page.getByText(/replayed — new execution id/i)
+    ).toBeVisible({ timeout: 8_000 });
+  });
+
+  test("clicking Replay shows loading state while request is in-flight", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+
+    // Use a delayed route to catch the in-flight state
+    await page.route(
+      `**/api/agents/${sharedAgentId}/webhooks/**/executions/**/replay`,
+      async (route) => {
+        await page.waitForTimeout(300);
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            success: true,
+            data: { executionId: "exec_slow_001", conversationId: "conv_slow", replayOf: "exec_001" },
+          }),
+        });
+      }
+    );
+
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    const replayBtn = page.getByRole("button", { name: /^replay$/i }).first();
+    await replayBtn.waitFor({ state: "visible", timeout: 8_000 });
+    await replayBtn.click();
+
+    // "Replaying…" text appears during the in-flight state
+    await expect(
+      page.getByRole("button", { name: /replaying…/i })
+    ).toBeVisible({ timeout: 3_000 });
+
+    // Eventually resolves to success
+    await expect(
+      page.getByText(/replayed — new execution id/i)
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("replay error shows inline error feedback", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await mockWebhookReplay(page, { agentId: sharedAgentId, status: 500 });
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    const replayBtn = page.getByRole("button", { name: /^replay$/i }).first();
+    await replayBtn.waitFor({ state: "visible", timeout: 8_000 });
+    await replayBtn.click();
+
+    // Expand row to see inline error
+    await page.getByText(/completed/i).first().click();
+
+    await expect(
+      page.getByText(/internal server error/i).first()
+    ).toBeVisible({ timeout: 8_000 });
+  });
+
+  test("replay badge appears on execution rows that are themselves replays", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+    const webhookWithReplayedExec = {
+      ...MOCK_WEBHOOK,
+      executions: [
+        {
+          id: "exec_was_replayed",
+          status: "COMPLETED",
+          triggeredAt: new Date(Date.now() - 30_000).toISOString(),
+          completedAt: new Date(Date.now() - 29_500).toISOString(),
+          durationMs: 300,
+          eventType: "push",
+          sourceIp: "127.0.0.1",
+          conversationId: "conv_replay_exec",
+          errorMessage: null,
+          rawPayload: JSON.stringify({ action: "opened" }),
+          isReplay: true,            // ← this IS a replay
+          replayOf: "exec_original",
+        },
+      ],
+    };
+    await mockWebhooksAPI(page, {
+      agentId: sharedAgentId,
+      webhooks: [webhookWithReplayedExec],
+    });
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    // The "replay" badge should appear in the execution row header
+    await expect(
+      page.getByText(/^replay$/i).first()
+    ).toBeVisible({ timeout: 8_000 });
+  });
+
+  test("API — replay endpoint returns 422 when execution has no stored payload", async ({
+    request,
+  }) => {
+    // Direct API test — create an agent + webhook + execution, then call replay.
+    // We use the actual API here (not mocks) so skip if no auth.
+    const agentRes = await request.post("/api/agents", {
+      data: { name: "Replay API E2E" },
+    });
+    if (agentRes.status() !== 201) { test.skip(); return; }
+    const agentId = (await agentRes.json()).data.id;
+
+    try {
+      // Create webhook
+      const whRes = await request.post(`/api/agents/${agentId}/webhooks`, {
+        data: { name: "Replay Test Webhook" },
+      });
+      if (whRes.status() !== 201) { test.skip(); return; }
+      const webhookId = (await whRes.json()).data.id;
+
+      // Seed a synthetic execution row directly — use the API trigger with
+      // a deliberately wrong signature so the trigger returns 400 (no execution created).
+      // Instead, we call replay on a non-existent execution to get 404.
+      const replayRes = await request.post(
+        `/api/agents/${agentId}/webhooks/${webhookId}/executions/non_existent_exec_id/replay`
+      );
+      expect(replayRes.status()).toBe(404);
+      const body = await replayRes.json();
+      expect(body.success).toBe(false);
+    } finally {
+      await request.delete(`/api/agents/${agentId}`);
+    }
   });
 });

@@ -58,7 +58,7 @@ vi.mock("@/lib/runtime/engine", () => ({
   })),
 }));
 
-import { executeWebhookTrigger } from "../execute";
+import { executeWebhookTrigger, sanitizeHeadersForStorage } from "../execute";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 
@@ -588,6 +588,188 @@ describe("executeWebhookTrigger", () => {
       const { executeFlow } = await import("@/lib/runtime/engine");
       const contextArg = (executeFlow as ReturnType<typeof vi.fn>).mock.calls[0][0];
       expect(contextArg.variables.__webhook_event_type).toBe("invoice.paid");
+    });
+  });
+
+  // ── Replay ───────────────────────────────────────────────────────────────────
+
+  describe("replay mode (isReplay: true)", () => {
+    it("skips signature verification and succeeds", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+
+      // No valid signature headers — would fail in normal mode
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: { "content-type": "application/json" }, // no signature
+        isReplay: true,
+        replayOf: "exec-original-001",
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.status).toBe(200);
+    });
+
+    it("generates a fresh idempotency key (does not use x-webhook-id)", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+      vi.mocked(prisma.webhookExecution.create).mockResolvedValue({ id: "exec-replay-001" } as never);
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: { "x-webhook-id": "original-id-should-not-be-reused" },
+        isReplay: true,
+        replayOf: "exec-original-001",
+      });
+
+      const createCall = vi.mocked(prisma.webhookExecution.create).mock.calls[0][0];
+      // Fresh key must not equal the original header value
+      expect(createCall.data.idempotencyKey).not.toBe("original-id-should-not-be-reused");
+      // Must start with WEBHOOK_ID (pattern: `${webhookId}:${timestamp}`)
+      expect(createCall.data.idempotencyKey).toMatch(new RegExp(`^${WEBHOOK_ID}:`));
+    });
+
+    it("stores isReplay=true and replayOf on the execution record", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: {},
+        isReplay: true,
+        replayOf: "exec-original-abc",
+      });
+
+      const createCall = vi.mocked(prisma.webhookExecution.create).mock.calls[0][0];
+      expect(createCall.data.isReplay).toBe(true);
+      expect(createCall.data.replayOf).toBe("exec-original-abc");
+    });
+
+    it("stores rawPayload when body fits within 1 MB", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+
+      const ts = makeTimestamp();
+      const id = "msg_store_test";
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders(),
+      });
+
+      const createCall = vi.mocked(prisma.webhookExecution.create).mock.calls[0][0];
+      expect(createCall.data.rawPayload).toBe(RAW_BODY);
+    });
+
+    it("stores null rawPayload when body exceeds 1 MB", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+      const bigBody = "x".repeat(1_048_577); // 1 MB + 1 byte
+      const ts = makeTimestamp();
+      const id = "msg_big_body";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, bigBody, SECRET),
+      };
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: bigBody,
+        headers,
+      });
+
+      const createCall = vi.mocked(prisma.webhookExecution.create).mock.calls[0][0];
+      expect(createCall.data.rawPayload).toBeNull();
+    });
+
+    it("default isReplay is false for normal executions", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders(),
+      });
+
+      const createCall = vi.mocked(prisma.webhookExecution.create).mock.calls[0][0];
+      expect(createCall.data.isReplay).toBe(false);
+      expect(createCall.data.replayOf).toBeNull();
+    });
+  });
+
+  // ── sanitizeHeadersForStorage ─────────────────────────────────────────────
+
+  describe("sanitizeHeadersForStorage", () => {
+    it("removes Authorization header", () => {
+      const result = sanitizeHeadersForStorage({
+        Authorization: "Bearer token123",
+        "content-type": "application/json",
+      });
+      expect(result).not.toHaveProperty("Authorization");
+      expect(result["content-type"]).toBe("application/json");
+    });
+
+    it("removes cookie and set-cookie headers", () => {
+      const result = sanitizeHeadersForStorage({
+        Cookie: "session=abc",
+        "Set-Cookie": "token=xyz",
+        "x-request-id": "req-001",
+      });
+      expect(result).not.toHaveProperty("Cookie");
+      expect(result).not.toHaveProperty("Set-Cookie");
+      expect(result["x-request-id"]).toBe("req-001");
+    });
+
+    it("redacts x-webhook-signature value but keeps the key", () => {
+      const result = sanitizeHeadersForStorage({
+        "x-webhook-signature": "v1,abc123secret",
+        "x-webhook-id": "msg_001",
+      });
+      expect(result["x-webhook-signature"]).toBe("[REDACTED]");
+      expect(result["x-webhook-id"]).toBe("msg_001");
+    });
+
+    it("removes x-api-key header", () => {
+      const result = sanitizeHeadersForStorage({
+        "x-api-key": "supersecretkey",
+        "content-type": "application/json",
+      });
+      expect(result).not.toHaveProperty("x-api-key");
+    });
+
+    it("flattens array header values to first element", () => {
+      const result = sanitizeHeadersForStorage({
+        "x-github-event": ["push", "duplicate"],
+        "content-type": "application/json",
+      });
+      expect(result["x-github-event"]).toBe("push");
+    });
+
+    it("omits headers with undefined value", () => {
+      const result = sanitizeHeadersForStorage({
+        "content-type": undefined,
+        "x-request-id": "req-001",
+      });
+      expect(result).not.toHaveProperty("content-type");
+      expect(result["x-request-id"]).toBe("req-001");
+    });
+
+    it("preserves normal provider event headers", () => {
+      const result = sanitizeHeadersForStorage({
+        "x-github-event": "push",
+        "x-webhook-id": "msg_001",
+        "x-webhook-timestamp": "1700000000",
+        "content-type": "application/json",
+        "user-agent": "GitHub-Hookshot/abc",
+      });
+      expect(result["x-github-event"]).toBe("push");
+      expect(result["x-webhook-id"]).toBe("msg_001");
+      expect(result["content-type"]).toBe("application/json");
     });
   });
 });

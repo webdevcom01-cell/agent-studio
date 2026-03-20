@@ -142,6 +142,9 @@ export const MOCK_WEBHOOK: Record<string, unknown> = {
       sourceIp: "127.0.0.1",
       conversationId: "conv_mock_001",
       errorMessage: null,
+      rawPayload: JSON.stringify({ action: "opened", repo: "test-repo" }),
+      isReplay: false,
+      replayOf: null,
     },
   ],
 };
@@ -267,6 +270,53 @@ export async function mockWebhooksAPI(
 
     void route.fallback();
   });
+}
+
+/**
+ * Mock the webhook replay endpoint.
+ *
+ * POST /api/agents/[agentId]/webhooks/[webhookId]/executions/[executionId]/replay
+ *
+ * By default returns a successful 200 with a new executionId.
+ * Pass `status: 422` to simulate a "no stored payload" response.
+ * Pass `status: 500` to simulate a server error.
+ */
+export async function mockWebhookReplay(
+  page: Page,
+  options?: {
+    agentId?: string;
+    webhookId?: string;
+    status?: number;
+    executionId?: string;
+  }
+) {
+  const pattern =
+    options?.agentId && options?.webhookId
+      ? `**/api/agents/${options.agentId}/webhooks/${options.webhookId}/executions/**/replay`
+      : "**/api/agents/*/webhooks/*/executions/**/replay";
+
+  const status = options?.status ?? 200;
+  const body =
+    status === 422
+      ? JSON.stringify({
+          success: false,
+          error:
+            "This execution has no stored payload. Replay is only available for executions captured after replay support was enabled.",
+        })
+      : status >= 500
+      ? JSON.stringify({ success: false, error: "Internal server error" })
+      : JSON.stringify({
+          success: true,
+          data: {
+            executionId: options?.executionId ?? "exec_replayed_001",
+            conversationId: "conv_replayed_001",
+            replayOf: "exec_001",
+          },
+        });
+
+  await page.route(pattern, (route) =>
+    route.fulfill({ status, contentType: "application/json", body })
+  );
 }
 
 /**

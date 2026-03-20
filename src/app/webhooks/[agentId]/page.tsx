@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, Webhook, Copy, Eye, EyeOff, RefreshCw,
   CheckCircle2, XCircle, Loader2, MoreVertical, Clock, Zap, Send,
-  ChevronDown, ChevronRight, Filter, Layers, X, ExternalLink,
+  ChevronDown, ChevronRight, Filter, Layers, X, ExternalLink, RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,12 @@ interface WebhookExecution {
   sourceIp: string | null;
   conversationId: string | null;
   errorMessage: string | null;
+  /** Non-null when a stored payload exists and replay is available. */
+  rawPayload: string | null;
+  /** True when this row is itself a replay execution. */
+  isReplay: boolean;
+  /** Original execution ID this was replayed from, if any. */
+  replayOf: string | null;
 }
 
 interface BodyMapping {
@@ -838,8 +844,50 @@ function TestPanel({
 
 // ─── Execution Row ────────────────────────────────────────────────────────────
 
-function ExecutionRow({ exec }: { exec: WebhookExecution }) {
+interface ReplayState {
+  status: "idle" | "running" | "success" | "error";
+  executionId?: string;
+  error?: string;
+}
+
+function ExecutionRow({
+  exec,
+  agentId,
+  webhookId,
+  onReplayed,
+}: {
+  exec: WebhookExecution;
+  agentId: string;
+  webhookId: string;
+  onReplayed?: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [replay, setReplay] = useState<ReplayState>({ status: "idle" });
+
+  async function handleReplay(e: React.MouseEvent) {
+    e.stopPropagation(); // Don't toggle expand/collapse
+    setReplay({ status: "running" });
+    try {
+      const res = await fetch(
+        `/api/agents/${agentId}/webhooks/${webhookId}/executions/${exec.id}/replay`,
+        { method: "POST" }
+      );
+      const json = await res.json() as { success: boolean; data?: { executionId: string }; error?: string };
+      if (!res.ok || !json.success) {
+        setReplay({ status: "error", error: json.error ?? "Replay failed" });
+        toast.error(json.error ?? "Replay failed");
+      } else {
+        setReplay({ status: "success", executionId: json.data?.executionId });
+        toast.success("Execution replayed successfully");
+        onReplayed?.();
+      }
+    } catch {
+      setReplay({ status: "error", error: "Network error" });
+      toast.error("Network error during replay");
+    }
+  }
+
+  const canReplay = exec.rawPayload !== null;
 
   return (
     <div className="border border-zinc-800 rounded-md overflow-hidden">
@@ -851,6 +899,12 @@ function ExecutionRow({ exec }: { exec: WebhookExecution }) {
         <span className={`text-xs font-medium uppercase tracking-wide ${statusColor(exec.status)}`}>
           {exec.status.toLowerCase()}
         </span>
+        {exec.isReplay && (
+          <Badge variant="outline" className="h-5 text-[10px] border-blue-800/50 text-blue-400 gap-1">
+            <RotateCcw className="size-2.5" />
+            replay
+          </Badge>
+        )}
         {exec.eventType && (
           <Badge variant="outline" className="h-5 text-[10px] border-zinc-700 text-zinc-400">
             {exec.eventType}
@@ -859,6 +913,23 @@ function ExecutionRow({ exec }: { exec: WebhookExecution }) {
         <span className="flex-1 text-xs text-zinc-500">{relativeTime(exec.triggeredAt)}</span>
         {exec.durationMs != null && (
           <span className="text-[10px] text-zinc-600">{exec.durationMs}ms</span>
+        )}
+        {/* Replay button */}
+        {canReplay && (
+          <button
+            type="button"
+            title="Replay this execution with the original payload"
+            disabled={replay.status === "running"}
+            onClick={handleReplay}
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700/60 disabled:opacity-50 transition-colors"
+          >
+            {replay.status === "running" ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <RotateCcw className="size-3" />
+            )}
+            {replay.status === "running" ? "Replaying…" : "Replay"}
+          </button>
         )}
         {expanded ? <ChevronDown className="size-3.5 text-zinc-500" /> : <ChevronRight className="size-3.5 text-zinc-500" />}
       </button>
@@ -892,11 +963,35 @@ function ExecutionRow({ exec }: { exec: WebhookExecution }) {
                 <span className="font-mono truncate">{exec.conversationId}</span>
               </>
             )}
+            {exec.replayOf && (
+              <>
+                <span className="text-zinc-600">Replayed from</span>
+                <span className="font-mono text-blue-400 truncate">{exec.replayOf}</span>
+              </>
+            )}
           </div>
           {exec.errorMessage && (
             <div className="rounded bg-red-900/20 border border-red-800/50 px-2 py-1.5 text-red-300">
               {exec.errorMessage}
             </div>
+          )}
+          {/* Inline replay result feedback */}
+          {replay.status === "success" && (
+            <div className="rounded bg-green-900/20 border border-green-800/50 px-2 py-1.5 text-green-300 flex items-center gap-1.5">
+              <CheckCircle2 className="size-3.5 shrink-0" />
+              <span>Replayed — new execution ID: <code className="font-mono">{replay.executionId}</code></span>
+            </div>
+          )}
+          {replay.status === "error" && (
+            <div className="rounded bg-red-900/20 border border-red-800/50 px-2 py-1.5 text-red-300 flex items-center gap-1.5">
+              <XCircle className="size-3.5 shrink-0" />
+              <span>{replay.error}</span>
+            </div>
+          )}
+          {!canReplay && (
+            <p className="text-zinc-600 text-[10px]">
+              Replay unavailable — no stored payload (captured before replay support was enabled).
+            </p>
           )}
         </div>
       )}
@@ -1201,7 +1296,13 @@ function WebhookDetailPanel({
               </div>
             ) : (
               detail.executions.map((exec) => (
-                <ExecutionRow key={exec.id} exec={exec} />
+                <ExecutionRow
+                  key={exec.id}
+                  exec={exec}
+                  agentId={agentId}
+                  webhookId={webhookId}
+                  onReplayed={() => void load()}
+                />
               ))
             )}
           </div>
