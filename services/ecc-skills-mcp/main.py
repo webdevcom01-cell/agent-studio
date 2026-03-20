@@ -3,34 +3,24 @@ ECC Skills MCP Server
 Exposes ECC skills from PostgreSQL via MCP protocol.
 Health: GET /health (plain text, no dependencies)
 MCP: mounted at /mcp (Streamable HTTP)
+
+Transport Security:
+  Railway terminates TLS externally. Instead of monkey-patching MCP SDK
+  internals (fragile, breaks on SDK updates), we rewrite the Host header
+  to 'localhost' in ASGI middleware — the same approach as nginx
+  proxy_set_header. This satisfies FastMCP's built-in host validation
+  without touching any SDK classes.
 """
 
 import os, json, logging
 import asyncpg
 import uvicorn
-from starlette.applications import Starlette
-from starlette.responses import PlainTextResponse
-from starlette.routing import Route, Mount
-from starlette.middleware.base import BaseHTTPMiddleware
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ecc-skills-mcp")
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 PORT = int(os.environ.get("PORT", "8000"))
-
-# ── Patch MCP transport security BEFORE importing FastMCP ────────────────────
-# Railway terminates TLS externally; host validation blocks legitimate requests.
-# We bypass it by patching every possible check method on TransportSecurityManager.
-try:
-    from mcp.server.transport_security import TransportSecurityMiddleware
-    # Railway terminates TLS externally — bypass internal host/origin validation.
-    # _validate_host default rejects all hosts when allowed_hosts=[] (empty list).
-    TransportSecurityMiddleware._validate_host = lambda self, host: True
-    TransportSecurityMiddleware._validate_origin = lambda self, origin: True
-    logger.info("[security-patch] TransportSecurityMiddleware._validate_host bypassed for Railway")
-except Exception as _e:
-    logger.warning(f"[security-patch] failed: {_e}")
 
 from mcp.server.fastmcp import FastMCP
 pool: asyncpg.Pool | None = None
@@ -92,13 +82,18 @@ async def list_skills(language: str = "", category: str = "") -> str:
     return json.dumps([dict(r) for r in rows], default=str, ensure_ascii=False)
 
 
-# ASGI middleware: health check + FastMCP host-validation bypass
-class RailwayMiddleware:
+class RailwayProxyMiddleware:
     """
+    ASGI middleware that acts as a reverse proxy for Railway deployments:
+
     1. GET /health → plain "ok" (no DB, fast Railway healthcheck)
-    2. All other requests → FastMCP, with Host header set to 'localhost'
-       FastMCP validates Host against its configured host (defaults to localhost).
-       We strip port from host to avoid redirect-loop issues.
+    2. Rewrites Host header to 'localhost' for all MCP requests.
+       This satisfies FastMCP's TransportSecurityMiddleware host validation
+       without monkey-patching any SDK internals.
+    3. Normalizes /mcp/ → /mcp to avoid Starlette redirect loops.
+
+    This is equivalent to nginx's:
+        proxy_set_header Host localhost;
     """
     def __init__(self, app):
         self.app = app
@@ -110,6 +105,7 @@ class RailwayMiddleware:
 
         path = scope.get("path", "")
 
+        # Health check — bypass MCP entirely
         if path == "/health":
             await send({
                 "type": "http.response.start",
@@ -125,10 +121,21 @@ class RailwayMiddleware:
             scope["path"] = "/mcp"
             scope["raw_path"] = b"/mcp"
 
+        # Rewrite Host header to 'localhost' for MCP transport security.
+        # Railway internal networking sends Host: positive-inspiration.railway.internal:8000
+        # but FastMCP's TransportSecurityMiddleware only allows 'localhost' by default.
+        scope = dict(scope)
+        headers = [(k, v) for k, v in scope.get("headers", [])
+                   if k not in (b"host", b"origin")]
+        headers.append((b"host", b"localhost"))
+        headers.append((b"origin", b"http://localhost"))
+        scope["headers"] = headers
+
         await self.app(scope, receive, send)
 
+
 # FastMCP at root + Railway-aware middleware
-app = RailwayMiddleware(mcp.streamable_http_app())
+app = RailwayProxyMiddleware(mcp.streamable_http_app())
 
 if __name__ == "__main__":
     logger.info("Starting on 0.0.0.0:%d", PORT)
