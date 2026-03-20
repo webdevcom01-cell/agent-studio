@@ -5,7 +5,21 @@ import { chunkText, estimateTokens } from "@/lib/knowledge/chunker";
 import { logger } from "@/lib/logger";
 import type { ParsedSkill, SkillIngestResult } from "./types";
 
-const EMBEDDING_BATCH_SIZE = 50;
+const DEFAULT_BATCH_SIZE = 10;
+const MAX_BATCH_SIZE = 50;
+const BACKPRESSURE_THRESHOLD = 100;
+const BACKPRESSURE_DELAY_MS = 500;
+
+export interface VectorizeOptions {
+  batchSize?: number;
+}
+
+export interface VectorizeResult {
+  chunksCreated: number;
+  skillsProcessed: number;
+  batchSize: number;
+  backpressurePauses: number;
+}
 
 export async function ingestSkills(
   skills: ParsedSkill[]
@@ -132,10 +146,14 @@ async function ensureVirtualSource(): Promise<void> {
   });
 }
 
-export async function vectorizeSkills(): Promise<{
-  chunksCreated: number;
-  skillsProcessed: number;
-}> {
+export async function vectorizeSkills(
+  options?: VectorizeOptions
+): Promise<VectorizeResult> {
+  const batchSize = Math.min(
+    Math.max(1, options?.batchSize ?? DEFAULT_BATCH_SIZE),
+    MAX_BATCH_SIZE
+  );
+
   await ensureVirtualSource();
 
   const skills = await prisma.skill.findMany({
@@ -143,6 +161,8 @@ export async function vectorizeSkills(): Promise<{
   });
 
   let totalChunks = 0;
+  let pendingEmbeddings = 0;
+  let backpressurePauses = 0;
 
   for (const skill of skills) {
     const fullText = `# ${skill.name}\n\n${skill.description}\n\n${skill.content}`;
@@ -150,9 +170,24 @@ export async function vectorizeSkills(): Promise<{
 
     if (chunks.length === 0) continue;
 
-    for (let i = 0; i < chunks.length; i += EMBEDDING_BATCH_SIZE) {
-      const batch = chunks.slice(i, i + EMBEDDING_BATCH_SIZE);
+    for (let i = 0; i < chunks.length; i += batchSize) {
+      // Backpressure: pause if too many embeddings are queued
+      while (pendingEmbeddings >= BACKPRESSURE_THRESHOLD) {
+        backpressurePauses++;
+        logger.info("Vectorization backpressure — pausing", {
+          pendingEmbeddings,
+          threshold: BACKPRESSURE_THRESHOLD,
+          pauses: backpressurePauses,
+        });
+        await new Promise((resolve) => setTimeout(resolve, BACKPRESSURE_DELAY_MS));
+        pendingEmbeddings = Math.max(0, pendingEmbeddings - batchSize);
+      }
+
+      const batch = chunks.slice(i, i + batchSize);
+      pendingEmbeddings += batch.length;
+
       const embeddings = await generateEmbeddings(batch);
+      pendingEmbeddings -= batch.length;
 
       for (let j = 0; j < batch.length; j++) {
         const embeddingArray = embeddings[j];
@@ -183,7 +218,14 @@ export async function vectorizeSkills(): Promise<{
   logger.info("Skill vectorization complete", {
     skillsProcessed: skills.length,
     chunksCreated: totalChunks,
+    batchSize,
+    backpressurePauses,
   });
 
-  return { chunksCreated: totalChunks, skillsProcessed: skills.length };
+  return {
+    chunksCreated: totalChunks,
+    skillsProcessed: skills.length,
+    batchSize,
+    backpressurePauses,
+  };
 }

@@ -15,6 +15,7 @@ const SkillEntrySchema = z.object({
 const IngestRequestSchema = z.object({
   skills: z.array(SkillEntrySchema).min(1).max(500),
   vectorize: z.boolean().optional().default(false),
+  batchSize: z.number().int().min(1).max(50).optional(),
 });
 
 function verifyCronSecret(req: NextRequest): boolean {
@@ -66,7 +67,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     let vectorResult = null;
     if (parsed.data.vectorize) {
-      vectorResult = await vectorizeSkills();
+      vectorResult = await vectorizeSkills(
+        parsed.data.batchSize ? { batchSize: parsed.data.batchSize } : undefined
+      );
     }
 
     return NextResponse.json({
