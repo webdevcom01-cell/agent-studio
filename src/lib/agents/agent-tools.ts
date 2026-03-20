@@ -14,12 +14,19 @@ import { z } from "zod";
 import { zodSchema } from "ai";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { checkCircuit, recordSuccess, recordFailure } from "@/lib/a2a/circuit-breaker";
+import {
+  checkCircuit,
+  recordSuccess,
+  recordFailure,
+  checkDepthLimit,
+  checkCycleDetection,
+  MAX_AGENT_DEPTH,
+  A2ACircuitError,
+} from "@/lib/a2a/circuit-breaker";
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
 import type { FlowContent } from "@/types";
 import { parseFlowContent } from "@/lib/validators/flow-content";
 
-const MAX_DEPTH = 5;
 const DEFAULT_TIMEOUT_SECONDS = 30;
 
 /**
@@ -87,7 +94,7 @@ export async function getAgentToolsForAgent(
   const depth = ctx.depth ?? 0;
 
   // Don't generate agent tools if we're already at max depth
-  if (depth >= MAX_DEPTH) {
+  if (depth >= MAX_AGENT_DEPTH) {
     logger.warn("Agent tools skipped: max depth reached", {
       callerAgentId,
       depth,
@@ -160,11 +167,20 @@ async function executeAgentTool(
     conversationId,
   } = ctx;
 
-  // Circular call detection
-  if (callStack.includes(agent.id)) {
-    const chain = [...callStack, agent.id].join(" → ");
-    logger.warn("Agent tool: circular call detected", { chain });
-    return `[Skipped: circular call detected — ${agent.name} is already in the call chain]`;
+  // Depth limit and circular call detection
+  try {
+    checkDepthLimit(depth, callStack);
+    checkCycleDetection(agent.id, callStack);
+  } catch (err) {
+    if (err instanceof A2ACircuitError) {
+      logger.warn("Agent tool: call rejected", {
+        code: err.code,
+        message: err.message,
+        data: err.data,
+      });
+      return `[Skipped: ${err.message}]`;
+    }
+    throw err;
   }
 
   // Rate limiting

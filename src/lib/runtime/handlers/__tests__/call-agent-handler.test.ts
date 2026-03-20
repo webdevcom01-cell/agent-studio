@@ -83,19 +83,19 @@ describe("callAgentHandler", () => {
   });
 
   it("respects max depth limit", async () => {
-    const ctx = makeContext({ _a2aDepth: 5 });
+    const ctx = makeContext({ _a2aDepth: 10 });
 
     const result = await callAgentHandler(
       makeNode({ targetAgentId: "agent-target", onError: "continue" }),
       ctx,
     );
 
-    expect(result.messages[0].content).toContain("depth limit");
+    expect(result.messages[0].content).toContain("Max agent call depth");
     expect(result.updatedVariables).toEqual({ agent_result: null });
   });
 
   it("stops flow on depth limit when onError is stop", async () => {
-    const ctx = makeContext({ _a2aDepth: 5 });
+    const ctx = makeContext({ _a2aDepth: 10 });
 
     const result = await callAgentHandler(
       makeNode({ targetAgentId: "agent-target", onError: "stop" }),

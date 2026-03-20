@@ -28,11 +28,21 @@ vi.mock("@/lib/runtime/engine", () => ({
   executeFlow: mockExecuteFlow,
 }));
 
-vi.mock("@/lib/a2a/circuit-breaker", () => ({
-  checkCircuit: vi.fn(),
-  recordSuccess: vi.fn(),
-  recordFailure: vi.fn(),
-}));
+vi.mock("@/lib/a2a/circuit-breaker", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/a2a/circuit-breaker")>("@/lib/a2a/circuit-breaker");
+  return {
+    checkCircuit: vi.fn(),
+    recordSuccess: vi.fn(),
+    recordFailure: vi.fn(),
+    checkDepthLimit: vi.fn(),
+    checkCycleDetection: vi.fn((targetId: string, callStack: string[]) => {
+      actual.checkCycleDetection(targetId, callStack);
+    }),
+    MAX_AGENT_DEPTH: 10,
+    A2ACircuitError: actual.A2ACircuitError,
+    A2A_ERROR_CODES: actual.A2A_ERROR_CODES,
+  };
+});
 
 vi.mock("@/lib/a2a/rate-limiter", () => ({
   checkRateLimit: vi.fn(),
@@ -89,8 +99,8 @@ describe("getAgentToolsForAgent", () => {
     expect(Object.keys(tools)).toContain("agent_content_writer");
   });
 
-  it("returns empty when depth is at max (5)", async () => {
-    const tools = await getAgentToolsForAgent("agent-1", makeCtx({ depth: 5 }));
+  it("returns empty when depth is at max (10)", async () => {
+    const tools = await getAgentToolsForAgent("agent-1", makeCtx({ depth: 10 }));
 
     expect(tools).toEqual({});
     expect(mockPrisma.agent.findMany).not.toHaveBeenCalled();
@@ -185,7 +195,7 @@ describe("agent tool execution", () => {
       { toolCallId: "test-call", messages: [] }
     );
 
-    expect(result).toContain("circular call detected");
+    expect(result).toContain("Circular agent call detected");
     expect(mockExecuteFlow).not.toHaveBeenCalled();
   });
 

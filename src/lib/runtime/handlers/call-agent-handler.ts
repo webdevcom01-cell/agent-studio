@@ -2,7 +2,15 @@ import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { checkCircuit, recordSuccess, recordFailure } from "@/lib/a2a/circuit-breaker";
+import {
+  checkCircuit,
+  recordSuccess,
+  recordFailure,
+  checkDepthLimit,
+  checkCycleDetection,
+  MAX_AGENT_DEPTH,
+  A2ACircuitError,
+} from "@/lib/a2a/circuit-breaker";
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
 import type { FlowContent } from "@/types";
 import { parseFlowContent } from "@/lib/validators/flow-content";
@@ -13,7 +21,6 @@ import {
   type AgentWorkspace,
 } from "@/lib/agents/agent-workspace";
 
-const MAX_DEPTH = 5;
 const DEFAULT_TIMEOUT_SECONDS = 30;
 
 interface ParallelTarget {
@@ -84,50 +91,36 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
   }
 
   if (mode === "internal" && targetAgentId) {
-    if (depth >= MAX_DEPTH) {
-      const msg = `Max agent call depth (${MAX_DEPTH}) reached. Chain: ${callStack.join(" → ")}`;
-      logger.warn(msg, { agentId: context.agentId, depth });
-      if (onError === "stop") {
+    try {
+      checkDepthLimit(depth, callStack);
+      checkCycleDetection(targetAgentId, callStack);
+    } catch (err) {
+      if (err instanceof A2ACircuitError) {
+        logger.warn(err.message, {
+          agentId: context.agentId,
+          code: err.code,
+          depth,
+        });
+        if (onError === "stop") {
+          return {
+            messages: [{ role: "assistant", content: err.message }],
+            nextNodeId: null,
+            waitForInput: false,
+          };
+        }
         return {
-          messages: [{ role: "assistant", content: msg }],
+          messages: [
+            {
+              role: "assistant",
+              content: err.message,
+            },
+          ],
           nextNodeId: null,
           waitForInput: false,
+          updatedVariables: { [outputVariable]: null },
         };
       }
-      return {
-        messages: [
-          {
-            role: "assistant",
-            content: "Agent call depth limit reached. Skipping sub-agent call.",
-          },
-        ],
-        nextNodeId: null,
-        waitForInput: false,
-        updatedVariables: { [outputVariable]: null },
-      };
-    }
-
-    if (callStack.includes(targetAgentId)) {
-      const msg = `Circular agent call detected: ${callStack.join(" → ")} → ${targetAgentId}`;
-      logger.warn(msg, { agentId: context.agentId });
-      if (onError === "stop") {
-        return {
-          messages: [{ role: "assistant", content: msg }],
-          nextNodeId: null,
-          waitForInput: false,
-        };
-      }
-      return {
-        messages: [
-          {
-            role: "assistant",
-            content: "Circular agent call detected. Skipping to avoid infinite loop.",
-          },
-        ],
-        nextNodeId: null,
-        waitForInput: false,
-        updatedVariables: { [outputVariable]: null },
-      };
+      throw err;
     }
   }
 
