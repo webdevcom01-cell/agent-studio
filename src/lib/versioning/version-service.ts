@@ -177,6 +177,47 @@ export class VersionService {
     });
   }
 
+  /**
+   * Deletes ARCHIVED FlowVersions older than `retentionDays`.
+   * PUBLISHED and DRAFT versions are never deleted.
+   * Returns the count of deleted versions.
+   *
+   * @param retentionDays - Days to retain archived versions (default 90)
+   * @param dryRun - If true, returns count without deleting
+   */
+  static async cleanupArchivedVersions(
+    retentionDays = 90,
+    dryRun = false
+  ): Promise<{ deleted: number; dryRun: boolean }> {
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+
+    const candidates = await prisma.flowVersion.findMany({
+      where: {
+        status: "ARCHIVED" as FlowVersionStatus,
+        createdAt: { lt: cutoff },
+      },
+      select: { id: true, flowId: true, version: true, createdAt: true },
+    });
+
+    if (dryRun || candidates.length === 0) {
+      return { deleted: candidates.length, dryRun };
+    }
+
+    const candidateIds = candidates.map((v) => v.id);
+
+    const result = await prisma.flowVersion.deleteMany({
+      where: { id: { in: candidateIds } },
+    });
+
+    logger.info("FlowVersion cleanup complete", {
+      deleted: result.count,
+      retentionDays,
+      cutoffDate: cutoff.toISOString(),
+    });
+
+    return { deleted: result.count, dryRun: false };
+  }
+
   static async getActiveVersion(
     agentId: string
   ): Promise<FlowVersion | null> {
