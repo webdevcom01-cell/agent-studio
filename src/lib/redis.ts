@@ -38,7 +38,6 @@ export async function getRedis(): Promise<RedisClient | null> {
   try {
     const Redis = (await import("ioredis")).default;
     const client = new Redis(url, {
-      family: 0, // dual-stack IPv4+IPv6 — Railway internal networking uses IPv6
       maxRetriesPerRequest: 1,
       retryStrategy(times: number) {
         if (times > 3) {
