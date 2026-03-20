@@ -23,6 +23,7 @@ vi.mock("@/lib/analytics", () => ({
 }));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true, remaining: 19, retryAfterMs: 0 }),
+  checkRateLimitAsync: vi.fn().mockResolvedValue({ allowed: true, remaining: 19, retryAfterMs: 0 }),
 }));
 vi.mock("@/lib/logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },

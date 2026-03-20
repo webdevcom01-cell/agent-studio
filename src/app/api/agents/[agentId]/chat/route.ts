@@ -4,7 +4,7 @@ import { executeFlowStreaming } from "@/lib/runtime/engine-streaming";
 import { loadContext } from "@/lib/runtime/context";
 import { trackChatResponse, trackError } from "@/lib/analytics";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimitAsync } from "@/lib/rate-limit";
 import { parseBodyWithLimit, BodyTooLargeError } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { logger } from "@/lib/logger";
@@ -29,7 +29,7 @@ export async function POST(
     request.headers.get("x-real-ip") ??
     "unknown";
   const rateKey = `chat:${agentId}:${clientIp}`;
-  const rateResult = checkRateLimit(rateKey);
+  const rateResult = await checkRateLimitAsync(rateKey);
 
   if (!rateResult.allowed) {
     return NextResponse.json(

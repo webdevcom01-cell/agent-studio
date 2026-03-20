@@ -26,6 +26,7 @@ const envSchema = z.object({
   NOTION_CLIENT_SECRET: optionalStr,
   GOOGLE_WORKSPACE_CLIENT_ID: optionalStr,
   GOOGLE_WORKSPACE_CLIENT_SECRET: optionalStr,
+  REDIS_URL: optionalStr,
   WEBHOOK_ENCRYPTION_KEY: optionalStr,
   OAUTH_ENCRYPTION_KEY: optionalStr,
   ECC_MCP_URL: optionalStr,
