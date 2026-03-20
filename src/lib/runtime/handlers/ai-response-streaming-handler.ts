@@ -5,6 +5,8 @@ import { getMCPToolsForAgent } from "@/lib/mcp/client";
 import { getAgentToolsForAgent, type AgentToolContext } from "@/lib/agents/agent-tools";
 import { traceGenAI } from "@/lib/observability/tracer";
 import { recordChatLatency, recordTokenUsage } from "@/lib/observability/metrics";
+// TODO: integrate citations when kb_search results are available in context
+// import { extractCitations, formatCitationsForAI } from "@/lib/knowledge/citations";
 import type { ExecutionResult, RuntimeContext, StreamWriter } from "../types";
 import type { FlowNode } from "@/types";
 import { resolveTemplate } from "../template";

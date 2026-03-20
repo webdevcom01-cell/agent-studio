@@ -68,6 +68,81 @@ export async function fetchAndParseURL(url: string): Promise<string> {
   return contentType.includes("text/html") ? parseHTML(text) : text.trim();
 }
 
+export async function parseExcel(buffer: Buffer, filename: string): Promise<string> {
+  if (buffer.length > MAX_FILE_SIZE) {
+    throw new Error(`File size (${(buffer.length / 1024 / 1024).toFixed(1)} MB) exceeds 10 MB limit`);
+  }
+
+  const XLSX = await import("xlsx");
+  const ext = getFileExtension(filename);
+  const workbook = ext === ".csv"
+    ? XLSX.read(buffer.toString("utf-8"), { type: "string" })
+    : XLSX.read(buffer, { type: "buffer" });
+
+  const parts: string[] = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) continue;
+
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+    if (rows.length === 0) continue;
+
+    const headers = Object.keys(rows[0]);
+    const headerRow = `| ${headers.join(" | ")} |`;
+    const separator = `| ${headers.map(() => "---").join(" | ")} |`;
+
+    const dataRows = rows.map((row) =>
+      `| ${headers.map((h) => String(row[h] ?? "")).join(" | ")} |`
+    );
+
+    parts.push(`## Sheet: ${sheetName}\n\n${headerRow}\n${separator}\n${dataRows.join("\n")}`);
+  }
+
+  const text = parts.join("\n\n");
+  if (!text.trim()) throw new Error("Spreadsheet contains no data");
+  return text;
+}
+
+export async function parsePPTX(buffer: Buffer): Promise<string> {
+  if (buffer.length > MAX_FILE_SIZE) {
+    throw new Error(`File size (${(buffer.length / 1024 / 1024).toFixed(1)} MB) exceeds 10 MB limit`);
+  }
+
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(buffer);
+
+  const slideFiles = Object.keys(zip.files)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => {
+      const numA = parseInt(a.match(/slide(\d+)/)?.[1] ?? "0", 10);
+      const numB = parseInt(b.match(/slide(\d+)/)?.[1] ?? "0", 10);
+      return numA - numB;
+    });
+
+  const parts: string[] = [];
+
+  for (let i = 0; i < slideFiles.length; i++) {
+    const file = zip.files[slideFiles[i]];
+    if (!file) continue;
+
+    const xml = await file.async("text");
+    const textRuns = xml.match(/<a:t>([^<]*)<\/a:t>/g) ?? [];
+    const slideText = textRuns
+      .map((tag) => tag.replace(/<\/?a:t>/g, "").trim())
+      .filter(Boolean)
+      .join(" ");
+
+    if (slideText) {
+      parts.push(`## Slide ${i + 1}\n\n${slideText}`);
+    }
+  }
+
+  const text = parts.join("\n\n");
+  if (!text.trim()) throw new Error("PPTX contains no extractable text");
+  return text;
+}
+
 export function parseText(content: string): string {
   return content.trim();
 }
@@ -84,6 +159,8 @@ export async function parseSource(source: {
       if (!source.fileBuffer) throw new Error("File buffer required");
       const ext = getFileExtension(source.fileName ?? "");
       if (ext === ".docx") return parseDOCX(source.fileBuffer);
+      if (ext === ".xlsx" || ext === ".xls" || ext === ".csv") return parseExcel(source.fileBuffer, source.fileName ?? "file.xlsx");
+      if (ext === ".pptx") return parsePPTX(source.fileBuffer);
       if (ext === ".pdf" || !ext) return parsePDF(source.fileBuffer);
       throw new Error(`Unsupported file type: ${ext}`);
     }

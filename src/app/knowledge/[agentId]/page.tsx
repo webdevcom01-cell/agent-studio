@@ -14,6 +14,7 @@ import {
   XCircle,
   Search,
   RefreshCw,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +82,26 @@ export default function KnowledgePage({
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  const [kbConfig, setKbConfig] = useState<Record<string, unknown>>({
+    chunkingStrategy: null,
+    embeddingModel: "text-embedding-3-small",
+    embeddingDimension: 1536,
+    retrievalMode: "hybrid",
+    rerankingModel: "llm-rubric",
+    queryTransform: "none",
+    searchTopK: 5,
+    searchThreshold: 0.25,
+    hybridAlpha: 0.7,
+    maxChunks: 500,
+  });
+  const [isLoadingConfig, setIsLoadingConfig] = useState(true);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [chunkStrategyType, setChunkStrategyType] = useState("recursive");
+  const [chunkSize, setChunkSize] = useState(512);
+  const [chunkOverlap, setChunkOverlap] = useState(100);
+  const [codeLanguage, setCodeLanguage] = useState("python");
+  const [preserveHeaders, setPreserveHeaders] = useState(true);
+
   const fetchSources = useCallback(async () => {
     try {
       const res = await fetch(`/api/agents/${agentId}/knowledge/sources`);
@@ -93,9 +114,75 @@ export default function KnowledgePage({
     }
   }, [agentId]);
 
+  const fetchConfig = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/agents/${agentId}/knowledge/config`);
+      const json = await res.json();
+      if (json.success) {
+        setKbConfig(json.data);
+        const cs = json.data.chunkingStrategy;
+        if (cs && typeof cs === "object") {
+          const strategy = cs as Record<string, unknown>;
+          setChunkStrategyType((strategy.type as string) ?? "recursive");
+          setChunkSize((strategy.chunkSize as number) ?? 512);
+          setChunkOverlap((strategy.chunkOverlap as number) ?? 100);
+          if (strategy.language) setCodeLanguage(strategy.language as string);
+          if (strategy.preserveHeaders !== undefined) setPreserveHeaders(strategy.preserveHeaders as boolean);
+        }
+      }
+    } catch {
+      // Non-critical
+    } finally {
+      setIsLoadingConfig(false);
+    }
+  }, [agentId]);
+
+  async function saveConfig() {
+    setIsSavingConfig(true);
+    try {
+      const strategyPayload: Record<string, unknown> = {
+        type: chunkStrategyType,
+        chunkSize,
+        chunkOverlap,
+      };
+      if (chunkStrategyType === "code") strategyPayload.language = codeLanguage;
+      if (chunkStrategyType === "markdown") strategyPayload.preserveHeaders = preserveHeaders;
+
+      const body: Record<string, unknown> = {
+        chunkingStrategy: strategyPayload,
+        embeddingModel: kbConfig.embeddingModel,
+        retrievalMode: kbConfig.retrievalMode,
+        rerankingModel: kbConfig.rerankingModel,
+        queryTransform: kbConfig.queryTransform,
+        searchTopK: kbConfig.searchTopK,
+        searchThreshold: kbConfig.searchThreshold,
+        hybridAlpha: kbConfig.hybridAlpha,
+        maxChunks: kbConfig.maxChunks,
+      };
+
+      const res = await fetch(`/api/agents/${agentId}/knowledge/config`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setKbConfig(json.data);
+        toast.success("Configuration saved");
+      } else {
+        toast.error(json.error || "Failed to save configuration");
+      }
+    } catch {
+      toast.error("Failed to save configuration");
+    } finally {
+      setIsSavingConfig(false);
+    }
+  }
+
   useEffect(() => {
     fetchSources();
-  }, [fetchSources]);
+    fetchConfig();
+  }, [fetchSources, fetchConfig]);
 
   // Auto-poll while any source is PENDING or PROCESSING
   useEffect(() => {
@@ -265,6 +352,7 @@ export default function KnowledgePage({
         <TabsList>
           <TabsTrigger value="sources">Sources</TabsTrigger>
           <TabsTrigger value="search">Test Search</TabsTrigger>
+          <TabsTrigger value="settings"><Settings className="h-4 w-4 mr-1" />Settings</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sources">
@@ -410,6 +498,224 @@ export default function KnowledgePage({
               </div>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="settings">
+          {isLoadingConfig ? (
+            <div className="py-12 text-center text-muted-foreground">Loading configuration...</div>
+          ) : (
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle>RAG Pipeline Configuration</CardTitle>
+                <CardDescription>Configure chunking, embedding, and retrieval settings for this knowledge base.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-8">
+                {/* Chunking Strategy */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold">Chunking Strategy</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Strategy Type</Label>
+                      <select
+                        value={chunkStrategyType}
+                        onChange={(e) => setChunkStrategyType(e.target.value)}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="fixed">Fixed Size</option>
+                        <option value="recursive">Recursive Character</option>
+                        <option value="markdown">Markdown-Aware</option>
+                        <option value="code">Code Block</option>
+                        <option value="sentence">Sentence-Based</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Chunk Size (tokens)</Label>
+                      <Input
+                        type="number"
+                        min={50}
+                        max={2048}
+                        value={chunkSize}
+                        onChange={(e) => setChunkSize(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Chunk Overlap (tokens)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={512}
+                        value={chunkOverlap}
+                        onChange={(e) => setChunkOverlap(Number(e.target.value))}
+                      />
+                    </div>
+                    {chunkStrategyType === "code" && (
+                      <div className="space-y-2">
+                        <Label>Language</Label>
+                        <select
+                          value={codeLanguage}
+                          onChange={(e) => setCodeLanguage(e.target.value)}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        >
+                          <option value="python">Python</option>
+                          <option value="typescript">TypeScript</option>
+                          <option value="javascript">JavaScript</option>
+                        </select>
+                      </div>
+                    )}
+                    {chunkStrategyType === "markdown" && (
+                      <div className="flex items-center gap-2 pt-6">
+                        <input
+                          type="checkbox"
+                          id="preserveHeaders"
+                          checked={preserveHeaders}
+                          onChange={(e) => setPreserveHeaders(e.target.checked)}
+                          className="rounded border-input"
+                        />
+                        <Label htmlFor="preserveHeaders">Preserve headers in each chunk</Label>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Embedding */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold">Embedding Model</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Model</Label>
+                      <select
+                        value={(kbConfig.embeddingModel as string) ?? "text-embedding-3-small"}
+                        onChange={(e) => setKbConfig((prev) => ({
+                          ...prev,
+                          embeddingModel: e.target.value,
+                          embeddingDimension: e.target.value === "text-embedding-3-large" ? 3072 : 1536,
+                        }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="text-embedding-3-small">text-embedding-3-small (1536 dim)</option>
+                        <option value="text-embedding-3-large">text-embedding-3-large (3072 dim)</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Dimensions</Label>
+                      <Input
+                        type="number"
+                        value={(kbConfig.embeddingDimension as number) ?? 1536}
+                        readOnly
+                        className="bg-muted"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Retrieval */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold">Retrieval</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Retrieval Mode</Label>
+                      <select
+                        value={(kbConfig.retrievalMode as string) ?? "hybrid"}
+                        onChange={(e) => setKbConfig((prev) => ({ ...prev, retrievalMode: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="semantic">Semantic Only</option>
+                        <option value="keyword">Keyword Only (BM25)</option>
+                        <option value="hybrid">Hybrid (Semantic + Keyword)</option>
+                      </select>
+                    </div>
+                    {(kbConfig.retrievalMode as string) === "hybrid" && (
+                      <div className="space-y-2">
+                        <Label>
+                          Semantic Weight: {((kbConfig.hybridAlpha as number) ?? 0.7).toFixed(2)}
+                          {" / "}
+                          Keyword Weight: {(1 - ((kbConfig.hybridAlpha as number) ?? 0.7)).toFixed(2)}
+                        </Label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={(kbConfig.hybridAlpha as number) ?? 0.7}
+                          onChange={(e) => setKbConfig((prev) => ({ ...prev, hybridAlpha: parseFloat(e.target.value) }))}
+                          className="w-full"
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <Label>Top-K Results</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={(kbConfig.searchTopK as number) ?? 5}
+                        onChange={(e) => setKbConfig((prev) => ({ ...prev, searchTopK: Number(e.target.value) }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Similarity Threshold ({((kbConfig.searchThreshold as number) ?? 0.25).toFixed(2)})</Label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={(kbConfig.searchThreshold as number) ?? 0.25}
+                        onChange={(e) => setKbConfig((prev) => ({ ...prev, searchThreshold: parseFloat(e.target.value) }))}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Advanced */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold">Advanced</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Reranking</Label>
+                      <select
+                        value={(kbConfig.rerankingModel as string) ?? "llm-rubric"}
+                        onChange={(e) => setKbConfig((prev) => ({ ...prev, rerankingModel: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="none">None</option>
+                        <option value="llm-rubric">LLM Rubric</option>
+                        <option value="cohere">Cohere Rerank</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Query Transform</Label>
+                      <select
+                        value={(kbConfig.queryTransform as string) ?? "none"}
+                        onChange={(e) => setKbConfig((prev) => ({ ...prev, queryTransform: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="none">None</option>
+                        <option value="hyde">HyDE (Hypothetical Document)</option>
+                        <option value="multi_query">Multi-Query Expansion</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Max Chunks per KB</Label>
+                      <Input
+                        type="number"
+                        min={50}
+                        max={5000}
+                        value={(kbConfig.maxChunks as number) ?? 500}
+                        onChange={(e) => setKbConfig((prev) => ({ ...prev, maxChunks: Number(e.target.value) }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-4 border-t border-border">
+                  <Button onClick={saveConfig} disabled={isSavingConfig}>
+                    {isSavingConfig ? "Saving..." : "Save Configuration"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 

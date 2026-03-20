@@ -129,6 +129,20 @@ model KnowledgeBase {
   sources   KBSource[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+
+  chunkingStrategy    Json?
+  embeddingModel      String    @default("text-embedding-3-small")
+  embeddingDimension  Int       @default(1536)
+  retrievalMode       String    @default("hybrid")
+  rerankingModel      String    @default("llm-rubric")
+  queryTransform      String    @default("none")
+  searchTopK          Int       @default(5)
+  searchThreshold     Float     @default(0.25)
+  hybridAlpha         Float     @default(0.7)
+  maxChunks           Int       @default(500)
+  contextOrdering     String    @default("relevance")
+  migrationStatus     String?
+  processingProgress  Json?
 }
 
 enum KBSourceType {
@@ -161,6 +175,15 @@ model KBSource {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
+  customMetadata        Json?
+  language              String?
+  expiresAt             DateTime?
+  reingestionSchedule   String?
+  reingestionEnabled    Boolean   @default(false)
+  lastIngestedAt        DateTime?
+  contentHash           String?
+  processingProgress    Json?
+
   @@index([knowledgeBaseId])
   @@index([knowledgeBaseId, status])
 }
@@ -175,7 +198,13 @@ model KBChunk {
   source    KBSource                     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   createdAt DateTime                     @default(now())
 
+  contentHash      String?
+  lastRetrievedAt  DateTime?
+  retrievalCount   Int       @default(0)
+
   @@index([sourceId])
+  @@index([contentHash])
+  @@index([lastRetrievedAt])
 }
 
 enum AnalyticsEventType {
@@ -251,6 +280,7 @@ model Message {
   id             String       @id @default(cuid())
   role           MessageRole
   content        String       @db.Text
+  citations      Json?
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())

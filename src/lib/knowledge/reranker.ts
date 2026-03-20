@@ -3,7 +3,82 @@ import { getModel } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import type { SearchResult } from "./search";
 
-export async function rerankResults(
+const COHERE_API_URL = "https://api.cohere.com/v2/rerank";
+const COHERE_MODEL = "rerank-v3.5";
+const COHERE_TIMEOUT_MS = 5_000;
+const MAX_RERANK_CANDIDATES = 20;
+
+// ── Cohere Rerank ────────────────────────────────────────────────────────
+
+interface CohereRerankResult {
+  index: number;
+  relevance_score: number;
+}
+
+export async function cohereRerank(
+  query: string,
+  candidates: SearchResult[],
+  topK: number = 5
+): Promise<SearchResult[]> {
+  const apiKey = process.env.COHERE_API_KEY;
+  if (!apiKey) {
+    logger.warn("COHERE_API_KEY not set, skipping Cohere rerank");
+    return candidates.slice(0, topK);
+  }
+
+  if (candidates.length === 0) return [];
+  if (candidates.length <= topK) return candidates;
+
+  const toRerank = candidates.slice(0, MAX_RERANK_CANDIDATES);
+
+  try {
+    const response = await fetch(COHERE_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: COHERE_MODEL,
+        query,
+        documents: toRerank.map((r) => r.content),
+        top_n: topK,
+        return_documents: false,
+      }),
+      signal: AbortSignal.timeout(COHERE_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      logger.warn("Cohere rerank API error", {
+        status: response.status,
+        error: errorText.slice(0, 200),
+      });
+      return candidates.slice(0, topK);
+    }
+
+    const data = (await response.json()) as { results?: CohereRerankResult[] };
+    const rerankResults = data.results ?? [];
+
+    const reranked: SearchResult[] = rerankResults
+      .filter((r) => r.index >= 0 && r.index < toRerank.length)
+      .map((r) => ({
+        ...toRerank[r.index],
+        relevanceScore: r.relevance_score,
+      }));
+
+    return reranked.slice(0, topK);
+  } catch (err) {
+    logger.warn("Cohere rerank failed, using original order", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return candidates.slice(0, topK);
+  }
+}
+
+// ── LLM Rerank (existing) ────────────────────────────────────────────────
+
+async function llmRerank(
   query: string,
   candidates: SearchResult[],
   topK: number = 5,
@@ -12,7 +87,7 @@ export async function rerankResults(
   if (candidates.length === 0) return [];
   if (candidates.length <= topK) return candidates;
 
-  const toRerank = candidates.slice(0, 20);
+  const toRerank = candidates.slice(0, MAX_RERANK_CANDIDATES);
 
   const candidateList = toRerank
     .map((c, i) => `[${i}] ${c.content.slice(0, 500)}${c.content.length > 500 ? "..." : ""}`)
@@ -71,5 +146,24 @@ function parseScoringResponse(text: string, expectedCount: number): number[] {
     return scores;
   } catch {
     return fallback;
+  }
+}
+
+// ── Dispatcher ───────────────────────────────────────────────────────────
+
+export async function rerankResults(
+  query: string,
+  candidates: SearchResult[],
+  topK: number = 5,
+  model?: string
+): Promise<SearchResult[]> {
+  switch (model) {
+    case "cohere":
+      return cohereRerank(query, candidates, topK);
+    case "none":
+      return candidates.slice(0, topK);
+    case "llm-rubric":
+    default:
+      return llmRerank(query, candidates, topK);
   }
 }

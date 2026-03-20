@@ -1,13 +1,73 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
+import { createHash } from "crypto";
 import { parseSource } from "./parsers";
-import { chunkText, estimateTokens } from "./chunker";
+import { chunkText, estimateTokens, chunkByStrategy } from "./chunker";
+import type { ChunkingStrategy } from "./chunker";
 import { generateEmbeddings } from "./embeddings";
+import { markChunkEmbeddingModel } from "./embedding-drift";
+import { computeContentHash as computeChunkHash, findDuplicateChunks, deduplicateChunks } from "./deduplication";
 import { logger } from "@/lib/logger";
 
 const BATCH_SIZE = 50;
-const MAX_CHUNKS = 500;
+const DEFAULT_MAX_CHUNKS = 500;
 const MAX_RETRIES = 3;
+
+async function updateProgress(sourceId: string, stage: string, progress: number): Promise<void> {
+  try {
+    await prisma.kBSource.update({
+      where: { id: sourceId },
+      data: {
+        processingProgress: {
+          stage,
+          progress: Math.round(progress),
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    });
+  } catch {
+    // Fire-and-forget
+  }
+}
+
+interface KBConfig {
+  id: string;
+  chunkingStrategy: unknown;
+  embeddingModel: string | null;
+  maxChunks: number | null;
+}
+
+async function loadKBConfig(sourceId: string): Promise<KBConfig | null> {
+  try {
+    const source = await prisma.kBSource.findUnique({
+      where: { id: sourceId },
+      select: {
+        knowledgeBase: {
+          select: {
+            id: true,
+            chunkingStrategy: true,
+            embeddingModel: true,
+            maxChunks: true,
+          },
+        },
+      },
+    });
+    return source?.knowledgeBase ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function parseStrategy(raw: unknown): ChunkingStrategy | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  if (!obj.type || typeof obj.type !== "string") return null;
+  return obj as unknown as ChunkingStrategy;
+}
+
+function computeContentHash(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
 
 export async function ingestSource(
   sourceId: string,
@@ -31,6 +91,8 @@ export async function ingestSource(
   });
 
   try {
+    updateProgress(sourceId, "parsing", 0).catch(() => {});
+
     let finalText: string;
 
     if (source.type === "TEXT") {
@@ -45,22 +107,64 @@ export async function ingestSource(
 
     if (!finalText.trim()) throw new Error("No content extracted");
 
-    const allChunks = chunkText(finalText);
+    updateProgress(sourceId, "chunking", 20).catch(() => {});
+
+    const kbConfig = await loadKBConfig(sourceId);
+    const strategy = parseStrategy(kbConfig?.chunkingStrategy);
+    const maxChunks = kbConfig?.maxChunks ?? DEFAULT_MAX_CHUNKS;
+    const embeddingModel = kbConfig?.embeddingModel ?? undefined;
+
+    const allChunks = strategy
+      ? chunkByStrategy(finalText, strategy)
+      : chunkText(finalText);
+
     if (allChunks.length === 0) throw new Error("No chunks generated");
 
-    const chunks = allChunks.length > MAX_CHUNKS
-      ? allChunks.slice(0, MAX_CHUNKS)
+    const chunks = allChunks.length > maxChunks
+      ? allChunks.slice(0, maxChunks)
       : allChunks;
 
-    if (allChunks.length > MAX_CHUNKS) {
+    if (allChunks.length > maxChunks) {
       logger.warn("Source exceeded max chunk limit, truncating", {
         sourceId,
         totalChunks: allChunks.length,
-        maxChunks: MAX_CHUNKS,
+        maxChunks,
       });
     }
 
-    const embeddings = await generateEmbeddings(chunks);
+    updateProgress(sourceId, "deduplication", 40).catch(() => {});
+
+    // Deduplicate against existing chunks in the same KB
+    let chunkHashes: string[] = [];
+    let dedupedChunks = chunks;
+    if (kbConfig?.id) {
+      const allHashes = chunks.map(computeChunkHash);
+      const existing = await findDuplicateChunks(kbConfig.id, allHashes);
+      const deduped = deduplicateChunks(chunks, existing);
+      dedupedChunks = deduped.unique;
+      chunkHashes = deduped.hashes;
+      if (deduped.duplicateCount > 0) {
+        logger.info("Deduplication skipped chunks", {
+          sourceId,
+          duplicates: deduped.duplicateCount,
+          remaining: dedupedChunks.length,
+        });
+      }
+    } else {
+      chunkHashes = chunks.map(computeChunkHash);
+    }
+
+    if (dedupedChunks.length === 0) {
+      await prisma.kBSource.update({
+        where: { id: sourceId },
+        data: { status: "READY", charCount: finalText.length, errorMsg: null },
+      });
+      return { chunksCreated: 0 };
+    }
+
+    updateProgress(sourceId, "embedding", 50).catch(() => {});
+
+    const embeddings = await generateEmbeddings(dedupedChunks, embeddingModel);
 
     for (let i = 0; i < embeddings.length; i++) {
       if (!embeddings[i].every((v) => typeof v === "number" && isFinite(v))) {
@@ -68,40 +172,55 @@ export async function ingestSource(
       }
     }
 
-    // Delete existing chunks first, then insert new ones.
-    // Note: intentionally NOT using $transaction here — PgBouncer in
-    // transaction-pooling mode doesn't support Prisma interactive transactions.
-    // Each statement gets its own connection from the pool instead.
+    updateProgress(sourceId, "storing", 90).catch(() => {});
+
     await prisma.kBChunk.deleteMany({ where: { sourceId } });
 
-    for (let batchStart = 0; batchStart < chunks.length; batchStart += BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, chunks.length);
+    for (let batchStart = 0; batchStart < dedupedChunks.length; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, dedupedChunks.length);
       const values = [];
 
       for (let i = batchStart; i < batchEnd; i++) {
-        const content = chunks[i];
+        const content = dedupedChunks[i];
         const embedding = embeddings[i];
         const tokens = estimateTokens(content);
         const vectorStr = `[${embedding.join(",")}]`;
-        const metadata = JSON.stringify({ index: i, total: chunks.length });
+        const hash = chunkHashes[i] ?? "";
+        const metadata = JSON.stringify({ index: i, total: dedupedChunks.length, contentHash: hash });
 
         values.push(
-          Prisma.sql`(gen_random_uuid()::text, ${content}, ${vectorStr}::vector, ${tokens}, ${metadata}::jsonb, NOW(), ${sourceId})`
+          Prisma.sql`(gen_random_uuid()::text, ${content}, ${vectorStr}::vector, ${tokens}, ${metadata}::jsonb, NOW(), ${sourceId}, ${hash})`
         );
       }
 
       await prisma.$executeRaw`
-        INSERT INTO "KBChunk" ("id", "content", "embedding", "tokens", "metadata", "createdAt", "sourceId")
+        INSERT INTO "KBChunk" ("id", "content", "embedding", "tokens", "metadata", "createdAt", "sourceId", "contentHash")
         VALUES ${Prisma.join(values)}
       `;
     }
 
+    const contentHash = computeContentHash(finalText);
+
+    updateProgress(sourceId, "storing", 100).catch(() => {});
+
     await prisma.kBSource.update({
       where: { id: sourceId },
-      data: { status: "READY", charCount: finalText.length, errorMsg: null },
+      data: {
+        status: "READY",
+        charCount: finalText.length,
+        errorMsg: null,
+        contentHash,
+        lastIngestedAt: new Date(),
+        processingProgress: { stage: "complete", progress: 100, updatedAt: new Date().toISOString() },
+      },
     });
 
-    return { chunksCreated: chunks.length };
+    // Mark chunks with the embedding model used (for drift detection)
+    if (embeddingModel) {
+      markChunkEmbeddingModel(sourceId, embeddingModel).catch(() => {});
+    }
+
+    return { chunksCreated: dedupedChunks.length };
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error("Source ingestion failed", err, { sourceId });

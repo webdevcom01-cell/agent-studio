@@ -107,6 +107,17 @@ export function getEmbeddingModel() {
   return getOpenAI().embedding("text-embedding-3-small");
 }
 
+export function getEmbeddingModelById(modelId: string) {
+  switch (modelId) {
+    case "text-embedding-3-small":
+      return getOpenAI().embedding("text-embedding-3-small");
+    case "text-embedding-3-large":
+      return getOpenAI().embedding("text-embedding-3-large");
+    default:
+      return getEmbeddingModel();
+  }
+}
+
 export const DEFAULT_MODEL = "deepseek-chat";
 
 

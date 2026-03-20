@@ -1,12 +1,50 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 import { generateEmbedding } from "./embeddings";
+import { getCachedQueryEmbedding, setCachedQueryEmbedding } from "./embedding-cache";
+import { transformQuery } from "./query-transform";
+import { evaluateFilter } from "./metadata-filter";
+import type { MetadataFilter } from "./metadata-filter";
 import { estimateTokens } from "./chunker";
+import { orderContext, compressContext } from "./context-ordering";
+import type { ContextOrderingStrategy } from "./context-ordering";
+import { updateChunkRetrievalStats } from "./maintenance";
 import { logger } from "@/lib/logger";
 import { recordMetric } from "@/lib/observability/metrics";
 
-// Post-RRF scores are typically 0.005–0.02 range, not cosine similarity.
-const MIN_RELEVANCE_SCORE = 0.005;
+const DEFAULT_RELEVANCE_THRESHOLD = 0.1;
+
+interface KBSearchConfig {
+  searchTopK: number;
+  searchThreshold: number;
+  hybridAlpha: number;
+  retrievalMode: string;
+  rerankingModel: string;
+  embeddingModel: string | null;
+  queryTransform: string;
+  contextOrdering: string | null;
+}
+
+async function loadKBConfig(knowledgeBaseId: string): Promise<KBSearchConfig | null> {
+  try {
+    const kb = await prisma.knowledgeBase.findUnique({
+      where: { id: knowledgeBaseId },
+      select: {
+        searchTopK: true,
+        searchThreshold: true,
+        hybridAlpha: true,
+        retrievalMode: true,
+        rerankingModel: true,
+        embeddingModel: true,
+        queryTransform: true,
+        contextOrdering: true,
+      },
+    });
+    return kb;
+  } catch {
+    return null;
+  }
+}
 
 /** Queries with fewer words than this threshold auto-enable reranking. */
 const SHORT_QUERY_WORD_THRESHOLD = 5;
@@ -32,9 +70,11 @@ export interface SearchResult {
   similarity: number;
   sourceId: string;
   sourceDocument?: string;
+  sourceType?: string;
   pageNumber?: number;
   chunkIndex?: number;
   relevanceScore: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface HybridSearchOptions {
@@ -45,6 +85,8 @@ export interface HybridSearchOptions {
   rerank?: boolean;
   /** A/B test variant ID for search quality experiments. Logged with results. */
   abTestVariant?: string;
+  /** Filter results by metadata conditions on chunks and sources. */
+  metadataFilter?: MetadataFilter;
 }
 
 interface VectorSearchRow {
@@ -53,6 +95,7 @@ interface VectorSearchRow {
   similarity: number;
   sourceId: string;
   sourceName: string;
+  sourceType: string;
   metadata: string | Record<string, unknown> | null;
 }
 
@@ -62,6 +105,7 @@ interface KeywordSearchRow {
   rank: number;
   sourceId: string;
   sourceName: string;
+  sourceType: string;
   metadata: string | Record<string, unknown> | null;
 }
 
@@ -76,9 +120,16 @@ function parseMetadata(metadata: string | Record<string, unknown> | null): Recor
 export async function searchKnowledgeBase(
   knowledgeBaseId: string,
   query: string,
-  topK: number = 5
+  topK: number = 5,
+  embeddingModel?: string,
+  queryOverride?: string
 ): Promise<SearchResult[]> {
-  const queryEmbedding = await generateEmbedding(query);
+  const textToEmbed = queryOverride ?? query;
+  let queryEmbedding = await getCachedQueryEmbedding(textToEmbed);
+  if (!queryEmbedding) {
+    queryEmbedding = await generateEmbedding(textToEmbed, embeddingModel);
+    setCachedQueryEmbedding(textToEmbed, queryEmbedding).catch(() => {});
+  }
   if (!queryEmbedding.every(v => typeof v === 'number' && isFinite(v))) {
     throw new Error('Invalid embedding');
   }
@@ -94,7 +145,7 @@ export async function searchKnowledgeBase(
       SELECT
         c."id", c."content",
         1 - (c."embedding" <=> ${vectorStr}::vector) as similarity,
-        c."sourceId", s."name" as "sourceName", c."metadata"
+        c."sourceId", s."name" as "sourceName", s."type" as "sourceType", c."metadata"
       FROM "KBChunk" c
       INNER JOIN "KBSource" s ON c."sourceId" = s."id"
       WHERE s."knowledgeBaseId" = ${knowledgeBaseId}
@@ -113,9 +164,11 @@ export async function searchKnowledgeBase(
       similarity: Number(r.similarity),
       sourceId: r.sourceId,
       sourceDocument: r.sourceName ?? undefined,
+      sourceType: r.sourceType ?? undefined,
       pageNumber: typeof meta.page === "number" ? meta.page : undefined,
       chunkIndex: typeof meta.index === "number" ? meta.index : undefined,
       relevanceScore: Number(r.similarity),
+      metadata: meta,
     };
   });
 }
@@ -130,7 +183,7 @@ async function keywordSearch(
       SELECT
         c."id", c."content",
         ts_rank(to_tsvector('simple', c."content"), plainto_tsquery('simple', ${query})) as rank,
-        c."sourceId", s."name" as "sourceName", c."metadata"
+        c."sourceId", s."name" as "sourceName", s."type" as "sourceType", c."metadata"
       FROM "KBChunk" c
       INNER JOIN "KBSource" s ON c."sourceId" = s."id"
       WHERE s."knowledgeBaseId" = ${knowledgeBaseId}
@@ -149,9 +202,11 @@ async function keywordSearch(
       similarity: Number(r.rank),
       sourceId: r.sourceId,
       sourceDocument: r.sourceName ?? undefined,
+      sourceType: r.sourceType ?? undefined,
       pageNumber: typeof meta.page === "number" ? meta.page : undefined,
       chunkIndex: typeof meta.index === "number" ? meta.index : undefined,
       relevanceScore: Number(r.rank),
+      metadata: meta,
     };
   });
 }
@@ -184,6 +239,16 @@ export function reciprocalRankFusion(
   return Array.from(scoreMap.values())
     .sort((a, b) => b.score - a.score)
     .map(({ score, result }) => ({ ...result, relevanceScore: score }));
+}
+
+function normalizeRRFScores(results: SearchResult[]): SearchResult[] {
+  if (results.length === 0) return results;
+  const maxScore = results[0].relevanceScore;
+  if (maxScore === 0) return results;
+  return results.map((r) => ({
+    ...r,
+    relevanceScore: r.relevanceScore / maxScore,
+  }));
 }
 
 export function computeDynamicTopK(query: string, configuredTopK: number): number {
@@ -327,29 +392,123 @@ export async function hybridSearch(
   knowledgeBaseId: string,
   options?: HybridSearchOptions
 ): Promise<SearchResult[]> {
-  const {
-    topK = 5,
-    semanticWeight = 0.7,
-    keywordWeight = 0.3,
-    rerank: explicitRerank,
-    abTestVariant,
-  } = options ?? {};
+  const kbConfig = await loadKBConfig(knowledgeBaseId);
 
-  const rerank = shouldRerank(query, explicitRerank);
-  const candidateK = rerank ? Math.max(topK, 20) : topK * 2;
+  const topK = options?.topK ?? kbConfig?.searchTopK ?? 5;
+  const semanticWeight = options?.semanticWeight ?? kbConfig?.hybridAlpha ?? 0.7;
+  const keywordWeight = options?.keywordWeight ?? (1 - semanticWeight);
+  const threshold = kbConfig?.searchThreshold ?? DEFAULT_RELEVANCE_THRESHOLD;
+  const retrievalMode = kbConfig?.retrievalMode ?? "hybrid";
+  const contextOrderingStrategy = (kbConfig?.contextOrdering ?? "relevance") as ContextOrderingStrategy;
+  const embeddingModel = kbConfig?.embeddingModel ?? undefined;
+  const abTestVariant = options?.abTestVariant;
 
-  const [semanticResults, keywordResults] = await Promise.all([
-    searchKnowledgeBase(knowledgeBaseId, query, candidateK),
+  const queryTransformMode = kbConfig?.queryTransform as "none" | "hyde" | "multi_query" | undefined;
+  const configRerankModel = kbConfig?.rerankingModel ?? "none";
+  const rerankModel = options?.rerank === false
+    ? "none"
+    : options?.rerank === true
+      ? (configRerankModel !== "none" ? configRerankModel : "llm-rubric")
+      : shouldRerank(query, undefined)
+        ? (configRerankModel !== "none" ? configRerankModel : "llm-rubric")
+        : "none";
+
+  const candidateK = rerankModel !== "none" ? Math.max(topK, 20) : topK * 2;
+
+  // Query transformation (HyDE / multi-query)
+  const transformed = queryTransformMode && queryTransformMode !== "none"
+    ? await transformQuery(query, queryTransformMode)
+    : { queries: [query] };
+
+  // For multi-query: run search for each expanded query and merge results
+  if (transformed.queries.length > 1) {
+    const allResults = new Map<string, SearchResult>();
+    for (const expandedQuery of transformed.queries) {
+      const partial = await runSingleSearch(
+        expandedQuery, knowledgeBaseId, candidateK, retrievalMode,
+        semanticWeight, keywordWeight, embeddingModel
+      );
+      for (const r of partial) {
+        const existing = allResults.get(r.chunkId);
+        if (!existing || r.relevanceScore > existing.relevanceScore) {
+          allResults.set(r.chunkId, r);
+        }
+      }
+    }
+    const merged = Array.from(allResults.values()).sort((a, b) => b.relevanceScore - a.relevanceScore);
+    return applyPostProcessing(merged, query, topK, threshold, rerankModel, knowledgeBaseId, abTestVariant, options?.metadataFilter, retrievalMode, contextOrderingStrategy);
+  }
+
+  // For HyDE: use hypothetical document for semantic embedding, original query for keyword
+  const hydeOverride = transformed.hydeDocument;
+
+  let searchResults: SearchResult[];
+
+  if (retrievalMode === "semantic") {
+    searchResults = await searchKnowledgeBase(knowledgeBaseId, query, candidateK, embeddingModel, hydeOverride);
+  } else if (retrievalMode === "keyword") {
+    searchResults = await keywordSearch(knowledgeBaseId, query, candidateK);
+  } else {
+    const [semanticResults, keywordResults] = await Promise.all([
+      searchKnowledgeBase(knowledgeBaseId, query, candidateK, embeddingModel, hydeOverride),
+      keywordSearch(knowledgeBaseId, query, candidateK),
+    ]);
+    searchResults = normalizeRRFScores(
+      reciprocalRankFusion(semanticResults, keywordResults, semanticWeight, keywordWeight)
+    );
+  }
+
+  return applyPostProcessing(searchResults, query, topK, threshold, rerankModel, knowledgeBaseId, abTestVariant, options?.metadataFilter, retrievalMode, contextOrderingStrategy);
+}
+
+async function runSingleSearch(
+  query: string,
+  knowledgeBaseId: string,
+  candidateK: number,
+  retrievalMode: string,
+  semanticWeight: number,
+  keywordWeight: number,
+  embeddingModel?: string
+): Promise<SearchResult[]> {
+  if (retrievalMode === "semantic") {
+    return searchKnowledgeBase(knowledgeBaseId, query, candidateK, embeddingModel);
+  }
+  if (retrievalMode === "keyword") {
+    return keywordSearch(knowledgeBaseId, query, candidateK);
+  }
+  const [sem, kw] = await Promise.all([
+    searchKnowledgeBase(knowledgeBaseId, query, candidateK, embeddingModel),
     keywordSearch(knowledgeBaseId, query, candidateK),
   ]);
+  return normalizeRRFScores(reciprocalRankFusion(sem, kw, semanticWeight, keywordWeight));
+}
 
-  let fused = reciprocalRankFusion(semanticResults, keywordResults, semanticWeight, keywordWeight);
+async function applyPostProcessing(
+  searchResults: SearchResult[],
+  query: string,
+  topK: number,
+  threshold: number,
+  rerankModel: string,
+  knowledgeBaseId: string,
+  abTestVariant: string | undefined,
+  metadataFilter: MetadataFilter | undefined,
+  retrievalMode: string,
+  contextOrderingStrategy: ContextOrderingStrategy = "relevance"
+): Promise<SearchResult[]> {
+  let fused = metadataFilter
+    ? searchResults.filter((r) =>
+        evaluateFilter(metadataFilter, r.metadata ?? {}, {
+          type: r.sourceType ?? "",
+          name: r.sourceDocument ?? "",
+        })
+      )
+    : searchResults;
 
-  if (rerank && fused.length > topK) {
+  if (rerankModel !== "none" && fused.length > topK) {
     const rerankStart = Date.now();
     try {
       const { rerankResults } = await import("./reranker");
-      fused = await rerankResults(query, fused, topK);
+      fused = await rerankResults(query, fused, topK, rerankModel);
 
       const rerankDurationMs = Date.now() - rerankStart;
       recordMetric("kb.search.rerank.duration", rerankDurationMs, "ms", {
@@ -361,16 +520,26 @@ export async function hybridSearch(
     }
   }
 
-  const results = fused
-    .filter((r) => r.relevanceScore >= MIN_RELEVANCE_SCORE)
+  const filtered = fused
+    .filter((r) => r.relevanceScore >= threshold)
     .slice(0, topK);
+
+  const ordered = orderContext(filtered, contextOrderingStrategy);
+  const results = compressContext(ordered, 4000);
 
   recordMetric("kb.search.results", results.length, "count", {
     knowledgeBaseId,
-    reranked: rerank ? 1 : 0,
+    reranked: rerankModel !== "none" ? 1 : 0,
+    rerankModel,
+    retrievalMode,
     queryWordCount: query.split(/\s+/).filter(Boolean).length,
     ...(abTestVariant ? { abTestVariant } : {}),
   });
+
+  // Fire-and-forget: track which chunks were retrieved
+  if (results.length > 0) {
+    updateChunkRetrievalStats(results.map((r) => r.chunkId)).catch(() => {});
+  }
 
   return results;
 }

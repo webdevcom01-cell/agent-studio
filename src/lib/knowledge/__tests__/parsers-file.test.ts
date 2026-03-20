@@ -141,9 +141,9 @@ describe("parseSource FILE routing", () => {
       parseSource({
         type: "FILE",
         fileBuffer: Buffer.from("data"),
-        fileName: "data.csv",
+        fileName: "data.zip",
       })
-    ).rejects.toThrow("Unsupported file type: .csv");
+    ).rejects.toThrow("Unsupported file type: .zip");
   });
 
   it("throws when file buffer is missing", async () => {

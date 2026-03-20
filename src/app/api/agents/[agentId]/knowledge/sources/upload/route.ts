@@ -8,10 +8,14 @@ import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = [".pdf", ".docx"];
+const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".xlsx", ".xls", ".csv", ".pptx"];
 const EXTENSION_MIME_MAP: Record<string, string> = {
   ".pdf": "application/pdf",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".xls": "application/vnd.ms-excel",
+  ".csv": "text/csv",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 };
 
 interface RouteParams {
@@ -83,7 +87,7 @@ export async function POST(
 
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
     return NextResponse.json(
-      { success: false, error: `Unsupported file type: ${ext || "unknown"}. Allowed: PDF, DOCX` },
+      { success: false, error: `Unsupported file type: ${ext || "unknown"}. Allowed: PDF, DOCX, XLSX, CSV, PPTX` },
       { status: 400 }
     );
   }
