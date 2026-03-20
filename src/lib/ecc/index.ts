@@ -13,7 +13,7 @@ export {
   evolveAgentInstincts,
   getLifecycleStats,
 } from "./instinct-engine";
-export { createObsidianAdapter } from "./obsidian-adapter";
+export { createObsidianAdapter, isObsidianConfigured } from "./obsidian-adapter";
 export { isECCEnabled, isECCEnabledForAgent } from "./feature-flag";
 export type {
   SkillFrontmatter,
