@@ -27,6 +27,10 @@ vi.mock("@/lib/logger", () => ({
 
 vi.mock("../verify", () => ({
   generateWebhookSecret: vi.fn(() => "test-generated-secret-43chars-xxxxxxxxxxxxx"),
+  encryptWebhookSecret: vi.fn((secret: string) => ({
+    encrypted: secret,
+    isEncrypted: false,
+  })),
 }));
 
 import { syncWebhooksFromFlow } from "../sync";

@@ -11,7 +11,7 @@ import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { applySecurityHeaders } from "@/lib/api/security-headers";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { generateWebhookSecret } from "@/lib/webhooks/verify";
+import { generateWebhookSecret, encryptWebhookSecret } from "@/lib/webhooks/verify";
 
 const CreateWebhookSchema = z.object({
   name: z.string().min(1).max(100),
@@ -107,12 +107,16 @@ export async function POST(
 
     const { name, description, eventFilters, bodyMappings, headerMappings } = parsed.data;
 
+    const plaintextSecret = generateWebhookSecret();
+    const { encrypted, isEncrypted } = encryptWebhookSecret(plaintextSecret);
+
     const webhook = await prisma.webhookConfig.create({
       data: {
         agentId,
         name,
         description,
-        secret: generateWebhookSecret(),
+        secret: encrypted,
+        secretEncrypted: isEncrypted,
         eventFilters,
         bodyMappings,
         headerMappings,
@@ -121,7 +125,6 @@ export async function POST(
         id: true,
         name: true,
         description: true,
-        secret: true,
         enabled: true,
         eventFilters: true,
         bodyMappings: true,
@@ -132,7 +135,11 @@ export async function POST(
 
     logger.info("Webhook config created", { agentId, webhookId: webhook.id });
 
-    const response = NextResponse.json({ success: true, data: webhook }, { status: 201 });
+    // Return plaintext secret ONCE — never stored in plaintext if encryption is configured
+    const response = NextResponse.json(
+      { success: true, data: { ...webhook, secret: plaintextSecret } },
+      { status: 201 }
+    );
     applySecurityHeaders(response, request.nextUrl.pathname);
     return response;
   } catch (error) {

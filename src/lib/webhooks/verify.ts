@@ -15,6 +15,7 @@
  */
 
 import { createHmac, timingSafeEqual, randomBytes } from "crypto";
+import { encrypt, decrypt, isEncryptionConfigured } from "@/lib/crypto";
 
 /** Maximum age of a webhook request before it is rejected (5 minutes). */
 const MAX_TIMESTAMP_AGE_SECONDS = 5 * 60;
@@ -124,4 +125,30 @@ export function verifyWebhookSignature(
  */
 export function generateWebhookSecret(): string {
   return randomBytes(32).toString("base64url");
+}
+
+/**
+ * Encrypts a webhook secret for storage.
+ * If encryption is not configured, returns the plaintext secret unchanged.
+ */
+export function encryptWebhookSecret(secret: string): {
+  encrypted: string;
+  isEncrypted: boolean;
+} {
+  if (!isEncryptionConfigured()) {
+    return { encrypted: secret, isEncrypted: false };
+  }
+  return { encrypted: encrypt(secret), isEncrypted: true };
+}
+
+/**
+ * Decrypts a webhook secret from storage.
+ * Handles both encrypted and legacy plaintext secrets based on the flag.
+ */
+export function decryptWebhookSecret(
+  storedSecret: string,
+  isEncrypted: boolean
+): string {
+  if (!isEncrypted) return storedSecret;
+  return decrypt(storedSecret);
 }

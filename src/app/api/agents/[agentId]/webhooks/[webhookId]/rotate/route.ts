@@ -12,7 +12,7 @@ import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { applySecurityHeaders } from "@/lib/api/security-headers";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { generateWebhookSecret } from "@/lib/webhooks/verify";
+import { generateWebhookSecret, encryptWebhookSecret } from "@/lib/webhooks/verify";
 
 export async function POST(
   request: NextRequest,
@@ -37,19 +37,20 @@ export async function POST(
       return response;
     }
 
-    const newSecret = generateWebhookSecret();
+    const plaintextSecret = generateWebhookSecret();
+    const { encrypted, isEncrypted } = encryptWebhookSecret(plaintextSecret);
 
     await prisma.webhookConfig.update({
       where: { id: webhookId },
-      data: { secret: newSecret },
+      data: { secret: encrypted, secretEncrypted: isEncrypted },
     });
 
     logger.info("Webhook secret rotated", { agentId, webhookId });
 
-    // Return the new secret — this is the ONLY time it will be shown in plaintext
+    // Return plaintext secret ONCE — encrypted at rest if encryption is configured
     const response = NextResponse.json({
       success: true,
-      data: { secret: newSecret },
+      data: { secret: plaintextSecret },
     });
     applySecurityHeaders(response, request.nextUrl.pathname);
     return response;

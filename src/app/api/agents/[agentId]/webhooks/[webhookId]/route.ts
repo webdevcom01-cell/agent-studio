@@ -68,6 +68,10 @@ export async function GET(
             sourceIp: true,
             conversationId: true,
             errorMessage: true,
+            // Replay support: expose whether a stored payload exists and replay metadata
+            rawPayload: true,
+            isReplay: true,
+            replayOf: true,
           },
         },
       },
@@ -82,7 +86,10 @@ export async function GET(
       return response;
     }
 
-    const response = NextResponse.json({ success: true, data: webhook });
+    // Never expose the raw or encrypted secret in GET responses.
+    // Secret is only returned on creation and rotation.
+    const { secret: _secret, secretEncrypted: _flag, ...safeWebhook } = webhook;
+    const response = NextResponse.json({ success: true, data: safeWebhook });
     applySecurityHeaders(response, request.nextUrl.pathname);
     return response;
   } catch (error) {

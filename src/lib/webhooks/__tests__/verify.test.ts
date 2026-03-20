@@ -3,7 +3,10 @@ import { createHmac } from "crypto";
 import {
   verifyWebhookSignature,
   generateWebhookSecret,
+  encryptWebhookSecret,
+  decryptWebhookSecret,
 } from "../verify";
+import { randomBytes } from "crypto";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -223,5 +226,57 @@ describe("generateWebhookSecret", () => {
   it("generates secrets of appropriate length (43 chars for 32 bytes base64url)", () => {
     const secret = generateWebhookSecret();
     expect(secret.length).toBe(43);
+  });
+});
+
+describe("encryptWebhookSecret / decryptWebhookSecret", () => {
+  const originalKey = process.env.WEBHOOK_ENCRYPTION_KEY;
+
+  afterEach(() => {
+    if (originalKey !== undefined) {
+      process.env.WEBHOOK_ENCRYPTION_KEY = originalKey;
+    } else {
+      delete process.env.WEBHOOK_ENCRYPTION_KEY;
+    }
+  });
+
+  it("returns plaintext when encryption is not configured", () => {
+    delete process.env.WEBHOOK_ENCRYPTION_KEY;
+    const secret = "my-webhook-secret";
+    const { encrypted, isEncrypted } = encryptWebhookSecret(secret);
+    expect(encrypted).toBe(secret);
+    expect(isEncrypted).toBe(false);
+  });
+
+  it("encrypts when encryption key is configured", () => {
+    process.env.WEBHOOK_ENCRYPTION_KEY = randomBytes(32).toString("base64url");
+    const secret = "my-webhook-secret";
+    const { encrypted, isEncrypted } = encryptWebhookSecret(secret);
+    expect(encrypted).not.toBe(secret);
+    expect(isEncrypted).toBe(true);
+  });
+
+  it("decryptWebhookSecret returns plaintext for non-encrypted secrets", () => {
+    const secret = "plaintext-secret";
+    expect(decryptWebhookSecret(secret, false)).toBe(secret);
+  });
+
+  it("decryptWebhookSecret decrypts encrypted secrets", () => {
+    process.env.WEBHOOK_ENCRYPTION_KEY = randomBytes(32).toString("base64url");
+    const secret = "my-webhook-secret";
+    const { encrypted } = encryptWebhookSecret(secret);
+    expect(decryptWebhookSecret(encrypted, true)).toBe(secret);
+  });
+
+  it("full round-trip: generate → encrypt → decrypt → verify signature", () => {
+    process.env.WEBHOOK_ENCRYPTION_KEY = randomBytes(32).toString("base64url");
+    const secret = generateWebhookSecret();
+    const { encrypted, isEncrypted } = encryptWebhookSecret(secret);
+    const decrypted = decryptWebhookSecret(encrypted, isEncrypted);
+
+    const ts = makeTimestamp();
+    const headers = makeHeaders(MSG_ID, ts, BODY, decrypted);
+    const result = verifyWebhookSignature(BODY, headers, decrypted);
+    expect(result.valid).toBe(true);
   });
 });

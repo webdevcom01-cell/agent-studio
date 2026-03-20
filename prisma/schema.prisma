@@ -617,9 +617,13 @@ model WebhookConfig {
   description String?
 
   /// HMAC-SHA256 signing secret — generated on creation, used to verify incoming requests.
-  /// Stored in plaintext (no hash) because verification needs the raw secret.
+  /// Encrypted at rest with AES-256-GCM when WEBHOOK_ENCRYPTION_KEY is configured.
   /// Rotatable via POST /rotate endpoint.
   secret      String
+
+  /// Whether the secret field is AES-256-GCM encrypted (migration flag).
+  /// false = legacy plaintext, true = encrypted. Used for zero-downtime migration.
+  secretEncrypted Boolean @default(false)
 
   /// Whether this webhook is accepting incoming requests
   enabled     Boolean @default(true)

@@ -18,7 +18,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import { loadContext, saveContext, saveMessages } from "@/lib/runtime/context";
 import { executeFlow } from "@/lib/runtime/engine";
-import { verifyWebhookSignature } from "./verify";
+import { verifyWebhookSignature, decryptWebhookSecret } from "./verify";
 
 /** Per-webhook rate limit: 60 requests per minute. */
 const WEBHOOK_RATE_LIMIT = 60;
@@ -29,6 +29,16 @@ export interface WebhookExecuteOptions {
   rawBody: string;
   headers: Record<string, string | string[] | undefined>;
   sourceIp?: string;
+  /**
+   * When true, skips signature verification (replay uses the stored body —
+   * there is no live HMAC signature to check).
+   */
+  isReplay?: boolean;
+  /**
+   * For replay executions, the ID of the original execution being replayed.
+   * Stored on the new execution record for traceability.
+   */
+  replayOf?: string;
 }
 
 export interface WebhookExecuteResult {
@@ -120,10 +130,43 @@ function extractEventTypeFromBody(parsedBody: unknown): string | null {
 /**
  * Executes the full inbound webhook pipeline.
  */
+/**
+ * Strips sensitive headers (Authorization, Cookie, API keys, secrets) and
+ * flattens array values for storage.  Returns a plain Record<string, string>.
+ */
+export function sanitizeHeadersForStorage(
+  headers: Record<string, string | string[] | undefined>
+): Record<string, string> {
+  const BLOCKED = new Set([
+    "authorization",
+    "cookie",
+    "set-cookie",
+    "x-api-key",
+    "api-key",
+    "x-secret",
+    "x-auth-token",
+    "x-access-token",
+  ]);
+  const result: Record<string, string> = {};
+  for (const [key, val] of Object.entries(headers)) {
+    const lower = key.toLowerCase();
+    if (BLOCKED.has(lower)) continue;
+    if (val === undefined) continue;
+    // x-webhook-signature contains the HMAC — redact value but keep the key so
+    // recipients know it existed without being able to re-use the signature.
+    if (lower === "x-webhook-signature" || lower === "webhook-signature") {
+      result[key] = "[REDACTED]";
+      continue;
+    }
+    result[key] = Array.isArray(val) ? val[0] : val;
+  }
+  return result;
+}
+
 export async function executeWebhookTrigger(
   opts: WebhookExecuteOptions
 ): Promise<WebhookExecuteResult> {
-  const { agentId, webhookId, rawBody, headers, sourceIp } = opts;
+  const { agentId, webhookId, rawBody, headers, sourceIp, isReplay = false, replayOf } = opts;
   const startedAt = Date.now();
 
   // ── 1. Load webhook config ────────────────────────────────────────────────
@@ -133,6 +176,7 @@ export async function executeWebhookTrigger(
       id: true,
       enabled: true,
       secret: true,
+      secretEncrypted: true,
       bodyMappings: true,
       headerMappings: true,
       eventFilters: true,
@@ -148,23 +192,36 @@ export async function executeWebhookTrigger(
   }
 
   // ── 2. Signature verification ─────────────────────────────────────────────
-  const verification = verifyWebhookSignature(rawBody, headers, webhookConfig.secret);
-  if (!verification.valid) {
-    logger.warn("Webhook signature verification failed", {
-      webhookId,
-      agentId,
-      error: verification.error,
-      sourceIp,
-    });
-    return { success: false, status: 400, error: verification.error };
+  // Replay executions re-use the original stored body; there is no live HMAC
+  // signature to verify, so we skip this step for them.
+  if (!isReplay) {
+    const rawSecret = decryptWebhookSecret(
+      webhookConfig.secret,
+      webhookConfig.secretEncrypted
+    );
+    const verification = verifyWebhookSignature(rawBody, headers, rawSecret);
+    if (!verification.valid) {
+      logger.warn("Webhook signature verification failed", {
+        webhookId,
+        agentId,
+        error: verification.error,
+        sourceIp,
+      });
+      return { success: false, status: 400, error: verification.error };
+    }
   }
 
   // ── 3. Idempotency check ──────────────────────────────────────────────────
-  const rawId =
-    headers["x-webhook-id"] ??
-    headers["webhook-id"] ??
-    headers["x-request-id"];
-  const idempotencyKey = Array.isArray(rawId) ? rawId[0] : rawId ?? `${webhookId}:${startedAt}`;
+  // Replay executions always get a fresh unique key so they are never blocked
+  // by the original execution's idempotency entry.
+  const rawId = isReplay
+    ? undefined
+    : (headers["x-webhook-id"] ??
+       headers["webhook-id"] ??
+       headers["x-request-id"]);
+  const idempotencyKey = Array.isArray(rawId)
+    ? rawId[0]
+    : rawId ?? `${webhookId}:${startedAt}`;
 
   const existing = await prisma.webhookExecution.findUnique({
     where: { idempotencyKey },
@@ -271,6 +328,8 @@ export async function executeWebhookTrigger(
   }
 
   // ── 6. Create execution record (PENDING) ──────────────────────────────────
+  const sanitizedHeaders = sanitizeHeadersForStorage(headers);
+
   const execution = await prisma.webhookExecution.create({
     data: {
       webhookConfigId: webhookId,
@@ -279,6 +338,12 @@ export async function executeWebhookTrigger(
       triggeredAt: new Date(),
       sourceIp: sourceIp ?? null,
       eventType,
+      // Store original payload and sanitized headers for replay support.
+      // rawPayload is capped at 1 MB to prevent unbounded storage.
+      rawPayload: rawBody.length <= 1_048_576 ? rawBody : null,
+      rawHeaders: sanitizedHeaders,
+      isReplay,
+      replayOf: replayOf ?? null,
     },
     select: { id: true },
   });

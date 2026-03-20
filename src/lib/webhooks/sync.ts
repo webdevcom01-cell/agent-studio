@@ -14,7 +14,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { generateWebhookSecret } from "./verify";
+import { generateWebhookSecret, encryptWebhookSecret } from "./verify";
 import type { FlowContent } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -86,13 +86,15 @@ export async function syncWebhooksFromFlow(
     if (!existingRecord) {
       // CREATE — generate a fresh secret on first deploy
       try {
-        const secret = generateWebhookSecret();
+        const plaintextSecret = generateWebhookSecret();
+        const { encrypted, isEncrypted } = encryptWebhookSecret(plaintextSecret);
         await prisma.webhookConfig.create({
           data: {
             agentId,
             nodeId,
             name,
-            secret,
+            secret: encrypted,
+            secretEncrypted: isEncrypted,
             enabled: true,
             bodyMappings: [],
             headerMappings: [],
