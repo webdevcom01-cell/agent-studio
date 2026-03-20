@@ -398,6 +398,11 @@ EvalResult — One test case result within a run
 | `/api/agents/[agentId]/knowledge/sources/upload` | POST | File upload (multipart/form-data, PDF/DOCX, max 10 MB) |
 | `/api/agents/[agentId]/knowledge/sources/[sourceId]` | DELETE | Delete source and all its chunks |
 | `/api/agents/[agentId]/knowledge/search` | POST | Test hybrid search (semantic + BM25 + optional reranking) |
+| `/api/agents/[agentId]/knowledge/config` | GET, PATCH | Per-KB RAG pipeline configuration (chunking, embedding, retrieval, reranking) |
+| `/api/agents/[agentId]/knowledge/drift` | GET | Embedding model drift detection with recommendation |
+| `/api/agents/[agentId]/knowledge/analytics` | GET | KB stats: sources, chunks, token distribution, search metrics |
+| `/api/agents/[agentId]/knowledge/evaluate` | POST | RAGAS evaluation: search → generate → evaluate quality metrics |
+| `/api/agents/[agentId]/knowledge/maintenance` | GET, POST | Dead chunk detection, cleanup, scheduled re-ingestion |
 | `/api/agents/[agentId]/export` | GET | Download agent as versioned JSON (config + flow, no conversations/KB) |
 | `/api/agents/import` | POST | Import agent from exported JSON, Zod-validated with `z.literal(1)` version |
 | `/api/agents/discover` | GET | Marketplace search/filter/sort/paginate with category stats and tag aggregation |
@@ -465,6 +470,92 @@ EvalResult — One test case result within a run
 - Dynamic topK: 5 for short queries, 8 for longer queries
 - Parent document retrieval — returns broader context around matched chunks
 - UI: Add Source dialog has URL, Text, and File tabs with client-side 10 MB validation
+
+### Enterprise RAG Pipeline
+Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and maintenance.
+
+**Per-KB Configuration** (`KnowledgeBase` model fields):
+- `chunkingStrategy` (Json), `embeddingModel`, `embeddingDimension`, `retrievalMode`, `rerankingModel`, `queryTransform`, `searchTopK`, `searchThreshold`, `hybridAlpha`, `maxChunks`, `contextOrdering`
+- Zod validation: `src/lib/schemas/kb-config.ts` — `ChunkingStrategySchema` (discriminated union, 5 variants), `kbConfigUpdateSchema`, `kbConfigResponseSchema`
+- Settings UI tab on Knowledge Base page (`/knowledge/[agentId]`)
+- API: `GET/PATCH /api/agents/[agentId]/knowledge/config`
+
+**Chunking** (5 strategies in `src/lib/knowledge/chunker.ts`):
+- `recursive` — hierarchical split by separators (`\n\n` → `\n` → `. ` → ` ` → char), recursive fallback, hard token split
+- `markdown` — line-by-line, preserves headings with `preserveHeaders` option
+- `code` — splits by class/function boundaries, auto-detect Python/TS/JS
+- `sentence` — split by sentence boundaries, token-accurate overlap
+- `fixed` — legacy mode via `chunkText()`
+- Token counting: tiktoken `cl100k_base` via `countTokens()` (replaces `estimateTokens()`)
+- Header injection: `buildChunkHeader()` + `injectHeaders()` — prepend source/type/page/section context to each chunk
+
+**Embedding**:
+- Multi-model: `getEmbeddingModelById()` — `text-embedding-3-small` (1536 dim), `text-embedding-3-large` (3072 dim)
+- Redis cache: `embedding-cache.ts` — `getCachedQueryEmbedding()` / `setCachedQueryEmbedding()` (600s TTL)
+- Semaphore: `acquireEmbeddingSemaphore()` — max 3 concurrent embedding calls (Lua EVAL atomic)
+- Drift detection: `embedding-drift.ts` — `detectEmbeddingDrift()` detects model mismatch, `markChunkEmbeddingModel()` tags chunks
+- API: `GET /api/agents/[agentId]/knowledge/drift`
+
+**Query Transformation** (`src/lib/knowledge/query-transform.ts`):
+- `hydeTransform()` — generates hypothetical document for better semantic match (LLM, 200 tokens)
+- `multiQueryExpand()` — 3 alternative phrasings for broader recall (LLM)
+- `transformQuery(query, mode)` — dispatcher for `"none"` / `"hyde"` / `"multi_query"`
+
+**Search Pipeline** (`src/lib/knowledge/search.ts`):
+- 3 retrieval modes: `semantic` (pgvector cosine), `keyword` (PostgreSQL FTS/BM25), `hybrid` (both + RRF fusion)
+- RRF normalization: scores normalized to 0.0–1.0 range via `normalizeRRFScores()`
+- Metadata filtering: `metadata-filter.ts` — 10 operators (eq, neq, gt, gte, lt, lte, in, nin, contains, exists), AND/OR groups, dot-notation paths, in-memory eval + SQL generation
+- KB config fallback: all search params read from `KnowledgeBase` model, options override
+- Query embedding cache: check Redis before embedding, cache after
+
+**Reranking** (`src/lib/knowledge/reranker.ts`):
+- `llm-rubric` — LLM scores each passage 0.0–1.0 (default, uses deepseek-chat)
+- `cohere` — Cohere Rerank v3.5 API (`POST api.cohere.com/v2/rerank`), 5s timeout, graceful fallback
+- `none` — skip reranking
+- Auto-rerank: enabled for queries < 5 words via `shouldRerank()`
+
+**Context Processing** (`src/lib/knowledge/context-ordering.ts`):
+- `relevance` — sort by score DESC (default)
+- `lost_in_middle` — U-shaped: best chunks at positions 1 and last (Liu et al. 2023)
+- `chronological` — sort by sourceDocument + chunkIndex
+- `diversity` — MMR-like iterative selection, Jaccard similarity penalty
+- `compressContext()` — fits results within token budget (4000 default), truncates last chunk
+
+**Document Parsers** (`src/lib/knowledge/parsers.ts`):
+- PDF (pdf-parse), DOCX (mammoth), HTML (cheerio), Excel/CSV (xlsx), PPTX (JSZip XML extraction)
+- `parseSource()` dispatcher routes by file extension
+
+**Content Deduplication** (`src/lib/knowledge/deduplication.ts`):
+- `computeContentHash()` — SHA-256 of normalized text
+- `findDuplicateChunks()` — query existing hashes in KB via `contentHash = ANY(...)`
+- `deduplicateChunks()` — filter duplicates before embedding (saves API cost)
+
+**Citations** (`src/lib/knowledge/citations.ts`):
+- `extractCitations()` — deduplicate by sourceId, max 5, truncate snippets to 200 chars
+- `formatCitationsForAI()` — numbered format for system prompt injection
+- `formatCitationsForUI()` — simplified format for frontend display
+
+**Ingest Progress** (`src/lib/knowledge/ingest.ts`):
+- 6 stages: parsing (0%) → chunking (20%) → deduplication (40%) → embedding (50%) → storing (90%) → complete (100%)
+- `updateProgress()` writes to `KBSource.processingProgress` JSON field (fire-and-forget)
+- Content hash stored on source (`KBSource.contentHash`) and chunks (`KBChunk.contentHash`)
+
+**RAGAS Evaluation** (`src/lib/knowledge/ragas.ts`):
+- 4 metrics: `faithfulness`, `contextPrecision`, `contextRecall` (with groundTruth), `answerRelevancy`
+- LLM-as-Judge via `generateObject()` + Zod schema, parallel evaluation
+- API: `POST /api/agents/[agentId]/knowledge/evaluate` — search → generate → evaluate
+
+**KB Analytics** (`src/lib/knowledge/analytics.ts`):
+- Source/chunk stats, token distribution (5 buckets), top retrieved chunks, search metrics
+- Embedding drift status, stale chunk percentage
+- API: `GET /api/agents/[agentId]/knowledge/analytics`
+
+**Maintenance** (`src/lib/knowledge/maintenance.ts`):
+- Dead chunk detection: retrievalCount=0 + older than 30 days
+- `cleanupDeadChunks()` — delete dead chunks
+- `updateChunkRetrievalStats()` — fire-and-forget increment on every search
+- Scheduled re-ingestion: `getSourcesDueForReingestion()` + `triggerReingestion()`
+- API: `GET/POST /api/agents/[agentId]/knowledge/maintenance`
 
 ### Agent Export/Import
 - Export format: `{ version: 1, exportedAt, agent: { name, description, systemPrompt, model }, flow: { nodes, edges, variables } }`
