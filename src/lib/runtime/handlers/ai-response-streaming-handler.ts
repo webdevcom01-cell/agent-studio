@@ -3,6 +3,8 @@ import { getModel, DEFAULT_MODEL } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import { getMCPToolsForAgent } from "@/lib/mcp/client";
 import { getAgentToolsForAgent, type AgentToolContext } from "@/lib/agents/agent-tools";
+import { traceGenAI } from "@/lib/observability/tracer";
+import { recordChatLatency, recordTokenUsage } from "@/lib/observability/metrics";
 import type { ExecutionResult, RuntimeContext, StreamWriter } from "../types";
 import type { FlowNode } from "@/types";
 import { resolveTemplate } from "../template";
@@ -108,6 +110,14 @@ export async function aiResponseStreamingHandler(
         }, 5000)
       : null;
 
+    const span = traceGenAI("gen_ai.stream", {
+      "gen_ai.system": modelId.split("-")[0],
+      "gen_ai.request.model": modelId,
+      "gen_ai.request.temperature": temperature,
+      "gen_ai.request.max_tokens": maxTokens,
+    });
+
+    const startMs = Date.now();
     const result = streamText(streamOptions);
 
     writer.write({ type: "stream_start" });
@@ -119,6 +129,36 @@ export async function aiResponseStreamingHandler(
     }
 
     if (heartbeatTimer) clearInterval(heartbeatTimer);
+
+    const durationMs = Date.now() - startMs;
+
+    // Await usage from the stream result
+    const usage = await result.usage;
+    const inputTokens = usage?.inputTokens ?? 0;
+    const outputTokens = usage?.outputTokens ?? 0;
+
+    span.setAttributes({
+      "gen_ai.usage.input_tokens": inputTokens,
+      "gen_ai.usage.output_tokens": outputTokens,
+    });
+
+    // Record tool calls as span events
+    const toolCalls = await result.toolCalls;
+    if (toolCalls && toolCalls.length > 0) {
+      for (const toolCall of toolCalls) {
+        span.addEvent({
+          name: "gen_ai.tool_call",
+          attributes: { "tool.name": toolCall.toolName },
+        });
+      }
+    }
+
+    span.end();
+
+    recordChatLatency(context.agentId, modelId, durationMs);
+    if (inputTokens > 0 || outputTokens > 0) {
+      recordTokenUsage(context.agentId, modelId, inputTokens, outputTokens);
+    }
 
     if (!fullText) fullText = "I couldn't generate a response.";
 

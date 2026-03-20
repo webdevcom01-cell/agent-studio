@@ -3,6 +3,8 @@ import { getModel, DEFAULT_MODEL } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import { getMCPToolsForAgent } from "@/lib/mcp/client";
 import { getAgentToolsForAgent, type AgentToolContext } from "@/lib/agents/agent-tools";
+import { traceGenAI } from "@/lib/observability/tracer";
+import { recordChatLatency, recordTokenUsage } from "@/lib/observability/metrics";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 
@@ -96,7 +98,43 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
       generateOptions.stopWhen = stepCountIs(MAX_TOOL_STEPS);
     }
 
+    const span = traceGenAI("gen_ai.generate", {
+      "gen_ai.system": modelId.split("-")[0],
+      "gen_ai.request.model": modelId,
+      "gen_ai.request.temperature": temperature,
+      "gen_ai.request.max_tokens": maxTokens,
+    });
+
+    const startMs = Date.now();
     const result = await generateText(generateOptions);
+    const durationMs = Date.now() - startMs;
+
+    const inputTokens = result.usage?.inputTokens ?? 0;
+    const outputTokens = result.usage?.outputTokens ?? 0;
+
+    span.setAttributes({
+      "gen_ai.usage.input_tokens": inputTokens,
+      "gen_ai.usage.output_tokens": outputTokens,
+      "gen_ai.response.finish_reason": result.finishReason ?? "unknown",
+    });
+
+    if (result.toolCalls && result.toolCalls.length > 0) {
+      for (const toolCall of result.toolCalls) {
+        span.addEvent({
+          name: "gen_ai.tool_call",
+          attributes: {
+            "tool.name": toolCall.toolName,
+          },
+        });
+      }
+    }
+
+    span.end();
+
+    recordChatLatency(context.agentId, modelId, durationMs);
+    if (inputTokens > 0 || outputTokens > 0) {
+      recordTokenUsage(context.agentId, modelId, inputTokens, outputTokens);
+    }
 
     const responseText = result.text || "I couldn't generate a response.";
 
