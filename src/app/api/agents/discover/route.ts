@@ -22,7 +22,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { prismaRead } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { AGENT_CATEGORIES } from "@/lib/constants/agent-categories";
@@ -231,12 +231,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     };
 
     const [agents, total, categoryStats, allTagAgents] = await Promise.all([
-      prisma.agent.findMany(findManyArgs) as unknown as Promise<AgentWithExtras[]>,
-      prisma.agent.count({ where }),
-      prisma.agent.groupBy(groupByArgs).catch(() => []) as Promise<
+      prismaRead.agent.findMany(findManyArgs) as unknown as Promise<AgentWithExtras[]>,
+      prismaRead.agent.count({ where }),
+      prismaRead.agent.groupBy(groupByArgs).catch(() => []) as Promise<
         { category: string | null; _count: { category: number } }[]
       >,
-      prisma.agent.findMany(tagsQueryArgs).catch(() => []) as Promise<
+      prismaRead.agent.findMany(tagsQueryArgs).catch(() => []) as Promise<
         { tags: string[] }[]
       >,
     ]);

@@ -6,6 +6,10 @@ vi.mock("@/lib/prisma", () => ({
     $queryRaw: vi.fn(),
     skill: { count: vi.fn().mockResolvedValue(60) },
   },
+  prismaRead: {
+    $queryRaw: vi.fn(),
+  },
+  measureReplicationLag: vi.fn(async () => null),
 }));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true, remaining: 29, retryAfterMs: 0 }),

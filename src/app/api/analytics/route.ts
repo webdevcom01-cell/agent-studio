@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { prisma } from "@/lib/prisma";
+import { prismaRead } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 
 const SENSITIVE_NUMBER_PATTERN = /\d{4,}/;
@@ -142,18 +142,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     scheduleExecData,
   ] = await Promise.all([
     // 1. Total conversations
-    prisma.conversation.count({
+    prismaRead.conversation.count({
       where: { createdAt: { gte: sinceDate }, agent: { userId } },
     }),
 
     // 2. Total messages
-    prisma.message.count({
+    prismaRead.message.count({
       where: { createdAt: { gte: sinceDate }, conversation: { agent: { userId } } },
     }),
 
     // 3. Time series (hourly or daily)
     useHourly
-      ? prisma.$queryRaw<HourlyRow[]>(
+      ? prismaRead.$queryRaw<HourlyRow[]>(
           Prisma.sql`
             SELECT
               TO_CHAR(c."createdAt", 'YYYY-MM-DD HH24:00') AS hour,
@@ -165,7 +165,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             ORDER BY hour ASC
           `
         )
-      : prisma.$queryRaw<DailyRow[]>(
+      : prismaRead.$queryRaw<DailyRow[]>(
           Prisma.sql`
             SELECT DATE(c."createdAt")::text AS date, COUNT(*)::bigint AS count
             FROM "Conversation" c
@@ -177,7 +177,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         ),
 
     // 4. Top agents
-    prisma.$queryRaw<TopAgentRow[]>(
+    prismaRead.$queryRaw<TopAgentRow[]>(
       Prisma.sql`
         SELECT
           a."id" AS "agentId", a."name" AS "agentName",
@@ -194,7 +194,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
 
     // 5. Common first messages
-    prisma.$queryRaw<FirstMessageRow[]>(
+    prismaRead.$queryRaw<FirstMessageRow[]>(
       Prisma.sql`
         SELECT fm."content", COUNT(*)::bigint AS "count"
         FROM (
@@ -213,7 +213,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // 6. Response time percentiles (p50, p95, p99) by day
     //    Falls back to metadata->>'totalResponseTimeMs' for events created before durationMs column
-    prisma.$queryRaw<AvgResponseRow[]>(
+    prismaRead.$queryRaw<AvgResponseRow[]>(
       Prisma.sql`
         SELECT
           DATE(ae."createdAt")::text AS date,
@@ -237,7 +237,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
 
     // 7. KB search hit rate
-    prisma.$queryRaw<KBCountRow[]>(
+    prismaRead.$queryRaw<KBCountRow[]>(
       Prisma.sql`
         SELECT
           ((ae.metadata->>'resultCount')::int > 0) AS has_results,
@@ -252,7 +252,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
 
     // 8. Model usage breakdown
-    prisma.$queryRaw<ModelUsageRow[]>(
+    prismaRead.$queryRaw<ModelUsageRow[]>(
       Prisma.sql`
         SELECT
           ae."model" AS model,
@@ -273,7 +273,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
 
     // 9. Error rates by day
-    prisma.$queryRaw<ErrorRateRow[]>(
+    prismaRead.$queryRaw<ErrorRateRow[]>(
       Prisma.sql`
         SELECT
           DATE(ae."createdAt")::text AS date,
@@ -289,7 +289,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
 
     // 10. Cost by day
-    prisma.$queryRaw<CostByDayRow[]>(
+    prismaRead.$queryRaw<CostByDayRow[]>(
       Prisma.sql`
         SELECT
           DATE(ae."createdAt")::text AS date,
@@ -306,7 +306,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
 
     // 11. Token summary
-    prisma.$queryRaw<TokenSummaryRow[]>(
+    prismaRead.$queryRaw<TokenSummaryRow[]>(
       Prisma.sql`
         SELECT
           COALESCE(SUM(ae."inputTokens"), 0)::bigint AS total_input,
@@ -320,7 +320,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
 
     // 12. Tool usage stats
-    prisma.$queryRaw<ToolUsageRow[]>(
+    prismaRead.$queryRaw<ToolUsageRow[]>(
       Prisma.sql`
         SELECT
           ae.metadata->>'toolName' AS tool_name,
@@ -340,7 +340,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
 
     // 13. Conversation funnel
-    prisma.$queryRaw<ConversationFunnelRow[]>(
+    prismaRead.$queryRaw<ConversationFunnelRow[]>(
       Prisma.sql`
         SELECT step, COUNT(*)::bigint AS count FROM (
           SELECT 'started' AS step FROM "Conversation" c
@@ -367,7 +367,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
 
     // 14. Schedule execution stats by day
-    prisma.$queryRaw<ScheduleDailyRow[]>(
+    prismaRead.$queryRaw<ScheduleDailyRow[]>(
       Prisma.sql`
         SELECT
           DATE(ae."createdAt")::text AS date,

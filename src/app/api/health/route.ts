@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, measureReplicationLag } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isECCEnabled } from "@/lib/ecc";
 import { getRedis, isRedisConfigured } from "@/lib/redis";
@@ -71,6 +71,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  const replicationLagMs = dbStatus === "ok" ? await measureReplicationLag() : null;
+
   const status = dbStatus === "ok" ? "healthy" : "degraded";
   const statusCode = dbStatus === "ok" ? 200 : 503;
 
@@ -80,6 +82,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       version: process.env.npm_package_version ?? "0.1.0",
       replicaId: REPLICA_ID,
       db: dbStatus,
+      dbReadReplica: process.env.DATABASE_READ_URL ? "configured" : "not-configured",
+      replicationLagMs,
       redis: redisStatus,
       ecc: {
         enabled: ecc.enabled,

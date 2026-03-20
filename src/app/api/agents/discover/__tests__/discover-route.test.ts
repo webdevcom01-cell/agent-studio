@@ -10,6 +10,7 @@ const mockPrisma = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: mockPrisma,
+  prismaRead: mockPrisma,
 }));
 
 vi.mock("@/lib/logger", () => ({

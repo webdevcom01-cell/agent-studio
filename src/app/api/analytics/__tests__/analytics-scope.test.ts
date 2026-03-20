@@ -9,7 +9,7 @@ const mockPrisma = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth", () => ({ auth: mockAuth }));
-vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
+vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma, prismaRead: mockPrisma }));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true, remaining: 9, retryAfterMs: 0 }),
 }));

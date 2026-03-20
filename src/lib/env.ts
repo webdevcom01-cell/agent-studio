@@ -29,6 +29,7 @@ const envSchema = z.object({
   REDIS_URL: optionalStr,
   WEBHOOK_ENCRYPTION_KEY: optionalStr,
   OAUTH_ENCRYPTION_KEY: optionalStr,
+  DATABASE_READ_URL: optionalStr,
   CDN_URL: optionalStr,
   OBSIDIAN_VAULT_REPO: optionalStr,
   OBSIDIAN_GITHUB_TOKEN: optionalStr,
