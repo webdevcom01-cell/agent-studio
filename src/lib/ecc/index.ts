@@ -9,6 +9,9 @@ export {
   getPromotionCandidates,
   promoteInstinctToSkill,
   decayStaleInstincts,
+  clusterSimilarInstincts,
+  evolveAgentInstincts,
+  getLifecycleStats,
 } from "./instinct-engine";
 export { createObsidianAdapter } from "./obsidian-adapter";
 export { isECCEnabled, isECCEnabledForAgent } from "./feature-flag";
@@ -18,7 +21,13 @@ export type {
   SkillIngestResult,
   SkillParam,
 } from "./types";
-export type { InstinctSummary, PromotionCandidate } from "./instinct-engine";
+export type {
+  InstinctSummary,
+  PromotionCandidate,
+  ClusterGroup,
+  EvolveResult,
+  LifecycleStats,
+} from "./instinct-engine";
 export type {
   ObsidianConfig,
   ObsidianDocument,
