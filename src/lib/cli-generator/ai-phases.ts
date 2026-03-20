@@ -85,47 +85,74 @@ async function callAIObjectWithModel<TSchema extends z.ZodTypeAny>(
  *
  * Uses generateObject() + Zod schema (Phase 2) and system/user split (Phase 3).
  */
+/**
+ * Checks if an error is retryable (API 429/500/502/503/504 or network errors).
+ * Non-retryable: AbortError (timeout), 400 (bad request), 401 (auth), 403 (forbidden).
+ */
+function isRetryableError(err: unknown): boolean {
+  if (!(err instanceof Error)) return true;
+  if (err.name === "AbortError") return false;
+
+  const msg = err.message;
+  if (msg.includes("429") || msg.includes("rate limit")) return true;
+  if (msg.includes("500") || msg.includes("502") || msg.includes("503") || msg.includes("504")) return true;
+  if (msg.includes("ECONNREFUSED") || msg.includes("ETIMEDOUT") || msg.includes("fetch failed")) return true;
+  if (msg.includes("400") || msg.includes("401") || msg.includes("403")) return false;
+
+  return true;
+}
+
 async function callAIObject<TSchema extends z.ZodTypeAny>(
   schema: TSchema,
   parts: PromptParts,
   phase: string,
   options: { maxTokens?: number } = {},
-): Promise<{ object: z.infer<TSchema>; usage: TokenUsage | undefined; modelUsed: string }> {
+): Promise<{ object: z.infer<TSchema>; usage: TokenUsage | undefined; modelUsed: string; retryCount: number }> {
   const models = [PRIMARY_MODEL, FALLBACK_MODEL];
-  const MAX_ROUNDS = 2;
+  const MAX_ROUNDS = 3;
   let lastError = "";
+  let totalAttempts = 0;
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     for (const modelId of models) {
+      totalAttempts++;
       try {
         const result = await callAIObjectWithModel(modelId, schema, parts, options);
-        return { ...result, modelUsed: modelId };
+        const retryCount = totalAttempts - 1;
+        if (retryCount > 0) {
+          logger.info(`AI call succeeded after ${retryCount} retries`, { phase, modelId, retryCount });
+        }
+        return { ...result, modelUsed: modelId, retryCount };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         lastError = msg;
 
-        // Timeout is non-recoverable — abort immediately
-        if (err instanceof Error && err.name === "AbortError") {
-          throw new Error(`Phase ${phase} timed out after ${AI_PHASE_TIMEOUT_MS / 1000}s`);
+        if (!isRetryableError(err)) {
+          throw err instanceof Error && err.name === "AbortError"
+            ? new Error(`Phase ${phase} timed out after ${AI_PHASE_TIMEOUT_MS / 1000}s`)
+            : err;
         }
 
         logger.warn(`AI object call failed (round ${round + 1}, model ${modelId})`, {
           phase,
           modelId,
           round,
+          attempt: totalAttempts,
           error: msg,
         });
       }
     }
 
-    // Exponential backoff between rounds: 1s, 2s, 4s…
+    // Exponential backoff between rounds: 1s, 2s, 4s
     if (round < MAX_ROUNDS - 1) {
-      await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, round)));
+      const delayMs = 1000 * Math.pow(2, round);
+      logger.info(`AI retry backoff: ${delayMs}ms`, { phase, round: round + 1 });
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
 
   throw new Error(
-    `AI generation failed for phase "${phase}" after ${MAX_ROUNDS} retry rounds: ${lastError}`,
+    `AI generation failed for phase "${phase}" after ${totalAttempts} attempts (${MAX_ROUNDS} rounds): ${lastError}`,
   );
 }
 
@@ -139,12 +166,13 @@ export async function aiAnalyze(config: PipelineConfig): Promise<AIPhaseOutput> 
     platform: config.platform,
   });
 
-  const { object, usage, modelUsed } = await callAIObject(AnalyzeOutputSchema, prompt, "analyze");
+  const { object, usage, modelUsed, retryCount } = await callAIObject(AnalyzeOutputSchema, prompt, "analyze");
 
   return {
     result: object,
     tokensUsed: buildTokensUsed(usage),
     modelUsed,
+    retryCount,
   };
 }
 
@@ -162,13 +190,13 @@ export async function aiDesign(
     previousResults: [analysisResult],
   });
 
-  const { object, usage, modelUsed } = await callAIObject(DesignOutputSchema, prompt, "design");
+  const { object, usage, modelUsed, retryCount } = await callAIObject(DesignOutputSchema, prompt, "design");
 
   return {
-    // Store just the tools array for backward compat with downstream prompts
     result: object.tools,
     tokensUsed: buildTokensUsed(usage),
     modelUsed,
+    retryCount,
   };
 }
 
@@ -318,7 +346,7 @@ export async function aiDocs(
     ? buildTSDocsPrompt(ctx)
     : buildDocsPrompt(ctx);
 
-  const { object, usage, modelUsed } = await callAIObject(DocsOutputSchema, prompt, "docs", {
+  const { object, usage, modelUsed, retryCount } = await callAIObject(DocsOutputSchema, prompt, "docs", {
     maxTokens: 3000,
   });
 
@@ -327,6 +355,7 @@ export async function aiDocs(
     generatedFiles: { "README.md": object["README.md"] },
     tokensUsed: buildTokensUsed(usage),
     modelUsed,
+    retryCount,
   };
 }
 
@@ -347,7 +376,7 @@ export async function aiPublish(
 
   if (isTS) {
     const prompt = buildTSPublishPrompt(ctx);
-    const { object, usage, modelUsed } = await callAIObject(
+    const { object, usage, modelUsed, retryCount } = await callAIObject(
       TSPublishOutputSchema,
       prompt,
       "publish",
@@ -361,11 +390,12 @@ export async function aiPublish(
       },
       tokensUsed: buildTokensUsed(usage),
       modelUsed,
+      retryCount,
     };
   }
 
   const prompt = buildPublishPrompt(ctx);
-  const { object, usage, modelUsed } = await callAIObject(PublishOutputSchema, prompt, "publish", {
+  const { object, usage, modelUsed, retryCount } = await callAIObject(PublishOutputSchema, prompt, "publish", {
     maxTokens: 2000,
   });
 
@@ -377,5 +407,6 @@ export async function aiPublish(
     },
     tokensUsed: buildTokensUsed(usage),
     modelUsed,
+    retryCount,
   };
 }

@@ -8,6 +8,8 @@ export interface AIPhaseOutput {
   tokensUsed?: { input: number; output: number };
   /** Which AI model actually ran (primary or fallback). */
   modelUsed?: string;
+  /** Number of retry attempts before success (0 = first attempt succeeded). */
+  retryCount?: number;
 }
 
 export interface PhaseResult {
