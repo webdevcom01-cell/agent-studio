@@ -3,6 +3,7 @@ import type { z } from "zod";
 import { getModel } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 import type { PipelineConfig, AIPhaseOutput, GeneratedFiles } from "./types";
+import { validateTSOutput } from "./ts-validator";
 import {
   buildAnalyzePrompt,
   buildDesignPrompt,
@@ -250,6 +251,16 @@ export async function aiImplement(
     } else {
       logger.warn("Implement file generation failed (partial result kept)", {
         error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      });
+    }
+  }
+
+  // Post-generation validation for TypeScript target
+  if (isTS && Object.keys(allFiles).length > 0) {
+    const validation = validateTSOutput(allFiles);
+    if (!validation.valid) {
+      logger.warn("TS implementation validation failed", {
+        issues: validation.issues.filter((i) => i.severity === "error"),
       });
     }
   }
