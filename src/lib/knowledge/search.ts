@@ -3,9 +3,13 @@ import { Prisma } from "@/generated/prisma";
 import { generateEmbedding } from "./embeddings";
 import { estimateTokens } from "./chunker";
 import { logger } from "@/lib/logger";
+import { recordMetric } from "@/lib/observability/metrics";
 
 // Post-RRF scores are typically 0.005–0.02 range, not cosine similarity.
 const MIN_RELEVANCE_SCORE = 0.005;
+
+/** Queries with fewer words than this threshold auto-enable reranking. */
+const SHORT_QUERY_WORD_THRESHOLD = 5;
 const MAX_CONTEXT_TOKENS = 4000;
 
 const HTML_ESCAPE_MAP: Record<string, string> = {
@@ -37,7 +41,10 @@ export interface HybridSearchOptions {
   topK?: number;
   semanticWeight?: number;
   keywordWeight?: number;
+  /** Explicit rerank toggle. When undefined, auto-enables for short queries (< 5 words). */
   rerank?: boolean;
+  /** A/B test variant ID for search quality experiments. Logged with results. */
+  abTestVariant?: string;
 }
 
 interface VectorSearchRow {
@@ -303,6 +310,18 @@ export async function expandChunksWithContext(
   return trimmed;
 }
 
+/**
+ * Determines if reranking should be enabled for a query.
+ * Auto-enables for short/ambiguous queries (< 5 words) unless explicitly disabled.
+ */
+export function shouldRerank(query: string, explicitRerank: boolean | undefined): boolean {
+  if (explicitRerank === false) return false;
+  if (explicitRerank === true) return true;
+
+  const wordCount = query.split(/\s+/).filter(Boolean).length;
+  return wordCount < SHORT_QUERY_WORD_THRESHOLD;
+}
+
 export async function hybridSearch(
   query: string,
   knowledgeBaseId: string,
@@ -312,9 +331,11 @@ export async function hybridSearch(
     topK = 5,
     semanticWeight = 0.7,
     keywordWeight = 0.3,
-    rerank = false,
+    rerank: explicitRerank,
+    abTestVariant,
   } = options ?? {};
 
+  const rerank = shouldRerank(query, explicitRerank);
   const candidateK = rerank ? Math.max(topK, 20) : topK * 2;
 
   const [semanticResults, keywordResults] = await Promise.all([
@@ -325,15 +346,31 @@ export async function hybridSearch(
   let fused = reciprocalRankFusion(semanticResults, keywordResults, semanticWeight, keywordWeight);
 
   if (rerank && fused.length > topK) {
+    const rerankStart = Date.now();
     try {
       const { rerankResults } = await import("./reranker");
       fused = await rerankResults(query, fused, topK);
+
+      const rerankDurationMs = Date.now() - rerankStart;
+      recordMetric("kb.search.rerank.duration", rerankDurationMs, "ms", {
+        knowledgeBaseId,
+        ...(abTestVariant ? { abTestVariant } : {}),
+      });
     } catch {
       logger.warn("Re-ranking failed, using RRF order", { knowledgeBaseId });
     }
   }
 
-  return fused
+  const results = fused
     .filter((r) => r.relevanceScore >= MIN_RELEVANCE_SCORE)
     .slice(0, topK);
+
+  recordMetric("kb.search.results", results.length, "count", {
+    knowledgeBaseId,
+    reranked: rerank ? 1 : 0,
+    queryWordCount: query.split(/\s+/).filter(Boolean).length,
+    ...(abTestVariant ? { abTestVariant } : {}),
+  });
+
+  return results;
 }
