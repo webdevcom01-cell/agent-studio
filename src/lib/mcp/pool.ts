@@ -1,6 +1,7 @@
 import { createMCPClient } from "@ai-sdk/mcp";
 import type { MCPTransport as MCPTransportType } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
+import { registerMCPConnection, removeMCPConnection } from "@/lib/redis";
 
 interface PoolEntry {
   client: Awaited<ReturnType<typeof createMCPClient>>;
@@ -98,6 +99,16 @@ export async function getOrCreate(
     const client = await createMCPClient({ transport: transportConfig });
     pool.set(serverId, { client, lastUsed: Date.now() });
     startCleanup();
+
+    // Register in Redis for cross-replica visibility (fire-and-forget)
+    registerMCPConnection({
+      serverId,
+      url,
+      transport,
+      connectedAt: new Date().toISOString(),
+      lastUsedAt: new Date().toISOString(),
+    }).catch(() => {});
+
     return client;
   })();
 
@@ -117,6 +128,7 @@ export async function remove(serverId: string): Promise<void> {
       logger.warn("Failed to close removed MCP client", { serverId, error: String(err) });
     });
     pool.delete(serverId);
+    removeMCPConnection(serverId).catch(() => {});
   }
 }
 
