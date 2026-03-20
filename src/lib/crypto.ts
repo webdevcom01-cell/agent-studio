@@ -1,8 +1,8 @@
 /**
  * AES-256-GCM encryption/decryption for sensitive data at rest.
  *
- * Used for webhook signing secrets and (future) OAuth tokens.
- * Requires WEBHOOK_ENCRYPTION_KEY env var (32-byte base64url string).
+ * Used for webhook signing secrets and OAuth tokens.
+ * Supports multiple named keys via env vars (WEBHOOK_ENCRYPTION_KEY, OAUTH_ENCRYPTION_KEY).
  *
  * Format: base64url(iv:ciphertext:authTag)
  *   - iv: 12 bytes (96-bit, NIST recommended for GCM)
@@ -15,17 +15,19 @@ const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
 
-function getEncryptionKey(): Buffer {
-  const raw = process.env.WEBHOOK_ENCRYPTION_KEY;
+type KeyName = "WEBHOOK_ENCRYPTION_KEY" | "OAUTH_ENCRYPTION_KEY";
+
+function resolveKey(keyName: KeyName): Buffer {
+  const raw = process.env[keyName];
   if (!raw) {
     throw new Error(
-      "WEBHOOK_ENCRYPTION_KEY is not set. Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('base64url'))\""
+      `${keyName} is not set. Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`
     );
   }
   const buf = Buffer.from(raw, "base64url");
   if (buf.length !== 32) {
     throw new Error(
-      `WEBHOOK_ENCRYPTION_KEY must be exactly 32 bytes (256 bits). Got ${buf.length} bytes.`
+      `${keyName} must be exactly 32 bytes (256 bits). Got ${buf.length} bytes.`
     );
   }
   return buf;
@@ -35,8 +37,8 @@ function getEncryptionKey(): Buffer {
  * Encrypts a plaintext string using AES-256-GCM.
  * Returns a single base64url-encoded string containing iv + ciphertext + authTag.
  */
-export function encrypt(plaintext: string): string {
-  const key = getEncryptionKey();
+export function encrypt(plaintext: string, keyName: KeyName = "WEBHOOK_ENCRYPTION_KEY"): string {
+  const key = resolveKey(keyName);
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv(ALGORITHM, key, iv, {
     authTagLength: AUTH_TAG_LENGTH,
@@ -57,8 +59,8 @@ export function encrypt(plaintext: string): string {
  * Returns the original plaintext string.
  * Throws on tampered data (GCM authentication failure).
  */
-export function decrypt(encoded: string): string {
-  const key = getEncryptionKey();
+export function decrypt(encoded: string, keyName: KeyName = "WEBHOOK_ENCRYPTION_KEY"): string {
+  const key = resolveKey(keyName);
   const combined = Buffer.from(encoded, "base64url");
 
   if (combined.length < IV_LENGTH + AUTH_TAG_LENGTH) {
@@ -83,11 +85,10 @@ export function decrypt(encoded: string): string {
 }
 
 /**
- * Checks whether the encryption key is configured.
- * Use this for graceful degradation during migration.
+ * Checks whether a specific encryption key is configured.
  */
-export function isEncryptionConfigured(): boolean {
-  const raw = process.env.WEBHOOK_ENCRYPTION_KEY;
+export function isEncryptionConfigured(keyName: KeyName = "WEBHOOK_ENCRYPTION_KEY"): boolean {
+  const raw = process.env[keyName];
   if (!raw) return false;
   try {
     const buf = Buffer.from(raw, "base64url");

@@ -41,6 +41,11 @@ model Account {
   scope             String?
   id_token          String? @db.Text
   session_state     String?
+
+  /// Whether token fields (access_token, refresh_token, id_token) are AES-256-GCM encrypted.
+  /// false = legacy plaintext, true = encrypted. Used for zero-downtime migration.
+  tokensEncrypted   Boolean @default(false)
+
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])

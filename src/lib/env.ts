@@ -27,6 +27,7 @@ const envSchema = z.object({
   GOOGLE_WORKSPACE_CLIENT_ID: optionalStr,
   GOOGLE_WORKSPACE_CLIENT_SECRET: optionalStr,
   WEBHOOK_ENCRYPTION_KEY: optionalStr,
+  OAUTH_ENCRYPTION_KEY: optionalStr,
   ECC_MCP_URL: optionalStr,
   ECC_ENABLED: optionalStr,
   OTEL_EXPORTER_OTLP_ENDPOINT: optionalStr,

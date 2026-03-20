@@ -1,8 +1,7 @@
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import { prisma } from "@/lib/prisma";
+import { createEncryptedAdapter } from "@/lib/auth-adapter";
 
 const providers = [
   ...(process.env.AUTH_GITHUB_ID ? [GitHub] : []),
@@ -10,7 +9,7 @@ const providers = [
 ];
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  adapter: createEncryptedAdapter(),
   session: { strategy: "jwt", maxAge: 24 * 60 * 60 },
   providers,
   trustHost: true,
