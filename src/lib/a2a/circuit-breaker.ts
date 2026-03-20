@@ -191,6 +191,41 @@ export function getCircuitState(
   return stats?.state ?? "closed";
 }
 
+/**
+ * Returns all circuit states (for monitoring dashboard).
+ */
+export function getAllCircuitStates(): {
+  key: string;
+  state: CircuitState;
+  failures: number;
+  lastFailureAt: number;
+  probeInFlight: boolean;
+}[] {
+  return Array.from(circuits.entries()).map(([key, stats]) => ({
+    key,
+    state: stats.state,
+    failures: stats.failures,
+    lastFailureAt: stats.lastFailureAt,
+    probeInFlight: stats.probeInFlight,
+  }));
+}
+
+/**
+ * Parses visited-agents header for distributed trace context.
+ * Format: comma-separated agent IDs.
+ */
+export function parseVisitedAgents(header: string | null): string[] {
+  if (!header) return [];
+  return header.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * Serializes visited-agents for propagation via header.
+ */
+export function serializeVisitedAgents(agents: string[]): string {
+  return agents.join(",");
+}
+
 export function resetCircuits(): void {
   circuits.clear();
 }

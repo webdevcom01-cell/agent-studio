@@ -4,6 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { parseFlowContent } from "@/lib/validators/flow-content";
+import {
+  checkCircuit,
+  recordSuccess,
+  recordFailure,
+  checkDepthLimit,
+  checkCycleDetection,
+  parseVisitedAgents,
+  serializeVisitedAgents,
+  A2ACircuitError,
+} from "@/lib/a2a/circuit-breaker";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -55,6 +65,32 @@ export async function POST(
       );
     }
 
+    // ── Distributed trace context from headers ──────────────────────────
+    const visitedHeader = req.headers.get("x-a2a-visited-agents");
+    const visitedAgents = parseVisitedAgents(visitedHeader);
+    const traceId = req.headers.get("x-a2a-trace-id") ?? generateId();
+    const depth = parseInt(req.headers.get("x-a2a-depth") ?? "0", 10);
+    const callerAgentId = req.headers.get("x-a2a-caller-agent-id") ?? agentId;
+
+    // ── Circuit breaker + depth + cycle checks ──────────────────────────
+    try {
+      checkDepthLimit(depth, visitedAgents);
+      checkCycleDetection(agentId, visitedAgents);
+      if (callerAgentId !== agentId) {
+        checkCircuit(callerAgentId, agentId);
+      }
+    } catch (err) {
+      if (err instanceof A2ACircuitError) {
+        logger.warn("A2A request rejected", {
+          agentId,
+          code: err.code,
+          message: err.message,
+        });
+        return jsonRpcError(body.id ?? null, err.code, err.message, 429);
+      }
+      throw err;
+    }
+
     const taskId = body.params?.taskId ?? generateId();
     const inputParts = body.params?.message?.parts ?? [
       { type: "text", text: "" },
@@ -77,14 +113,14 @@ export async function POST(
 
     await prisma.agentCallLog.create({
       data: {
-        traceId: taskId,
+        traceId,
         spanId: generateId(),
-        callerAgentId: agentId,
+        callerAgentId,
         calleeAgentId: agentId,
         taskId,
         status: "SUBMITTED",
         inputParts,
-        depth: 0,
+        depth,
         isParallel: false,
         externalUrl: req.headers.get("referer") ?? undefined,
       },
@@ -102,6 +138,9 @@ export async function POST(
       },
     });
 
+    // Propagate visited-agents into flow context for sub-agent calls
+    const updatedVisited = [...visitedAgents, agentId];
+
     const context = {
       conversationId: conversation.id,
       agentId,
@@ -115,11 +154,18 @@ export async function POST(
         content: string;
       }[],
       isNewConversation: true,
+      _a2aDepth: depth + 1,
+      _a2aCallStack: updatedVisited,
+      _a2aTraceId: traceId,
     };
 
     const startTime = Date.now();
     const result = await executeFlow(context, inputMessage || undefined);
     const durationMs = Date.now() - startTime;
+
+    if (callerAgentId !== agentId) {
+      recordSuccess(callerAgentId, agentId);
+    }
 
     const lastAssistant = result.messages
       .filter((m) => m.role === "assistant")
@@ -138,7 +184,7 @@ export async function POST(
       })
       .catch((err) => logger.warn("A2A task update failed", err));
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       jsonrpc: "2.0",
       id: body.id ?? null,
       result: {
@@ -151,7 +197,18 @@ export async function POST(
         ],
       },
     });
+
+    // Propagate trace context in response headers for caller visibility
+    response.headers.set("x-a2a-trace-id", traceId);
+    response.headers.set("x-a2a-visited-agents", serializeVisitedAgents(updatedVisited));
+
+    return response;
   } catch (err) {
+    const agentId = (await params).agentId;
+    const callerAgentId = req.headers.get("x-a2a-caller-agent-id");
+    if (callerAgentId && callerAgentId !== agentId) {
+      recordFailure(callerAgentId, agentId);
+    }
     logger.error("A2A task execution failed", err, {});
     return jsonRpcError(null, -32000, "Internal execution error", 500);
   }

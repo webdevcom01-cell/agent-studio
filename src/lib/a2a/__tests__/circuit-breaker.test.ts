@@ -7,6 +7,9 @@ import {
   checkDepthLimit,
   checkCycleDetection,
   getCircuitState,
+  getAllCircuitStates,
+  parseVisitedAgents,
+  serializeVisitedAgents,
   MAX_AGENT_DEPTH,
   A2A_ERROR_CODES,
   A2ACircuitError,
@@ -214,5 +217,96 @@ describe("checkCycleDetection", () => {
 
   it("allows empty call stack", () => {
     expect(() => checkCycleDetection("a1", [])).not.toThrow();
+  });
+});
+
+describe("getAllCircuitStates", () => {
+  it("returns empty array when no circuits exist", () => {
+    expect(getAllCircuitStates()).toHaveLength(0);
+  });
+
+  it("returns all circuit states after failures", () => {
+    for (let i = 0; i < 3; i++) recordFailure("a1", "a2");
+    recordFailure("a3", "a4");
+
+    const states = getAllCircuitStates();
+    expect(states.length).toBe(2);
+
+    const openCircuit = states.find((s) => s.key === "a1:a2");
+    expect(openCircuit?.state).toBe("open");
+    expect(openCircuit?.failures).toBe(3);
+
+    const closedCircuit = states.find((s) => s.key === "a3:a4");
+    expect(closedCircuit?.state).toBe("closed");
+    expect(closedCircuit?.failures).toBe(1);
+  });
+
+  it("reflects state changes after recovery", () => {
+    for (let i = 0; i < 3; i++) recordFailure("a1", "a2");
+    recordSuccess("a1", "a2");
+
+    const states = getAllCircuitStates();
+    expect(states.find((s) => s.key === "a1:a2")).toBeUndefined();
+  });
+});
+
+describe("parseVisitedAgents", () => {
+  it("parses comma-separated agent IDs", () => {
+    expect(parseVisitedAgents("a1,a2,a3")).toEqual(["a1", "a2", "a3"]);
+  });
+
+  it("trims whitespace", () => {
+    expect(parseVisitedAgents(" a1 , a2 , a3 ")).toEqual(["a1", "a2", "a3"]);
+  });
+
+  it("returns empty array for null", () => {
+    expect(parseVisitedAgents(null)).toEqual([]);
+  });
+
+  it("returns empty array for empty string", () => {
+    expect(parseVisitedAgents("")).toEqual([]);
+  });
+
+  it("handles single agent", () => {
+    expect(parseVisitedAgents("a1")).toEqual(["a1"]);
+  });
+});
+
+describe("serializeVisitedAgents", () => {
+  it("joins agent IDs with commas", () => {
+    expect(serializeVisitedAgents(["a1", "a2", "a3"])).toBe("a1,a2,a3");
+  });
+
+  it("returns empty string for empty array", () => {
+    expect(serializeVisitedAgents([])).toBe("");
+  });
+});
+
+describe("advanced state transitions", () => {
+  it("multiple failures on same pair accumulate", () => {
+    recordFailure("a1", "a2");
+    recordFailure("a1", "a2");
+    expect(getCircuitState("a1", "a2")).toBe("closed");
+
+    recordFailure("a1", "a2");
+    expect(getCircuitState("a1", "a2")).toBe("open");
+  });
+
+  it("success after partial failures resets circuit", () => {
+    recordFailure("a1", "a2");
+    recordFailure("a1", "a2");
+    recordSuccess("a1", "a2");
+    expect(getCircuitState("a1", "a2")).toBe("closed");
+
+    recordFailure("a1", "a2");
+    expect(() => checkCircuit("a1", "a2")).not.toThrow();
+  });
+
+  it("resetCircuits clears all state", () => {
+    for (let i = 0; i < 3; i++) recordFailure("a1", "a2");
+    expect(getAllCircuitStates().length).toBeGreaterThan(0);
+
+    resetCircuits();
+    expect(getAllCircuitStates()).toHaveLength(0);
   });
 });
