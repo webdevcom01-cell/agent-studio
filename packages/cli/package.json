@@ -1,5 +1,5 @@
 {
-  "name": "@agent-studio/cli",
+  "name": "agent-studio-cli",
   "version": "0.1.0",
   "type": "module",
   "description": "CLI for Agent Studio — visual AI agent builder",
