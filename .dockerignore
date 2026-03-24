@@ -44,6 +44,9 @@ e2e
 **/*.spec.ts
 **/__tests__
 
+# Docusaurus docs site
+website/
+
 # Misc
 *.log
 *.tmp
