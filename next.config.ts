@@ -4,7 +4,7 @@ const CDN_URL = process.env.CDN_URL;
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  serverExternalPackages: ["pdf-parse", "mammoth"],
+  serverExternalPackages: ["pdf-parse", "mammoth", "tiktoken"],
 
   // When CDN_URL is configured, serve _next/static/* from CDN edge.
   // Example: CDN_URL=https://cdn.example.com
