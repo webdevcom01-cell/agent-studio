@@ -62,7 +62,7 @@ Autonomous agent routing based on the ECC chief-of-staff pattern. 4 pre-built fl
 The Learn node extracts patterns from AgentExecution history into instincts. Instincts accumulate confidence scores (0.0–1.0) and frequency counters. When confidence exceeds 0.85, instincts are promoted to full KB skills via the `/api/skills/evolve` endpoint (runs daily at 3 AM via cron).
 
 ### ECC Skills MCP Server
-Separate Railway service (`positive-inspiration`) running Python FastMCP. Exposes 3 tools: `get_skill`, `search_skills`, `list_skills`. Communicates via Railway internal networking on `/mcp` path.
+Separate service running Python FastMCP. Exposes 3 tools: `get_skill`, `search_skills`, `list_skills`. Communicates via internal networking on `/mcp` path. URL configured via `ECC_MCP_URL` env var.
 
 ---
 

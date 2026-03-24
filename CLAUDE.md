@@ -1116,15 +1116,15 @@ Applied via: `pnpm db:push`
 - **RAILWAY**: no serverless timeout — multi-agent pipelines run unlimited
 
 ### Phase 4: ECC Skills MCP Server — Separate Railway Service (COMPLETED)
-Railway service name: `positive-inspiration`. MCP endpoint: `/mcp`.
+Deployed as a separate service. MCP endpoint: `/mcp`.
 
 - `services/ecc-skills-mcp/main.py` — Python FastMCP with 3 tools:
   - `get_skill(name)` → returns skill content
   - `search_skills(query, tag?)` → vector search
   - `list_skills(language?)` → filtered listing
 - Deploy as Railway service: Nixpacks Python, Port 8000, Private Networking ONLY
-- Internal URL: `http://ecc-skills-mcp.railway.internal:8000`
-- Env-aware in `featured-servers.ts`: prod → railway.internal, dev → localhost:8000
+- Internal URL: configured via `ECC_MCP_URL` env var
+- Env-aware in `featured-servers.ts`: prod → env var, dev → localhost:8000
 - MCP Roots: agent workspaces as roots. MCP Resources: `kb://agent-id/skill-name`
 - MCP pool: min=5, max=20, HTTP/2, timeout tiers (2s/10s/30s)
 
@@ -1168,7 +1168,7 @@ Railway service name: `positive-inspiration`. MCP endpoint: `/mcp`.
 - Smoke test: health, login, agent create, KB ingest, chat, MCP call, webhook, cron
 
 ### Implementation Summary
-All 10 phases completed and deployed to production on Railway (service: `positive-inspiration`).
+All 10 phases completed and deployed to production.
 60 skills ingested and vectorized (255 KB chunks). ECC_ENABLED defaults to `false` (opt-in).
 
 ---
@@ -1188,26 +1188,22 @@ All 10 phases completed and deployed to production on Railway (service: `positiv
 │  │  numReplicas: 2      │    │  HNSW index for embeddings   │    │
 │  └────────┬────────────┘    └──────────────────────────────┘    │
 │           │                                                      │
-│           │ railway.internal                                     │
+│           │ internal networking                                  │
 │           │                                                      │
 │  ┌────────▼────────────┐    ┌──────────────────────────────┐    │
 │  │  Redis               │    │  Cron Service                │    │
-│  │  redis.railway.internal│   │  */5 * * * * (flows)         │    │
-│  │  Port 6379            │    │  0 3 * * * (evolve)          │    │
-│  │  Cross-replica state  │    │  → /api/cron/*               │    │
-│  └──────────────────────┘    │  Internal networking only    │    │
-│                               └──────────────────────────────┘    │
-│  ┌──────────────────────┐                                        │
-│  │  positive-inspiration │                                        │
-│  │  (ECC Skills MCP)     │                                        │
+│  │  Port 6379            │    │  */5 * * * * (flows)         │    │
+│  │  Cross-replica state  │    │  0 3 * * * (evolve)          │    │
+│  └──────────────────────┘    │  → /api/cron/*               │    │
+│                               │  Internal networking only    │    │
+│  ┌──────────────────────┐    └──────────────────────────────┘    │
+│  │  ECC Skills MCP       │                                        │
 │  │  Python FastMCP       │                                        │
 │  │  Port 8000 · /mcp     │                                        │
 │  └──────────────────────┘                                        │
 │                                                                  │
-│  Private Network: *.railway.internal (all services)              │
-│  Public:  agent-studio → agent-studio-production-c43e.up.railway.app │
-│  Private: positive-inspiration → positive-inspiration.railway.internal │
-│  Private: redis → redis.railway.internal:6379                    │
+│  All services communicate via internal networking                │
+│  Public: agent-studio → https://your-app.railway.app             │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1217,9 +1213,9 @@ All 10 phases completed and deployed to production on Railway (service: `positiv
 - **Ephemeral /tmp** — agent workspace cleared on redeploy. All persistent data → PostgreSQL
 - **Vercel cron NOT available** — use Railway Cron Service for scheduled flows + /evolve
 - **Nixpacks build** — Python MCP server needs `requirements.txt` for auto-detection
-- **Internal networking** — MCP server communicates via `*.railway.internal` (faster, no egress cost)
+- **Internal networking** — MCP server communicates via private internal networking (faster, no egress cost)
 - **Two replicas** — `numReplicas: 2` with Redis for cross-replica rate limiting, session cache, and MCP pool coordination. Falls back to in-memory if Redis unavailable
-- **Redis** — `redis.railway.internal:6379` via private networking. REDIS_URL uses `${{Redis.REDIS_PUBLIC_URL}}` variable reference (Railway auto-routes to internal)
+- **Redis** — configured via `REDIS_URL` env var. Railway auto-routes to internal networking
 - **ioredis workaround** — `pnpm add ioredis` in `buildCommand` because lockfile was out of sync. `.npmrc` has `frozen-lockfile=false`, `nixpacks.toml` overrides install phase
 - **Healthcheck timeout** — 120s. Skill ingestion MUST be async POST, not in startup path
 
@@ -1227,15 +1223,15 @@ All 10 phases completed and deployed to production on Railway (service: `positiv
 
 | Service          | Variable                      | Value                                           | Phase |
 |------------------|-------------------------------|-------------------------------------------------|-------|
-| agent-studio     | `ECC_MCP_URL`                 | `http://positive-inspiration.railway.internal:8000` | F4    |
+| agent-studio     | `ECC_MCP_URL`                 | Internal URL of ECC Skills MCP service          | F4    |
 | agent-studio     | `ECC_ENABLED`                 | `true`                                          | F9    |
-| agent-studio     | `OTEL_EXPORTER_OTLP_ENDPOINT` | `https://otlp-gateway-*.grafana.net/otlp`      | F6    |
+| agent-studio     | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP gateway URL (e.g. Grafana Cloud)           | F6    |
 | agent-studio     | `OTEL_SERVICE_NAME`           | `agent-studio`                                  | F6    |
-| agent-studio     | `REDIS_URL`                   | `${{Redis.REDIS_PUBLIC_URL}}` (auto-routes to internal) | —     |
-| positive-inspiration | `DATABASE_URL`            | Reference → PostgreSQL (read-only recommended)  | F4    |
-| positive-inspiration | `PORT`                    | `8000`                                          | F4    |
-| positive-inspiration | `MCP_TRANSPORT`           | `streamable-http`                               | F4    |
-| cron-service     | `STUDIO_URL`                  | `http://agent-studio.railway.internal:$PORT`    | F9    |
+| agent-studio     | `REDIS_URL`                   | Redis connection URL (auto-routes to internal)  | —     |
+| ecc-skills-mcp   | `DATABASE_URL`                | Reference → PostgreSQL (read-only recommended)  | F4    |
+| ecc-skills-mcp   | `PORT`                        | `8000`                                          | F4    |
+| ecc-skills-mcp   | `MCP_TRANSPORT`               | `streamable-http`                               | F4    |
+| cron-service     | `STUDIO_URL`                  | Internal URL of agent-studio service            | F9    |
 
 ---
 
@@ -1291,10 +1287,10 @@ All 10 phases completed and deployed to production on Railway (service: `positiv
 1. **Always check feature flag**: wrap ECC code with `if (process.env.ECC_ENABLED !== 'false')` or the per-agent `eccEnabled` field
 2. **Schema changes**: run `pnpm db:push` after any Prisma schema modifications
 3. **Async ingestion ONLY**: Never put skill ingestion in startup path (Railway healthcheck = 120s)
-4. **Railway internal networking**: MCP server URL via `process.env.ECC_MCP_URL`, never hardcode. Service name: `positive-inspiration`, MCP path: `/mcp`
+4. **Internal networking**: MCP server URL via `process.env.ECC_MCP_URL`, never hardcode. MCP path: `/mcp`
 5. **Existing patterns**: follow the same patterns as existing code (Zod validation, SWR hooks, API route handlers, Prisma queries)
 6. **No new CSS frameworks**: Tailwind CSS v4 ONLY. No inline styles.
 7. **MCP pool awareness**: timeout tiers matter — metadata=2s, search=10s, compute=30s
 8. **Push metrics, not pull**: Railway doesn't support Prometheus scrape. Use OTLP push exporter
 9. **Separate MCP service**: ECC Skills MCP is a separate Railway service (Python), not embedded in Next.js
-10. **Production URL**: `https://agent-studio-production-c43e.up.railway.app`
+10. **Production URL**: configured per deployment (see Railway dashboard or env vars)

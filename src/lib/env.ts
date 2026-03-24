@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { logger } from "@/lib/logger";
 
 // Treat empty strings as undefined for optional keys
 const optionalStr = z
@@ -58,27 +59,27 @@ export function validateEnv(
       .join("\n");
 
     const message = `Missing or invalid environment variables:\n${missing}\n\nSee .env.example for required variables.`;
-    console.error(message);
+    logger.error(message);
     throw new Error(message);
   }
 
   if (!result.data.AUTH_GITHUB_ID && !result.data.AUTH_GOOGLE_ID) {
-    console.warn("No OAuth providers configured — AUTH_GITHUB_ID or AUTH_GOOGLE_ID required for login");
+    logger.warn("No OAuth providers configured — AUTH_GITHUB_ID or AUTH_GOOGLE_ID required for login");
   }
   if (!result.data.ANTHROPIC_API_KEY) {
-    console.warn("ANTHROPIC_API_KEY not set — Anthropic models will be unavailable");
+    logger.warn("ANTHROPIC_API_KEY not set — Anthropic models will be unavailable");
   }
   if (!result.data.GOOGLE_GENERATIVE_AI_API_KEY) {
-    console.warn("GOOGLE_GENERATIVE_AI_API_KEY not set — Gemini models will be unavailable");
+    logger.warn("GOOGLE_GENERATIVE_AI_API_KEY not set — Gemini models will be unavailable");
   }
   if (!result.data.GROQ_API_KEY) {
-    console.warn("GROQ_API_KEY not set — Groq models will be unavailable");
+    logger.warn("GROQ_API_KEY not set — Groq models will be unavailable");
   }
   if (!result.data.MISTRAL_API_KEY) {
-    console.warn("MISTRAL_API_KEY not set — Mistral models will be unavailable");
+    logger.warn("MISTRAL_API_KEY not set — Mistral models will be unavailable");
   }
   if (!result.data.MOONSHOT_API_KEY) {
-    console.warn("MOONSHOT_API_KEY not set — Kimi models will be unavailable");
+    logger.warn("MOONSHOT_API_KEY not set — Kimi models will be unavailable");
   }
 
   return result.data;

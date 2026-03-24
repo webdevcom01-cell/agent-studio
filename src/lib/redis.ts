@@ -5,7 +5,7 @@
  * MCP pool coordination, session cache for JWT validation.
  *
  * Falls back gracefully when REDIS_URL is not configured.
- * Railway internal networking: redis://default:***@redis.railway.internal:6379
+ * Configure REDIS_URL env var for cross-replica shared state.
  */
 
 import { logger } from "@/lib/logger";

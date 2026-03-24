@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const CDN_URL = process.env.CDN_URL;
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   serverExternalPackages: ["pdf-parse", "mammoth"],
 
   // When CDN_URL is configured, serve _next/static/* from CDN edge.

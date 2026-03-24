@@ -1,11 +1,3 @@
-# ──────────────────────────────────────────────────────────────
-# Agent Studio — CI Pipeline
-# ──────────────────────────────────────────────────────────────
-# Hybrid approach:
-#   ✅ Always: lint, typecheck, unit tests
-#   🔘 Optional: E2E tests (manual trigger or PR label)
-# ──────────────────────────────────────────────────────────────
-
 name: CI
 
 on:
@@ -27,13 +19,18 @@ concurrency:
 env:
   NODE_VERSION: "20"
   PNPM_VERSION: "9"
+  NEXT_TELEMETRY_DISABLED: 1
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+  DIRECT_URL: postgresql://postgres:postgres@localhost:5432/test_db
+  DEEPSEEK_API_KEY: dummy_key_for_ci
+  OPENAI_API_KEY: dummy_key_for_ci
+  AUTH_SECRET: ci_test_secret_32_characters_long_x
 
 jobs:
-  # ─── Lint & Typecheck ──────────────────────────────────────
-  quality:
-    name: Lint & Typecheck
+  test:
+    name: Lint, Typecheck, Test, Build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -48,7 +45,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -62,45 +59,20 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-  # ─── Unit Tests ────────────────────────────────────────────
-  unit-tests:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+      - name: Unit tests
+        run: pnpm test --reporter=verbose
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Build
+        run: pnpm build
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: pnpm db:generate
-
-      - name: Run unit tests
-        run: pnpm test -- --reporter=default --reporter=github-actions
-
-  # ─── E2E Tests (Optional) ─────────────────────────────────
-  e2e-tests:
+  e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: [test]
     if: >-
       github.event_name == 'workflow_dispatch' && github.event.inputs.run_e2e == 'true' ||
       contains(github.event.pull_request.labels.*.name, 'e2e')
-    needs: [quality, unit-tests]
 
     services:
       postgres:
@@ -118,19 +90,15 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/agent_studio_test"
-      DIRECT_URL: "postgresql://postgres:postgres@localhost:5432/agent_studio_test"
-      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
-      AUTH_SECRET: "ci-test-secret-at-least-32-characters-long"
-      # AI keys — use dummy values; E2E tests mock all AI calls
-      DEEPSEEK_API_KEY: "sk-ci-dummy-deepseek-key"
-      OPENAI_API_KEY: "sk-ci-dummy-openai-key"
-      # OAuth — dummy values (not tested in E2E)
-      AUTH_GITHUB_ID: "ci-github-id"
-      AUTH_GITHUB_SECRET: "ci-github-secret"
-      AUTH_GOOGLE_ID: "ci-google-id"
-      AUTH_GOOGLE_SECRET: "ci-google-secret"
-      # Playwright
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agent_studio_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/agent_studio_test
+      AUTH_SECRET: ci-test-secret-at-least-32-characters-long
+      DEEPSEEK_API_KEY: sk-ci-dummy-deepseek-key
+      OPENAI_API_KEY: sk-ci-dummy-openai-key
+      AUTH_GITHUB_ID: ci-github-id
+      AUTH_GITHUB_SECRET: ci-github-secret
+      AUTH_GOOGLE_ID: ci-google-id
+      AUTH_GOOGLE_SECRET: ci-google-secret
       CI: "true"
 
     steps:
@@ -146,7 +114,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

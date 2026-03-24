@@ -22,6 +22,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
+
+# deployment docs (private ops runbooks)
+docs/deployment/
 
 # typescript
 *.tsbuildinfo
@@ -56,3 +60,15 @@ services/
 
 # Railway
 .env.railway
+
+# Local working documents
+*.docx
+*.pptx
+*.pdf
+*.jpg
+*.png
+*.tmp
+*.html
+!public/*.html
+.~lock.*
+_tmp_*

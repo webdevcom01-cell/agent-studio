@@ -1,0 +1,704 @@
+{
+  "meta": {
+    "project": "agent-studio",
+    "version": "1.0",
+    "createdAt": "2026-03-20",
+    "basedOn": "Forensic Architectural Analysis — March 2026",
+    "totalSprints": 12,
+    "sprintDurationWeeks": 1,
+    "repository": "agent-studio",
+    "deployment": "Railway",
+    "productionUrl": "https://your-app.railway.app"
+  },
+
+  "currentState": {
+    "scores": {
+      "architecture": { "rating": 4, "max": 5, "status": "good" },
+      "codeQuality": { "rating": 4, "max": 5, "status": "good" },
+      "security": { "rating": 3, "max": 5, "status": "needs-work" },
+      "scalability": { "rating": 3, "max": 5, "status": "needs-work" },
+      "testing": { "rating": 4, "max": 5, "status": "good" }
+    },
+    "metrics": {
+      "apiRoutes": 101,
+      "dbModels": 26,
+      "nodeTypes": 40,
+      "unitTests": 500,
+      "eccSkills": 50,
+      "llmProviders": 7,
+      "aiModels": 18,
+      "railwayServices": 2
+    }
+  },
+
+  "priorities": [
+    {
+      "id": "P1",
+      "name": "Sigurnosni Popravci",
+      "severity": "CRITICAL",
+      "sprints": "1-2",
+      "weeks": "1-2",
+      "estimatedDays": 10,
+      "tasks": [
+        {
+          "id": "P1-T1",
+          "title": "Webhook Secrets Hashing",
+          "description": "Heširati webhook secrets sa bcrypt/argon2 umjesto plaintext čuvanja u bazi",
+          "detail": "WebhookConfig.secret → hash+salt pattern. Migracija postojećih plaintext secrets.",
+          "estimatedDays": 3,
+          "status": "pending",
+          "files": [
+            "prisma/schema.prisma",
+            "src/lib/webhooks/verify.ts",
+            "src/app/api/agents/[agentId]/webhooks/route.ts",
+            "src/app/api/agents/[agentId]/webhooks/[webhookId]/rotate/route.ts"
+          ],
+          "acceptance": [
+            "Svi webhook secrets su heširani u bazi (bcrypt ili argon2)",
+            "Verifikacija radi sa heširanim vrijednostima",
+            "Migracija postojećih plaintext secrets bez downtime-a",
+            "Unit testovi za hash/verify flow"
+          ],
+          "risk": {
+            "level": "CRITICAL",
+            "probability": "high",
+            "impact": "Breach eksponira sve webhook secrets"
+          }
+        },
+        {
+          "id": "P1-T2",
+          "title": "OAuth Token Encryption",
+          "description": "AES-256-GCM enkripcija za GoogleOAuthToken access/refresh tokene",
+          "detail": "Encryption at rest za sve OAuth access tokene u Account modelu.",
+          "estimatedDays": 2,
+          "status": "pending",
+          "files": [
+            "src/lib/auth.ts",
+            "src/lib/crypto.ts",
+            "prisma/schema.prisma"
+          ],
+          "acceptance": [
+            "OAuth tokeni enkriptovani AES-256-GCM prije čuvanja u DB",
+            "Dekriptovanje transparentno za auth flow",
+            "Encryption key rotacija podržana",
+            "Migracija postojećih plaintext tokena"
+          ],
+          "risk": {
+            "level": "CRITICAL",
+            "probability": "high",
+            "impact": "Plaintext access tokens za Gmail/Calendar — full account takeover"
+          }
+        },
+        {
+          "id": "P1-T3",
+          "title": "A2A Circuit Breaker Depth Limit",
+          "description": "Implementirati max depth check (5-10) na agent-to-agent pozivima",
+          "detail": "Sprječava beskonačnu rekurziju u agent chain-ovima. Visited-agents tracking.",
+          "estimatedDays": 2,
+          "status": "pending",
+          "files": [
+            "src/lib/a2a/circuit-breaker.ts",
+            "src/lib/agents/agent-tools.ts",
+            "src/lib/runtime/handlers/call-agent-handler.ts"
+          ],
+          "acceptance": [
+            "Max depth limit (default 10) konfigurisan",
+            "Visited-agents set sprječava cikluse",
+            "Circuit breaker OPEN → HALF_OPEN recovery radi",
+            "JSON-RPC 2.0 error codes za circuit breaker stanja",
+            "Unit testovi za depth limit i cycle detection"
+          ],
+          "risk": {
+            "level": "HIGH",
+            "probability": "medium",
+            "impact": "Beskonačni agent-to-agent lanci mogu srušiti server"
+          }
+        },
+        {
+          "id": "P1-T4",
+          "title": "Redis Rate Limiting",
+          "description": "Zamijeniti in-memory Map rate limiter sa Redis-based implementacijom",
+          "detail": "Omogućava distribuciju rate limiting-a na multi-replica Railway setup.",
+          "estimatedDays": 3,
+          "status": "pending",
+          "files": [
+            "src/lib/rate-limit.ts",
+            "src/lib/a2a/rate-limiter.ts",
+            "src/app/api/agents/[agentId]/chat/route.ts"
+          ],
+          "acceptance": [
+            "Redis-based sliding window rate limiter",
+            "Radi na multi-replica deploymentu",
+            "Fallback na in-memory ako Redis nije dostupan",
+            "Konfigurabilni limiti po route-u",
+            "Unit testovi sa Redis mock-om"
+          ],
+          "risk": {
+            "level": "HIGH",
+            "probability": "medium",
+            "impact": "In-memory rate limiting ne skalira — svaki replica ima svoj counter"
+          }
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "Stabilizacija Servisa",
+      "severity": "HIGH",
+      "sprints": "2-3",
+      "weeks": "3-6",
+      "estimatedDays": 10,
+      "tasks": [
+        {
+          "id": "P2-T1",
+          "title": "MCP Transport Security",
+          "description": "Zamijeniti monkey-patch transport validacije sa nginx/caddy TLS proxy konfiguracijom",
+          "detail": "Eliminira fragile runtime patching koji puca na svaki MCP SDK update.",
+          "estimatedDays": 3,
+          "status": "pending",
+          "files": [
+            "src/lib/mcp/client.ts",
+            "src/lib/mcp/pool.ts",
+            "services/ecc-skills-mcp/main.py"
+          ],
+          "acceptance": [
+            "Monkey-patch uklonjen iz MCP client koda",
+            "TLS proxy konfiguran za interne MCP pozive",
+            "MCP connection test endpoint radi bez patcha",
+            "Upgrade na novi MCP SDK ne zahtijeva code change"
+          ],
+          "risk": {
+            "level": "MEDIUM",
+            "probability": "medium",
+            "impact": "Monkey-patch puca na MCP SDK update — svi MCP tools prestaju raditi"
+          }
+        },
+        {
+          "id": "P2-T2",
+          "title": "NextAuth Stabilizacija",
+          "description": "Monitor za stabilnu NextAuth v5 verziju, pinning cookie names",
+          "detail": "NextAuth v5 je još u beta — cookie names i session handling mogu se promijeniti.",
+          "estimatedDays": 2,
+          "status": "pending",
+          "files": [
+            "src/lib/auth.ts",
+            "src/middleware.ts"
+          ],
+          "acceptance": [
+            "Cookie names pinned (authjs.session-token / __Secure-authjs.session-token)",
+            "Session validation robusna na cookie name promjene",
+            "Monitoring za NextAuth stable release",
+            "Upgrade plan dokumentovan"
+          ],
+          "risk": {
+            "level": "MEDIUM",
+            "probability": "low",
+            "impact": "Session cookie name promjena = svi korisnici izlogovani"
+          }
+        },
+        {
+          "id": "P2-T3",
+          "title": "ECC Aktivacija u Produkciji",
+          "description": "Enableovati ECC_ENABLED=true na Railway + monitoring",
+          "detail": "Svi ECC skills, instinct engine i meta-orchestrator postaju aktivni.",
+          "estimatedDays": 1,
+          "status": "pending",
+          "files": [
+            "src/lib/ecc/index.ts"
+          ],
+          "envChanges": [
+            { "service": "agent-studio", "key": "ECC_ENABLED", "value": "true" }
+          ],
+          "acceptance": [
+            "ECC_ENABLED=true na Railway production",
+            "Skills Browser (/skills) prikazuje 50+ skills",
+            "Instinct engine procesira execution history",
+            "Health check uključuje ECC status",
+            "Rollback plan ako se pojave problemi"
+          ]
+        },
+        {
+          "id": "P2-T4",
+          "title": "Anthropic API Key Konfiguracija",
+          "description": "Konfigurirati ANTHROPIC_API_KEY na Railway za Claude modele",
+          "detail": "Claude Haiku/Sonnet/Opus modeli postaju dostupni korisnicima.",
+          "estimatedDays": 1,
+          "status": "pending",
+          "files": [
+            "src/lib/ai.ts",
+            "src/lib/env.ts"
+          ],
+          "envChanges": [
+            { "service": "agent-studio", "key": "ANTHROPIC_API_KEY", "value": "<from-console.anthropic.com>" }
+          ],
+          "acceptance": [
+            "ANTHROPIC_API_KEY konfiguran na Railway",
+            "Claude modeli vidljivi u model selector UI",
+            "Chat sa Claude modelom radi end-to-end",
+            "Rate limiting za Claude pozive aktivan"
+          ]
+        },
+        {
+          "id": "P2-T5",
+          "title": "Schedule Failure Notifikacije",
+          "description": "Email/webhook alert kada circuit breaker okinuo ili scheduled task fails",
+          "detail": "Sprječava tihe padove scheduled taskova bez obavještenja korisnika.",
+          "estimatedDays": 3,
+          "status": "pending",
+          "files": [
+            "src/lib/runtime/handlers/schedule-trigger-handler.ts",
+            "src/lib/a2a/circuit-breaker.ts",
+            "src/app/api/cron/route.ts"
+          ],
+          "acceptance": [
+            "Email notifikacija na schedule failure",
+            "Webhook callback opcija za custom alerting",
+            "Circuit breaker state change loguje se sa alertom",
+            "Dashboard prikazuje failure history"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "Kod Kvalitet & Monitoring",
+      "severity": "MEDIUM",
+      "sprints": "4-5",
+      "weeks": "7-10",
+      "estimatedDays": 15,
+      "tasks": [
+        {
+          "id": "P3-T1",
+          "title": "OpenTelemetry Aktivacija",
+          "description": "Aktivirati OTEL export na Railway → Grafana Cloud",
+          "detail": "gen_ai.* semantic conventions za LLM observability. OTLP push exporter.",
+          "estimatedDays": 3,
+          "status": "pending",
+          "files": [
+            "src/instrumentation.ts",
+            "src/lib/ai.ts"
+          ],
+          "envChanges": [
+            { "service": "agent-studio", "key": "OTEL_EXPORTER_OTLP_ENDPOINT", "value": "<grafana-cloud-otlp-endpoint>" },
+            { "service": "agent-studio", "key": "OTEL_SERVICE_NAME", "value": "agent-studio" }
+          ],
+          "acceptance": [
+            "OTLP push exporter šalje trace/metrics na Grafana Cloud",
+            "gen_ai.system, gen_ai.request.model, gen_ai.usage spans",
+            "Tool use calls imaju child span-ove",
+            "Grafana dashboard sa P95/P99 latency"
+          ]
+        },
+        {
+          "id": "P3-T2",
+          "title": "FlowVersion Cleanup Job",
+          "description": "Arhivirati/brisati FlowVersion starije od 90 dana",
+          "detail": "Sprječava DB bloat od akumuliranih immutable verzija.",
+          "estimatedDays": 2,
+          "status": "pending",
+          "files": [
+            "src/lib/versioning/version-service.ts",
+            "src/app/api/cron/cleanup/route.ts"
+          ],
+          "acceptance": [
+            "Cron job briše ARCHIVED verzije starije od 90 dana",
+            "PUBLISHED i DRAFT verzije se nikad ne brišu",
+            "Dry-run mode za preview šta bi bilo obrisano",
+            "Cleanup metrike u analytics dashboard-u"
+          ]
+        },
+        {
+          "id": "P3-T3",
+          "title": "CLI Generator Retry Logic",
+          "description": "Exponential backoff na LLM API greške u CLI Generator pipeline-u",
+          "detail": "Trenutno pipeline fails na prvom API erroru bez retry-a.",
+          "estimatedDays": 2,
+          "status": "pending",
+          "files": [
+            "src/lib/cli-generator/ai-phases.ts"
+          ],
+          "acceptance": [
+            "Exponential backoff (1s, 2s, 4s) na API 429/500 greške",
+            "Max 3 retry-a po phase-u",
+            "Retry count loguje se u phase result",
+            "Stuck detection ostaje na 5 minuta"
+          ]
+        },
+        {
+          "id": "P3-T4",
+          "title": "KB Search Reranking Poboljšanje",
+          "description": "Aktivirati LLM-based reranking za dvosmislene upite",
+          "detail": "Reranker postoji ali se rijetko koristi — default ga treba uključiti.",
+          "estimatedDays": 2,
+          "status": "pending",
+          "files": [
+            "src/lib/runtime/knowledge/search.ts",
+            "src/lib/runtime/knowledge/reranker.ts"
+          ],
+          "acceptance": [
+            "Reranking aktivan po defaultu za queries < 5 riječi",
+            "Konfigurabilna opcija za disable",
+            "Reranking latency metrika u analytics",
+            "A/B test framework za search quality"
+          ]
+        },
+        {
+          "id": "P3-T5",
+          "title": "ECC Batch Config sa Backpressure",
+          "description": "Konfigurabilni batch size za skill ingestion sa backpressure mehanizmom",
+          "detail": "Trenutno fiksni batch size bez zaštite od overload-a.",
+          "estimatedDays": 3,
+          "status": "pending",
+          "files": [
+            "src/lib/ecc/skill-ingest.ts",
+            "src/app/api/ecc/ingest-skills/route.ts"
+          ],
+          "acceptance": [
+            "Konfigurabilni BATCH_SIZE (default 10, max 50)",
+            "Backpressure: pauzira ingestion ako embedding queue > 100",
+            "Progress reporting u API response",
+            "Unit testovi za batch + backpressure"
+          ]
+        },
+        {
+          "id": "P3-T6",
+          "title": "E2E Test Expansion",
+          "description": "Dodati Playwright spec za A2A, webhooks i ECC skills",
+          "detail": "Trenutno 7 E2E spec fajlova — dodati 3 nova za necovered features.",
+          "estimatedDays": 3,
+          "status": "pending",
+          "files": [
+            "e2e/tests/a2a.spec.ts",
+            "e2e/tests/webhooks.spec.ts",
+            "e2e/tests/ecc-skills.spec.ts"
+          ],
+          "acceptance": [
+            "A2A spec: card generation, task communication, discovery",
+            "Webhooks spec: create, trigger, signature verify, event filter",
+            "ECC spec: skill browser, search, skill detail",
+            "Svi testovi prolaze u CI"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P4",
+      "name": "Nove Funkcionalnosti",
+      "severity": "EVOLUTION",
+      "sprints": "5-8",
+      "weeks": "9-16",
+      "estimatedDays": 20,
+      "tasks": [
+        {
+          "id": "P4-T1",
+          "title": "ECC Instinct Evolucija",
+          "description": "AI-powered clustering instinkata u skills sa automatskim promovisanjem",
+          "detail": "Confidence > 0.85 → automatska promocija u Skill. Decay mehanizam za neaktivne instinkte. Cron na 3AM daily.",
+          "estimatedDays": 5,
+          "status": "pending",
+          "files": [
+            "src/lib/ecc/instinct-engine.ts",
+            "src/app/api/skills/evolve/route.ts",
+            "src/app/api/cron/evolve/route.ts"
+          ],
+          "acceptance": [
+            "AI clustering grupira slične instinkte",
+            "Auto-promocija kad confidence > 0.85 i frequency > 10",
+            "Decay: confidence -= 0.05 svaki tjedan bez upotrebe",
+            "Cron job na 3AM procesira sve agente sa eccEnabled=true",
+            "Dashboard za instinct lifecycle vizualizaciju"
+          ]
+        },
+        {
+          "id": "P4-T2",
+          "title": "A2A Protocol Poboljšanje",
+          "description": "Implementirati visited-agents tracking, half-open recovery, JSON-RPC 2.0 errors",
+          "detail": "Kompletirati A2A circuit breaker sa production-ready error handling.",
+          "estimatedDays": 4,
+          "status": "pending",
+          "files": [
+            "src/lib/a2a/circuit-breaker.ts",
+            "src/lib/a2a/rate-limiter.ts",
+            "src/app/api/agents/[agentId]/a2a/route.ts",
+            "src/components/a2a/agent-call-monitor.tsx"
+          ],
+          "acceptance": [
+            "Visited-agents tracking u distributed trace context",
+            "Half-open state testira sa jednim probe call-om",
+            "JSON-RPC 2.0 error codes (32000-32099 za custom)",
+            "Real-time monitoring UI za circuit breaker state",
+            "30+ unit testova za sve state transitions"
+          ]
+        },
+        {
+          "id": "P4-T3",
+          "title": "CLI Generator TypeScript Poboljšanje",
+          "description": "Poboljšati 6-phase pipeline za TypeScript target output",
+          "detail": "McpServer + registerTool pattern, Vitest testovi, ESM imports, package.json generacija.",
+          "estimatedDays": 5,
+          "status": "pending",
+          "files": [
+            "src/lib/cli-generator/ai-phases.ts",
+            "src/lib/cli-generator/prompts.ts",
+            "src/lib/cli-generator/schemas.ts",
+            "src/lib/cli-generator/mcp-registration.ts"
+          ],
+          "acceptance": [
+            "TypeScript target generira 8 fajlova (index.ts, bridge.ts, server.ts, itd.)",
+            "server.ts koristi McpServer + registerTool (ne server.tool())",
+            "Vitest testovi za bridge i server",
+            "ESM imports sa .js extension",
+            "package.json sa type:module",
+            "E2E test za full TypeScript pipeline"
+          ]
+        },
+        {
+          "id": "P4-T4",
+          "title": "Obsidian Vault Integration",
+          "description": "Git-synced Obsidian vault kao persistent memory layer za agente",
+          "detail": "Agent skills → vault docs. GitMCP bridge za MCP pristup. Adapter stub već postoji.",
+          "estimatedDays": 6,
+          "status": "pending",
+          "files": [
+            "src/lib/ecc/obsidian-adapter.ts",
+            "src/app/api/integrations/obsidian/route.ts"
+          ],
+          "acceptance": [
+            "GitHub repo kao Obsidian vault storage",
+            "GitMCP bridge ekspozira vault kao MCP server",
+            "Agent instincts writeback → vault documents",
+            "Bi-directional sync (vault ↔ KB)",
+            "Onboarding dokumentacija za korisnike"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P5",
+      "name": "Skaliranje Infrastrukture",
+      "severity": "SCALING",
+      "sprints": "9-12",
+      "weeks": "17-24",
+      "estimatedDays": 25,
+      "tasks": [
+        {
+          "id": "P5-T1",
+          "title": "Redis Cluster Setup",
+          "description": "Dodati Redis servis na Railway za rate limiting, MCP pool i session cache",
+          "detail": "Railway internal networking za latency < 1ms između servisa.",
+          "estimatedDays": 5,
+          "status": "pending",
+          "files": [
+            "src/lib/redis.ts",
+            "src/lib/rate-limit.ts",
+            "src/lib/mcp/pool.ts"
+          ],
+          "envChanges": [
+            { "service": "agent-studio", "key": "REDIS_URL", "value": "redis://default:***@your-redis-host:6379" }
+          ],
+          "acceptance": [
+            "Redis servis na Railway internal network",
+            "Rate limiting prebačen na Redis",
+            "MCP connection pool sa Redis backend-om",
+            "Session cache za JWT token validation",
+            "Fallback na in-memory ako Redis je down"
+          ]
+        },
+        {
+          "id": "P5-T2",
+          "title": "Multi-Replica Deployment",
+          "description": "Railway multi-replica (2-3 replicas) sa load balancing",
+          "detail": "Zahtijeva Redis za shared state. Railway automatski load balance-uje.",
+          "estimatedDays": 5,
+          "status": "pending",
+          "files": [
+            "railway.toml"
+          ],
+          "acceptance": [
+            "2 replica deployement na Railway",
+            "Zero-downtime deploys sa rolling update",
+            "Shared state preko Redis (ne in-memory)",
+            "Health check endpoint radi na svakoj replici",
+            "Load test: 100 concurrent users bez degradacije"
+          ]
+        },
+        {
+          "id": "P5-T3",
+          "title": "CDN za Statičke Fajlove",
+          "description": "CDN za embed.js, widget assets i Next.js static files",
+          "detail": "Smanjuje TTFB za embed widget na globalnom nivou.",
+          "estimatedDays": 3,
+          "status": "pending",
+          "files": [
+            "next.config.ts",
+            "public/embed.js"
+          ],
+          "acceptance": [
+            "CDN konfiguran za /public assets",
+            "embed.js serviran sa CDN edge-a",
+            "Cache-Control headers optimizovani",
+            "TTFB < 100ms za static assets globalno"
+          ]
+        },
+        {
+          "id": "P5-T4",
+          "title": "Database Read Replicas",
+          "description": "PostgreSQL read replicas za analytics i heavy queries",
+          "detail": "Razdvajanje read/write workload-a za bolji performance.",
+          "estimatedDays": 5,
+          "status": "pending",
+          "files": [
+            "src/lib/prisma.ts",
+            "src/app/api/analytics/route.ts",
+            "src/app/api/agents/discover/route.ts"
+          ],
+          "acceptance": [
+            "Read replica konfigurana na Railway",
+            "Analytics queries idu na read replica",
+            "Discover/search queries idu na read replica",
+            "Write queries idu na primary",
+            "Replication lag monitoring"
+          ]
+        },
+        {
+          "id": "P5-T5",
+          "title": "Kubernetes Migration Plan",
+          "description": "Dokumentovati migration plan sa Railway na Kubernetes za dugoročno skaliranje",
+          "detail": "Railway je odličan za start ali K8s daje više kontrole za enterprise scale.",
+          "estimatedDays": 7,
+          "status": "pending",
+          "files": [
+            "docs/k8s-migration-plan.md",
+            "k8s/deployment.yaml",
+            "k8s/service.yaml"
+          ],
+          "acceptance": [
+            "Migration plan dokument sa step-by-step",
+            "Kubernetes manifests za sve servise",
+            "Helm chart ili Kustomize za env management",
+            "CI/CD pipeline za K8s deploy",
+            "Cost comparison Railway vs K8s"
+          ]
+        }
+      ]
+    }
+  ],
+
+  "slaTargets": {
+    "flowExecution": { "metric": "P95", "target": "< 5s", "current": "~8s" },
+    "kbSearch": { "metric": "P99", "target": "< 2s", "current": "~3s" },
+    "skillMetadata": { "metric": "P95", "target": "< 100ms", "current": "~200ms" },
+    "uptime": { "metric": "monthly", "target": "> 99.9%", "current": "~99.5%" },
+    "cacheHitRate": { "metric": "average", "target": "> 80%", "current": "N/A (no cache)" }
+  },
+
+  "risks": [
+    {
+      "id": "R1",
+      "component": "Webhook Secrets",
+      "level": "CRITICAL",
+      "description": "Plaintext u bazi — breach eksponira sve secrets",
+      "probability": "high",
+      "mitigationTask": "P1-T1",
+      "sprint": "S1"
+    },
+    {
+      "id": "R2",
+      "component": "OAuth Tokens",
+      "level": "CRITICAL",
+      "description": "Plaintext access tokens za Gmail/Calendar",
+      "probability": "high",
+      "mitigationTask": "P1-T2",
+      "sprint": "S1"
+    },
+    {
+      "id": "R3",
+      "component": "A2A Rekurzija",
+      "level": "HIGH",
+      "description": "Beskonačni agent-to-agent lanci bez depth limita",
+      "probability": "medium",
+      "mitigationTask": "P1-T3",
+      "sprint": "S1"
+    },
+    {
+      "id": "R4",
+      "component": "Rate Limiting",
+      "level": "HIGH",
+      "description": "In-memory — ne skalira na multi-replica",
+      "probability": "medium",
+      "mitigationTask": "P1-T4",
+      "sprint": "S1"
+    },
+    {
+      "id": "R5",
+      "component": "MCP Patch",
+      "level": "MEDIUM",
+      "description": "Monkey-patch transport validacije — puca na SDK update",
+      "probability": "medium",
+      "mitigationTask": "P2-T1",
+      "sprint": "S2"
+    },
+    {
+      "id": "R6",
+      "component": "NextAuth Beta",
+      "level": "MEDIUM",
+      "description": "v5 beta — session cookie names nestabilni",
+      "probability": "low",
+      "mitigationTask": "P2-T2",
+      "sprint": "S2"
+    },
+    {
+      "id": "R7",
+      "component": "Schedule Timeout",
+      "level": "LOW",
+      "description": "Silent fail scheduled taskova bez notifikacije korisniku",
+      "probability": "low",
+      "mitigationTask": "P2-T5",
+      "sprint": "S2"
+    },
+    {
+      "id": "R8",
+      "component": "DB Bloat",
+      "level": "LOW",
+      "description": "FlowVersion soft archive bez automatskog cleanup-a",
+      "probability": "low",
+      "mitigationTask": "P3-T2",
+      "sprint": "S4"
+    }
+  ],
+
+  "railwayArchitecture": {
+    "current": {
+      "services": [
+        { "name": "agent-studio", "tech": "Next.js 15.5", "replicas": 1, "public": true },
+        { "name": "ecc-skills-mcp", "tech": "Python FastMCP", "replicas": 1, "public": false },
+        { "name": "postgresql", "tech": "pgvector/pgvector:pg16", "replicas": 1, "public": false }
+      ]
+    },
+    "target": {
+      "services": [
+        { "name": "agent-studio", "tech": "Next.js 15.5", "replicas": 2, "public": true },
+        { "name": "ecc-skills-mcp", "tech": "Python FastMCP", "replicas": 1, "public": false },
+        { "name": "postgresql", "tech": "pgvector/pgvector:pg16", "replicas": 1, "public": false },
+        { "name": "redis", "tech": "Redis 7", "replicas": 1, "public": false, "new": true },
+        { "name": "cron-service", "tech": "Railway Cron", "replicas": 1, "public": false },
+        { "name": "grafana-otel", "tech": "Grafana Cloud + OTLP", "replicas": 1, "public": false, "new": true }
+      ]
+    }
+  },
+
+  "timeline": [
+    { "sprint": 1, "weeks": "1-2", "focus": "P1: Security (Critical)", "color": "red" },
+    { "sprint": 2, "weeks": "3-4", "focus": "P2: Stabilization (High)", "color": "orange" },
+    { "sprint": 3, "weeks": "5-6", "focus": "P2: Stabilization cont.", "color": "orange" },
+    { "sprint": 4, "weeks": "7-8", "focus": "P3: Code Quality", "color": "blue" },
+    { "sprint": 5, "weeks": "9-10", "focus": "P3 + P4: Quality + Features (parallel)", "color": "blue" },
+    { "sprint": 6, "weeks": "11-12", "focus": "P4: Features", "color": "gold" },
+    { "sprint": 7, "weeks": "13-14", "focus": "P4: Features cont.", "color": "gold" },
+    { "sprint": 8, "weeks": "15-16", "focus": "P4: Features finalization", "color": "gold" },
+    { "sprint": 9, "weeks": "17-18", "focus": "P5: Scaling (Redis + Multi-replica)", "color": "green" },
+    { "sprint": 10, "weeks": "19-20", "focus": "P5: Scaling (CDN + DB replicas)", "color": "green" },
+    { "sprint": 11, "weeks": "21-22", "focus": "P5: Scaling (K8s prep)", "color": "green" },
+    { "sprint": 12, "weeks": "23-24", "focus": "P5: Final testing + documentation", "color": "green" }
+  ]
+}

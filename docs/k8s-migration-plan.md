@@ -7,7 +7,7 @@ Migration guide from Railway to Kubernetes for enterprise-scale deployment.
 | Service | Tech | Replicas | Public |
 |---------|------|----------|--------|
 | agent-studio | Next.js 15.5 | 2 | Yes |
-| positive-inspiration | Python FastMCP | 1 | No |
+| ecc-skills-mcp | Python FastMCP | 1 | No |
 | postgresql | pgvector/pg16 | 1 | No |
 | redis | Redis 7 | 1 | No |
 | cron-service | Railway Cron | 1 | No |
@@ -51,7 +51,7 @@ Migrate when any of these thresholds are hit:
 
 1. Deploy Redis via Bitnami Helm chart
 2. Deploy agent-studio via Kustomize manifests (see `k8s/`)
-3. Deploy positive-inspiration (ECC Skills MCP)
+3. Deploy ecc-skills-mcp (ECC Skills MCP)
 4. Configure CronJob for scheduled flows and evolve
 5. Set up Ingress with TLS
 
@@ -144,7 +144,7 @@ K8s becomes cost-effective at 5+ replicas due to better resource packing and aut
 
 ## Prerequisites Checklist
 
-- [ ] Dockerfiles for agent-studio and positive-inspiration
+- [ ] Dockerfiles for agent-studio and ecc-skills-mcp
 - [ ] Container registry access (GHCR or ECR)
 - [ ] K8s cluster provisioned
 - [ ] CloudSQL/RDS with pgvector enabled

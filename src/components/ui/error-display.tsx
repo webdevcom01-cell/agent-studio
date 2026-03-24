@@ -18,7 +18,10 @@ export function ErrorDisplay({
   title = "Something went wrong",
 }: ErrorDisplayProps): React.ReactElement {
   useEffect(() => {
-    console.error(error);
+    if (process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.error(error);
+    }
   }, [error]);
 
   return (

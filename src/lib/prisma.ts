@@ -12,8 +12,7 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient();
  * Read replica client — used for heavy read queries (analytics, discover, search).
  * Falls back to primary when DATABASE_READ_URL is not configured.
  *
- * Configure on Railway:
- *   DATABASE_READ_URL=postgresql://...@read-replica.railway.internal:5432/railway
+ * Set DATABASE_READ_URL env var to enable read replica routing.
  */
 export const prismaRead: PrismaClient = globalForPrisma.prismaRead ?? createReadClient();
 

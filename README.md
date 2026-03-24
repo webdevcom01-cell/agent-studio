@@ -1,67 +1,164 @@
-# Agent Studio
+<p align="center">
+  <h1 align="center">Agent Studio</h1>
+  <p align="center">Visual AI agent builder with multi-agent orchestration and continuous learning.</p>
+</p>
 
-Visual AI agent builder with multi-agent orchestration and continuous learning.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
+  <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Next.js-15.5-000?logo=next.js" alt="Next.js">
+  <img src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white" alt="Node">
+  <img src="https://img.shields.io/badge/Tests-1500%2B-brightgreen" alt="Tests">
+</p>
 
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
-![Next.js](https://img.shields.io/badge/Next.js-15.5-000000?logo=next.js)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-![Tailwind](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss&logoColor=white)
-![Prisma](https://img.shields.io/badge/Prisma-v6-2D3748?logo=prisma)
-![Railway](https://img.shields.io/badge/Railway-deployed-0B0D0E?logo=railway)
-![Tests](https://img.shields.io/badge/Tests-1500%2B-brightgreen)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+<!-- TODO: Replace with actual screenshot of dashboard or flow editor -->
+<p align="center">
+  <img src="docs/assets/screenshot-placeholder.png" alt="Agent Studio Screenshot" width="800">
+</p>
 
-<!-- ![Dashboard](docs/assets/dashboard.png) -->
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/your-org/agent-studio.git
+cd agent-studio
+cp .env.example .env
+# Fill in DEEPSEEK_API_KEY and OPENAI_API_KEY, then:
+docker compose up
+```
+
+Open [http://localhost:3000](http://localhost:3000) and create your first agent.
+
+> **No Docker?** See [Manual Setup](#manual-setup) below.
 
 ---
 
 ## Features
 
-### Flow Builder
-Drag-and-drop visual editor with 32 node types powered by XyFlow. Build complex conversation flows, automation pipelines, and multi-agent orchestrations without writing code.
-
-### Knowledge Base (RAG)
-Add URLs, upload files (PDF/DOCX), or paste text. Content is chunked, embedded (OpenAI text-embedding-3-small), and stored in pgvector. Hybrid search combines semantic similarity (70%) + BM25 keyword matching (30%) with optional LLM re-ranking.
-
-### Multi-Provider AI
-18 models across 7 providers in three tiers (fast/balanced/powerful). DeepSeek (default), OpenAI, Anthropic, Google Gemini, Groq, Mistral, and Moonshot/Kimi.
-
-### Agent Marketplace
-137 agent templates across 12 categories. Discover and share agents with faceted search by category, tags, model, and scope.
-
-### Agent-as-Tool Orchestration
-AI agents dynamically call sibling agents as tools. Circuit breaker, rate limiter, depth limiting, and audit logging protect the call chain.
-
-### CLI Generator
-6-phase AI pipeline wraps any CLI application as an MCP server. Dual-target: Python FastMCP or TypeScript Node.js MCP SDK. Analyze, design, implement, test, document, publish.
-
-### Agent Evals
-3-layer testing framework: deterministic assertions, semantic similarity via embeddings, and LLM-as-Judge evaluation. 12 assertion types with auto-run on deploy.
-
-### Inbound Webhooks
-Standard Webhooks spec with HMAC-SHA256 signatures. Provider presets for GitHub, Stripe, and Slack. Event filtering, idempotency, and secret rotation.
-
-### MCP Integration
-Connect external tool servers via Model Context Protocol. Streamable HTTP + SSE transports. Connection pooling with 5-min TTL. Per-agent tool filtering.
-
-### A2A Protocol
-Agent-to-agent communication following Google A2A v0.3 spec. Agent Cards for discovery, task-based inter-agent messaging.
-
-### Embeddable Chat Widget
-Drop-in chat widget for any website. Customizable colors, title, welcome message, and proactive messaging. Mobile-responsive with full-screen mode.
+- **Visual Flow Editor** — Drag-and-drop builder with 32 node types (AI, logic, integrations, webhooks) powered by XyFlow
+- **Enterprise RAG Pipeline** — Ingest URLs, PDFs, DOCX; chunk with 5 strategies; hybrid search (semantic + BM25) with pgvector; LLM re-ranking
+- **MCP + A2A Protocols** — Connect external tools via Model Context Protocol; agent-to-agent communication following Google A2A v0.3
+- **ECC Developer Skills** — 60+ skill modules and 25 developer agent templates with autonomous meta-orchestration and continuous learning
+- **CLI Generator** — 6-phase AI pipeline wraps any CLI as an MCP server (Python FastMCP or TypeScript MCP SDK)
+- **Agent Evals** — 3-layer testing: deterministic assertions, semantic similarity, LLM-as-Judge with 12 assertion types and deploy-triggered runs
+- **Agent Marketplace** — 137 templates across 12 categories with faceted search, discovery, and one-click import
+- **Embeddable Chat Widget** — Drop-in widget for any website with streaming responses, customizable appearance, and mobile support
 
 ---
 
-## ECC Integration
+## Architecture
 
-Agent Studio integrates [everything-claude-code](https://github.com/affaan-m/everything-claude-code) (ECC) as a module in `src/lib/ecc/`, adding developer-focused AI agent capabilities:
+```mermaid
+graph TB
+    subgraph Client
+        UI[Next.js App Router]
+        FE[Flow Editor - XyFlow]
+        Chat[Chat Interface]
+    end
 
-- **25 Developer Agent Templates** — Specialized agents (planner, architect, code-reviewer, tdd-guide, security-reviewer, etc.) with model routing: Opus for complex reasoning, Sonnet for balanced tasks, Haiku for fast operations
-- **60+ Skill Modules** — Parsed from SKILL.md files, stored in the Skill model, and vectorized into the Knowledge Base (255 chunks) for RAG retrieval
-- **Skills Browser** — Search and filter skills by language, category, and agent at `/skills`
-- **Meta-Orchestrator** — Autonomous agent routing with 4 pre-built flow templates (TDD Pipeline, Full Dev Workflow, Security Audit, Code Review Pipeline)
-- **Continuous Learning** — Learn node extracts patterns into instincts (confidence 0.0-1.0). High-confidence instincts auto-promote to KB skills via daily cron
-- **ECC Skills MCP Server** — Separate Railway service (Python FastMCP) exposing `get_skill`, `search_skills`, `list_skills` tools
+    subgraph API["API Layer (50+ routes)"]
+        Agents[Agent CRUD]
+        FlowAPI[Flow Versioning & Deploy]
+        ChatAPI[Chat - Streaming NDJSON]
+        KBAPI[Knowledge Base]
+        Evals[Eval Runner]
+        Webhooks[Inbound Webhooks]
+        CLI[CLI Generator]
+    end
+
+    subgraph Runtime["Flow Runtime Engine"]
+        Engine[Execution Loop]
+        Handlers[32 Node Handlers]
+        Stream[Streaming Engine]
+    end
+
+    subgraph AI["AI Layer"]
+        SDK[Vercel AI SDK v6]
+        Providers[7 Providers / 18 Models]
+        MCP[MCP Client + Pool]
+        AgentTools[Agent-as-Tool]
+    end
+
+    subgraph Data
+        PG[(PostgreSQL + pgvector)]
+        Redis[(Redis)]
+        KB[RAG Pipeline]
+    end
+
+    subgraph ECC["ECC Module"]
+        Skills[60+ Skills]
+        Meta[Meta-Orchestrator]
+        Learn[Instinct Engine]
+        ECCMCP[Skills MCP Server]
+    end
+
+    UI --> API
+    FE --> FlowAPI
+    Chat --> ChatAPI
+    API --> Runtime
+    Runtime --> AI
+    AI --> Providers
+    AI --> MCP
+    Runtime --> Data
+    KB --> PG
+    ECC --> ECCMCP
+    Meta --> AgentTools
+```
+
+---
+
+## Manual Setup
+
+<details>
+<summary>Setup without Docker</summary>
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm 9+
+- PostgreSQL with pgvector extension
+
+### Steps
+
+```bash
+# Install dependencies
+pnpm install
+
+# Configure environment
+cp .env.example .env.local
+# Required: DATABASE_URL, DIRECT_URL, DEEPSEEK_API_KEY, OPENAI_API_KEY,
+#           AUTH_SECRET, AUTH_GITHUB_ID/SECRET or AUTH_GOOGLE_ID/SECRET
+
+# Enable pgvector (run in your PostgreSQL client)
+# CREATE EXTENSION IF NOT EXISTS vector;
+
+# Setup database and generate client
+pnpm db:push && pnpm db:generate
+
+# Start dev server
+pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+</details>
+
+---
+
+## Available Commands
+
+```
+pnpm dev              # Dev server (Turbopack)
+pnpm build            # Production build
+pnpm lint             # ESLint
+pnpm typecheck        # TypeScript check
+pnpm test             # Vitest unit tests (1500+)
+pnpm test:e2e         # Playwright E2E tests
+pnpm db:push          # Sync Prisma schema to DB
+pnpm db:generate      # Generate Prisma client
+pnpm db:studio        # Prisma Studio UI
+```
 
 ---
 
@@ -73,128 +170,42 @@ Agent Studio integrates [everything-claude-code](https://github.com/affaan-m/eve
 | Runtime | React 19 |
 | Language | TypeScript strict |
 | Styling | Tailwind CSS v4 |
-| Database | PostgreSQL + pgvector (Supabase), Prisma v6 |
+| Database | PostgreSQL + pgvector, Prisma v6 |
 | AI | Vercel AI SDK v6 (7 providers, 18 models) |
-| Auth | NextAuth v5 (GitHub + Google OAuth, JWT) |
+| Auth | NextAuth v5 (GitHub + Google OAuth) |
 | Flow Editor | @xyflow/react v12 |
 | MCP | @ai-sdk/mcp (Streamable HTTP + SSE) |
 | Validation | Zod v3 |
-| UI | Radix UI + lucide-react icons |
-| Charts | recharts |
-| Data Fetching | SWR |
-| Unit Tests | Vitest + @vitest/coverage-v8 |
-| E2E Tests | Playwright (8 spec files) |
-| Deploy | Railway (Nixpacks) |
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js 20+
-- pnpm 9+
-- PostgreSQL with pgvector extension
-
-### Setup
-
-```bash
-# Clone
-git clone https://github.com/webdevcom01-cell/agent-studio.git
-cd agent-studio
-
-# Install dependencies
-pnpm install
-
-# Configure environment
-cp .env.example .env.local
-# Required: DATABASE_URL, DIRECT_URL, DEEPSEEK_API_KEY, OPENAI_API_KEY,
-#           AUTH_SECRET, AUTH_GITHUB_ID/SECRET, AUTH_GOOGLE_ID/SECRET
-
-# Setup database
-pnpm db:push
-
-# Generate Prisma client
-pnpm db:generate
-
-# Enable pgvector (run in Supabase SQL editor)
-# CREATE EXTENSION IF NOT EXISTS vector;
-
-# Start dev server
-pnpm dev
-```
-
-### Available Commands
-
-```
-pnpm dev              # Dev server (Turbopack)
-pnpm build            # Production build
-pnpm lint             # ESLint
-pnpm typecheck        # TypeScript check
-pnpm test             # Vitest unit tests (1500+)
-pnpm test:e2e         # Playwright E2E tests
-pnpm db:push          # Sync schema to DB
-pnpm db:generate      # Generate Prisma client
-pnpm db:studio        # Prisma Studio UI
-```
-
----
-
-## Railway Deployment
-
-Production URL: `https://agent-studio-production-c43e.up.railway.app`
-
-### Services
-
-| Service | Description |
-|---------|------------|
-| agent-studio | Next.js 15.5 application (Nixpacks, auto-deploy from main) |
-| positive-inspiration | ECC Skills MCP server (Python FastMCP, internal networking, `/mcp` path) |
-| PostgreSQL | pgvector/pgvector:pg16, persistent volume, HNSW index |
-| Cron Service | Scheduled flows (5min) + instinct evolution (daily 3AM) |
-
-See [docs/deployment/ECC-DEPLOY-RUNBOOK.md](docs/deployment/ECC-DEPLOY-RUNBOOK.md) for full deployment guide.
+| UI | Radix UI + lucide-react |
+| Tests | Vitest (unit) + Playwright (E2E) |
 
 ---
 
 ## Project Structure
 
 ```
-prisma/schema.prisma          # 30+ models, pgvector, versioning, A2A, ECC
+prisma/schema.prisma        # 30+ models, pgvector, versioning, A2A, ECC
 src/
-  app/                        # Next.js App Router pages and API routes
-    api/                      # 50+ API endpoints
-    builder/[agentId]/        # Flow editor
-    chat/[agentId]/           # Chat interface
-    knowledge/[agentId]/      # Knowledge base management
-    skills/                   # ECC Skills Browser
-    evals/[agentId]/          # Agent evals
-    webhooks/[agentId]/       # Webhook management
-    cli-generator/            # CLI-to-MCP pipeline
-    discover/                 # Agent marketplace
-    templates/                # Template gallery
-  components/                 # React components (builder, chat, UI primitives)
-  lib/                        # Core libraries
-    runtime/                  # Flow execution engine (32 handlers)
-    knowledge/                # RAG pipeline (chunk, embed, search)
-    ecc/                      # ECC module (skills, orchestrator, instincts)
-    webhooks/                 # Webhook verification and execution
-    evals/                    # Eval assertions and runner
-    cli-generator/            # 6-phase pipeline
-    mcp/                      # MCP client and connection pool
-  data/                       # Templates and static data
-services/ecc-skills-mcp/      # Python FastMCP server (separate Railway service)
-e2e/                          # Playwright E2E tests
-docs/                         # Documentation
+  app/                      # Pages and 50+ API routes
+    builder/[agentId]/      # Flow editor
+    chat/[agentId]/         # Chat interface
+    knowledge/[agentId]/    # Knowledge base
+    evals/[agentId]/        # Agent evals
+    discover/               # Agent marketplace
+    skills/                 # ECC Skills Browser
+    cli-generator/          # CLI-to-MCP pipeline
+  components/               # React components
+  lib/
+    runtime/                # Flow engine (32 handlers)
+    knowledge/              # RAG pipeline
+    ecc/                    # ECC module
+    evals/                  # Eval runner
+    mcp/                    # MCP client + pool
+  data/                     # Agent templates
+services/ecc-skills-mcp/    # Python FastMCP server
+e2e/                        # Playwright E2E tests
+docs/                       # Documentation
 ```
-
----
-
-## Testing
-
-- **1500+ unit tests** across 114+ test files (Vitest)
-- **8 E2E spec files** (Playwright): auth, dashboard, flow editor, KB, chat, import/export, API, webhooks
-- Run: `pnpm test` (unit), `pnpm test:e2e` (E2E)
 
 ---
 
@@ -205,18 +216,27 @@ docs/                         # Documentation
 | [Platform Overview](docs/01-overview.md) | Features and architecture |
 | [Getting Started](docs/08-getting-started.md) | Setup guide |
 | [Node Reference](docs/10-node-reference.md) | All 32 node types |
-| [Knowledge Base Guide](docs/09-knowledge-base-guide.md) | RAG pipeline details |
+| [Knowledge Base Guide](docs/09-knowledge-base-guide.md) | RAG pipeline |
 | [CLI Generator](docs/12-cli-generator.md) | MCP bridge generation |
 | [Agent Evals](docs/13-agent-evals.md) | Testing framework |
-| [ECC Deploy Runbook](docs/deployment/ECC-DEPLOY-RUNBOOK.md) | Production deployment |
 | [CHANGELOG](CHANGELOG.md) | Version history |
+
+<!-- TODO: Add link to hosted documentation site -->
+
+---
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+<!-- TODO: Create CONTRIBUTING.md in Task 0.4 -->
 
 ---
 
 ## License
 
-MIT
+[Apache License 2.0](LICENSE)
 
----
-
-Built with Next.js, Vercel AI SDK, XyFlow, Prisma, and pgvector. Deployed on Railway.
+```
+Copyright 2026 Agent Studio Contributors
+```
