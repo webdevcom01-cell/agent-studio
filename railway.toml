@@ -3,7 +3,7 @@ builder = "NIXPACKS"
 buildCommand = "pnpm add ioredis && pnpm run build"
 
 [deploy]
-startCommand = "npx prisma db push --skip-generate || echo 'Schema sync skipped' && PORT=${PORT:-3000} node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3000}"
+startCommand = "npx prisma db push --accept-data-loss || echo 'Schema sync skipped' && PORT=${PORT:-3000} node .next/standalone/server.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
