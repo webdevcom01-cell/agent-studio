@@ -103,19 +103,15 @@ describe("Parallel agent calls", () => {
   });
 
   it("stores each result in correct output variable", async () => {
-    mockPrisma.agent.findFirst
-      .mockResolvedValueOnce(makeAgentResponse())
-      .mockResolvedValueOnce(makeAgentResponse());
+    mockPrisma.agent.findFirst.mockResolvedValue(makeAgentResponse());
 
-    mockExecuteFlow
-      .mockResolvedValueOnce({
-        messages: [{ role: "assistant", content: "answer-1" }],
-        waitingForInput: false,
-      })
-      .mockResolvedValueOnce({
-        messages: [{ role: "assistant", content: "answer-2" }],
+    mockExecuteFlow.mockImplementation((ctx: { agentId: string }) => {
+      const answer = ctx.agentId === "a1" ? "answer-1" : "answer-2";
+      return Promise.resolve({
+        messages: [{ role: "assistant", content: answer }],
         waitingForInput: false,
       });
+    });
 
     const result = await callAgentHandler(
       makeNode({
