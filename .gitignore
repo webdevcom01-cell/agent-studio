@@ -61,6 +61,11 @@ services/
 # Railway
 .env.railway
 
+# Docusaurus
+website/node_modules
+website/.docusaurus
+website/build
+
 # Local working documents
 *.docx
 *.pptx
