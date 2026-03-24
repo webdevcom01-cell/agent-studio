@@ -18,7 +18,7 @@ export function ErrorDisplay({
   title = "Something went wrong",
 }: ErrorDisplayProps): React.ReactElement {
   useEffect(() => {
-    if (process.env.NODE_ENV === "development") {
+    if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
       console.error(error);
     }

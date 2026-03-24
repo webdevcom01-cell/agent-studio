@@ -1,4 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const mockLogger = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock("@/lib/logger", () => ({ logger: mockLogger }));
+
 import { validateEnv } from "../env";
 
 const VALID_ENV = {
@@ -58,18 +67,14 @@ describe("validateEnv", () => {
   });
 
   it("warns when ANTHROPIC_API_KEY is missing", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
     validateEnv(VALID_ENV);
 
-    expect(warnSpy).toHaveBeenCalledWith(
+    expect(mockLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining("ANTHROPIC_API_KEY")
     );
   });
 
   it("does not warn when all optional keys are present", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
     validateEnv({
       ...VALID_ENV,
       ANTHROPIC_API_KEY: "sk-test-anthropic",
@@ -79,7 +84,7 @@ describe("validateEnv", () => {
       MOONSHOT_API_KEY: "sk-test-moonshot",
     });
 
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(mockLogger.warn).not.toHaveBeenCalled();
   });
 
   it("throws when AUTH_SECRET is missing", () => {
@@ -97,23 +102,18 @@ describe("validateEnv", () => {
   it("does not throw when AUTH_GITHUB_ID is missing (optional)", () => {
     const { AUTH_GITHUB_ID: _, ...env } = VALID_ENV;
     void _;
-    // AUTH_GITHUB_ID is optional — should not throw, but may warn
     expect(() => validateEnv(env)).not.toThrow();
   });
 
   it("does not throw when AUTH_GOOGLE_SECRET is missing (optional)", () => {
     const { AUTH_GOOGLE_SECRET: _, ...env } = VALID_ENV;
     void _;
-    // AUTH_GOOGLE_SECRET is optional — should not throw
     expect(() => validateEnv(env)).not.toThrow();
   });
 
   it("treats empty string as undefined for optional keys", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    // Empty string AUTH_GITHUB_ID should be treated as missing (undefined)
     const result = validateEnv({ ...VALID_ENV, AUTH_GITHUB_ID: "" });
     expect(result.AUTH_GITHUB_ID).toBeUndefined();
-    warnSpy.mockRestore();
   });
 
   it("includes all missing vars in error message", () => {
