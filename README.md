@@ -18,6 +18,9 @@
   <a href="https://render.com/deploy?repo=https://github.com/webdevcom01-cell/agent-studio">
     <img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render" height="32">
   </a>
+  <a href="https://agent-studio-production-c43e.up.railway.app">
+    <img src="https://img.shields.io/badge/Live_Demo-▶_Try_it-8B5CF6?style=for-the-badge" alt="Live Demo" height="32">
+  </a>
 </p>
 
 <!-- TODO: Replace with actual screenshot of dashboard or flow editor -->
@@ -30,7 +33,7 @@
 ## Quick Start
 
 ```bash
-git clone https://github.com/your-org/agent-studio.git
+git clone https://github.com/webdevcom01-cell/agent-studio.git
 cd agent-studio
 cp .env.example .env
 # Fill in DEEPSEEK_API_KEY and OPENAI_API_KEY, then:
