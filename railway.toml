@@ -3,7 +3,7 @@ builder = "NIXPACKS"
 buildCommand = "pnpm add ioredis && pnpm run build"
 
 [deploy]
-startCommand = "PORT=${PORT:-3000} node .next/standalone/server.js"
+startCommand = "node server.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
