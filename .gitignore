@@ -66,6 +66,10 @@ website/node_modules
 website/.docusaurus
 website/build
 
+# CLI package
+packages/cli/node_modules
+packages/cli/dist
+
 # Local working documents
 *.docx
 *.pptx

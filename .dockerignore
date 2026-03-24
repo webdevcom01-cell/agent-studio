@@ -47,6 +47,9 @@ e2e
 # Docusaurus docs site
 website/
 
+# CLI package
+packages/
+
 # Misc
 *.log
 *.tmp
