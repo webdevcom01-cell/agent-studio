@@ -79,17 +79,19 @@ function isCsrfSafe(request: NextRequest): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return true;
 
-  // Exact match (local dev, same-protocol deployments)
-  const requestOrigin = new URL(request.url).origin;
+  // Use request.nextUrl which Next.js reconstructs from x-forwarded-host /
+  // x-forwarded-proto headers, giving the public-facing URL even when
+  // Railway terminates SSL and forwards requests as http:// internally.
+  // Exact origin match covers local dev and same-protocol deployments.
+  const requestOrigin = request.nextUrl.origin;
   if (origin === requestOrigin) return true;
 
-  // Railway / reverse-proxy tolerance: SSL is terminated at the edge so
-  // request.url arrives as http:// internally while the browser Origin is
-  // https://.  Compare just the host (no protocol) so legitimate same-host
-  // requests are still allowed while cross-origin attacks are still blocked.
+  // Fallback host-only comparison: handles cases where the protocol differs
+  // (e.g. browser sends https:// Origin but proxy exposes http:// origin).
+  // Cross-origin hosts are still rejected.
   try {
     const originHost = new URL(origin).host;
-    const requestHost = new URL(request.url).host;
+    const requestHost = request.nextUrl.host;
     return originHost === requestHost;
   } catch {
     return false;
