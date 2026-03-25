@@ -23,6 +23,7 @@ import { useDebugSession } from "./use-debug-session";
 import { DebugToggleButton, DebugToolbar } from "./debug-toolbar";
 import { DebugContext, buildDebugNodeTypes } from "./debug-node-overlay";
 import { DebugPanel } from "./debug-panel";
+import { DebugTimeline } from "./debug-timeline";
 import { MessageNode } from "./nodes/message-node";
 import { CaptureNode } from "./nodes/capture-node";
 import { ConditionNode } from "./nodes/condition-node";
@@ -61,11 +62,12 @@ import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
 import { Button } from "@/components/ui/button";
-import { Save, Plug, X, Clock, Rocket, Circle, Undo2, Redo2, Search } from "lucide-react";
+import { Save, Plug, X, Clock, Rocket, Circle, Undo2, Redo2, Search, BarChart2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { AgentMCPSelector } from "@/components/mcp/agent-mcp-selector";
 import type { FlowContent, FlowNode } from "@/types";
 import type { NodeTypes as ReactFlowNodeTypes } from "@xyflow/react";
+import { cn } from "@/lib/utils";
 
 interface FlowBuilderProps {
   agentId: string;
@@ -207,6 +209,7 @@ function FlowBuilderCanvas({
 
   // Debug session
   const debugSession = useDebugSession(agentId);
+  const [showTimeline, setShowTimeline] = useState(false);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -591,8 +594,28 @@ function FlowBuilderCanvas({
           </Button>
           <DebugToggleButton
             isDebugMode={debugSession.state.isDebugMode}
-            onToggle={debugSession.toggleDebugMode}
+            onToggle={() => {
+              debugSession.toggleDebugMode();
+              // Auto-show timeline when entering debug mode
+              if (!debugSession.state.isDebugMode) setShowTimeline(true);
+            }}
           />
+          {debugSession.state.isDebugMode && (
+            <Button
+              size="sm"
+              variant={showTimeline ? "default" : "outline"}
+              onClick={() => setShowTimeline((v) => !v)}
+              className={cn(
+                "gap-1.5",
+                showTimeline && "bg-violet-700 hover:bg-violet-800 border-violet-700 text-white"
+              )}
+              title="Toggle Execution Timeline"
+              aria-label="Toggle Execution Timeline"
+            >
+              <BarChart2 className="size-4" />
+              Timeline
+            </Button>
+          )}
           <Button
             size="sm"
             onClick={handleSave}
@@ -694,6 +717,22 @@ function FlowBuilderCanvas({
           </ReactFlow>
           </DebugContext.Provider>
           </FlowErrorBoundary>
+
+          {/* Execution Timeline — absolute bottom overlay on canvas */}
+          {debugSession.state.isDebugMode && showTimeline && (
+            <DebugTimeline
+              nodeStates={debugSession.state.nodeStates}
+              flowSummary={debugSession.state.flowSummary}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={(nodeId) => {
+                setSelectedNodeId(nodeId);
+                debugSession.selectNode(nodeId);
+                setShowMCPPanel(false);
+                setShowVersionPanel(false);
+              }}
+              onClose={() => setShowTimeline(false)}
+            />
+          )}
         </div>
 
         {selectedNode && debugSession.state.isDebugMode && debugSession.state.nodeStates.get(selectedNode.id) ? (
