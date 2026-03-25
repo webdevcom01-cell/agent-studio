@@ -102,7 +102,6 @@ model Agent {
   skillPermissions  AgentSkillPermission[]
   instincts         Instinct[]
   eccEnabled        Boolean        @default(false)
-  flowTraces        FlowTrace[]
 
   @@index([userId])
   @@index([userId, updatedAt])
@@ -944,34 +943,4 @@ model AuditLog {
 
   @@index([resourceType, resourceId])
   @@index([userId, timestamp])
-}
-
-// ---------------------------------------------------------------------------
-// Visual Flow Debugger — Trace Persistence (Phase 5)
-// ---------------------------------------------------------------------------
-
-enum TraceStatus {
-  RUNNING
-  COMPLETED
-  FAILED
-}
-
-model FlowTrace {
-  id              String      @id @default(cuid())
-  agentId         String
-  agent           Agent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  conversationId  String?
-  testInput       String?     @db.Text
-  status          TraceStatus @default(RUNNING)
-  totalDurationMs Int?
-  nodesExecuted   Int?
-  nodesFailed     Int?
-  executionPath   String[]
-  nodeTraces      Json        // Map<nodeId, NodeDebugState>
-  edgeTraces      Json        // Map<edgeKey, EdgeDebugState>
-  flowSummary     Json?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
-  @@index([agentId, createdAt])
 }

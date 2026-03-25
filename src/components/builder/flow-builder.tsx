@@ -21,7 +21,7 @@ import { PropertyPanel } from "./property-panel";
 import { NodePicker } from "./node-picker";
 import { useDebugSession } from "./use-debug-session";
 import { DebugToggleButton, DebugToolbar } from "./debug-toolbar";
-import { DebugContext, buildDebugNodeTypes } from "./debug-node-overlay";
+import { DebugContext, buildDebugNodeTypes, type DebugContextValue } from "./debug-node-overlay";
 import { DebugPanel } from "./debug-panel";
 import { DebugTimeline } from "./debug-timeline";
 import { TraceHistoryPanel } from "./trace-history";
@@ -356,6 +356,16 @@ function FlowBuilderCanvas({
     setSelectedNodeId(null);
   }, []);
 
+  /** Right-click on a node in debug mode → toggle breakpoint */
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      if (!debugSession.state.isDebugMode) return;
+      event.preventDefault();
+      debugSession.toggleBreakpoint(node.id);
+    },
+    [debugSession.state.isDebugMode, debugSession.toggleBreakpoint]
+  );
+
   const addNode = useCallback(
     (type: string, data: Record<string, unknown>) => {
       pushHistory();
@@ -654,6 +664,18 @@ function FlowBuilderCanvas({
           onRun={debugSession.runDebug}
           onStop={debugSession.stopRun}
           onClear={debugSession.clearSession}
+          onContinue={() => {
+            const { debugSessionId } = debugSession.state;
+            if (debugSessionId) {
+              void debugSession.sendControl("continue", agentId, debugSessionId);
+            }
+          }}
+          onStep={() => {
+            const { debugSessionId } = debugSession.state;
+            if (debugSessionId) {
+              void debugSession.sendControl("step", agentId, debugSessionId);
+            }
+          }}
         />
       )}
 
@@ -719,7 +741,11 @@ function FlowBuilderCanvas({
 
         <div className="relative flex-1" data-testid="flow-canvas">
           <FlowErrorBoundary>
-          <DebugContext.Provider value={debugSession.state.nodeStates}>
+          <DebugContext.Provider value={{
+            nodeStates: debugSession.state.nodeStates,
+            breakpoints: debugSession.state.breakpoints,
+            pausedAtNodeId: debugSession.state.pausedAtNodeId,
+          } satisfies DebugContextValue}>
           <ReactFlow
             nodes={nodes}
             edges={debugSession.state.isDebugMode ? debugEdges : edges}
@@ -733,6 +759,7 @@ function FlowBuilderCanvas({
             }}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
+            onNodeContextMenu={onNodeContextMenu}
             onPaneClick={onPaneClick}
             nodeTypes={debugSession.state.isDebugMode ? DEBUG_NODE_TYPES : NODE_TYPES}
             fitView

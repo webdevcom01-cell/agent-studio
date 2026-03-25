@@ -14,6 +14,10 @@ export interface RuntimeContext {
   debugMode?: boolean;
   // OTEL traceId for cross-referencing in Grafana
   otelTraceId?: string;
+  // Breakpoints — set of nodeIds where execution should pause
+  breakpoints?: Set<string>;
+  // Debug session ID used to coordinate pause/resume via Redis
+  debugSessionId?: string;
 }
 
 export interface ExecutionResult {
@@ -101,7 +105,10 @@ export type StreamChunk =
   | { type: "debug_tool_end"; nodeId: string; toolName: string; durationMs: number; status: "success" | "error"; result?: unknown; error?: string }
   | { type: "debug_branch_start"; nodeId: string; branchId: string; label?: string; timestamp: number }
   | { type: "debug_branch_end"; nodeId: string; branchId: string; status: "success" | "error"; durationMs: number }
-  | { type: "debug_flow_summary"; totalDurationMs: number; nodesExecuted: number; nodesFailed: number; executionPath: string[]; otelTraceId?: string };
+  | { type: "debug_flow_summary"; totalDurationMs: number; nodesExecuted: number; nodesFailed: number; executionPath: string[]; otelTraceId?: string }
+  // ── Breakpoint chunks (Phase 6) ──────────────────────────────────────────
+  | { type: "debug_breakpoint_hit"; nodeId: string; nodeType: string; nodeName: string; variables: Record<string, unknown>; debugSessionId: string }
+  | { type: "debug_resumed"; nodeId: string; action: "continue" | "step" };
 
 export interface StreamWriter {
   write(chunk: StreamChunk): void;

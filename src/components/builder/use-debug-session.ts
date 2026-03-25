@@ -29,6 +29,15 @@ export interface DebugSessionState {
   conversationId: string | undefined;
   /** ID of the trace record that was auto-saved for the current/last run */
   savedTraceId: string | undefined;
+  // ── Phase 6: Breakpoints ─────────────────────────────────────────────────
+  /** Set of nodeIds where execution should pause */
+  breakpoints: Set<string>;
+  /** Whether the flow is currently paused at a breakpoint */
+  isPaused: boolean;
+  /** The nodeId the flow is currently paused at */
+  pausedAtNodeId: string | null;
+  /** Stable session ID used for pause/resume coordination with the API */
+  debugSessionId: string | undefined;
 }
 
 const initialState: DebugSessionState = {
@@ -41,6 +50,10 @@ const initialState: DebugSessionState = {
   testInput: "",
   conversationId: undefined,
   savedTraceId: undefined,
+  breakpoints: new Set(),
+  isPaused: false,
+  pausedAtNodeId: null,
+  debugSessionId: undefined,
 };
 
 export function useDebugSession(agentId: string) {
@@ -131,11 +144,55 @@ export function useDebugSession(agentId: string) {
 
   const stopRun = useCallback(() => {
     abortRef.current?.abort();
-    setState((prev) => ({ ...prev, isRunning: false }));
+    setState((prev) => ({ ...prev, isRunning: false, isPaused: false, pausedAtNodeId: null }));
   }, []);
+
+  /** Toggle a breakpoint on/off for a given nodeId */
+  const toggleBreakpoint = useCallback((nodeId: string) => {
+    setState((prev) => {
+      const next = new Set(prev.breakpoints);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return { ...prev, breakpoints: next };
+    });
+  }, []);
+
+  /** Send a continue/step/stop command to the paused debug session */
+  const sendControl = useCallback(
+    async (action: "continue" | "step" | "stop", currentAgentId: string, sessionId: string) => {
+      if (action === "stop") {
+        abortRef.current?.abort();
+        setState((prev) => ({ ...prev, isRunning: false, isPaused: false, pausedAtNodeId: null }));
+        return;
+      }
+
+      // Optimistically clear paused state
+      setState((prev) => ({ ...prev, isPaused: false, pausedAtNodeId: null }));
+
+      try {
+        await fetch(
+          `/api/agents/${currentAgentId}/debug/${sessionId}/control`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action }),
+          }
+        );
+      } catch {
+        // Ignore — if the engine has already moved on, that's fine
+      }
+    },
+    []
+  );
 
   const runDebug = useCallback(async () => {
     if (!state.testInput.trim() || state.isRunning) return;
+
+    // Generate a fresh debug session ID for this run
+    const sessionId = `dbg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     // Snapshot test input for use in saveTrace (avoids stale closure)
     testInputRef.current = state.testInput;
@@ -149,6 +206,9 @@ export function useDebugSession(agentId: string) {
     setState((prev) => ({
       ...prev,
       isRunning: true,
+      isPaused: false,
+      pausedAtNodeId: null,
+      debugSessionId: sessionId,
       nodeStates: new Map(),
       edgeStates: new Map(),
       flowSummary: null,
@@ -166,6 +226,8 @@ export function useDebugSession(agentId: string) {
           stream: true,
           debug: true,
           conversationId: state.conversationId,
+          debugSessionId: sessionId,
+          breakpoints: Array.from(state.breakpoints),
         }),
         signal: abortRef.current.signal,
       });
@@ -304,6 +366,36 @@ export function useDebugSession(agentId: string) {
               break;
             }
 
+            case "debug_breakpoint_hit": {
+              // Mark the node as "waiting" status
+              setState((prev) => {
+                const next = new Map(prev.nodeStates);
+                const existing = next.get(chunk.nodeId);
+                if (existing) {
+                  next.set(chunk.nodeId, { ...existing, aggregateStatus: "waiting" });
+                }
+                nodeStatesRef.current = next;
+                return {
+                  ...prev,
+                  nodeStates: next,
+                  isPaused: true,
+                  pausedAtNodeId: chunk.nodeId,
+                  selectedNodeId: chunk.nodeId,
+                };
+              });
+              break;
+            }
+
+            case "debug_resumed": {
+              // Clear paused state; node will go back to running
+              setState((prev) => ({
+                ...prev,
+                isPaused: false,
+                pausedAtNodeId: null,
+              }));
+              break;
+            }
+
             case "debug_flow_summary": {
               const summary: DebugFlowSummary = {
                 totalDurationMs: chunk.totalDurationMs,
@@ -356,5 +448,7 @@ export function useDebugSession(agentId: string) {
     clearSession,
     stopRun,
     runDebug,
+    toggleBreakpoint,
+    sendControl,
   };
 }
