@@ -108,7 +108,9 @@ export type StreamChunk =
   | { type: "debug_flow_summary"; totalDurationMs: number; nodesExecuted: number; nodesFailed: number; executionPath: string[]; otelTraceId?: string }
   // ── Breakpoint chunks (Phase 6) ──────────────────────────────────────────
   | { type: "debug_breakpoint_hit"; nodeId: string; nodeType: string; nodeName: string; variables: Record<string, unknown>; debugSessionId: string }
-  | { type: "debug_resumed"; nodeId: string; action: "continue" | "step" };
+  | { type: "debug_resumed"; nodeId: string; action: "continue" | "step" }
+  // ── Variable Watch (Phase 7) ──────────────────────────────────────────────
+  | { type: "debug_variables_updated"; variables: Record<string, unknown> };
 
 export interface StreamWriter {
   write(chunk: StreamChunk): void;

@@ -18,6 +18,21 @@ export interface EdgeDebugState {
   taken: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Variable Watch types (Phase 7)
+// ---------------------------------------------------------------------------
+
+export type VariableChangeType = "new" | "modified" | "deleted";
+
+export interface VariableDiffEntry {
+  key: string;
+  previousValue?: unknown;
+  currentValue?: unknown;
+  change: VariableChangeType;
+}
+
+export type VariableDiff = VariableDiffEntry[];
+
 export interface DebugSessionState {
   isDebugMode: boolean;
   isRunning: boolean;
@@ -38,6 +53,13 @@ export interface DebugSessionState {
   pausedAtNodeId: string | null;
   /** Stable session ID used for pause/resume coordination with the API */
   debugSessionId: string | undefined;
+  // ── Phase 7: Variable Watch ───────────────────────────────────────────────
+  /** Latest runtime variables snapshot (updated on each debug_node_start) */
+  currentVariables: Record<string, unknown>;
+  /** Diff from the previous node's variables — drives diff highlighting */
+  variableDiff: VariableDiff;
+  /** User edits made while paused (not yet sent to engine) */
+  pendingVariableEdits: Record<string, unknown>;
 }
 
 const initialState: DebugSessionState = {
@@ -54,6 +76,9 @@ const initialState: DebugSessionState = {
   isPaused: false,
   pausedAtNodeId: null,
   debugSessionId: undefined,
+  currentVariables: {},
+  variableDiff: [],
+  pendingVariableEdits: {},
 };
 
 export function useDebugSession(agentId: string) {
@@ -165,12 +190,47 @@ export function useDebugSession(agentId: string) {
     async (action: "continue" | "step" | "stop", currentAgentId: string, sessionId: string) => {
       if (action === "stop") {
         abortRef.current?.abort();
-        setState((prev) => ({ ...prev, isRunning: false, isPaused: false, pausedAtNodeId: null }));
+        setState((prev) => ({ ...prev, isRunning: false, isPaused: false, pausedAtNodeId: null, pendingVariableEdits: {} }));
         return;
       }
 
+      // Flush pending variable edits BEFORE sending resume command
+      // (engine reads overrides between waitForDebugResume() and emitting debug_resumed)
+      let hasPendingEdits = false;
+      setState((prev) => {
+        hasPendingEdits = Object.keys(prev.pendingVariableEdits).length > 0;
+        return prev;
+      });
+
+      if (hasPendingEdits) {
+        try {
+          // Read pending edits from current state synchronously via ref pattern
+          // We capture it here since setState callback runs async
+          const currentState = { pendingVariableEdits: {} as Record<string, unknown> };
+          setState((prev) => {
+            currentState.pendingVariableEdits = prev.pendingVariableEdits;
+            return prev;
+          });
+          // Small delay to let setState flush the read
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+          if (Object.keys(currentState.pendingVariableEdits).length > 0) {
+            await fetch(
+              `/api/agents/${currentAgentId}/debug/${sessionId}/variables`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ variables: currentState.pendingVariableEdits }),
+              }
+            );
+          }
+        } catch {
+          // Ignore — best-effort
+        }
+      }
+
       // Optimistically clear paused state
-      setState((prev) => ({ ...prev, isPaused: false, pausedAtNodeId: null }));
+      setState((prev) => ({ ...prev, isPaused: false, pausedAtNodeId: null, pendingVariableEdits: {} }));
 
       try {
         await fetch(
@@ -187,6 +247,19 @@ export function useDebugSession(agentId: string) {
     },
     []
   );
+
+  /** Set a local variable edit (only committed when user continues/steps) */
+  const editVariable = useCallback((key: string, value: unknown) => {
+    setState((prev) => ({
+      ...prev,
+      pendingVariableEdits: { ...prev.pendingVariableEdits, [key]: value },
+    }));
+  }, []);
+
+  /** Discard all pending variable edits without sending */
+  const resetVariableEdits = useCallback(() => {
+    setState((prev) => ({ ...prev, pendingVariableEdits: {} }));
+  }, []);
 
   const runDebug = useCallback(async () => {
     if (!state.testInput.trim() || state.isRunning) return;
@@ -213,6 +286,9 @@ export function useDebugSession(agentId: string) {
       edgeStates: new Map(),
       flowSummary: null,
       selectedNodeId: null,
+      currentVariables: {},
+      variableDiff: [],
+      pendingVariableEdits: {},
     }));
 
     abortRef.current = new AbortController();
@@ -274,7 +350,35 @@ export function useDebugSession(agentId: string) {
                       totalDurationMs: 0,
                     };
                 next.set(chunk.nodeId, updatedState);
-                return { ...prev, nodeStates: next };
+
+                // Compute variable diff (Phase 7)
+                const newVars = chunk.variables ?? {};
+                const prevVars = prev.currentVariables;
+                const diff: VariableDiff = [];
+
+                // Check for new + modified keys
+                for (const [k, v] of Object.entries(newVars)) {
+                  if (!(k in prevVars)) {
+                    diff.push({ key: k, currentValue: v, change: "new" });
+                  } else if (JSON.stringify(prevVars[k]) !== JSON.stringify(v)) {
+                    diff.push({ key: k, previousValue: prevVars[k], currentValue: v, change: "modified" });
+                  }
+                }
+                // Check for deleted keys
+                for (const k of Object.keys(prevVars)) {
+                  if (!(k in newVars)) {
+                    diff.push({ key: k, previousValue: prevVars[k], change: "deleted" });
+                  }
+                }
+
+                return {
+                  ...prev,
+                  nodeStates: next,
+                  currentVariables: newVars,
+                  variableDiff: diff,
+                  // Clear pending edits when a new node starts (they've been applied or discarded)
+                  pendingVariableEdits: {},
+                };
               });
               break;
             }
@@ -396,6 +500,34 @@ export function useDebugSession(agentId: string) {
               break;
             }
 
+            case "debug_variables_updated": {
+              // Engine applied variable overrides — update the watch panel immediately
+              const newVars = chunk.variables ?? {};
+              setState((prev) => {
+                const prevVars = prev.currentVariables;
+                const diff: VariableDiff = [];
+                for (const [k, v] of Object.entries(newVars)) {
+                  if (!(k in prevVars)) {
+                    diff.push({ key: k, currentValue: v, change: "new" });
+                  } else if (JSON.stringify(prevVars[k]) !== JSON.stringify(v)) {
+                    diff.push({ key: k, previousValue: prevVars[k], currentValue: v, change: "modified" });
+                  }
+                }
+                for (const k of Object.keys(prevVars)) {
+                  if (!(k in newVars)) {
+                    diff.push({ key: k, previousValue: prevVars[k], change: "deleted" });
+                  }
+                }
+                return {
+                  ...prev,
+                  currentVariables: newVars,
+                  variableDiff: diff,
+                  pendingVariableEdits: {},
+                };
+              });
+              break;
+            }
+
             case "debug_flow_summary": {
               const summary: DebugFlowSummary = {
                 totalDurationMs: chunk.totalDurationMs,
@@ -450,5 +582,7 @@ export function useDebugSession(agentId: string) {
     runDebug,
     toggleBreakpoint,
     sendControl,
+    editVariable,
+    resetVariableEdits,
   };
 }

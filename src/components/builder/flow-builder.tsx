@@ -25,6 +25,7 @@ import { DebugContext, buildDebugNodeTypes, type DebugContextValue } from "./deb
 import { DebugPanel } from "./debug-panel";
 import { DebugTimeline } from "./debug-timeline";
 import { TraceHistoryPanel } from "./trace-history";
+import { DebugVariableWatchPanel } from "./debug-variable-watch";
 import { MessageNode } from "./nodes/message-node";
 import { CaptureNode } from "./nodes/capture-node";
 import { ConditionNode } from "./nodes/condition-node";
@@ -63,7 +64,7 @@ import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
 import { Button } from "@/components/ui/button";
-import { Save, Plug, X, Clock, Rocket, Circle, Undo2, Redo2, Search, BarChart2, History } from "lucide-react";
+import { Save, Plug, X, Clock, Rocket, Circle, Undo2, Redo2, Search, BarChart2, History, Variable } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { AgentMCPSelector } from "@/components/mcp/agent-mcp-selector";
 import type { FlowContent, FlowNode } from "@/types";
@@ -212,6 +213,7 @@ function FlowBuilderCanvas({
   const debugSession = useDebugSession(agentId);
   const [showTimeline, setShowTimeline] = useState(false);
   const [showTraceHistory, setShowTraceHistory] = useState(false);
+  const [showVariableWatch, setShowVariableWatch] = useState(false);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -608,8 +610,11 @@ function FlowBuilderCanvas({
             isDebugMode={debugSession.state.isDebugMode}
             onToggle={() => {
               debugSession.toggleDebugMode();
-              // Auto-show timeline when entering debug mode
-              if (!debugSession.state.isDebugMode) setShowTimeline(true);
+              // Auto-show timeline + variable watch when entering debug mode
+              if (!debugSession.state.isDebugMode) {
+                setShowTimeline(true);
+                setShowVariableWatch(true);
+              }
             }}
           />
           {debugSession.state.isDebugMode && (
@@ -641,6 +646,20 @@ function FlowBuilderCanvas({
               >
                 <History className="size-4" />
                 History
+              </Button>
+              <Button
+                size="sm"
+                variant={showVariableWatch ? "default" : "outline"}
+                onClick={() => setShowVariableWatch((v) => !v)}
+                className={cn(
+                  "gap-1.5",
+                  showVariableWatch && "bg-violet-700 hover:bg-violet-800 border-violet-700 text-white"
+                )}
+                title="Toggle Variable Watch"
+                aria-label="Toggle Variable Watch"
+              >
+                <Variable className="size-4" />
+                Variables
               </Button>
             </>
           )}
@@ -846,6 +865,19 @@ function FlowBuilderCanvas({
               <AgentMCPSelector agentId={agentId} />
             </div>
           </div>
+        )}
+
+        {/* Variable Watch panel — debug mode only, shown on the right */}
+        {debugSession.state.isDebugMode && showVariableWatch && !selectedNode && !showVersionPanel && !showMCPPanel && (
+          <DebugVariableWatchPanel
+            currentVariables={debugSession.state.currentVariables}
+            variableDiff={debugSession.state.variableDiff}
+            pendingEdits={debugSession.state.pendingVariableEdits}
+            isPaused={debugSession.state.isPaused}
+            onEditVariable={debugSession.editVariable}
+            onResetEdits={debugSession.resetVariableEdits}
+            onClose={() => setShowVariableWatch(false)}
+          />
         )}
       </div>
 

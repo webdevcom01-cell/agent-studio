@@ -126,9 +126,69 @@ export async function waitForDebugResume(
 export async function cleanupDebugSession(sessionId: string): Promise<void> {
   const redis = await getRedis();
   if (redis) {
-    await redis.del(`${KEY_PREFIX}${sessionId}:cmd`);
+    await redis.del(
+      `${KEY_PREFIX}${sessionId}:cmd`,
+      `${KEY_PREFIX}${sessionId}:vars`
+    );
   } else {
     inMemoryStore.delete(sessionId);
+    inMemoryVarStore.delete(sessionId);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Variable overrides — Phase 7
+// ---------------------------------------------------------------------------
+
+/** In-memory fallback for variable overrides */
+const inMemoryVarStore = new Map<string, Record<string, unknown>>();
+
+/**
+ * Store variable overrides for the session.
+ * These will be applied to context.variables when the engine resumes.
+ * Single-use: cleared by getAndClearVariableOverrides().
+ */
+export async function setVariableOverrides(
+  sessionId: string,
+  variables: Record<string, unknown>
+): Promise<void> {
+  const redis = await getRedis();
+  if (redis) {
+    await redis.set(
+      `${KEY_PREFIX}${sessionId}:vars`,
+      JSON.stringify(variables),
+      "EX",
+      KEY_TTL_S
+    );
+  } else {
+    inMemoryVarStore.set(sessionId, variables);
+  }
+}
+
+/**
+ * Get variable overrides and immediately delete them (single-use).
+ * Returns null if no overrides are pending.
+ */
+export async function getAndClearVariableOverrides(
+  sessionId: string
+): Promise<Record<string, unknown> | null> {
+  const redis = await getRedis();
+  if (redis) {
+    const key = `${KEY_PREFIX}${sessionId}:vars`;
+    const raw = await redis.get(key);
+    if (raw) {
+      await redis.del(key);
+      try {
+        return JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  } else {
+    const overrides = inMemoryVarStore.get(sessionId) ?? null;
+    inMemoryVarStore.delete(sessionId);
+    return overrides;
   }
 }
 

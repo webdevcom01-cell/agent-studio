@@ -16,6 +16,7 @@ import {
   initDebugSession,
   waitForDebugResume,
   cleanupDebugSession,
+  getAndClearVariableOverrides,
 } from "./debug-controller";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -180,6 +181,17 @@ export function executeFlowStreaming(
 
             if (command === "step") {
               stepMode = true; // pause at the next node after this one
+            }
+
+            // Apply any variable overrides the user set while paused (Phase 7)
+            const overrides = await getAndClearVariableOverrides(context.debugSessionId!);
+            if (overrides && Object.keys(overrides).length > 0) {
+              Object.assign(context.variables, overrides);
+              // Emit updated variables so client Watch panel refreshes
+              writer.write({
+                type: "debug_variables_updated",
+                variables: sanitizeVariables(context.variables),
+              });
             }
 
             writer.write({
