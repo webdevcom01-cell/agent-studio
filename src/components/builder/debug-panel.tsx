@@ -113,41 +113,6 @@ function JsonBlock({ value, label }: JsonBlockProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Collapsible section
-// ---------------------------------------------------------------------------
-interface SectionProps {
-  title: string;
-  icon: React.ReactNode;
-  defaultOpen?: boolean;
-  badge?: React.ReactNode;
-  children: React.ReactNode;
-}
-
-function Section({ title, icon, defaultOpen = true, badge, children }: SectionProps) {
-  const [open, setOpen] = useState(defaultOpen);
-
-  return (
-    <div className="border-b border-border/50 last:border-0">
-      <button
-        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs font-medium hover:bg-muted/30 transition-colors"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        {open ? (
-          <ChevronDown className="size-3 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronRight className="size-3 text-muted-foreground shrink-0" />
-        )}
-        <span className="text-muted-foreground mr-0.5">{icon}</span>
-        <span className="flex-1">{title}</span>
-        {badge && <span className="ml-auto">{badge}</span>}
-      </button>
-      {open && <div className="px-4 pb-3 pt-0.5 space-y-2">{children}</div>}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Tool call row
 // ---------------------------------------------------------------------------
 function ToolCallRow({ call }: { call: ToolCallTrace }) {

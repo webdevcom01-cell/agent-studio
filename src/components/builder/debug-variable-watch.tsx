@@ -330,7 +330,7 @@ export function DebugVariableWatchPanel({
           </div>
         ) : filteredKeys.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-zinc-600">
-            No variables match "{search}"
+            No variables match &ldquo;{search}&rdquo;
           </div>
         ) : (
           <div className="group">
