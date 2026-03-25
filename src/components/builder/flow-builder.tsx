@@ -24,6 +24,7 @@ import { DebugToggleButton, DebugToolbar } from "./debug-toolbar";
 import { DebugContext, buildDebugNodeTypes } from "./debug-node-overlay";
 import { DebugPanel } from "./debug-panel";
 import { DebugTimeline } from "./debug-timeline";
+import { TraceHistoryPanel } from "./trace-history";
 import { MessageNode } from "./nodes/message-node";
 import { CaptureNode } from "./nodes/capture-node";
 import { ConditionNode } from "./nodes/condition-node";
@@ -62,7 +63,7 @@ import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
 import { Button } from "@/components/ui/button";
-import { Save, Plug, X, Clock, Rocket, Circle, Undo2, Redo2, Search, BarChart2 } from "lucide-react";
+import { Save, Plug, X, Clock, Rocket, Circle, Undo2, Redo2, Search, BarChart2, History } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { AgentMCPSelector } from "@/components/mcp/agent-mcp-selector";
 import type { FlowContent, FlowNode } from "@/types";
@@ -210,6 +211,7 @@ function FlowBuilderCanvas({
   // Debug session
   const debugSession = useDebugSession(agentId);
   const [showTimeline, setShowTimeline] = useState(false);
+  const [showTraceHistory, setShowTraceHistory] = useState(false);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -601,20 +603,36 @@ function FlowBuilderCanvas({
             }}
           />
           {debugSession.state.isDebugMode && (
-            <Button
-              size="sm"
-              variant={showTimeline ? "default" : "outline"}
-              onClick={() => setShowTimeline((v) => !v)}
-              className={cn(
-                "gap-1.5",
-                showTimeline && "bg-violet-700 hover:bg-violet-800 border-violet-700 text-white"
-              )}
-              title="Toggle Execution Timeline"
-              aria-label="Toggle Execution Timeline"
-            >
-              <BarChart2 className="size-4" />
-              Timeline
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant={showTimeline ? "default" : "outline"}
+                onClick={() => setShowTimeline((v) => !v)}
+                className={cn(
+                  "gap-1.5",
+                  showTimeline && "bg-violet-700 hover:bg-violet-800 border-violet-700 text-white"
+                )}
+                title="Toggle Execution Timeline"
+                aria-label="Toggle Execution Timeline"
+              >
+                <BarChart2 className="size-4" />
+                Timeline
+              </Button>
+              <Button
+                size="sm"
+                variant={showTraceHistory ? "default" : "outline"}
+                onClick={() => setShowTraceHistory((v) => !v)}
+                className={cn(
+                  "gap-1.5",
+                  showTraceHistory && "bg-violet-700 hover:bg-violet-800 border-violet-700 text-white"
+                )}
+                title="Toggle Trace History"
+                aria-label="Toggle Trace History"
+              >
+                <History className="size-4" />
+                History
+              </Button>
+            </>
           )}
           <Button
             size="sm"
@@ -686,6 +704,19 @@ function FlowBuilderCanvas({
       )}
 
       <div className="flex flex-1 overflow-hidden">
+        {/* Trace History sidebar — left panel, only in debug mode */}
+        {debugSession.state.isDebugMode && showTraceHistory && (
+          <TraceHistoryPanel
+            agentId={agentId}
+            activeTraceId={debugSession.state.savedTraceId}
+            onReplay={(_traceId, testInput) => {
+              debugSession.setTestInput(testInput);
+              setShowTraceHistory(false);
+            }}
+            onClose={() => setShowTraceHistory(false)}
+          />
+        )}
+
         <div className="relative flex-1" data-testid="flow-canvas">
           <FlowErrorBoundary>
           <DebugContext.Provider value={debugSession.state.nodeStates}>

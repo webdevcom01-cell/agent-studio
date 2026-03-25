@@ -1,0 +1,79 @@
+import type { NodeHandler } from "../types";
+import { resolveTemplate } from "../template";
+import { prisma } from "@/lib/prisma";
+import { hybridSearch, computeDynamicTopK, expandChunksWithContext } from "@/lib/knowledge/search";
+import { trackKBSearch } from "@/lib/analytics";
+import { logger } from "@/lib/logger";
+
+export const kbSearchHandler: NodeHandler = async (node, context) => {
+  const configuredTopK = (node.data.topK as number) ?? 7;
+  const queryVariable = (node.data.queryVariable as string) || "last_message";
+  const outputVariable = (node.data.outputVariable as string) || "kb_context";
+
+  let query: string;
+  if (queryVariable.includes("{{")) {
+    query = resolveTemplate(queryVariable, context.variables);
+  } else {
+    query = String(context.variables[queryVariable] ?? "");
+  }
+
+  if (!query.trim()) {
+    return {
+      messages: [],
+      nextNodeId: null,
+      waitForInput: false,
+      updatedVariables: { kb_results: [], [outputVariable]: "" },
+    };
+  }
+
+  try {
+    const kb = await prisma.knowledgeBase.findUnique({
+      where: { agentId: context.agentId },
+    });
+
+    if (!kb) {
+      return {
+        messages: [],
+        nextNodeId: null,
+        waitForInput: false,
+        updatedVariables: { kb_results: [], [outputVariable]: "" },
+      };
+    }
+
+    const topK = computeDynamicTopK(query, configuredTopK);
+    const results = await hybridSearch(query, kb.id, { topK });
+    const expanded = await expandChunksWithContext(results, 1);
+    const kbContext = expanded.map((r) => r.content).join("\n---\n");
+
+    trackKBSearch({
+      agentId: context.agentId,
+      conversationId: context.conversationId,
+      query,
+      resultCount: expanded.length,
+      topScore: expanded.length > 0 ? expanded[0].relevanceScore : null,
+    }).catch((err) => logger.warn("KB search tracking failed", err));
+
+    return {
+      messages: [],
+      nextNodeId: null,
+      waitForInput: false,
+      updatedVariables: {
+        kb_results: expanded.map((r) => ({
+          content: r.content,
+          similarity: r.similarity,
+          sourceDocument: r.sourceDocument ?? null,
+          relevanceScore: r.relevanceScore ?? r.similarity,
+        })),
+        [outputVariable]: kbContext,
+      },
+    };
+  } catch (error) {
+    logger.error("KB Search failed", error, { agentId: context.agentId });
+    return {
+      messages: [],
+      nextNodeId: null,
+      waitForInput: false,
+      updatedVariables: { kb_results: [], [outputVariable]: "" },
+    };
+  }
+};

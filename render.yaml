@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: agent-studio
+    runtime: node
+    buildCommand: pnpm install && pnpm db:generate && pnpm build
+    startCommand: pnpm db:push && node .next/standalone/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: AUTH_SECRET
+        generateValue: true

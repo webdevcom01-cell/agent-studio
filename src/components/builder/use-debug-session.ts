@@ -27,6 +27,8 @@ export interface DebugSessionState {
   flowSummary: DebugFlowSummary | null;
   testInput: string;
   conversationId: string | undefined;
+  /** ID of the trace record that was auto-saved for the current/last run */
+  savedTraceId: string | undefined;
 }
 
 const initialState: DebugSessionState = {
@@ -38,6 +40,7 @@ const initialState: DebugSessionState = {
   flowSummary: null,
   testInput: "",
   conversationId: undefined,
+  savedTraceId: undefined,
 };
 
 export function useDebugSession(agentId: string) {
@@ -47,6 +50,58 @@ export function useDebugSession(agentId: string) {
   const pendingToolCalls = useRef<Map<string, ToolCallTrace[]>>(new Map());
   // Server-side start timestamps from debug_node_start (keyed by nodeId)
   const pendingNodeStartMs = useRef<Map<string, number>>(new Map());
+  // Snapshot refs — kept in sync with state for use inside async callbacks
+  const nodeStatesRef = useRef<Map<string, NodeDebugState>>(new Map());
+  const edgeStatesRef = useRef<Map<string, EdgeDebugState>>(new Map());
+  const flowSummaryRef = useRef<DebugFlowSummary | null>(null);
+  const testInputRef = useRef<string>("");
+
+  // -------------------------------------------------------------------------
+  // Auto-save the completed trace to the API (fire-and-forget)
+  // -------------------------------------------------------------------------
+  const saveTrace = useCallback(
+    async (status: "COMPLETED" | "FAILED", conversationId?: string) => {
+      const nodeTraces: Record<string, unknown> = {};
+      nodeStatesRef.current.forEach((v, k) => {
+        nodeTraces[k] = v;
+      });
+
+      const edgeTraces: Record<string, unknown> = {};
+      edgeStatesRef.current.forEach((v, k) => {
+        edgeTraces[k] = v;
+      });
+
+      const summary = flowSummaryRef.current;
+
+      try {
+        const res = await fetch(`/api/agents/${agentId}/traces`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversationId,
+            testInput: testInputRef.current,
+            status,
+            totalDurationMs: summary?.totalDurationMs,
+            nodesExecuted: summary?.nodesExecuted,
+            nodesFailed: summary?.nodesFailed,
+            executionPath: summary?.executionPath ?? [],
+            nodeTraces,
+            edgeTraces,
+            flowSummary: summary ?? undefined,
+          }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data?.id) {
+            setState((prev) => ({ ...prev, savedTraceId: json.data.id as string }));
+          }
+        }
+      } catch {
+        // Fire-and-forget — never let save errors disrupt the UI
+      }
+    },
+    [agentId]
+  );
 
   const toggleDebugMode = useCallback(() => {
     setState((prev) => ({
@@ -82,9 +137,15 @@ export function useDebugSession(agentId: string) {
   const runDebug = useCallback(async () => {
     if (!state.testInput.trim() || state.isRunning) return;
 
+    // Snapshot test input for use in saveTrace (avoids stale closure)
+    testInputRef.current = state.testInput;
+
     // Clear previous results
     pendingToolCalls.current.clear();
     pendingNodeStartMs.current.clear();
+    nodeStatesRef.current = new Map();
+    edgeStatesRef.current = new Map();
+    flowSummaryRef.current = null;
     setState((prev) => ({
       ...prev,
       isRunning: true,
@@ -188,6 +249,8 @@ export function useDebugSession(agentId: string) {
                   totalDurationMs: existing.totalDurationMs + chunk.durationMs,
                 };
                 next.set(chunk.nodeId, updatedState);
+                // Keep ref in sync for saveTrace
+                nodeStatesRef.current = next;
                 return { ...prev, nodeStates: next };
               });
               break;
@@ -202,6 +265,8 @@ export function useDebugSession(agentId: string) {
                   targetNodeId: chunk.targetNodeId,
                   taken: true,
                 });
+                // Keep ref in sync for saveTrace
+                edgeStatesRef.current = next;
                 return { ...prev, edgeStates: next };
               });
               break;
@@ -240,16 +305,16 @@ export function useDebugSession(agentId: string) {
             }
 
             case "debug_flow_summary": {
-              setState((prev) => ({
-                ...prev,
-                flowSummary: {
-                  totalDurationMs: chunk.totalDurationMs,
-                  nodesExecuted: chunk.nodesExecuted,
-                  nodesFailed: chunk.nodesFailed,
-                  executionPath: chunk.executionPath,
-                  otelTraceId: chunk.otelTraceId,
-                },
-              }));
+              const summary: DebugFlowSummary = {
+                totalDurationMs: chunk.totalDurationMs,
+                nodesExecuted: chunk.nodesExecuted,
+                nodesFailed: chunk.nodesFailed,
+                executionPath: chunk.executionPath,
+                otelTraceId: chunk.otelTraceId,
+              };
+              // Keep ref in sync for saveTrace
+              flowSummaryRef.current = summary;
+              setState((prev) => ({ ...prev, flowSummary: summary }));
               break;
             }
 
@@ -259,11 +324,15 @@ export function useDebugSession(agentId: string) {
                 isRunning: false,
                 conversationId: chunk.conversationId,
               }));
+              // Auto-save the completed trace (fire-and-forget)
+              void saveTrace("COMPLETED", chunk.conversationId);
               break;
             }
 
             case "error": {
               setState((prev) => ({ ...prev, isRunning: false }));
+              // Auto-save failed trace
+              void saveTrace("FAILED");
               break;
             }
           }
@@ -272,11 +341,12 @@ export function useDebugSession(agentId: string) {
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setState((prev) => ({ ...prev, isRunning: false }));
+        void saveTrace("FAILED");
       }
     } finally {
       setState((prev) => ({ ...prev, isRunning: false }));
     }
-  }, [agentId, state.testInput, state.isRunning, state.conversationId]);
+  }, [agentId, saveTrace, state.testInput, state.isRunning, state.conversationId]);
 
   return {
     state,
