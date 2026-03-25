@@ -1,29 +1,14 @@
 "use client";
 
 import { createContext, useContext, type ComponentType } from "react";
-import { Loader2, CheckCircle2, XCircle, Wrench, Circle, Pause } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NodeDebugState } from "./use-debug-session";
 
 // ---------------------------------------------------------------------------
-// Context — holds the live nodeStates map + breakpoint/pause data
+// Context — holds the live nodeStates map from useDebugSession
 // ---------------------------------------------------------------------------
-
-export interface DebugContextValue {
-  nodeStates: Map<string, NodeDebugState>;
-  /** nodeIds that have a breakpoint set */
-  breakpoints: Set<string>;
-  /** nodeId currently paused at, if any */
-  pausedAtNodeId: string | null;
-}
-
-const defaultContextValue: DebugContextValue = {
-  nodeStates: new Map(),
-  breakpoints: new Set(),
-  pausedAtNodeId: null,
-};
-
-export const DebugContext = createContext<DebugContextValue>(defaultContextValue);
+export const DebugContext = createContext<Map<string, NodeDebugState>>(new Map());
 
 // ---------------------------------------------------------------------------
 // Helper — format a duration value nicely
@@ -31,37 +16,6 @@ export const DebugContext = createContext<DebugContextValue>(defaultContextValue
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
-}
-
-// ---------------------------------------------------------------------------
-// BreakpointDot — red dot shown on nodes that have a breakpoint set
-// ---------------------------------------------------------------------------
-interface BreakpointDotProps {
-  isPaused: boolean;
-  onClick?: (e: React.MouseEvent) => void;
-}
-
-function BreakpointDot({ isPaused, onClick }: BreakpointDotProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "absolute -top-2 -left-2 z-50 size-4 rounded-full flex items-center justify-center",
-        "shadow-md ring-2 ring-background transition-transform hover:scale-110",
-        isPaused
-          ? "bg-orange-500 ring-orange-300 animate-pulse"
-          : "bg-red-500 ring-red-300"
-      )}
-      title={isPaused ? "Paused here — click to remove breakpoint" : "Breakpoint — click to remove"}
-      aria-label="Breakpoint"
-    >
-      {isPaused ? (
-        <Pause className="size-2 text-white" />
-      ) : (
-        <Circle className="size-2 text-white fill-white" />
-      )}
-    </button>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +48,6 @@ function DebugNodeBadge({ nodeState }: DebugNodeBadgeProps) {
         className={cn(
           "flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-white shadow-sm",
           aggregateStatus === "running" && "bg-violet-500/90",
-          aggregateStatus === "waiting" && "bg-orange-500/90",
           aggregateStatus === "success" && "bg-emerald-500/90",
           aggregateStatus === "error" && "bg-red-500/90",
           aggregateStatus === "skipped" && "bg-muted-foreground/70",
@@ -104,9 +57,6 @@ function DebugNodeBadge({ nodeState }: DebugNodeBadgeProps) {
         {aggregateStatus === "running" && (
           <Loader2 className="size-2.5 animate-spin" />
         )}
-        {aggregateStatus === "waiting" && (
-          <Pause className="size-2.5" />
-        )}
         {aggregateStatus === "success" && (
           <CheckCircle2 className="size-2.5" />
         )}
@@ -114,11 +64,7 @@ function DebugNodeBadge({ nodeState }: DebugNodeBadgeProps) {
           <XCircle className="size-2.5" />
         )}
 
-        {aggregateStatus === "waiting"
-          ? "paused"
-          : totalDurationMs > 0
-          ? formatDuration(totalDurationMs)
-          : null}
+        {totalDurationMs > 0 && formatDuration(totalDurationMs)}
         {executions.length > 1 && (
           <span className="opacity-75">×{executions.length}</span>
         )}
@@ -137,7 +83,6 @@ function DebugRing({ status }: { status: NodeDebugState["aggregateStatus"] }) {
       className={cn(
         "pointer-events-none absolute inset-0 rounded-lg ring-2 ring-offset-0",
         status === "running" && "ring-violet-500 animate-pulse",
-        status === "waiting" && "ring-orange-500 animate-pulse",
         status === "success" && "ring-emerald-500",
         status === "error" && "ring-red-500",
         status === "skipped" && "ring-muted-foreground/30",
@@ -150,47 +95,29 @@ function DebugRing({ status }: { status: NodeDebugState["aggregateStatus"] }) {
 // ---------------------------------------------------------------------------
 // withDebugOverlay — HOC that wraps a node component with debug UI
 //
-// Props interface extended with an optional onBreakpointToggle callback
-// so the flow-builder can wire up the toggle without going through context.
+// Usage:
+//   const DebugAIResponseNode = withDebugOverlay(AIResponseNode);
+//
+// The wrapped component renders identically to the original, with an
+// absolutely-positioned badge and ring overlay added on top.
 // ---------------------------------------------------------------------------
-
-interface DebugNodeExtraProps {
-  /** Called when the user clicks the breakpoint dot to toggle it */
-  onBreakpointToggle?: (nodeId: string) => void;
-}
-
 export function withDebugOverlay<T extends { id: string }>(
   WrappedComponent: ComponentType<T>
-): ComponentType<T & DebugNodeExtraProps> {
-  function DebugWrappedNode(props: T & DebugNodeExtraProps) {
-    const { onBreakpointToggle, ...restProps } = props;
-    const { nodeStates, breakpoints, pausedAtNodeId } = useContext(DebugContext);
+): ComponentType<T> {
+  function DebugWrappedNode(props: T) {
+    const nodeStates = useContext(DebugContext);
     const nodeState = nodeStates.get(props.id);
-    const hasBreakpoint = breakpoints.has(props.id);
-    const isPausedHere = pausedAtNodeId === props.id;
+
+    if (!nodeState) {
+      // No debug state for this node — render plain
+      return <WrappedComponent {...props} />;
+    }
 
     return (
       <div className="relative">
-        <WrappedComponent {...(restProps as T)} />
-
-        {/* Breakpoint dot — shown when breakpoint is set on this node */}
-        {hasBreakpoint && (
-          <BreakpointDot
-            isPaused={isPausedHere}
-            onClick={(e) => {
-              e.stopPropagation();
-              onBreakpointToggle?.(props.id);
-            }}
-          />
-        )}
-
-        {/* Debug ring + badge — shown when execution has visited this node */}
-        {nodeState && (
-          <>
-            <DebugRing status={nodeState.aggregateStatus} />
-            <DebugNodeBadge nodeState={nodeState} />
-          </>
-        )}
+        <WrappedComponent {...props} />
+        <DebugRing status={nodeState.aggregateStatus} />
+        <DebugNodeBadge nodeState={nodeState} />
       </div>
     );
   }
@@ -213,6 +140,7 @@ export function buildDebugNodeTypes<
 >(nodeTypes: T): T {
   const result = {} as T;
   for (const key in nodeTypes) {
+    // Cast needed because TS can't narrow ComponentType<{id:string}> to ComponentType<T[key] props>
     (result as Record<string, ComponentType<{ id: string }>>)[key] = withDebugOverlay(
       nodeTypes[key]
     );

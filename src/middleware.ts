@@ -79,8 +79,21 @@ function isCsrfSafe(request: NextRequest): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return true;
 
+  // Exact match (local dev, same-protocol deployments)
   const requestOrigin = new URL(request.url).origin;
-  return origin === requestOrigin;
+  if (origin === requestOrigin) return true;
+
+  // Railway / reverse-proxy tolerance: SSL is terminated at the edge so
+  // request.url arrives as http:// internally while the browser Origin is
+  // https://.  Compare just the host (no protocol) so legitimate same-host
+  // requests are still allowed while cross-origin attacks are still blocked.
+  try {
+    const originHost = new URL(origin).host;
+    const requestHost = new URL(request.url).host;
+    return originHost === requestHost;
+  } catch {
+    return false;
+  }
 }
 
 export function middleware(request: NextRequest): NextResponse {

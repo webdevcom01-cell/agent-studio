@@ -67,16 +67,6 @@ export async function POST(
   const isStreaming = body.stream === true;
   // Debug mode: only allowed for authenticated agent owners
   const isDebug = body.debug === true;
-  // Breakpoints: array of nodeIds to pause at (Phase 6)
-  const rawBreakpoints = Array.isArray(body.breakpoints) ? (body.breakpoints as unknown[]) : [];
-  const breakpointSet: Set<string> = new Set(
-    rawBreakpoints.filter((b): b is string => typeof b === "string" && b.length > 0)
-  );
-  // Debug session ID for pause/resume coordination (Phase 6)
-  const debugSessionId =
-    typeof body.debugSessionId === "string" && body.debugSessionId.length > 0
-      ? body.debugSessionId
-      : undefined;
 
   if (!message) {
     return NextResponse.json(
@@ -102,15 +92,9 @@ export async function POST(
     const startTime = Date.now();
     const context = await loadContext(agentId, conversationId);
 
-    // Inject debug flag + breakpoints into context
+    // Inject debug flag into context
     if (isDebug) {
       context.debugMode = true;
-      if (breakpointSet.size > 0) {
-        context.breakpoints = breakpointSet;
-      }
-      if (debugSessionId) {
-        context.debugSessionId = debugSessionId;
-      }
     }
 
     const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { model: true } });

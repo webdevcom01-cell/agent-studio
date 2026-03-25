@@ -18,21 +18,6 @@ export interface EdgeDebugState {
   taken: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Variable Watch types (Phase 7)
-// ---------------------------------------------------------------------------
-
-export type VariableChangeType = "new" | "modified" | "deleted";
-
-export interface VariableDiffEntry {
-  key: string;
-  previousValue?: unknown;
-  currentValue?: unknown;
-  change: VariableChangeType;
-}
-
-export type VariableDiff = VariableDiffEntry[];
-
 export interface DebugSessionState {
   isDebugMode: boolean;
   isRunning: boolean;
@@ -42,24 +27,6 @@ export interface DebugSessionState {
   flowSummary: DebugFlowSummary | null;
   testInput: string;
   conversationId: string | undefined;
-  /** ID of the trace record that was auto-saved for the current/last run */
-  savedTraceId: string | undefined;
-  // ── Phase 6: Breakpoints ─────────────────────────────────────────────────
-  /** Set of nodeIds where execution should pause */
-  breakpoints: Set<string>;
-  /** Whether the flow is currently paused at a breakpoint */
-  isPaused: boolean;
-  /** The nodeId the flow is currently paused at */
-  pausedAtNodeId: string | null;
-  /** Stable session ID used for pause/resume coordination with the API */
-  debugSessionId: string | undefined;
-  // ── Phase 7: Variable Watch ───────────────────────────────────────────────
-  /** Latest runtime variables snapshot (updated on each debug_node_start) */
-  currentVariables: Record<string, unknown>;
-  /** Diff from the previous node's variables — drives diff highlighting */
-  variableDiff: VariableDiff;
-  /** User edits made while paused (not yet sent to engine) */
-  pendingVariableEdits: Record<string, unknown>;
 }
 
 const initialState: DebugSessionState = {
@@ -71,14 +38,6 @@ const initialState: DebugSessionState = {
   flowSummary: null,
   testInput: "",
   conversationId: undefined,
-  savedTraceId: undefined,
-  breakpoints: new Set(),
-  isPaused: false,
-  pausedAtNodeId: null,
-  debugSessionId: undefined,
-  currentVariables: {},
-  variableDiff: [],
-  pendingVariableEdits: {},
 };
 
 export function useDebugSession(agentId: string) {
@@ -86,60 +45,6 @@ export function useDebugSession(agentId: string) {
   const abortRef = useRef<AbortController | null>(null);
   // Mutable ref to accumulate tool calls per node during streaming
   const pendingToolCalls = useRef<Map<string, ToolCallTrace[]>>(new Map());
-  // Server-side start timestamps from debug_node_start (keyed by nodeId)
-  const pendingNodeStartMs = useRef<Map<string, number>>(new Map());
-  // Snapshot refs — kept in sync with state for use inside async callbacks
-  const nodeStatesRef = useRef<Map<string, NodeDebugState>>(new Map());
-  const edgeStatesRef = useRef<Map<string, EdgeDebugState>>(new Map());
-  const flowSummaryRef = useRef<DebugFlowSummary | null>(null);
-  const testInputRef = useRef<string>("");
-
-  // -------------------------------------------------------------------------
-  // Auto-save the completed trace to the API (fire-and-forget)
-  // -------------------------------------------------------------------------
-  const saveTrace = useCallback(
-    async (status: "COMPLETED" | "FAILED", conversationId?: string) => {
-      const nodeTraces: Record<string, unknown> = {};
-      nodeStatesRef.current.forEach((v, k) => {
-        nodeTraces[k] = v;
-      });
-
-      const edgeTraces: Record<string, unknown> = {};
-      edgeStatesRef.current.forEach((v, k) => {
-        edgeTraces[k] = v;
-      });
-
-      const summary = flowSummaryRef.current;
-
-      try {
-        const res = await fetch(`/api/agents/${agentId}/traces`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            conversationId,
-            testInput: testInputRef.current,
-            status,
-            totalDurationMs: summary?.totalDurationMs,
-            nodesExecuted: summary?.nodesExecuted,
-            nodesFailed: summary?.nodesFailed,
-            executionPath: summary?.executionPath ?? [],
-            nodeTraces,
-            edgeTraces,
-            flowSummary: summary ?? undefined,
-          }),
-        });
-        if (res.ok) {
-          const json = await res.json();
-          if (json.success && json.data?.id) {
-            setState((prev) => ({ ...prev, savedTraceId: json.data.id as string }));
-          }
-        }
-      } catch {
-        // Fire-and-forget — never let save errors disrupt the UI
-      }
-    },
-    [agentId]
-  );
 
   const toggleDebugMode = useCallback(() => {
     setState((prev) => ({
@@ -164,131 +69,25 @@ export function useDebugSession(agentId: string) {
       testInput: prev.testInput,
     }));
     pendingToolCalls.current.clear();
-    pendingNodeStartMs.current.clear();
   }, []);
 
   const stopRun = useCallback(() => {
     abortRef.current?.abort();
-    setState((prev) => ({ ...prev, isRunning: false, isPaused: false, pausedAtNodeId: null }));
-  }, []);
-
-  /** Toggle a breakpoint on/off for a given nodeId */
-  const toggleBreakpoint = useCallback((nodeId: string) => {
-    setState((prev) => {
-      const next = new Set(prev.breakpoints);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return { ...prev, breakpoints: next };
-    });
-  }, []);
-
-  /** Send a continue/step/stop command to the paused debug session */
-  const sendControl = useCallback(
-    async (action: "continue" | "step" | "stop", currentAgentId: string, sessionId: string) => {
-      if (action === "stop") {
-        abortRef.current?.abort();
-        setState((prev) => ({ ...prev, isRunning: false, isPaused: false, pausedAtNodeId: null, pendingVariableEdits: {} }));
-        return;
-      }
-
-      // Flush pending variable edits BEFORE sending resume command
-      // (engine reads overrides between waitForDebugResume() and emitting debug_resumed)
-      let hasPendingEdits = false;
-      setState((prev) => {
-        hasPendingEdits = Object.keys(prev.pendingVariableEdits).length > 0;
-        return prev;
-      });
-
-      if (hasPendingEdits) {
-        try {
-          // Read pending edits from current state synchronously via ref pattern
-          // We capture it here since setState callback runs async
-          const currentState = { pendingVariableEdits: {} as Record<string, unknown> };
-          setState((prev) => {
-            currentState.pendingVariableEdits = prev.pendingVariableEdits;
-            return prev;
-          });
-          // Small delay to let setState flush the read
-          await new Promise<void>((resolve) => setTimeout(resolve, 0));
-
-          if (Object.keys(currentState.pendingVariableEdits).length > 0) {
-            await fetch(
-              `/api/agents/${currentAgentId}/debug/${sessionId}/variables`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ variables: currentState.pendingVariableEdits }),
-              }
-            );
-          }
-        } catch {
-          // Ignore — best-effort
-        }
-      }
-
-      // Optimistically clear paused state
-      setState((prev) => ({ ...prev, isPaused: false, pausedAtNodeId: null, pendingVariableEdits: {} }));
-
-      try {
-        await fetch(
-          `/api/agents/${currentAgentId}/debug/${sessionId}/control`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action }),
-          }
-        );
-      } catch {
-        // Ignore — if the engine has already moved on, that's fine
-      }
-    },
-    []
-  );
-
-  /** Set a local variable edit (only committed when user continues/steps) */
-  const editVariable = useCallback((key: string, value: unknown) => {
-    setState((prev) => ({
-      ...prev,
-      pendingVariableEdits: { ...prev.pendingVariableEdits, [key]: value },
-    }));
-  }, []);
-
-  /** Discard all pending variable edits without sending */
-  const resetVariableEdits = useCallback(() => {
-    setState((prev) => ({ ...prev, pendingVariableEdits: {} }));
+    setState((prev) => ({ ...prev, isRunning: false }));
   }, []);
 
   const runDebug = useCallback(async () => {
     if (!state.testInput.trim() || state.isRunning) return;
 
-    // Generate a fresh debug session ID for this run
-    const sessionId = `dbg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-    // Snapshot test input for use in saveTrace (avoids stale closure)
-    testInputRef.current = state.testInput;
-
     // Clear previous results
     pendingToolCalls.current.clear();
-    pendingNodeStartMs.current.clear();
-    nodeStatesRef.current = new Map();
-    edgeStatesRef.current = new Map();
-    flowSummaryRef.current = null;
     setState((prev) => ({
       ...prev,
       isRunning: true,
-      isPaused: false,
-      pausedAtNodeId: null,
-      debugSessionId: sessionId,
       nodeStates: new Map(),
       edgeStates: new Map(),
       flowSummary: null,
       selectedNodeId: null,
-      currentVariables: {},
-      variableDiff: [],
-      pendingVariableEdits: {},
     }));
 
     abortRef.current = new AbortController();
@@ -302,8 +101,6 @@ export function useDebugSession(agentId: string) {
           stream: true,
           debug: true,
           conversationId: state.conversationId,
-          debugSessionId: sessionId,
-          breakpoints: Array.from(state.breakpoints),
         }),
         signal: abortRef.current.signal,
       });
@@ -331,8 +128,6 @@ export function useDebugSession(agentId: string) {
 
           switch (chunk.type) {
             case "debug_node_start": {
-              // Store server-provided start timestamp for timeline accuracy
-              pendingNodeStartMs.current.set(chunk.nodeId, chunk.timestamp);
               setState((prev) => {
                 const next = new Map(prev.nodeStates);
                 const existing = next.get(chunk.nodeId);
@@ -350,35 +145,7 @@ export function useDebugSession(agentId: string) {
                       totalDurationMs: 0,
                     };
                 next.set(chunk.nodeId, updatedState);
-
-                // Compute variable diff (Phase 7)
-                const newVars = chunk.variables ?? {};
-                const prevVars = prev.currentVariables;
-                const diff: VariableDiff = [];
-
-                // Check for new + modified keys
-                for (const [k, v] of Object.entries(newVars)) {
-                  if (!(k in prevVars)) {
-                    diff.push({ key: k, currentValue: v, change: "new" });
-                  } else if (JSON.stringify(prevVars[k]) !== JSON.stringify(v)) {
-                    diff.push({ key: k, previousValue: prevVars[k], currentValue: v, change: "modified" });
-                  }
-                }
-                // Check for deleted keys
-                for (const k of Object.keys(prevVars)) {
-                  if (!(k in newVars)) {
-                    diff.push({ key: k, previousValue: prevVars[k], change: "deleted" });
-                  }
-                }
-
-                return {
-                  ...prev,
-                  nodeStates: next,
-                  currentVariables: newVars,
-                  variableDiff: diff,
-                  // Clear pending edits when a new node starts (they've been applied or discarded)
-                  pendingVariableEdits: {},
-                };
+                return { ...prev, nodeStates: next };
               });
               break;
             }
@@ -392,19 +159,13 @@ export function useDebugSession(agentId: string) {
                 const toolCalls = pendingToolCalls.current.get(chunk.nodeId) ?? [];
                 pendingToolCalls.current.delete(chunk.nodeId);
 
-                // Use server-provided start time; fall back to end-time minus duration
-                const serverStartMs =
-                  pendingNodeStartMs.current.get(chunk.nodeId) ??
-                  Date.now() - chunk.durationMs;
-                pendingNodeStartMs.current.delete(chunk.nodeId);
-
                 const execution: NodeExecution = {
                   iteration: existing.executions.length + 1,
                   status: chunk.status,
                   durationMs: chunk.durationMs,
                   output: chunk.output,
                   error: chunk.error,
-                  timestamp: serverStartMs, // ← server start time (used by timeline)
+                  timestamp: Date.now(),
                   toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
                 };
 
@@ -415,8 +176,6 @@ export function useDebugSession(agentId: string) {
                   totalDurationMs: existing.totalDurationMs + chunk.durationMs,
                 };
                 next.set(chunk.nodeId, updatedState);
-                // Keep ref in sync for saveTrace
-                nodeStatesRef.current = next;
                 return { ...prev, nodeStates: next };
               });
               break;
@@ -431,8 +190,6 @@ export function useDebugSession(agentId: string) {
                   targetNodeId: chunk.targetNodeId,
                   taken: true,
                 });
-                // Keep ref in sync for saveTrace
-                edgeStatesRef.current = next;
                 return { ...prev, edgeStates: next };
               });
               break;
@@ -470,75 +227,17 @@ export function useDebugSession(agentId: string) {
               break;
             }
 
-            case "debug_breakpoint_hit": {
-              // Mark the node as "waiting" status
-              setState((prev) => {
-                const next = new Map(prev.nodeStates);
-                const existing = next.get(chunk.nodeId);
-                if (existing) {
-                  next.set(chunk.nodeId, { ...existing, aggregateStatus: "waiting" });
-                }
-                nodeStatesRef.current = next;
-                return {
-                  ...prev,
-                  nodeStates: next,
-                  isPaused: true,
-                  pausedAtNodeId: chunk.nodeId,
-                  selectedNodeId: chunk.nodeId,
-                };
-              });
-              break;
-            }
-
-            case "debug_resumed": {
-              // Clear paused state; node will go back to running
+            case "debug_flow_summary": {
               setState((prev) => ({
                 ...prev,
-                isPaused: false,
-                pausedAtNodeId: null,
+                flowSummary: {
+                  totalDurationMs: chunk.totalDurationMs,
+                  nodesExecuted: chunk.nodesExecuted,
+                  nodesFailed: chunk.nodesFailed,
+                  executionPath: chunk.executionPath,
+                  otelTraceId: chunk.otelTraceId,
+                },
               }));
-              break;
-            }
-
-            case "debug_variables_updated": {
-              // Engine applied variable overrides — update the watch panel immediately
-              const newVars = chunk.variables ?? {};
-              setState((prev) => {
-                const prevVars = prev.currentVariables;
-                const diff: VariableDiff = [];
-                for (const [k, v] of Object.entries(newVars)) {
-                  if (!(k in prevVars)) {
-                    diff.push({ key: k, currentValue: v, change: "new" });
-                  } else if (JSON.stringify(prevVars[k]) !== JSON.stringify(v)) {
-                    diff.push({ key: k, previousValue: prevVars[k], currentValue: v, change: "modified" });
-                  }
-                }
-                for (const k of Object.keys(prevVars)) {
-                  if (!(k in newVars)) {
-                    diff.push({ key: k, previousValue: prevVars[k], change: "deleted" });
-                  }
-                }
-                return {
-                  ...prev,
-                  currentVariables: newVars,
-                  variableDiff: diff,
-                  pendingVariableEdits: {},
-                };
-              });
-              break;
-            }
-
-            case "debug_flow_summary": {
-              const summary: DebugFlowSummary = {
-                totalDurationMs: chunk.totalDurationMs,
-                nodesExecuted: chunk.nodesExecuted,
-                nodesFailed: chunk.nodesFailed,
-                executionPath: chunk.executionPath,
-                otelTraceId: chunk.otelTraceId,
-              };
-              // Keep ref in sync for saveTrace
-              flowSummaryRef.current = summary;
-              setState((prev) => ({ ...prev, flowSummary: summary }));
               break;
             }
 
@@ -548,15 +247,11 @@ export function useDebugSession(agentId: string) {
                 isRunning: false,
                 conversationId: chunk.conversationId,
               }));
-              // Auto-save the completed trace (fire-and-forget)
-              void saveTrace("COMPLETED", chunk.conversationId);
               break;
             }
 
             case "error": {
               setState((prev) => ({ ...prev, isRunning: false }));
-              // Auto-save failed trace
-              void saveTrace("FAILED");
               break;
             }
           }
@@ -565,12 +260,11 @@ export function useDebugSession(agentId: string) {
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setState((prev) => ({ ...prev, isRunning: false }));
-        void saveTrace("FAILED");
       }
     } finally {
       setState((prev) => ({ ...prev, isRunning: false }));
     }
-  }, [agentId, saveTrace, state.testInput, state.isRunning, state.conversationId]);
+  }, [agentId, state.testInput, state.isRunning, state.conversationId]);
 
   return {
     state,
@@ -580,9 +274,5 @@ export function useDebugSession(agentId: string) {
     clearSession,
     stopRun,
     runDebug,
-    toggleBreakpoint,
-    sendControl,
-    editVariable,
-    resetVariableEdits,
   };
 }
