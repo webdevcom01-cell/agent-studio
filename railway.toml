@@ -9,3 +9,14 @@ healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
 numReplicas = 2
+watchPaths = [
+  "src/**",
+  "prisma/**",
+  "public/**",
+  "package.json",
+  "pnpm-lock.yaml",
+  "next.config.ts",
+  "railway.toml",
+  "nixpacks.toml",
+  "Dockerfile"
+]
