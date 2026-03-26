@@ -6,6 +6,106 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.5.0] - 2026-03-26 — Template Expansion & Developer Experience
+
+> 216 templates · 19 categories · 1700+ tests · `pnpm precheck` for pre-push CI
+
+### Added
+- **83 new agent templates** (133 → 216 total) across 8 new industry categories: `coding`, `data`, `finance`, `hr`, `paid-media`, `research`, `sales`, `writing`
+- All existing categories expanded to a minimum of 8 templates (Dobro standard) — `marketing`, `product`, `project-management`, `spatial-computing`, `support` all brought up from 1–4 templates
+- **`scripts/pre-push-check.sh`** — 4-phase local CI simulation: TypeScript check → targeted Vitest → Lucide icon mock check → placeholder string consistency
+- **`pnpm precheck`** and **`pnpm precheck:file <path>`** scripts added to `package.json`
+
+### Changed
+- **README** — complete 2026-standards rewrite: CI + Docker Build + MCP Ready + A2A v0.3 badges; "What is Agent Studio?" problem/solution section; Supported AI Providers table (7 providers, 18 models); comparison table vs Flowise, n8n, LangFlow, Dify; updated Mermaid diagram (37 handlers, 87 routes); added Inbound Webhooks to feature list and comparison table
+- **CLAUDE.md** — synced project context with all changes since v2.0.0: template counts (133 → 216), category counts (12 → 19), pre-push workflow section, `pnpm precheck` commands, `scripts/pre-push-check.sh` in folder structure
+
+---
+
+## [2.4.0] - 2026-03-25 — Visual Flow Debugger
+
+> Real-time breakpoints · step-by-step execution · variable watch · trace history
+
+### Added
+- **Debug Panel** — collapsible sidebar in flow builder with node inspector, active variable state, and edge traversal view (Phase 1+2)
+- **Execution Timeline** — chronological trace of all node executions per run with duration, input/output snapshot per step (Phase 4)
+- **Trace Persistence** — `FlowTrace` Prisma model; `GET/POST /api/agents/[agentId]/traces`, `GET /api/agents/[agentId]/traces/[traceId]` routes; replay any historical execution (Phase 5)
+- **Breakpoints & Step-by-Step** — set breakpoints on any node; pause, inspect, and resume execution mid-flow; `debug-controller.ts` runtime integration (Phase 6)
+- **Variable Watch Panel** — live variable state during execution; in-flight edit support for variables before next node runs (Phase 7)
+- **`/api/agents/[agentId]/debug`** — debug session management API
+- **8 new builder components**: `debug-panel`, `debug-timeline`, `trace-history`, `debug-variable-watch`, `debug-toolbar`, `debug-node-overlay`, `use-debug-session` hook
+- **`src/lib/runtime/debug-controller.ts`** — intercepts engine execution loop for breakpoint/step control
+- **`src/lib/observability/tracer.ts`** — OpenTelemetry tracer wired into all AI response handlers
+
+### Fixed
+- ESLint errors in debug components blocking CI
+- Missing component and API files from virtiofs-constrained commit
+
+---
+
+## [2.3.0] - 2026-03-24 — Open Source Launch & CLI
+
+> Self-hostable via Docker · one-click Railway/Render deploy · `npx agent-studio-cli`
+
+### Added
+- **Docker support** — `Dockerfile` (Next.js standalone build), `docker-compose.yml` (app + PostgreSQL/pgvector + Redis), `docker-compose.override.yml` for local dev overrides
+- **GitHub Actions CI/CD** — `ci.yml` (lint + typecheck + vitest + Playwright E2E), `docker.yml` (Docker build on every push to main), `docs.yml` (Docusaurus deploy to GitHub Pages)
+- **`@agent-studio/cli` npm package** (`packages/cli/`) — v0.1.0, published to npm; commands: `agent-studio init` (scaffold new agent project), `agent-studio dev` (local dev server), `agent-studio build` (production build)
+- **Docusaurus docs site** (`website/`) — deployed to GitHub Pages via `docs.yml`; includes platform overview, node reference, knowledge base guide, CLI generator, and agent evals documentation
+- **One-click deploy buttons** in README — Railway template + Render deploy
+- **Community files** — `CONTRIBUTING.md` (dev setup, PR guidelines, code style), `CODE_OF_CONDUCT.md`
+
+---
+
+## [2.2.0] - 2026-03-23 — Enterprise RAG Upgrade & Webhooks Replay
+
+> 5 chunking strategies · per-KB config · RAGAS evaluation · webhook replay
+
+### Added
+- **Enterprise RAG pipeline** — 24 new features across 4 sprints:
+  - 5 chunking strategies: `recursive`, `markdown`, `code` (auto-detect Python/TS/JS), `sentence`, `fixed`; tiktoken `cl100k_base` token counting; header injection per chunk
+  - Per-KB configuration UI + API (`GET/PATCH /api/agents/[agentId]/knowledge/config`) — chunking strategy, embedding model, retrieval mode, reranking model, search thresholds
+  - Multi-model embeddings: `text-embedding-3-small` (1536 dim) + `text-embedding-3-large` (3072 dim); Redis embedding cache (600s TTL); semaphore (max 3 concurrent calls)
+  - Query transformation: HyDE (hypothetical document embedding), multi-query expansion (3 phrasings)
+  - Metadata filtering: 10 operators (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `nin`, `contains`, `exists`), AND/OR groups, dot-notation paths
+  - Context ordering: `relevance`, `lost-in-middle` (U-shaped, Liu et al. 2023), `chronological`, `diversity` (MMR-like)
+  - Cohere Rerank v3.5 support alongside existing LLM-rubric reranker
+  - Content deduplication via SHA-256 hash (saves embedding API cost)
+  - Ingest progress tracking: 6 stages (parsing → chunking → dedup → embedding → storing → complete)
+  - Document parsers: Excel/CSV (`xlsx`), PPTX (JSZip XML extraction) added alongside existing PDF/DOCX/HTML
+  - RAGAS evaluation: 4 metrics (`faithfulness`, `contextPrecision`, `contextRecall`, `answerRelevancy`) via `POST /api/agents/[agentId]/knowledge/evaluate`
+  - KB analytics: source/chunk stats, token distribution, top retrieved chunks — `GET /api/agents/[agentId]/knowledge/analytics`
+  - Maintenance: dead chunk detection, cleanup, scheduled re-ingestion — `GET/POST /api/agents/[agentId]/knowledge/maintenance`
+  - Embedding drift detection with model mismatch recommendation
+- **Webhook execution replay** — re-trigger any past webhook execution with its stored payload via `POST /api/agents/[agentId]/webhooks/[webhookId]/replay`
+
+---
+
+## [2.1.0] - 2026-03-21 — Security & Infrastructure Hardening
+
+> AES-256-GCM encryption · Redis rate limiting · multi-replica · circuit breakers
+
+### Added
+- **AES-256-GCM encryption at rest** — webhook secrets and OAuth tokens encrypted in DB; transparent decrypt on read
+- **Redis-based sliding window rate limiter** — replaces in-memory fallback for cross-replica accuracy; Lua EVAL atomic increment
+- **A2A circuit breaker hardening** — depth limit (max 3), visited-agent cycle detection, 33 new tests
+- **Schedule failure notifications** — webhook callback on cron job failure with retry count and error detail
+- **Instinct evolution** — AI clustering of instincts via `generateObject`, auto-promotion to Skill at ≥0.85 confidence
+- **Obsidian vault integration** — GitHub API-backed read/write for persistent knowledge storage
+- **Multi-replica deployment** — `numReplicas: 2` in `railway.toml`; rolling update strategy
+- **Redis cluster** — cross-replica cache, session sharing, MCP pool coordination; `REDIS_URL` env var
+- **CDN Cache-Control headers** — static assets get `public, max-age=31536000, immutable`
+- **Database read replica** — analytics and `/discover` queries routed to read-only replica
+- **FlowVersion cleanup job** — removes DRAFT versions older than 30 days to prevent DB bloat
+- **OpenTelemetry tracing** — wired into all AI response handlers with `gen_ai.*` semantic conventions
+
+### Fixed
+- MCP Host header rewrite middleware for Railway TLS (replaced monkey-patch approach)
+- NextAuth cookie pinning and fallback detection for cross-replica session stability
+- ECC production activation with `ECC_ENABLED` health monitoring guard
+
+---
+
 ## [2.0.0] - 2026-03-19 — ECC Integration
 
 ### Added
