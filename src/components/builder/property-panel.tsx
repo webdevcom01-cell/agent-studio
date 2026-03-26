@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { PropertySection } from "./property-section";
 import { VariableInput, VariableTextarea } from "./variable-input";
 import { type Node } from "@xyflow/react";
-import { Trash2, X, Plus, Search, Database, Plug, Zap, AppWindow, AlertTriangle, Clipboard, Check } from "lucide-react";
+import { Trash2, X, Plus, Search, Database, Plug, Zap, AlertTriangle, Clipboard, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

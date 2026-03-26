@@ -25,7 +25,6 @@ import { z } from "zod";
 import { prismaRead } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
-import { AGENT_CATEGORIES } from "@/lib/constants/agent-categories";
 
 const discoverSchema = z.object({
   q: z.string().max(200).optional(),

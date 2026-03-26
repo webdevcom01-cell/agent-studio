@@ -15,7 +15,7 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 // ─── Browser path ─────────────────────────────────────────────────────────────
 
 let browserWorker: Worker | null = null;
-let browserPendingCalls = new Map<
+const browserPendingCalls = new Map<
   string,
   { resolve: (r: PythonResponse) => void; reject: (e: Error) => void }
 >();

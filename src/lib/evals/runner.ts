@@ -25,8 +25,6 @@ import { evaluateAllAssertions } from "./assertions";
 import { EvalAssertionSchema } from "./schemas";
 import type { AssertionContext, EvalAssertion } from "./schemas";
 import type {
-  EvalRun,
-  EvalResult,
   EvalTestCase,
 } from "@/generated/prisma";
 

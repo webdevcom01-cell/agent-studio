@@ -24,7 +24,6 @@ import {
   A2ACircuitError,
 } from "@/lib/a2a/circuit-breaker";
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
-import type { FlowContent } from "@/types";
 import { parseFlowContent } from "@/lib/validators/flow-content";
 
 const DEFAULT_TIMEOUT_SECONDS = 30;
