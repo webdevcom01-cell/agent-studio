@@ -113,8 +113,10 @@ vi.mock("lucide-react", () => {
     Plug: Icon,
     Zap: Icon,
     ChevronDown: Icon,
+    ChevronRight: Icon,
     Check: Icon,
     AlertTriangle: Icon,
+    Clipboard: Icon,
     AppWindow: Icon,
     Paintbrush: Icon,
     Image: Icon,
@@ -285,8 +287,8 @@ describe("PropertyPanel", () => {
           node={makeNode("format_transform", { format: "template" })}
         />
       );
-      // The Template textarea has a specific placeholder
-      expect(screen.getByPlaceholderText("Use {{variable}} syntax...")).toBeDefined();
+      // The Template textarea has a specific placeholder (VariableTextarea renders a real <textarea>)
+      expect(screen.getByPlaceholderText("Use {{variable}} syntax — type {{ to see suggestions")).toBeDefined();
     });
 
     it("shows Separator field when format needs it", () => {
@@ -307,7 +309,7 @@ describe("PropertyPanel", () => {
         />
       );
       // Template textarea should not be present
-      expect(screen.queryByPlaceholderText("Use {{variable}} syntax...")).toBeNull();
+      expect(screen.queryByPlaceholderText("Use {{variable}} syntax — type {{ to see suggestions")).toBeNull();
     });
 
     it("hides Separator field for non-separator formats", () => {
