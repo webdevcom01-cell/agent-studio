@@ -12,7 +12,7 @@
  *   - buildCronPreview
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   validateTimezone,
   validateCronExpression,
@@ -316,8 +316,6 @@ describe("computeNextRunAt", () => {
 // ─── buildCronPreview ─────────────────────────────────────────────────────────
 
 describe("buildCronPreview", () => {
-  const from = new Date("2024-01-15T00:00:00.000Z");
-
   it("returns valid preview for CRON schedule", () => {
     const preview = buildCronPreview({
       scheduleType: "CRON",

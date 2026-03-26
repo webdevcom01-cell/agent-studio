@@ -651,8 +651,8 @@ describe("executeWebhookTrigger", () => {
     it("stores rawPayload when body fits within 1 MB", async () => {
       vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
 
-      const ts = makeTimestamp();
-      const id = "msg_store_test";
+      const _ts = makeTimestamp();
+      const _id = "msg_store_test";
       await executeWebhookTrigger({
         agentId: AGENT_ID,
         webhookId: WEBHOOK_ID,
