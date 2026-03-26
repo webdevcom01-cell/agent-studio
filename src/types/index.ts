@@ -59,4 +59,5 @@ export type NodeType =
   | "web_fetch"
   | "browser_action"
   | "desktop_app"
-  | "learn";
+  | "learn"
+  | "python_code";

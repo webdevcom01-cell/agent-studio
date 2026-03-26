@@ -60,6 +60,7 @@ import { WebFetchNode } from "./nodes/web-fetch-node";
 import { BrowserActionNode } from "./nodes/browser-action-node";
 import { DesktopAppNode } from "./nodes/desktop-app-node";
 import { LearnNode } from "./nodes/learn-node";
+import { PythonCodeNode } from "./nodes/python-code-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -112,6 +113,7 @@ const NODE_TYPES: NodeTypes = {
   browser_action: BrowserActionNode,
   desktop_app: DesktopAppNode,
   learn: LearnNode,
+  python_code: PythonCodeNode,
 };
 
 // Debug-wrapped versions of all node types (stable reference, created once)

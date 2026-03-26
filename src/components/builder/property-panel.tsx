@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { PropertySection } from "./property-section";
+import { VariableInput, VariableTextarea } from "./variable-input";
 import { type Node } from "@xyflow/react";
-import { Trash2, X, Plus, Search, Database, Plug, Zap, AppWindow } from "lucide-react";
+import { Trash2, X, Plus, Search, Database, Plug, Zap, AppWindow, AlertTriangle, Clipboard, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -75,6 +77,35 @@ function ModelSelect({
   );
 }
 
+// ─── Field validation utilities ───────────────────────────────────────────────
+
+/** Returns an error message when `name` is not valid snake_case, or undefined when valid. */
+function validateVarName(name: string): string | undefined {
+  if (!name) return undefined; // empty is shown by required indicators separately
+  if (!/^[a-z_][a-z0-9_]*$/.test(name))
+    return "Use snake_case: lowercase letters, digits, underscores only";
+}
+
+/** Returns an error message when `url` is not a valid URL or variable template. */
+function validateUrl(url: string): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith("{{")) return undefined; // template — valid
+  if (!/^https?:\/\//i.test(url)) return "Must start with https:// (or use {{variable}})";
+}
+
+/** Inline validation hint shown below a field. */
+function FieldHint({ error }: { error: string | undefined }) {
+  if (!error) return null;
+  return (
+    <p className="flex items-center gap-1 text-xs text-amber-500" role="alert">
+      <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
+      {error}
+    </p>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function PropertyPanel({
   node,
   allNodes,
@@ -85,24 +116,61 @@ export function PropertyPanel({
 }: PropertyPanelProps) {
   const data = node.data as Record<string, unknown>;
   const [confirmDeleteNode, setConfirmDeleteNode] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  /** All variable names available in this flow for {{}} autocomplete */
+  const variables = useMemo(() => extractFlowVariables(allNodes), [allNodes]);
 
   function update(key: string, value: unknown) {
     onUpdateData(node.id, { [key]: value });
   }
 
+  /** Copy the node's full data as formatted JSON — useful for debugging and sharing configs. */
+  function copyConfig() {
+    const payload = { id: node.id, type: node.type, data: node.data };
+    void navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  /** Escape key closes the panel. */
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="flex w-80 flex-col border-l bg-background" data-testid="property-panel">
+    <div className="flex w-96 flex-col border-l bg-background" data-testid="property-panel">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <h3 className="text-sm font-semibold">Properties</h3>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7"
-          aria-label="Close properties panel"
-          onClick={onClose}
-        >
-          <X className="size-4" aria-hidden="true" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            aria-label="Copy node config as JSON"
+            title="Copy config as JSON"
+            onClick={copyConfig}
+          >
+            {copied ? (
+              <Check className="size-3.5 text-green-500" aria-hidden="true" />
+            ) : (
+              <Clipboard className="size-3.5" aria-hidden="true" />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            aria-label="Close properties panel"
+            onClick={onClose}
+          >
+            <X className="size-4" aria-hidden="true" />
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -117,10 +185,12 @@ export function PropertyPanel({
         {node.type === "message" && (
           <div className="space-y-2">
             <Label>Message</Label>
-            <Textarea
+            <VariableTextarea
               value={(data.message as string) ?? ""}
-              onChange={(e) => update("message", e.target.value)}
+              onChange={(val) => update("message", val)}
+              variables={variables}
               rows={4}
+              placeholder="Type {{ to insert a variable"
             />
           </div>
         )}
@@ -129,10 +199,12 @@ export function PropertyPanel({
           <>
             <div className="space-y-2">
               <Label>System Prompt</Label>
-              <Textarea
+              <VariableTextarea
                 value={(data.prompt as string) ?? ""}
-                onChange={(e) => update("prompt", e.target.value)}
+                onChange={(val) => update("prompt", val)}
+                variables={variables}
                 rows={4}
+                placeholder="You are a helpful assistant… type {{ to insert a variable"
               />
             </div>
             <div className="space-y-2">
@@ -143,14 +215,6 @@ export function PropertyPanel({
               />
             </div>
             <div className="space-y-2">
-              <Label>Max Tokens</Label>
-              <Input
-                type="number"
-                value={(data.maxTokens as number) ?? 500}
-                onChange={(e) => update("maxTokens", parseInt(e.target.value) || 500)}
-              />
-            </div>
-            <div className="space-y-2">
               <Label>Output Variable</Label>
               <Input
                 value={(data.outputVariable as string) ?? ""}
@@ -158,42 +222,79 @@ export function PropertyPanel({
                 placeholder="e.g. ai_response"
               />
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between rounded-md border border-zinc-700 bg-zinc-800/50 p-3">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-medium">Agent Orchestration</Label>
-                  <p className="text-xs text-zinc-400">
-                    Let AI dynamically call your other agents as tools
-                  </p>
+
+            <PropertySection title="Advanced" defaultOpen={false}>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Temperature</Label>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {((data.temperature as number) ?? 0.7).toFixed(1)}
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={(data.enableAgentTools as boolean) ?? false}
-                  onClick={() => update("enableAgentTools", !(data.enableAgentTools as boolean))}
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
-                    (data.enableAgentTools as boolean)
-                      ? "bg-blue-600"
-                      : "bg-zinc-600"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                      (data.enableAgentTools as boolean)
-                        ? "translate-x-4"
-                        : "translate-x-0.5"
-                    }`}
-                  />
-                </button>
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  value={(data.temperature as number) ?? 0.7}
+                  onChange={(e) => update("temperature", parseFloat(e.target.value))}
+                  className="w-full accent-blue-500"
+                  aria-label="Temperature"
+                />
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Precise (0)</span>
+                  <span>Balanced (0.7)</span>
+                  <span>Creative (2)</span>
+                </div>
               </div>
-              {(data.enableAgentTools as boolean) && (
-                <p className="rounded bg-blue-950/50 px-2 py-1.5 text-xs text-blue-300">
-                  This AI node will see your other agents as callable tools.
-                  The LLM decides which agents to invoke based on the conversation.
-                  Protected by circuit breaker, rate limiting, and depth control.
-                </p>
-              )}
-            </div>
+              <div className="space-y-2">
+                <Label>Max Tokens</Label>
+                <Input
+                  type="number"
+                  value={(data.maxTokens as number) ?? 2000}
+                  onChange={(e) => update("maxTokens", parseInt(e.target.value) || 2000)}
+                  min={1}
+                  max={32000}
+                />
+                <p className="text-xs text-muted-foreground">Max tokens in the response</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between rounded-md border border-zinc-700 bg-zinc-800/50 p-3">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Agent Orchestration</Label>
+                    <p className="text-xs text-zinc-400">
+                      Let AI dynamically call your other agents as tools
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={(data.enableAgentTools as boolean) ?? false}
+                    onClick={() => update("enableAgentTools", !(data.enableAgentTools as boolean))}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
+                      (data.enableAgentTools as boolean)
+                        ? "bg-blue-600"
+                        : "bg-zinc-600"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                        (data.enableAgentTools as boolean)
+                          ? "translate-x-4"
+                          : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+                {(data.enableAgentTools as boolean) && (
+                  <p className="rounded bg-blue-950/50 px-2 py-1.5 text-xs text-blue-300">
+                    This AI node will see your other agents as callable tools.
+                    The LLM decides which agents to invoke based on the conversation.
+                    Protected by circuit breaker, rate limiting, and depth control.
+                  </p>
+                )}
+              </div>
+            </PropertySection>
           </>
         )}
 
@@ -205,13 +306,16 @@ export function PropertyPanel({
                 value={(data.variableName as string) ?? ""}
                 onChange={(e) => update("variableName", e.target.value)}
               />
+              <FieldHint error={validateVarName((data.variableName as string) ?? "")} />
             </div>
             <div className="space-y-2">
               <Label>Prompt</Label>
-              <Textarea
+              <VariableTextarea
                 value={(data.prompt as string) ?? ""}
-                onChange={(e) => update("prompt", e.target.value)}
+                onChange={(val) => update("prompt", val)}
+                variables={variables}
                 rows={3}
+                placeholder="What would you like to ask? Type {{ to insert a variable"
               />
             </div>
           </>
@@ -240,11 +344,12 @@ export function PropertyPanel({
         {node.type === "end" && (
           <div className="space-y-2">
             <Label>End Message</Label>
-            <Textarea
+            <VariableTextarea
               value={(data.endMessage as string) ?? ""}
-              onChange={(e) => update("endMessage", e.target.value)}
+              onChange={(val) => update("endMessage", val)}
+              variables={variables}
               rows={2}
-              placeholder="Optional goodbye message"
+              placeholder="Optional goodbye message — type {{ to insert a variable"
             />
           </div>
         )}
@@ -282,12 +387,14 @@ export function PropertyPanel({
                 onChange={(e) => update("variableName", e.target.value)}
                 placeholder="e.g. user_score"
               />
+              <FieldHint error={validateVarName((data.variableName as string) ?? "")} />
             </div>
             <div className="space-y-2">
               <Label>Value</Label>
-              <Input
+              <VariableInput
                 value={(data.value as string) ?? ""}
-                onChange={(e) => update("value", e.target.value)}
+                onChange={(val) => update("value", val)}
+                variables={variables}
                 placeholder="e.g. {{last_message}} or static text"
               />
             </div>
@@ -309,15 +416,15 @@ export function PropertyPanel({
         )}
 
         {node.type === "button" && (
-          <ButtonProperties data={data} update={update} />
+          <ButtonProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "api_call" && (
-          <HttpProperties data={data} update={update} />
+          <HttpProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "webhook" && (
-          <HttpProperties data={data} update={update} />
+          <HttpProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "function" && (
@@ -342,6 +449,39 @@ export function PropertyPanel({
                 onChange={(e) => update("outputVariable", e.target.value)}
                 placeholder="e.g. result"
               />
+              <FieldHint error={validateVarName((data.outputVariable as string) ?? "")} />
+            </div>
+          </>
+        )}
+
+        {node.type === "python_code" && (
+          <>
+            <div className="space-y-2">
+              <Label>Python Code</Label>
+              <Textarea
+                value={(data.code as string) ?? ""}
+                onChange={(e) => update("code", e.target.value)}
+                rows={10}
+                className="font-mono text-xs"
+                placeholder={"import numpy as np\n\n# Access flow variables directly\ndata = variables.get('my_var', [])\nresult = np.mean(data)"}
+              />
+              <p className="text-xs text-muted-foreground">
+                Variables are available via <code>variables</code> dict.
+                Set <code>result</code> to pass a value to the output variable.
+                numpy, pandas, and matplotlib are available.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Output Variable</Label>
+              <Input
+                value={(data.outputVariable as string) ?? ""}
+                onChange={(e) => update("outputVariable", e.target.value)}
+                placeholder="e.g. result"
+              />
+              <FieldHint error={validateVarName((data.outputVariable as string) ?? "")} />
+              <p className="text-xs text-muted-foreground">
+                Stores the value of <code>result</code> from your Python code
+              </p>
             </div>
           </>
         )}
@@ -371,30 +511,32 @@ export function PropertyPanel({
                 onChange={(e) => update("maxLength", parseInt(e.target.value) || 200)}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Model</Label>
-              <Input
-                value={(data.model as string) ?? "deepseek-chat"}
-                onChange={(e) => update("model", e.target.value)}
-              />
-            </div>
+            <PropertySection title="Advanced" defaultOpen={false}>
+              <div className="space-y-2">
+                <Label>Model</Label>
+                <ModelSelect
+                  value={(data.model as string) ?? "deepseek-chat"}
+                  onChange={(val) => update("model", val)}
+                />
+              </div>
+            </PropertySection>
           </>
         )}
 
         {node.type === "mcp_tool" && (
-          <MCPToolProperties data={data} update={update} />
+          <MCPToolProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "call_agent" && (
-          <CallAgentProperties data={data} update={update} currentAgentId={agentId ?? ""} />
+          <CallAgentProperties data={data} update={update} variables={variables} currentAgentId={agentId ?? ""} />
         )}
 
         {node.type === "human_approval" && (
-          <HumanApprovalProperties data={data} update={update} />
+          <HumanApprovalProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "loop" && (
-          <LoopProperties data={data} update={update} />
+          <LoopProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "parallel" && (
@@ -402,11 +544,11 @@ export function PropertyPanel({
         )}
 
         {node.type === "memory_write" && (
-          <MemoryWriteProperties data={data} update={update} />
+          <MemoryWriteProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "memory_read" && (
-          <MemoryReadProperties data={data} update={update} />
+          <MemoryReadProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "evaluator" && (
@@ -422,15 +564,15 @@ export function PropertyPanel({
         )}
 
         {node.type === "email_send" && (
-          <EmailSendProperties data={data} update={update} />
+          <EmailSendProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "notification" && (
-          <NotificationProperties data={data} update={update} />
+          <NotificationProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "format_transform" && (
-          <FormatTransformProperties data={data} update={update} />
+          <FormatTransformProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "switch" && (
@@ -438,7 +580,7 @@ export function PropertyPanel({
         )}
 
         {node.type === "web_fetch" && (
-          <WebFetchProperties data={data} update={update} />
+          <WebFetchProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "browser_action" && (
@@ -447,6 +589,14 @@ export function PropertyPanel({
 
         {node.type === "desktop_app" && (
           <DesktopAppProperties data={data} update={update} />
+        )}
+
+        {node.type === "condition" && (
+          <ConditionProperties data={data} update={update} variables={variables} />
+        )}
+
+        {node.type === "learn" && (
+          <LearnProperties data={data} update={update} variables={variables} />
         )}
       </div>
 
@@ -480,9 +630,68 @@ export function PropertyPanel({
 interface SubPanelProps {
   data: Record<string, unknown>;
   update: (key: string, value: unknown) => void;
+  /** Available variable names from the flow (for {{}} autocomplete) */
+  variables?: string[];
 }
 
-function ButtonProperties({ data, update }: SubPanelProps) {
+// ─── Built-in runtime variables always available in every flow ─────────────────
+const BUILTIN_VARS = [
+  "last_message",
+  "user_input",
+  "conversation_id",
+  "agent_name",
+] as const;
+
+/** Node types that set an output variable that becomes available to downstream nodes */
+const OUTPUT_VAR_TYPES = new Set([
+  "ai_response",
+  "ai_classify",
+  "ai_extract",
+  "ai_summarize",
+  "api_call",
+  "webhook",
+  "function",
+  "python_code",
+  "kb_search",
+  "mcp_tool",
+  "call_agent",
+  "memory_read",
+  "evaluator",
+  "format_transform",
+  "web_fetch",
+  "browser_action",
+]);
+
+/**
+ * Extract all variable names available at runtime from the flow's nodes.
+ * Includes built-ins + variables captured/set by nodes + node output variables.
+ */
+function extractFlowVariables(allNodes: Node[]): string[] {
+  const names = new Set<string>([...BUILTIN_VARS]);
+
+  for (const n of allNodes) {
+    const d = n.data as Record<string, unknown>;
+    // Variables explicitly set/captured
+    if (n.type === "set_variable" || n.type === "capture") {
+      const name = d.variableName as string | undefined;
+      if (name?.trim()) names.add(name.trim());
+    }
+    // Output variables from processing nodes
+    if (OUTPUT_VAR_TYPES.has(n.type ?? "")) {
+      const out = d.outputVariable as string | undefined;
+      if (out?.trim()) names.add(out.trim());
+    }
+    // Loop index variable
+    if (n.type === "loop") {
+      const loopVar = (d.loopVariable as string | undefined) ?? "loop_index";
+      if (loopVar.trim()) names.add(loopVar.trim());
+    }
+  }
+
+  return Array.from(names).sort();
+}
+
+function ButtonProperties({ data, update, variables = [] }: SubPanelProps) {
   interface ButtonOption {
     id: string;
     label: string;
@@ -511,11 +720,12 @@ function ButtonProperties({ data, update }: SubPanelProps) {
     <>
       <div className="space-y-2">
         <Label>Message</Label>
-        <Textarea
+        <VariableTextarea
           value={(data.message as string) ?? ""}
-          onChange={(e) => update("message", e.target.value)}
+          onChange={(val) => update("message", val)}
+          variables={variables}
           rows={2}
-          placeholder="Choose an option:"
+          placeholder="Choose an option — type {{ to insert a variable"
         />
       </div>
       <div className="space-y-2">
@@ -525,6 +735,7 @@ function ButtonProperties({ data, update }: SubPanelProps) {
           onChange={(e) => update("variableName", e.target.value)}
           placeholder="e.g. user_choice"
         />
+        <FieldHint error={validateVarName((data.variableName as string) ?? "")} />
       </div>
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -564,8 +775,10 @@ function ButtonProperties({ data, update }: SubPanelProps) {
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
-function HttpProperties({ data, update }: SubPanelProps) {
+function HttpProperties({ data, update, variables = [] }: SubPanelProps) {
   const method = (data.method as string) ?? "GET";
+  const bodyMethods = ["POST", "PUT", "PATCH"];
+  const showBody = bodyMethods.includes(method);
 
   return (
     <>
@@ -587,22 +800,27 @@ function HttpProperties({ data, update }: SubPanelProps) {
       </div>
       <div className="space-y-2">
         <Label>URL</Label>
-        <Input
+        <VariableInput
           value={(data.url as string) ?? ""}
-          onChange={(e) => update("url", e.target.value)}
+          onChange={(val) => update("url", val)}
+          variables={variables}
           placeholder="https://api.example.com/endpoint"
         />
+        <FieldHint error={validateUrl((data.url as string) ?? "")} />
       </div>
-      <div className="space-y-2">
-        <Label>Body</Label>
-        <Textarea
-          value={(data.body as string) ?? ""}
-          onChange={(e) => update("body", e.target.value)}
-          rows={4}
-          className="font-mono text-xs"
-          placeholder='{"key": "{{variable}}"}'
-        />
-      </div>
+      {showBody && (
+        <div className="space-y-2">
+          <Label>Body</Label>
+          <VariableTextarea
+            value={(data.body as string) ?? ""}
+            onChange={(val) => update("body", val)}
+            variables={variables}
+            rows={4}
+            className="font-mono text-xs"
+            placeholder='{"key": "{{variable}}"}'
+          />
+        </div>
+      )}
       <div className="space-y-2">
         <Label>Output Variable</Label>
         <Input
@@ -610,6 +828,7 @@ function HttpProperties({ data, update }: SubPanelProps) {
           onChange={(e) => update("outputVariable", e.target.value)}
           placeholder="e.g. api_result"
         />
+        <FieldHint error={validateVarName((data.outputVariable as string) ?? "")} />
       </div>
     </>
   );
@@ -617,14 +836,13 @@ function HttpProperties({ data, update }: SubPanelProps) {
 
 function AIClassifyProperties({ data, update }: SubPanelProps) {
   const categories = (data.categories as string[]) ?? [];
-  const newCategoryValue = "";
+  const [newCategory, setNewCategory] = useState("");
 
   function addCategory() {
-    const input = document.getElementById("new-category-input") as HTMLInputElement;
-    const value = input?.value?.trim();
+    const value = newCategory.trim();
     if (value && !categories.includes(value)) {
       update("categories", [...categories, value]);
-      if (input) input.value = "";
+      setNewCategory("");
     }
   }
 
@@ -646,8 +864,8 @@ function AIClassifyProperties({ data, update }: SubPanelProps) {
         <Label>Categories</Label>
         <div className="flex gap-1">
           <Input
-            id="new-category-input"
-            defaultValue={newCategoryValue}
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
             placeholder="e.g. complaint"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -674,13 +892,15 @@ function AIClassifyProperties({ data, update }: SubPanelProps) {
           ))}
         </div>
       </div>
-      <div className="space-y-2">
-        <Label>Model</Label>
-        <Input
-          value={(data.model as string) ?? "deepseek-chat"}
-          onChange={(e) => update("model", e.target.value)}
-        />
-      </div>
+      <PropertySection title="Advanced" defaultOpen={false}>
+        <div className="space-y-2">
+          <Label>Model</Label>
+          <ModelSelect
+            value={(data.model as string) ?? "deepseek-chat"}
+            onChange={(val) => update("model", val)}
+          />
+        </div>
+      </PropertySection>
     </>
   );
 }
@@ -691,7 +911,7 @@ interface MCPServerOption {
   toolsCache: string[] | null;
 }
 
-function MCPToolProperties({ data, update }: SubPanelProps) {
+function MCPToolProperties({ data, update, variables = [] }: SubPanelProps) {
   const [servers, setServers] = useState<MCPServerOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const selectedServerId = (data.mcpServerId as string) ?? "";
@@ -801,9 +1021,10 @@ function MCPToolProperties({ data, update }: SubPanelProps) {
               placeholder="param"
               className="flex-1"
             />
-            <Input
+            <VariableInput
               value={value}
-              onChange={(e) => updateMappingValue(key, e.target.value)}
+              onChange={(val) => updateMappingValue(key, val)}
+              variables={variables}
               placeholder="{{variable}}"
               className="flex-1"
             />
@@ -860,7 +1081,7 @@ interface ParallelTargetData {
   inputMapping: { key: string; value: string }[];
 }
 
-function CallAgentProperties({ data, update, currentAgentId }: CallAgentPropertiesProps) {
+function CallAgentProperties({ data, update, variables = [], currentAgentId }: CallAgentPropertiesProps) {
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingCard, setIsFetchingCard] = useState(false);
@@ -1185,9 +1406,10 @@ function CallAgentProperties({ data, update, currentAgentId }: CallAgentProperti
               placeholder="param"
               className="flex-1"
             />
-            <Input
+            <VariableInput
               value={mapping.value}
-              onChange={(e) => updateMapping(i, "value", e.target.value)}
+              onChange={(val) => updateMapping(i, "value", val)}
+              variables={variables}
               placeholder="{{variable}}"
               className="flex-1"
             />
@@ -1238,18 +1460,19 @@ function CallAgentProperties({ data, update, currentAgentId }: CallAgentProperti
   );
 }
 
-function HumanApprovalProperties({ data, update }: SubPanelProps) {
+function HumanApprovalProperties({ data, update, variables = [] }: SubPanelProps) {
   const onTimeout = (data.onTimeout as string) ?? "continue";
 
   return (
     <>
       <div className="space-y-2">
         <Label>Prompt</Label>
-        <Textarea
+        <VariableTextarea
           value={(data.prompt as string) ?? ""}
-          onChange={(e) => update("prompt", e.target.value)}
+          onChange={(val) => update("prompt", val)}
+          variables={variables}
           rows={3}
-          placeholder="Please review and approve this response"
+          placeholder="Please review and approve — type {{ to insert a variable"
         />
       </div>
       <div className="space-y-2">
@@ -1377,9 +1600,9 @@ function AIExtractProperties({ data, update }: SubPanelProps) {
       </div>
       <div className="space-y-2">
         <Label>Model</Label>
-        <Input
+        <ModelSelect
           value={(data.model as string) ?? "deepseek-chat"}
-          onChange={(e) => update("model", e.target.value)}
+          onChange={(val) => update("model", val)}
         />
       </div>
     </>
@@ -1402,7 +1625,7 @@ const LOOP_OPERATORS = [
   { value: "is_falsy", label: "is falsy" },
 ] as const;
 
-function LoopProperties({ data, update }: SubPanelProps) {
+function LoopProperties({ data, update, variables = [] }: SubPanelProps) {
   const mode = (data.mode as string) ?? "count";
 
   return (
@@ -1465,10 +1688,11 @@ function LoopProperties({ data, update }: SubPanelProps) {
           </div>
           <div className="space-y-2">
             <Label>Condition Value</Label>
-            <Input
+            <VariableInput
               value={(data.conditionValue as string) ?? ""}
-              onChange={(e) => update("conditionValue", e.target.value)}
-              placeholder="e.g. done"
+              onChange={(val) => update("conditionValue", val)}
+              variables={variables}
+              placeholder="e.g. done or {{status}}"
             />
             <p className="text-xs text-muted-foreground">{"Supports {{variable}} templates"}</p>
           </div>
@@ -1608,23 +1832,25 @@ function ParallelProperties({ data, update }: SubPanelProps) {
   );
 }
 
-function MemoryWriteProperties({ data, update }: SubPanelProps) {
+function MemoryWriteProperties({ data, update, variables = [] }: SubPanelProps) {
   return (
     <>
       <div className="space-y-2">
         <Label>Key (template supported)</Label>
-        <Input
+        <VariableInput
           value={(data.key as string) ?? ""}
-          onChange={(e) => update("key", e.target.value)}
+          onChange={(val) => update("key", val)}
+          variables={variables}
           placeholder="e.g. user_preference or {{topic}}"
         />
       </div>
 
       <div className="space-y-2">
         <Label>Value (template supported)</Label>
-        <Textarea
+        <VariableTextarea
           value={(data.value as string) ?? ""}
-          onChange={(e) => update("value", e.target.value)}
+          onChange={(val) => update("value", val)}
+          variables={variables}
           placeholder='e.g. {{last_message}} or {"key": "value"}'
           rows={3}
         />
@@ -1671,7 +1897,7 @@ function MemoryWriteProperties({ data, update }: SubPanelProps) {
   );
 }
 
-function MemoryReadProperties({ data, update }: SubPanelProps) {
+function MemoryReadProperties({ data, update, variables = [] }: SubPanelProps) {
   const mode = (data.mode as string) ?? "key";
 
   return (
@@ -1693,9 +1919,10 @@ function MemoryReadProperties({ data, update }: SubPanelProps) {
       {mode === "key" && (
         <div className="space-y-2">
           <Label>Key (template supported)</Label>
-          <Input
+          <VariableInput
             value={(data.key as string) ?? ""}
-            onChange={(e) => update("key", e.target.value)}
+            onChange={(val) => update("key", val)}
+            variables={variables}
             placeholder="e.g. user_preference"
           />
         </div>
@@ -1715,9 +1942,10 @@ function MemoryReadProperties({ data, update }: SubPanelProps) {
       {mode === "search" && (
         <div className="space-y-2">
           <Label>Search Query (template supported)</Label>
-          <Textarea
+          <VariableTextarea
             value={(data.searchQuery as string) ?? ""}
-            onChange={(e) => update("searchQuery", e.target.value)}
+            onChange={(val) => update("searchQuery", val)}
+            variables={variables}
             placeholder="e.g. {{last_message}}"
             rows={2}
           />
@@ -1802,27 +2030,6 @@ function EvaluatorProperties({ data, update }: SubPanelProps) {
       </div>
 
       <div className="space-y-2">
-        <Label>Model</Label>
-        <Input
-          value={(data.model as string) ?? ""}
-          onChange={(e) => update("model", e.target.value)}
-          placeholder="Default: deepseek-chat"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Passing Score (0–10)</Label>
-        <Input
-          type="number"
-          min={0}
-          max={10}
-          step={0.5}
-          value={Number(data.passingScore) || 7}
-          onChange={(e) => update("passingScore", parseFloat(e.target.value) || 7)}
-        />
-      </div>
-
-      <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Criteria</Label>
           <Button variant="ghost" size="sm" className="h-6 px-2" onClick={addCriterion}>
@@ -1865,6 +2072,28 @@ function EvaluatorProperties({ data, update }: SubPanelProps) {
           </div>
         ))}
       </div>
+
+      <PropertySection title="Advanced" defaultOpen={false}>
+        <div className="space-y-2">
+          <Label>Passing Score (0–10)</Label>
+          <Input
+            type="number"
+            min={0}
+            max={10}
+            step={0.5}
+            value={Number(data.passingScore) || 7}
+            onChange={(e) => update("passingScore", parseFloat(e.target.value) || 7)}
+          />
+          <p className="text-xs text-muted-foreground">Scores at or above this pass</p>
+        </div>
+        <div className="space-y-2">
+          <Label>Model</Label>
+          <ModelSelect
+            value={(data.model as string) ?? "deepseek-chat"}
+            onChange={(val) => update("model", val)}
+          />
+        </div>
+      </PropertySection>
 
       <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
         <p className="font-medium mb-1">Outputs:</p>
@@ -2503,14 +2732,15 @@ function WebhookTriggerProperties({ data, update, agentId, nodeId }: WebhookTrig
   );
 }
 
-function EmailSendProperties({ data, update }: SubPanelProps) {
+function EmailSendProperties({ data, update, variables = [] }: SubPanelProps) {
   return (
     <>
       <div className="space-y-2">
         <Label>To (template supported)</Label>
-        <Input
+        <VariableInput
           value={(data.to as string) ?? ""}
-          onChange={(e) => update("to", e.target.value)}
+          onChange={(val) => update("to", val)}
+          variables={variables}
           placeholder="user@example.com or {{user_email}}"
         />
         <p className="text-xs text-muted-foreground">Comma-separated for multiple recipients</p>
@@ -2518,19 +2748,21 @@ function EmailSendProperties({ data, update }: SubPanelProps) {
 
       <div className="space-y-2">
         <Label>Subject (template supported)</Label>
-        <Input
+        <VariableInput
           value={(data.subject as string) ?? ""}
-          onChange={(e) => update("subject", e.target.value)}
+          onChange={(val) => update("subject", val)}
+          variables={variables}
           placeholder="e.g. Report for {{date}}"
         />
       </div>
 
       <div className="space-y-2">
         <Label>Body (template supported)</Label>
-        <Textarea
+        <VariableTextarea
           value={(data.body as string) ?? ""}
-          onChange={(e) => update("body", e.target.value)}
-          placeholder="Email body content..."
+          onChange={(val) => update("body", val)}
+          variables={variables}
+          placeholder="Email body content — type {{ to insert a variable"
           rows={4}
         />
       </div>
@@ -2546,23 +2778,6 @@ function EmailSendProperties({ data, update }: SubPanelProps) {
         <Label htmlFor="isHtml" className="text-sm font-normal">
           HTML body
         </Label>
-      </div>
-
-      <div className="space-y-2">
-        <Label>From Name</Label>
-        <Input
-          value={(data.fromName as string) ?? "Agent Studio"}
-          onChange={(e) => update("fromName", e.target.value)}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Reply-To</Label>
-        <Input
-          value={(data.replyTo as string) ?? ""}
-          onChange={(e) => update("replyTo", e.target.value)}
-          placeholder="Optional reply-to address"
-        />
       </div>
 
       <div className="space-y-2">
@@ -2582,11 +2797,29 @@ function EmailSendProperties({ data, update }: SubPanelProps) {
           onChange={(e) => update("outputVariable", e.target.value)}
         />
       </div>
+
+      <PropertySection title="Advanced" defaultOpen={false}>
+        <div className="space-y-2">
+          <Label>From Name</Label>
+          <Input
+            value={(data.fromName as string) ?? "Agent Studio"}
+            onChange={(e) => update("fromName", e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Reply-To</Label>
+          <Input
+            value={(data.replyTo as string) ?? ""}
+            onChange={(e) => update("replyTo", e.target.value)}
+            placeholder="Optional reply-to address"
+          />
+        </div>
+      </PropertySection>
     </>
   );
 }
 
-function NotificationProperties({ data, update }: SubPanelProps) {
+function NotificationProperties({ data, update, variables = [] }: SubPanelProps) {
   const channel = (data.channel as string) ?? "log";
 
   return (
@@ -2625,19 +2858,21 @@ function NotificationProperties({ data, update }: SubPanelProps) {
 
       <div className="space-y-2">
         <Label>Title (template supported)</Label>
-        <Input
+        <VariableInput
           value={(data.title as string) ?? ""}
-          onChange={(e) => update("title", e.target.value)}
+          onChange={(val) => update("title", val)}
+          variables={variables}
           placeholder="Notification title"
         />
       </div>
 
       <div className="space-y-2">
         <Label>Message (template supported)</Label>
-        <Textarea
+        <VariableTextarea
           value={(data.message as string) ?? ""}
-          onChange={(e) => update("message", e.target.value)}
-          placeholder="Notification body..."
+          onChange={(val) => update("message", val)}
+          variables={variables}
+          placeholder="Notification body — type {{ to insert a variable"
           rows={3}
         />
       </div>
@@ -2681,7 +2916,7 @@ const TRANSFORM_FORMATS = [
   { value: "join", label: "Join" },
 ] as const;
 
-function FormatTransformProperties({ data, update }: SubPanelProps) {
+function FormatTransformProperties({ data, update, variables = [] }: SubPanelProps) {
   const format = (data.format as string) || "template";
   const showTemplate = format === "template" || format === "json_to_text";
   const showSeparator = ["csv_to_json", "json_to_csv", "split", "join"].includes(format);
@@ -2716,22 +2951,24 @@ function FormatTransformProperties({ data, update }: SubPanelProps) {
 
       <div className="space-y-2">
         <Label>Direct Input Value</Label>
-        <Textarea
-          placeholder="Or enter data directly..."
+        <VariableTextarea
+          placeholder="Or enter data directly — type {{ to insert a variable"
           rows={3}
           value={(data.inputValue as string) ?? ""}
-          onChange={(e) => update("inputValue", e.target.value)}
+          onChange={(val) => update("inputValue", val)}
+          variables={variables}
         />
       </div>
 
       {showTemplate && (
         <div className="space-y-2">
           <Label>Template</Label>
-          <Textarea
-            placeholder="Use {{variable}} syntax..."
+          <VariableTextarea
+            placeholder="Use {{variable}} syntax — type {{ to see suggestions"
             rows={3}
             value={(data.template as string) ?? ""}
-            onChange={(e) => update("template", e.target.value)}
+            onChange={(val) => update("template", val)}
+            variables={variables}
           />
         </div>
       )}
@@ -2875,19 +3112,18 @@ function SwitchProperties({ data, update }: SubPanelProps) {
   );
 }
 
-function WebFetchProperties({ data, update }: SubPanelProps) {
+function WebFetchProperties({ data, update, variables = [] }: SubPanelProps) {
   return (
     <>
       <div className="space-y-2">
         <Label>URL</Label>
-        <Input
+        <VariableInput
           value={(data.url as string) ?? ""}
-          onChange={(e) => update("url", e.target.value)}
+          onChange={(val) => update("url", val)}
+          variables={variables}
           placeholder="https://example.com or {{url_variable}}"
         />
-        <p className="text-xs text-muted-foreground">
-          Supports {"{{variable}}"} templates
-        </p>
+        <FieldHint error={validateUrl((data.url as string) ?? "")} />
       </div>
 
       <div className="space-y-2">
@@ -3273,6 +3509,195 @@ function DesktopAppProperties({ data, update }: SubPanelProps) {
           value={(data.outputVariable as string) ?? "desktop_result"}
           onChange={(e) => update("outputVariable", e.target.value)}
         />
+      </div>
+    </>
+  );
+}
+
+// ─── Condition Node ───────────────────────────────────────────────────────────
+
+const CONDITION_OPERATORS = [
+  { value: "equals", label: "equals" },
+  { value: "not_equals", label: "not equals" },
+  { value: "contains", label: "contains" },
+  { value: "greater_than", label: "greater than (>)" },
+  { value: "less_than", label: "less than (<)" },
+  { value: "is_set", label: "is set" },
+  { value: "is_empty", label: "is empty" },
+] as const;
+
+interface ConditionBranch {
+  id: string;
+  variable: string;
+  operator: string;
+  value: string;
+}
+
+function ConditionProperties({ data, update, variables = [] }: SubPanelProps) {
+  const branches = (data.branches as ConditionBranch[]) ?? [];
+
+  function addBranch() {
+    const id = `branch-${Date.now()}`;
+    update("branches", [
+      ...branches,
+      { id, variable: "", operator: "equals", value: "" },
+    ]);
+  }
+
+  function updateBranch(
+    index: number,
+    field: keyof ConditionBranch,
+    value: string
+  ) {
+    const updated = branches.map((b, i) =>
+      i === index ? { ...b, [field]: value } : b
+    );
+    update("branches", updated);
+  }
+
+  function removeBranch(index: number) {
+    update("branches", branches.filter((_, i) => i !== index));
+  }
+
+  const noValueOps = ["is_set", "is_empty"];
+
+  return (
+    <>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Conditions</Label>
+          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={addBranch}>
+            <Plus className="mr-1 size-3" /> Add
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Each condition creates a separate output handle. Connect edges from those handles.
+        </p>
+
+        {branches.length === 0 && (
+          <p className="text-xs italic text-muted-foreground text-center py-3">
+            No conditions yet — add one to create branch outputs
+          </p>
+        )}
+
+        {branches.map((branch, i) => (
+          <div key={branch.id} className="space-y-1.5 rounded-md border p-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">
+                Branch {i + 1}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                onClick={() => removeBranch(i)}
+                aria-label={`Remove branch ${i + 1}`}
+              >
+                <X className="size-3" />
+              </Button>
+            </div>
+
+            <Input
+              value={branch.variable}
+              onChange={(e) => updateBranch(i, "variable", e.target.value)}
+              placeholder="Variable name (e.g. user_intent)"
+            />
+
+            <Select
+              value={branch.operator}
+              onValueChange={(val) => updateBranch(i, "operator", val)}
+            >
+              <SelectTrigger className="w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CONDITION_OPERATORS.map((op) => (
+                  <SelectItem key={op.value} value={op.value} className="text-xs">
+                    {op.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {!noValueOps.includes(branch.operator) && (
+              <VariableInput
+                value={branch.value}
+                onChange={(val) => updateBranch(i, "value", val)}
+                variables={variables}
+                placeholder='Compare value (e.g. "greeting" or {{variable}})'
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+        <p className="font-medium mb-1">Output handles:</p>
+        {branches.map((b, i) => (
+          <p key={b.id}>
+            <strong>
+              {i + 1}. {b.variable || "—"}
+            </strong>{" "}
+            {b.operator}
+            {!noValueOps.includes(b.operator) && ` "${b.value || "—"}"`}
+          </p>
+        ))}
+        <p>
+          <strong>Else</strong> — fallthrough if no condition matches
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ─── Learn Node ───────────────────────────────────────────────────────────────
+
+function LearnProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>
+          Pattern Name{" "}
+          <span className="text-destructive" aria-hidden="true">
+            *
+          </span>
+        </Label>
+        <VariableInput
+          value={(data.patternName as string) ?? ""}
+          onChange={(val) => update("patternName", val)}
+          variables={variables}
+          placeholder="e.g. positive_feedback or {{topic}}_pattern"
+        />
+        <p className="text-xs text-muted-foreground">
+          Templates supported. Each execution reinforces this instinct.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Pattern Description</Label>
+        <VariableTextarea
+          value={(data.patternDescription as string) ?? ""}
+          onChange={(val) => update("patternDescription", val)}
+          variables={variables}
+          rows={2}
+          placeholder="Describe what this pattern represents (optional)"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "learn_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="learn_result"
+        />
+      </div>
+
+      <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground space-y-1">
+        <p className="font-medium">How it works:</p>
+        <p>First run: creates instinct with confidence 0.1</p>
+        <p>Subsequent runs: confidence +0.1 (max 1.0)</p>
+        <p>At confidence ≥ 0.85: eligible for promotion to KB skill</p>
       </div>
     </>
   );
