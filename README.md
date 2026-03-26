@@ -65,9 +65,10 @@ Open [http://localhost:3000](http://localhost:3000) and create your first agent.
 
 ## Features
 
-- **Visual Flow Editor** — Drag-and-drop builder with 37 node types (AI, logic, integrations, webhooks) powered by XyFlow; full version history, deploy pipeline, and rollback
+- **Visual Flow Editor** — Drag-and-drop builder with 37 node types (AI, logic, integrations, webhooks) powered by XyFlow; full version history, deploy pipeline, and one-click rollback
 - **Enterprise RAG Pipeline** — Ingest URLs, PDFs, DOCX, Excel, PPTX; chunk with 5 strategies; hybrid search (semantic + BM25) with pgvector; LLM re-ranking and RAGAS evaluation
 - **MCP + A2A Protocols** — Connect any MCP server (Streamable HTTP + SSE); agent-to-agent communication following Google A2A v0.3 with circuit breaker and distributed tracing
+- **Inbound Webhooks** — Standard Webhooks spec (HMAC-SHA256); receive events from GitHub, Stripe, Slack, and any provider; trigger flows with idempotency and event filtering
 - **Agent Marketplace** — 216 production-ready templates across 19 industries with faceted search, discovery, and one-click import
 - **Agent Evals** — 3-layer testing: deterministic assertions, semantic similarity, LLM-as-Judge with 12 assertion types and deploy-triggered automatic runs
 - **CLI Generator** — 6-phase AI pipeline wraps any CLI tool as a fully-typed MCP server (Python FastMCP or TypeScript MCP SDK)
@@ -104,6 +105,7 @@ Agent Studio works with **18 models across 7 providers** out of the box. Add the
 | Enterprise RAG pipeline | ✅ | ⚠️ | ❌ | ⚠️ | ✅ |
 | 3-layer agent evals | ✅ | ❌ | ❌ | ❌ | ⚠️ |
 | CLI → MCP generator | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Inbound webhooks | ✅ | ⚠️ | ✅ | ❌ | ⚠️ |
 | Flow version control | ✅ | ❌ | ⚠️ | ❌ | ❌ |
 | Embeddable widget | ✅ | ✅ | ❌ | ❌ | ✅ |
 | 7 AI providers built-in | ✅ | ✅ | ⚠️ | ✅ | ⚠️ |
