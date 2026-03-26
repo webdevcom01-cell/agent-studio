@@ -1,20 +1,27 @@
 {
   "version": 1,
   "generatedAt": "2026-03-11T07:37:02.692Z",
-  "total": 133,
+  "total": 160,
   "categories": [
+    "coding",
+    "data",
     "design",
     "desktop-automation",
     "engineering",
+    "finance",
     "game-development",
+    "hr",
     "marketing",
     "paid-media",
     "product",
     "project-management",
+    "research",
+    "sales",
     "spatial-computing",
     "specialized",
     "support",
-    "testing"
+    "testing",
+    "writing"
   ],
   "templates": [
     {
