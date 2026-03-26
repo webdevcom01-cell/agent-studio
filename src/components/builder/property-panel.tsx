@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { PropertySection } from "./property-section";
 import { type Node } from "@xyflow/react";
 import { Trash2, X, Plus, Search, Database, Plug, Zap, AppWindow } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -91,7 +92,7 @@ export function PropertyPanel({
   }
 
   return (
-    <div className="flex w-80 flex-col border-l bg-background" data-testid="property-panel">
+    <div className="flex w-96 flex-col border-l bg-background" data-testid="property-panel">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <h3 className="text-sm font-semibold">Properties</h3>
         <Button
@@ -133,6 +134,7 @@ export function PropertyPanel({
                 value={(data.prompt as string) ?? ""}
                 onChange={(e) => update("prompt", e.target.value)}
                 rows={4}
+                placeholder="You are a helpful assistant..."
               />
             </div>
             <div className="space-y-2">
@@ -143,14 +145,6 @@ export function PropertyPanel({
               />
             </div>
             <div className="space-y-2">
-              <Label>Max Tokens</Label>
-              <Input
-                type="number"
-                value={(data.maxTokens as number) ?? 500}
-                onChange={(e) => update("maxTokens", parseInt(e.target.value) || 500)}
-              />
-            </div>
-            <div className="space-y-2">
               <Label>Output Variable</Label>
               <Input
                 value={(data.outputVariable as string) ?? ""}
@@ -158,42 +152,79 @@ export function PropertyPanel({
                 placeholder="e.g. ai_response"
               />
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between rounded-md border border-zinc-700 bg-zinc-800/50 p-3">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-medium">Agent Orchestration</Label>
-                  <p className="text-xs text-zinc-400">
-                    Let AI dynamically call your other agents as tools
-                  </p>
+
+            <PropertySection title="Advanced" defaultOpen={false}>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Temperature</Label>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {((data.temperature as number) ?? 0.7).toFixed(1)}
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={(data.enableAgentTools as boolean) ?? false}
-                  onClick={() => update("enableAgentTools", !(data.enableAgentTools as boolean))}
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
-                    (data.enableAgentTools as boolean)
-                      ? "bg-blue-600"
-                      : "bg-zinc-600"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                      (data.enableAgentTools as boolean)
-                        ? "translate-x-4"
-                        : "translate-x-0.5"
-                    }`}
-                  />
-                </button>
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  value={(data.temperature as number) ?? 0.7}
+                  onChange={(e) => update("temperature", parseFloat(e.target.value))}
+                  className="w-full accent-blue-500"
+                  aria-label="Temperature"
+                />
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Precise (0)</span>
+                  <span>Balanced (0.7)</span>
+                  <span>Creative (2)</span>
+                </div>
               </div>
-              {(data.enableAgentTools as boolean) && (
-                <p className="rounded bg-blue-950/50 px-2 py-1.5 text-xs text-blue-300">
-                  This AI node will see your other agents as callable tools.
-                  The LLM decides which agents to invoke based on the conversation.
-                  Protected by circuit breaker, rate limiting, and depth control.
-                </p>
-              )}
-            </div>
+              <div className="space-y-2">
+                <Label>Max Tokens</Label>
+                <Input
+                  type="number"
+                  value={(data.maxTokens as number) ?? 2000}
+                  onChange={(e) => update("maxTokens", parseInt(e.target.value) || 2000)}
+                  min={1}
+                  max={32000}
+                />
+                <p className="text-xs text-muted-foreground">Max tokens in the response</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between rounded-md border border-zinc-700 bg-zinc-800/50 p-3">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Agent Orchestration</Label>
+                    <p className="text-xs text-zinc-400">
+                      Let AI dynamically call your other agents as tools
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={(data.enableAgentTools as boolean) ?? false}
+                    onClick={() => update("enableAgentTools", !(data.enableAgentTools as boolean))}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
+                      (data.enableAgentTools as boolean)
+                        ? "bg-blue-600"
+                        : "bg-zinc-600"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                        (data.enableAgentTools as boolean)
+                          ? "translate-x-4"
+                          : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+                {(data.enableAgentTools as boolean) && (
+                  <p className="rounded bg-blue-950/50 px-2 py-1.5 text-xs text-blue-300">
+                    This AI node will see your other agents as callable tools.
+                    The LLM decides which agents to invoke based on the conversation.
+                    Protected by circuit breaker, rate limiting, and depth control.
+                  </p>
+                )}
+              </div>
+            </PropertySection>
           </>
         )}
 
@@ -373,9 +404,9 @@ export function PropertyPanel({
             </div>
             <div className="space-y-2">
               <Label>Model</Label>
-              <Input
+              <ModelSelect
                 value={(data.model as string) ?? "deepseek-chat"}
-                onChange={(e) => update("model", e.target.value)}
+                onChange={(val) => update("model", val)}
               />
             </div>
           </>
@@ -447,6 +478,14 @@ export function PropertyPanel({
 
         {node.type === "desktop_app" && (
           <DesktopAppProperties data={data} update={update} />
+        )}
+
+        {node.type === "condition" && (
+          <ConditionProperties data={data} update={update} />
+        )}
+
+        {node.type === "learn" && (
+          <LearnProperties data={data} update={update} />
         )}
       </div>
 
@@ -617,14 +656,13 @@ function HttpProperties({ data, update }: SubPanelProps) {
 
 function AIClassifyProperties({ data, update }: SubPanelProps) {
   const categories = (data.categories as string[]) ?? [];
-  const newCategoryValue = "";
+  const [newCategory, setNewCategory] = useState("");
 
   function addCategory() {
-    const input = document.getElementById("new-category-input") as HTMLInputElement;
-    const value = input?.value?.trim();
+    const value = newCategory.trim();
     if (value && !categories.includes(value)) {
       update("categories", [...categories, value]);
-      if (input) input.value = "";
+      setNewCategory("");
     }
   }
 
@@ -646,8 +684,8 @@ function AIClassifyProperties({ data, update }: SubPanelProps) {
         <Label>Categories</Label>
         <div className="flex gap-1">
           <Input
-            id="new-category-input"
-            defaultValue={newCategoryValue}
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
             placeholder="e.g. complaint"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -676,9 +714,9 @@ function AIClassifyProperties({ data, update }: SubPanelProps) {
       </div>
       <div className="space-y-2">
         <Label>Model</Label>
-        <Input
+        <ModelSelect
           value={(data.model as string) ?? "deepseek-chat"}
-          onChange={(e) => update("model", e.target.value)}
+          onChange={(val) => update("model", val)}
         />
       </div>
     </>
@@ -1377,9 +1415,9 @@ function AIExtractProperties({ data, update }: SubPanelProps) {
       </div>
       <div className="space-y-2">
         <Label>Model</Label>
-        <Input
+        <ModelSelect
           value={(data.model as string) ?? "deepseek-chat"}
-          onChange={(e) => update("model", e.target.value)}
+          onChange={(val) => update("model", val)}
         />
       </div>
     </>
@@ -1803,10 +1841,9 @@ function EvaluatorProperties({ data, update }: SubPanelProps) {
 
       <div className="space-y-2">
         <Label>Model</Label>
-        <Input
-          value={(data.model as string) ?? ""}
-          onChange={(e) => update("model", e.target.value)}
-          placeholder="Default: deepseek-chat"
+        <ModelSelect
+          value={(data.model as string) ?? "deepseek-chat"}
+          onChange={(val) => update("model", val)}
         />
       </div>
 
@@ -3273,6 +3310,192 @@ function DesktopAppProperties({ data, update }: SubPanelProps) {
           value={(data.outputVariable as string) ?? "desktop_result"}
           onChange={(e) => update("outputVariable", e.target.value)}
         />
+      </div>
+    </>
+  );
+}
+
+// ─── Condition Node ───────────────────────────────────────────────────────────
+
+const CONDITION_OPERATORS = [
+  { value: "equals", label: "equals" },
+  { value: "not_equals", label: "not equals" },
+  { value: "contains", label: "contains" },
+  { value: "greater_than", label: "greater than (>)" },
+  { value: "less_than", label: "less than (<)" },
+  { value: "is_set", label: "is set" },
+  { value: "is_empty", label: "is empty" },
+] as const;
+
+interface ConditionBranch {
+  id: string;
+  variable: string;
+  operator: string;
+  value: string;
+}
+
+function ConditionProperties({ data, update }: SubPanelProps) {
+  const branches = (data.branches as ConditionBranch[]) ?? [];
+
+  function addBranch() {
+    const id = `branch-${Date.now()}`;
+    update("branches", [
+      ...branches,
+      { id, variable: "", operator: "equals", value: "" },
+    ]);
+  }
+
+  function updateBranch(
+    index: number,
+    field: keyof ConditionBranch,
+    value: string
+  ) {
+    const updated = branches.map((b, i) =>
+      i === index ? { ...b, [field]: value } : b
+    );
+    update("branches", updated);
+  }
+
+  function removeBranch(index: number) {
+    update("branches", branches.filter((_, i) => i !== index));
+  }
+
+  const noValueOps = ["is_set", "is_empty"];
+
+  return (
+    <>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Conditions</Label>
+          <Button variant="ghost" size="sm" className="h-6 px-2" onClick={addBranch}>
+            <Plus className="mr-1 size-3" /> Add
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Each condition creates a separate output handle. Connect edges from those handles.
+        </p>
+
+        {branches.length === 0 && (
+          <p className="text-xs italic text-muted-foreground text-center py-3">
+            No conditions yet — add one to create branch outputs
+          </p>
+        )}
+
+        {branches.map((branch, i) => (
+          <div key={branch.id} className="space-y-1.5 rounded-md border p-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">
+                Branch {i + 1}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                onClick={() => removeBranch(i)}
+                aria-label={`Remove branch ${i + 1}`}
+              >
+                <X className="size-3" />
+              </Button>
+            </div>
+
+            <Input
+              value={branch.variable}
+              onChange={(e) => updateBranch(i, "variable", e.target.value)}
+              placeholder="Variable name (e.g. user_intent)"
+            />
+
+            <Select
+              value={branch.operator}
+              onValueChange={(val) => updateBranch(i, "operator", val)}
+            >
+              <SelectTrigger className="w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CONDITION_OPERATORS.map((op) => (
+                  <SelectItem key={op.value} value={op.value} className="text-xs">
+                    {op.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {!noValueOps.includes(branch.operator) && (
+              <Input
+                value={branch.value}
+                onChange={(e) => updateBranch(i, "value", e.target.value)}
+                placeholder='Compare value (e.g. "greeting" or {{variable}})'
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+        <p className="font-medium mb-1">Output handles:</p>
+        {branches.map((b, i) => (
+          <p key={b.id}>
+            <strong>
+              {i + 1}. {b.variable || "—"}
+            </strong>{" "}
+            {b.operator}
+            {!noValueOps.includes(b.operator) && ` "${b.value || "—"}"`}
+          </p>
+        ))}
+        <p>
+          <strong>Else</strong> — fallthrough if no condition matches
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ─── Learn Node ───────────────────────────────────────────────────────────────
+
+function LearnProperties({ data, update }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>
+          Pattern Name{" "}
+          <span className="text-destructive" aria-hidden="true">
+            *
+          </span>
+        </Label>
+        <Input
+          value={(data.patternName as string) ?? ""}
+          onChange={(e) => update("patternName", e.target.value)}
+          placeholder="e.g. positive_feedback or {{topic}}_pattern"
+        />
+        <p className="text-xs text-muted-foreground">
+          Templates supported. Each execution reinforces this instinct.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Pattern Description</Label>
+        <Textarea
+          value={(data.patternDescription as string) ?? ""}
+          onChange={(e) => update("patternDescription", e.target.value)}
+          rows={2}
+          placeholder="Describe what this pattern represents (optional)"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "learn_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="learn_result"
+        />
+      </div>
+
+      <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground space-y-1">
+        <p className="font-medium">How it works:</p>
+        <p>First run: creates instinct with confidence 0.1</p>
+        <p>Subsequent runs: confidence +0.1 (max 1.0)</p>
+        <p>At confidence ≥ 0.85: eligible for promotion to KB skill</p>
       </div>
     </>
   );
