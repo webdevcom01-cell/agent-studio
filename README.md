@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Next.js-15.5-000?logo=next.js" alt="Next.js">
   <img src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white" alt="Node">
-  <img src="https://img.shields.io/badge/Tests-1500%2B-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-1700%2B-brightgreen" alt="Tests">
 </p>
 
 <p align="center">
@@ -23,9 +23,10 @@
   </a>
 </p>
 
-<!-- TODO: Replace with actual screenshot of dashboard or flow editor -->
 <p align="center">
-  <img src="docs/assets/screenshot-placeholder.png" alt="Agent Studio Screenshot" width="800">
+  <a href="https://agent-studio-production-c43e.up.railway.app">
+    <img src="https://img.shields.io/badge/▶_Open_Live_Demo-agent--studio.railway.app-8B5CF6?style=for-the-badge&logo=railway&logoColor=white" alt="Live Demo" height="36">
+  </a>
 </p>
 
 ---
@@ -48,13 +49,13 @@ Open [http://localhost:3000](http://localhost:3000) and create your first agent.
 
 ## Features
 
-- **Visual Flow Editor** — Drag-and-drop builder with 32 node types (AI, logic, integrations, webhooks) powered by XyFlow
+- **Visual Flow Editor** — Drag-and-drop builder with 37 node types (AI, logic, integrations, webhooks) powered by XyFlow
 - **Enterprise RAG Pipeline** — Ingest URLs, PDFs, DOCX; chunk with 5 strategies; hybrid search (semantic + BM25) with pgvector; LLM re-ranking
 - **MCP + A2A Protocols** — Connect external tools via Model Context Protocol; agent-to-agent communication following Google A2A v0.3
 - **ECC Developer Skills** — 60+ skill modules and 25 developer agent templates with autonomous meta-orchestration and continuous learning
 - **CLI Generator** — 6-phase AI pipeline wraps any CLI as an MCP server (Python FastMCP or TypeScript MCP SDK)
 - **Agent Evals** — 3-layer testing: deterministic assertions, semantic similarity, LLM-as-Judge with 12 assertion types and deploy-triggered runs
-- **Agent Marketplace** — 137 templates across 12 categories with faceted search, discovery, and one-click import
+- **Agent Marketplace** — 216 templates across 19 categories with faceted search, discovery, and one-click import
 - **Embeddable Chat Widget** — Drop-in widget for any website with streaming responses, customizable appearance, and mobile support
 
 ---
@@ -69,7 +70,7 @@ graph TB
         Chat[Chat Interface]
     end
 
-    subgraph API["API Layer (50+ routes)"]
+    subgraph API["API Layer (87 routes)"]
         Agents[Agent CRUD]
         FlowAPI[Flow Versioning & Deploy]
         ChatAPI[Chat - Streaming NDJSON]
@@ -81,7 +82,7 @@ graph TB
 
     subgraph Runtime["Flow Runtime Engine"]
         Engine[Execution Loop]
-        Handlers[32 Node Handlers]
+        Handlers[37 Node Handlers]
         Stream[Streaming Engine]
     end
 
@@ -165,11 +166,13 @@ pnpm dev              # Dev server (Turbopack)
 pnpm build            # Production build
 pnpm lint             # ESLint
 pnpm typecheck        # TypeScript check
-pnpm test             # Vitest unit tests (1500+)
+pnpm test             # Vitest unit tests (1700+)
 pnpm test:e2e         # Playwright E2E tests
 pnpm db:push          # Sync Prisma schema to DB
 pnpm db:generate      # Generate Prisma client
 pnpm db:studio        # Prisma Studio UI
+pnpm precheck         # Pre-push CI simulation (TS + vitest + icon mocks + strings)
+pnpm precheck:file    # Same, for a specific file
 ```
 
 ---
@@ -196,9 +199,9 @@ pnpm db:studio        # Prisma Studio UI
 ## Project Structure
 
 ```
-prisma/schema.prisma        # 30+ models, pgvector, versioning, A2A, ECC
+prisma/schema.prisma        # 36 models, pgvector, versioning, A2A, ECC
 src/
-  app/                      # Pages and 50+ API routes
+  app/                      # Pages and 87 API routes
     builder/[agentId]/      # Flow editor
     chat/[agentId]/         # Chat interface
     knowledge/[agentId]/    # Knowledge base
@@ -208,7 +211,7 @@ src/
     cli-generator/          # CLI-to-MCP pipeline
   components/               # React components
   lib/
-    runtime/                # Flow engine (32 handlers)
+    runtime/                # Flow engine (37 handlers)
     knowledge/              # RAG pipeline
     ecc/                    # ECC module
     evals/                  # Eval runner
@@ -227,21 +230,17 @@ docs/                       # Documentation
 |----------|------------|
 | [Platform Overview](docs/01-overview.md) | Features and architecture |
 | [Getting Started](docs/08-getting-started.md) | Setup guide |
-| [Node Reference](docs/10-node-reference.md) | All 32 node types |
+| [Node Reference](docs/10-node-reference.md) | All 37 node types |
 | [Knowledge Base Guide](docs/09-knowledge-base-guide.md) | RAG pipeline |
 | [CLI Generator](docs/12-cli-generator.md) | MCP bridge generation |
 | [Agent Evals](docs/13-agent-evals.md) | Testing framework |
 | [CHANGELOG](CHANGELOG.md) | Version history |
-
-<!-- TODO: Add link to hosted documentation site -->
 
 ---
 
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-<!-- TODO: Create CONTRIBUTING.md in Task 0.4 -->
 
 ---
 
