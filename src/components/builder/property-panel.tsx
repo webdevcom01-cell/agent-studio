@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { PropertySection } from "./property-section";
 import { VariableInput, VariableTextarea } from "./variable-input";
 import { type Node } from "@xyflow/react";
-import { Trash2, X, Plus, Search, Database, Plug, Zap, AppWindow } from "lucide-react";
+import { Trash2, X, Plus, Search, Database, Plug, Zap, AppWindow, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -76,6 +76,35 @@ function ModelSelect({
     </Select>
   );
 }
+
+// ─── Field validation utilities ───────────────────────────────────────────────
+
+/** Returns an error message when `name` is not valid snake_case, or undefined when valid. */
+function validateVarName(name: string): string | undefined {
+  if (!name) return undefined; // empty is shown by required indicators separately
+  if (!/^[a-z_][a-z0-9_]*$/.test(name))
+    return "Use snake_case: lowercase letters, digits, underscores only";
+}
+
+/** Returns an error message when `url` is not a valid URL or variable template. */
+function validateUrl(url: string): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith("{{")) return undefined; // template — valid
+  if (!/^https?:\/\//i.test(url)) return "Must start with https:// (or use {{variable}})";
+}
+
+/** Inline validation hint shown below a field. */
+function FieldHint({ error }: { error: string | undefined }) {
+  if (!error) return null;
+  return (
+    <p className="flex items-center gap-1 text-xs text-amber-500" role="alert">
+      <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
+      {error}
+    </p>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function PropertyPanel({
   node,
@@ -243,6 +272,7 @@ export function PropertyPanel({
                 value={(data.variableName as string) ?? ""}
                 onChange={(e) => update("variableName", e.target.value)}
               />
+              <FieldHint error={validateVarName((data.variableName as string) ?? "")} />
             </div>
             <div className="space-y-2">
               <Label>Prompt</Label>
@@ -323,6 +353,7 @@ export function PropertyPanel({
                 onChange={(e) => update("variableName", e.target.value)}
                 placeholder="e.g. user_score"
               />
+              <FieldHint error={validateVarName((data.variableName as string) ?? "")} />
             </div>
             <div className="space-y-2">
               <Label>Value</Label>
@@ -384,6 +415,7 @@ export function PropertyPanel({
                 onChange={(e) => update("outputVariable", e.target.value)}
                 placeholder="e.g. result"
               />
+              <FieldHint error={validateVarName((data.outputVariable as string) ?? "")} />
             </div>
           </>
         )}
@@ -636,6 +668,7 @@ function ButtonProperties({ data, update, variables = [] }: SubPanelProps) {
           onChange={(e) => update("variableName", e.target.value)}
           placeholder="e.g. user_choice"
         />
+        <FieldHint error={validateVarName((data.variableName as string) ?? "")} />
       </div>
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -706,6 +739,7 @@ function HttpProperties({ data, update, variables = [] }: SubPanelProps) {
           variables={variables}
           placeholder="https://api.example.com/endpoint"
         />
+        <FieldHint error={validateUrl((data.url as string) ?? "")} />
       </div>
       {showBody && (
         <div className="space-y-2">
@@ -727,6 +761,7 @@ function HttpProperties({ data, update, variables = [] }: SubPanelProps) {
           onChange={(e) => update("outputVariable", e.target.value)}
           placeholder="e.g. api_result"
         />
+        <FieldHint error={validateVarName((data.outputVariable as string) ?? "")} />
       </div>
     </>
   );
@@ -3021,9 +3056,7 @@ function WebFetchProperties({ data, update, variables = [] }: SubPanelProps) {
           variables={variables}
           placeholder="https://example.com or {{url_variable}}"
         />
-        <p className="text-xs text-muted-foreground">
-          Supports {"{{variable}}"} templates
-        </p>
+        <FieldHint error={validateUrl((data.url as string) ?? "")} />
       </div>
 
       <div className="space-y-2">
