@@ -131,6 +131,7 @@ src/
       cli-generator/[generationId]/download/route.ts ← GET download all files as .zip
       cli-generator/[generationId]/logs/route.ts     ← GET per-phase logs and token usage
       cli-generator/[generationId]/publish/route.ts  ← POST register generated bridge as MCP server
+      cli-generator/[generationId]/test-mcp/route.ts ← GET static validation + Claude Desktop config JSON (py-validator / ts-validator)
       agents/[agentId]/evals/route.ts                          ← GET list suites, POST create suite
       agents/[agentId]/evals/[suiteId]/route.ts                ← GET detail, PATCH update, DELETE
       agents/[agentId]/evals/[suiteId]/cases/route.ts          ← GET, POST, PUT bulk, DELETE test cases
@@ -246,11 +247,15 @@ src/
       scraper.ts      ← URL content fetching (safe redirect following, DNS validation)
       ingest.ts       ← Source ingestion pipeline (scrape → parse → chunk → embed → store)
     cli-generator/
-      types.ts        ← PipelineConfig (incl. target?: "python"|"typescript"), PhaseResult, PIPELINE_PHASES, STATUS_FOR_PHASE, STUCK_THRESHOLD_MS
+      types.ts        ← PipelineConfig, PhaseResult (incl. modelUsed?, retryCount?), OnFileGenerated callback type, PIPELINE_PHASES, STUCK_THRESHOLD_MS
       schemas.ts      ← Zod schemas for all 6 phases; TSPublishOutputSchema for TypeScript publish phase
       prompts.ts      ← System/user prompt pairs per phase; Python + TypeScript variants; extractPythonSignatures, extractTypeScriptSignatures
-      ai-phases.ts    ← Phase runners: aiAnalyze, aiDesign, aiImplement, aiTest, aiDocs, aiPublish — branches by config.target for phases 2–5
+      ai-phases.ts    ← Phase runners with retry jitter + OnFileGenerated callback; aiAnalyze, aiDesign, aiImplement, aiTest, aiDocs, aiPublish
       mcp-registration.ts ← Auto-register generated bridge as MCP server; extractToolsFromFiles routes by target
+      py-validator.ts ← Post-generation validation for Python FastMCP: checks FastMCP import, @mcp.tool, mcp.run(), requirements.txt, file presence
+      auto-fix.ts     ← Deterministic auto-fix: mcp.Server()→FastMCP, server.tool()→registerTool(), missing .js ESM extensions
+      quickstart.ts   ← Generates install.sh + Dockerfile for Python FastMCP and TypeScript MCP SDK targets
+      ts-validator.ts ← Post-generation validation for TypeScript MCP SDK output (8 validation rules)
       __tests__/      ← Unit tests for prompts, pipeline, schemas, MCP registration (Python + TypeScript paths)
     evals/
       schemas.ts      ← Zod schemas for all 12 assertion types, test case input, suite create/update
@@ -434,6 +439,7 @@ EvalResult — One test case result within a run
 | `/api/cli-generator/[generationId]/download` | GET | Download all generated files as a .zip archive |
 | `/api/cli-generator/[generationId]/logs` | GET | Per-phase execution logs and token usage |
 | `/api/cli-generator/[generationId]/publish` | POST | Register generated bridge as an MCP server in user's account |
+| `/api/cli-generator/[generationId]/test-mcp` | GET | Static validation (py-validator / ts-validator) + Claude Desktop config JSON for completed generation |
 | `/api/agents/[agentId]/evals` | GET, POST | List eval suites (with last run + counts), create suite |
 | `/api/agents/[agentId]/evals/[suiteId]` | GET, PATCH, DELETE | Suite detail (test cases + last 5 runs), update (name/desc/isDefault/runOnDeploy), delete |
 | `/api/agents/[agentId]/evals/[suiteId]/cases` | GET, POST, PUT, DELETE | List/create/bulk-update/delete test cases (max 50 per suite) |
@@ -723,6 +729,17 @@ Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and mainte
   - `TSPublishOutputSchema` in `schemas.ts` outputs `package.json` + `tsconfig.json` + `mcp_config`
 - Stuck detection: `STUCK_THRESHOLD_MS = 5 min` — UI shows AlertTriangle on generations where `updatedAt` exceeds threshold without COMPLETED/FAILED
 - Resume endpoint resets the stuck phase and re-invokes the phase runner
+- **Auto-heal** in `advance/route.ts` — if a phase is found in `"running"` state (leftover from a crashed invocation), it is automatically reset to `"pending"` before re-running (no manual resume needed for crash recovery)
+- **Retry jitter** in `callAIObject()` — ±25% random jitter on top of exponential backoff (`baseMs * (random * 0.5 - 0.25)`) to avoid thundering-herd on provider rate limits
+- **`modelUsed` + `retryCount`** persisted per `PhaseResult` in DB — tracks which model actually completed the phase (primary or fallback) and how many retries were needed
+- **Frontend auto-resume** — `useEffect` in `page.tsx` detects stuck generations on select and triggers `handleResume` once per session (guarded by `autoResumedRef: Set<string>`)
+- **`OnFileGenerated` callback** — `aiImplement` and `aiTest` accept an optional async callback that fires after each parallel file resolves; `advance/route.ts` passes an incremental DB write callback (enables live file preview)
+- **Live file preview** — `FileViewer` shown during running state (not just completed); `isRunning=true` prop triggers 2 s SWR polling on `/files` endpoint
+- **Python validator** (`py-validator.ts`) — runs after implement phase for Python target; checks FastMCP import, `@mcp.tool`, `mcp.run()`, `mcp` in requirements.txt, and required file presence; logs only, never blocks
+- **Auto-fix engine** (`auto-fix.ts`) — runs after implement phase for both targets; deterministic corrections: `mcp.Server()→FastMCP`, `from mcp import Server→from mcp.server.fastmcp import FastMCP`, `server.tool()→server.registerTool()`, missing `.js` ESM import extensions
+- **Quick-start files** (`quickstart.ts`) — `generateQuickStartFiles()` called on pipeline completion; appends `install.sh` and `Dockerfile` to `generatedFiles`; Python and TypeScript variants; rendered in `FileViewer` Quick Start section
+- **`GET /api/cli-generator/[generationId]/test-mcp`** — static validation + Claude Desktop config export; accessible after `COMPLETED` status; requires auth (owner check)
+- **`MCPTestPanel`** component (`mcp-test-panel.tsx`) — SWR-fetched validation panel shown in `page.tsx` after generation completes; displays issues + copy-to-clipboard config JSON
 - Publish phase registers the generated bridge as an MCP server (`MCPServer` model) linked to the user
 - `extractToolsFromFiles()` in `mcp-registration.ts` auto-detects target: Python (parses `@server.tool()` decorators) vs TypeScript (parses `server.registerTool()` calls, ignores `.test.ts` files)
 - `STUCK_THRESHOLD_MS` lives in `src/lib/cli-generator/types.ts` — never export constants from `route.ts`

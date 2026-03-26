@@ -6,6 +6,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.8.0] - 2026-03-26 — CLI Generator v2: Retry Hardening, Live Preview, Auto-Fix & Quick-Start
+
+> 10 files · ~700 lines · 5 new modules · 0 breaking changes
+
+### Added
+- **Retry jitter** (`ai-phases.ts`) — ±25% random jitter added to exponential backoff between retry rounds, preventing thundering-herd when multiple phases hit rate limits simultaneously
+- **Auto-heal stuck running phases** (`advance/route.ts`) — if advance is called on a generation whose current phase is stuck in `"running"` (leftover from a crashed invocation), the phase is automatically reset to `"pending"` and re-executed in the same request
+- **`modelUsed` + `retryCount` on `PhaseResult`** — every phase now persists which model succeeded and how many retries were needed; fields added to `PhaseResult` interface in `types.ts`
+- **Frontend auto-resume** (`page.tsx`) — new `useEffect` detects stuck generations when they are selected and triggers `handleResume` automatically; guarded by `autoResumedRef` (fires at most once per generation per page session)
+- **Live file preview** (`file-viewer.tsx`) — `FileViewer` now accepts `isRunning?: boolean` prop; when true, SWR polls `/files` every 2 s so files appear as they are generated rather than only after pipeline completion
+- **`OnFileGenerated` callback** (`types.ts`, `ai-phases.ts`) — `aiImplement` and `aiTest` accept an optional async callback fired after each parallel file resolves; `advance/route.ts` passes a callback that writes each file to `generatedFiles` in the DB incrementally (enables live preview)
+- **Python validator** (`py-validator.ts`) — new static analysis module: checks FastMCP import, `@mcp.tool` decorators, `mcp.run()`, `mcp` in requirements.txt, and presence of required files; logs warnings, never blocks completion
+- **Auto-fix engine** (`auto-fix.ts`) — new deterministic post-processing module: corrects `mcp.Server()→FastMCP`, `from mcp import Server→FastMCP import`, `server.tool()→server.registerTool()`, and missing `.js` ESM extensions; runs automatically after implement phase in `advance/route.ts`
+- **Quick-start scripts** (`quickstart.ts`) — generates `install.sh` (runtime version checks, venv/npm setup, Claude Desktop config snippet) and a multi-stage `Dockerfile` for both Python and TypeScript targets; appended to `generatedFiles` on completion; rendered in `FileViewer` as a dedicated Quick Start section with copy button
+- **`GET /api/cli-generator/[generationId]/test-mcp`** — static validation + config endpoint: runs py-validator or ts-validator on generated files, returns issues, Claude Desktop config JSON, and MCP server registration status
+- **`MCPTestPanel` component** (`mcp-test-panel.tsx`) — shown after generation completes; renders validation badge, per-issue list (errors red, warnings amber), and ready-to-paste Claude Desktop config JSON with copy button
+
+### Changed
+- `PhaseResult` interface gains optional `modelUsed?: string` and `retryCount?: number` (backwards-compatible — existing DB rows without these fields deserialize cleanly)
+- `FileViewer` is now shown during running state (live preview) in addition to completed state
+- `advance/route.ts` runs Python validation + auto-fix after implement phase before subsequent phases consume the files
+
+---
+
 ## [2.7.0] - 2026-03-26 — Eval Enhancements: CSV Export, Scheduled Runs & A/B Comparison
 
 > 12 files · ~900 lines · 9 new unit tests · 0 breaking changes
