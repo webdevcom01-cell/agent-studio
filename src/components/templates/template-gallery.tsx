@@ -63,10 +63,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   productivity:       "Productivity",
   "desktop-automation": "Desktop Auto",
   "developer-agents":  "Dev Agents",
-  // 2026 business verticals
-  finance:            "Finance",
-  hr:                 "HR & Recruiting",
-  sales:              "Sales & CRM",
 };
 
 interface TemplateGalleryProps {

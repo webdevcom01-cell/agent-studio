@@ -4,6 +4,7 @@ import {
   debugEmitNodeEnd,
   debugEmitEdge,
   debugEmit,
+  sanitizeVariables,
 } from "./types";
 import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
@@ -11,6 +12,12 @@ import { findNextNode, findStartNode } from "./engine";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
 import { parallelStreamingHandler } from "./handlers/parallel-streaming-handler";
+import {
+  initDebugSession,
+  waitForDebugResume,
+  cleanupDebugSession,
+  getAndClearVariableOverrides,
+} from "./debug-controller";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
@@ -23,10 +30,13 @@ export function executeFlowStreaming(
   userMessage?: string
 ): ReadableStream<Uint8Array> {
   let aborted = false;
+  // Shared AbortController so cancel() can unblock waitForDebugResume()
+  const streamAbortController = new AbortController();
 
   return new ReadableStream<Uint8Array>({
     cancel() {
       aborted = true;
+      streamAbortController.abort();
       logger.info("Stream cancelled by client", { conversationId: context.conversationId });
     },
     async start(controller) {
@@ -40,8 +50,15 @@ export function executeFlowStreaming(
       const executionPath: string[] = [];
       let nodesFailed = 0;
       const flowStartMs = Date.now();
+      // Step mode: when true, pause at the NEXT node regardless of breakpoints
+      let stepMode = false;
 
       try {
+        // Init debug session in Redis if breakpoints are configured
+        if (context.debugMode && context.debugSessionId && (context.breakpoints?.size ?? 0) > 0) {
+          await initDebugSession(context.debugSessionId);
+        }
+
         const isResuming = !!context.currentNodeId && !!userMessage;
         context.isResuming = isResuming;
 
@@ -130,10 +147,62 @@ export function executeFlowStreaming(
           }
           visitedNodes.set(node.id, visitCount + 1);
 
-          // ── Debug: node start ────────────────────────────────────────────
-          const nodeStartMs = Date.now();
           const nodeName = (node.data?.label as string) || node.data?.name as string || node.type;
           const iteration = visitCount + 1;
+
+          // ── Breakpoint check (Phase 6) ───────────────────────────────────
+          const isBreakpoint = context.debugMode &&
+            context.debugSessionId &&
+            (context.breakpoints?.has(node.id) || stepMode);
+
+          if (isBreakpoint) {
+            stepMode = false; // reset; will be re-enabled if user sends "step"
+
+            // Emit the pause event so the client can show the paused state
+            writer.write({
+              type: "debug_breakpoint_hit",
+              nodeId: node.id,
+              nodeType: node.type,
+              nodeName,
+              variables: sanitizeVariables(context.variables),
+              debugSessionId: context.debugSessionId!,
+            });
+
+            // Block until Continue / Step / Stop (or 60s timeout)
+            const command = await waitForDebugResume(
+              context.debugSessionId!,
+              streamAbortController.signal
+            );
+
+            if (command === "stop" || aborted) {
+              aborted = true;
+              break;
+            }
+
+            if (command === "step") {
+              stepMode = true; // pause at the next node after this one
+            }
+
+            // Apply any variable overrides the user set while paused (Phase 7)
+            const overrides = await getAndClearVariableOverrides(context.debugSessionId!);
+            if (overrides && Object.keys(overrides).length > 0) {
+              Object.assign(context.variables, overrides);
+              // Emit updated variables so client Watch panel refreshes
+              writer.write({
+                type: "debug_variables_updated",
+                variables: sanitizeVariables(context.variables),
+              });
+            }
+
+            writer.write({
+              type: "debug_resumed",
+              nodeId: node.id,
+              action: command,
+            });
+          }
+
+          // ── Debug: node start ────────────────────────────────────────────
+          const nodeStartMs = Date.now();
           debugEmitNodeStart(writer, context, node.id, node.type, nodeName, iteration);
           executionPath.push(node.id);
 
@@ -336,6 +405,10 @@ export function executeFlowStreaming(
           waitForInput: waitingForInput,
         });
       } finally {
+        // Cleanup debug session in Redis (fire-and-forget)
+        if (context.debugSessionId) {
+          void cleanupDebugSession(context.debugSessionId).catch(() => {});
+        }
         try { await saveMessages(context.conversationId, allMessages); } catch (err) { logger.error("Failed to save messages", err, { conversationId: context.conversationId }); }
         try { await saveContext(context); } catch (err) { logger.error("Failed to save context", err, { conversationId: context.conversationId }); }
         try { writer.close(); } catch { /* stream already closed */ }

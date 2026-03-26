@@ -5,7 +5,7 @@
 Visual AI agent builder with multi-agent orchestration and continuous learning. Build AI agents
 via a flow editor (XyFlow), manage knowledge bases with RAG (chunking + embeddings + hybrid
 search), enable agent-to-agent communication (A2A protocol), and chat with agents. Features
-include: agent marketplace/discovery with faceted search, 216 agent templates across 19
+include: agent marketplace/discovery with faceted search, 137 agent templates across 12
 categories (including 25 ECC Developer Agents), agent-as-tool orchestration (AI dynamically
 calls sibling agents), web browsing capabilities (fetch + browser actions via MCP), an
 embeddable chat widget, a CLI Generator that automatically produces a full MCP server bridge
@@ -78,7 +78,7 @@ src/
     login/page.tsx                    ← Login page (GitHub + Google OAuth)
     analytics/page.tsx                ← Analytics dashboard (charts, response times, KB stats)
     discover/page.tsx                 ← Agent Discovery Marketplace (faceted search, categories, tags)
-    templates/page.tsx                ← Agent Templates Gallery (216 templates, 19 categories)
+    templates/page.tsx                ← Agent Templates Gallery (112 templates, 11 categories)
     templates/templates-client.tsx    ← Templates client component (search + filter)
     builder/[agentId]/page.tsx        ← Flow editor page
     builder/[agentId]/error.tsx       ← Error boundary (Flow Editor Error)
@@ -167,7 +167,7 @@ src/
     theme-provider.tsx    ← Dark mode theme provider
 
   data/
-    agent-templates.json  ← 216 agent templates across 19 categories
+    agent-templates.json  ← 112 agent templates across 11 categories
 
   lib/
     ai.ts             ← AI model routing (DeepSeek/OpenAI/Anthropic/Gemini/Groq/Mistral/Kimi)
@@ -608,19 +608,15 @@ Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and mainte
 - `/discover` page with faceted search: categories, tags, model, sort, scope (public/mine/all)
 - `/api/agents/discover` endpoint: 4 parallel Prisma queries (agents, count, category stats, tag aggregation)
 - Agent model fields: `category String?`, `tags String[]`, `isPublic Boolean`
-- Shared categories in `src/lib/constants/agent-categories.ts` (23 categories incl. marketplace-only)
+- Shared categories in `src/lib/constants/agent-categories.ts` (11 categories)
 - Debounced search (300ms), loading skeletons, active filter pills, category badges with colors
 - Searchable agent selector in flow builder property panel (replaces basic HTML select)
 
 ### Agent Templates
-- 216 templates in `src/data/agent-templates.json` across 19 categories (all at minimum 🟢 Dobro coverage)
+- 112 templates in `src/data/agent-templates.json` across 11 categories
 - `/templates` page with server component + client-side search and category filter tabs
 - Dashboard "New Agent" dialog includes "Browse Templates" tab — selecting pre-fills name, description, systemPrompt
 - Template gallery component: `src/components/templates/template-gallery.tsx`
-- **19 template categories** — all at minimum 8 templates (🟢 Dobro); 5 categories at 15+ (🔵 Odlično)
-- New 2026 categories added: `finance` (10), `hr` (10), `sales` (10), `research` (8), `writing` (8), `data` (8), `coding` (8)
-- `CATEGORY_LABELS` in template-gallery.tsx covers all 23 categories (including marketplace-only)
-- When adding templates: update `src/data/agent-templates.json` array + header `total` + `categories` list
 
 ### Human Approval Workflow
 - `human_approval` node type in flow — pauses execution for human review
@@ -819,18 +815,11 @@ pnpm db:migrate       # Run migrations (dev)
 pnpm db:push          # Sync schema directly
 pnpm db:studio        # Prisma Studio UI
 pnpm db:seed          # Seed dev data
-pnpm precheck         # Pre-push validation (TS + vitest + lucide mocks + strings)
-pnpm precheck:file    # Same, for a specific file (e.g. pnpm precheck:file src/foo.tsx)
 ```
 
 ---
 
 ## 8. CLAUDE WORKING GUIDELINES
-
-### Pre-Push Workflow
-Before every commit+push, run `pnpm precheck` (or `pnpm precheck:file <path>` for a specific file).
-The script simulates CI locally: TypeScript check → targeted vitest → lucide icon mock check → placeholder string consistency.
-All 4 checks must show PASS before pushing. Workflow: **code → precheck → commit → push**.
 
 ### Hard Rules
 - Never edit `src/generated/` — Prisma auto-generates this
@@ -894,7 +883,7 @@ NOT as a separate project or fork. Agent-studio already has 80%+ of the needed i
 
 | ECC Component          | Studio Equivalent                    | Integration Action                    |
 |------------------------|--------------------------------------|---------------------------------------|
-| 25 Agent definitions   | Agent Templates (216 existing)       | Import as new "Developer Agents" category |
+| 25 Agent definitions   | Agent Templates (133 existing)       | Import as new "Developer Agents" category |
 | 108+ SKILL.md files    | Knowledge Base (RAG pipeline)        | Ingest into shared KB + new Skill model |
 | 57 slash commands      | CLI Generator / Flow Templates       | Map to flow triggers + API routes     |
 | Hook system (15+ types)| Webhook system (existing)            | Extend webhook events + new hook middleware |
@@ -953,7 +942,7 @@ src/lib/ecc/                          # ← ECC module root
   └── types.ts                        # ECC-specific TypeScript interfaces
 
 src/data/
-  └── ecc-agent-templates.json        # 25 ECC agent templates (separate from existing 216)
+  └── ecc-agent-templates.json        # 25 ECC agent templates (separate from existing 133)
 
 src/app/skills/
   └── page.tsx                        # Skill Browser UI (search, filter, cards)
@@ -972,7 +961,6 @@ services/ecc-skills-mcp/              # ← Separate Railway service
   └── Dockerfile                      # Optional, Nixpacks auto-detects Python
 
 scripts/
-  ├── pre-push-check.sh               # Pre-push CI simulation (TS + vitest + lucide mocks + strings)
   ├── import-ecc-agents.mjs           # One-time agent import script
   └── import-ecc-skills.mjs           # One-time skill import script
 ```
@@ -1105,7 +1093,7 @@ Applied via: `pnpm db:push`
 
 ### Phase 1: Import 25 ECC Agents as Templates (COMPLETED)
 - New category "Developer Agents" in `src/lib/constants/agent-categories.ts`
-- `src/data/ecc-agent-templates.json` — 25 templates, separate from existing 216
+- `src/data/ecc-agent-templates.json` — 25 templates, separate from existing 133
 - Import script: `scripts/import-ecc-agents.mjs` — parses YAML frontmatter from ECC .md files
 - Agent Card endpoint: `GET /api/agents/[agentId]/card.json` (A2A v0.3 JSON-LD)
 - Tests: schema validation for all 25, snapshot tests

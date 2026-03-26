@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, useCallback, useRef, use } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, Webhook, Copy, Eye, EyeOff, RefreshCw,
   CheckCircle2, XCircle, Loader2, MoreVertical, Clock, Zap, Send,
   ChevronDown, ChevronRight, Filter, Layers, X, ExternalLink, RotateCcw,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -729,10 +730,11 @@ function CreateWebhookDialog({
 // ─── Test Webhook Panel ───────────────────────────────────────────────────────
 
 function TestPanel({
-  agentId, webhook,
+  agentId, webhook, onTestSent,
 }: {
   agentId: string;
   webhook: WebhookDetail;
+  onTestSent?: () => void;
 }) {
   const [payload, setPayload] = useState(
     JSON.stringify({ event: "test", data: { message: "Hello from test panel" } }, null, 2)
@@ -776,6 +778,8 @@ function TestPanel({
       setResult({ ok: res.ok, status: res.status, body });
       if (res.ok) {
         toast.success("Test webhook sent successfully");
+        // Switch to Executions tab and refresh after backend processes the event
+        if (onTestSent) setTimeout(() => onTestSent(), 2500);
       } else {
         toast.error(`Webhook returned ${res.status}`);
       }
@@ -1019,6 +1023,59 @@ function WebhookDetailPanel({
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
 
+  // ── Executions pagination state ─────────────────────────────────────────────
+  type ExecStatus = "ALL" | "COMPLETED" | "FAILED" | "RUNNING";
+  const [execStatus, setExecStatus] = useState<ExecStatus>("ALL");
+  const [execList, setExecList] = useState<WebhookExecution[]>([]);
+  const [execTotal, setExecTotal] = useState(0);
+  const [execHasMore, setExecHasMore] = useState(false);
+  const [loadingExecs, setLoadingExecs] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Refs so fetchExecutions always reads the latest value without stale closures
+  const execCursorRef = useRef<string | null>(null);
+  const execStatusRef = useRef<ExecStatus>("ALL");
+
+  async function fetchExecutions(reset: boolean) {
+    if (reset) {
+      execCursorRef.current = null;
+      setLoadingExecs(true);
+    } else {
+      setLoadingMore(true);
+    }
+    try {
+      const params = new URLSearchParams({ limit: "20", status: execStatusRef.current });
+      if (!reset && execCursorRef.current) params.set("cursor", execCursorRef.current);
+      const res = await fetch(
+        `/api/agents/${agentId}/webhooks/${webhookId}/executions?${params.toString()}`
+      );
+      const json = await res.json() as {
+        success: boolean;
+        data?: WebhookExecution[];
+        nextCursor?: string | null;
+        total?: number;
+        hasMore?: boolean;
+      };
+      if (json.success && json.data) {
+        setExecList((prev) => (reset ? json.data! : [...prev, ...json.data!]));
+        execCursorRef.current = json.nextCursor ?? null;
+        setExecTotal(json.total ?? 0);
+        setExecHasMore(json.hasMore ?? false);
+      }
+    } catch {
+      toast.error("Failed to load executions");
+    } finally {
+      setLoadingExecs(false);
+      setLoadingMore(false);
+    }
+  }
+
+  function handleStatusChange(s: ExecStatus) {
+    setExecStatus(s);
+    execStatusRef.current = s;
+    void fetchExecutions(true);
+  }
+
+  // ── Detail load (webhook config only) ───────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -1032,9 +1089,20 @@ function WebhookDetailPanel({
     }
   }, [agentId, webhookId]);
 
+  // Initial loads
   useEffect(() => {
     void load();
-  }, [load]);
+    void fetchExecutions(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Polling: refresh executions every 10s while Executions tab is active
+  useEffect(() => {
+    if (tab !== "executions") return;
+    const id = setInterval(() => void fetchExecutions(true), 10_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   async function toggleEnabled() {
     if (!detail || toggling) return;
@@ -1199,10 +1267,16 @@ function WebhookDetailPanel({
           <span className="text-xs text-zinc-500">
             <Zap className="inline size-3 mr-0.5" />
             {detail.triggerCount} trigger{detail.triggerCount !== 1 ? "s" : ""}
-            {detail.failureCount > 0 && (
-              <span className="text-red-400 ml-1">· {detail.failureCount} failed</span>
-            )}
           </span>
+          {detail.triggerCount > 0 && (() => {
+            const rate = Math.round(((detail.triggerCount - detail.failureCount) / detail.triggerCount) * 100);
+            const color = rate >= 95 ? "text-green-400" : rate >= 80 ? "text-amber-400" : "text-red-400";
+            return (
+              <span className={`text-xs font-medium ${color}`}>
+                {rate}% success
+              </span>
+            );
+          })()}
           {detail.lastTriggeredAt && (
             <span className="text-xs text-zinc-500">
               <Clock className="inline size-3 mr-0.5" />
@@ -1268,42 +1342,102 @@ function WebhookDetailPanel({
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t === "executions" ? `Executions (${detail._count.executions})` : t === "config" ? "Configuration" : "Test"}
+            {t === "executions"
+              ? `Executions${execTotal > 0 ? ` (${execTotal})` : ""}`
+              : t === "config" ? "Configuration" : "Test"}
           </button>
         ))}
         {tab === "executions" && (
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={() => void fetchExecutions(true)}
             className="ml-auto px-3 text-muted-foreground hover:text-foreground transition-colors"
             title="Refresh"
           >
-            <RefreshCw className="size-3.5" />
+            <RefreshCw className={`size-3.5 ${loadingExecs ? "animate-spin" : ""}`} />
           </button>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {tab === "executions" && (
-          <div className="space-y-2">
-            {detail.executions.length === 0 ? (
+          <div className="space-y-3">
+            {/* Status filter pills */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {(["ALL", "COMPLETED", "FAILED", "RUNNING"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => handleStatusChange(s)}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium border transition-colors ${
+                    execStatus === s
+                      ? s === "FAILED"
+                        ? "bg-red-900/40 border-red-700/60 text-red-300"
+                        : s === "COMPLETED"
+                        ? "bg-green-900/40 border-green-700/60 text-green-300"
+                        : s === "RUNNING"
+                        ? "bg-blue-900/40 border-blue-700/60 text-blue-300"
+                        : "bg-zinc-700 border-zinc-600 text-zinc-100"
+                      : "bg-transparent border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+                  }`}
+                >
+                  {s === "COMPLETED" && <CheckCircle2 className="size-2.5" />}
+                  {s === "FAILED" && <XCircle className="size-2.5" />}
+                  {s === "RUNNING" && <Loader2 className="size-2.5 animate-spin" />}
+                  {s === "ALL" ? "All" : s.charAt(0) + s.slice(1).toLowerCase()}
+                </button>
+              ))}
+              {execTotal > 0 && (
+                <span className="ml-auto text-[11px] text-zinc-600">
+                  {execList.length} of {execTotal}
+                </span>
+              )}
+            </div>
+
+            {/* Executions list */}
+            {loadingExecs ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : execList.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
                 <Webhook className="size-8 text-zinc-700" />
-                <p className="text-sm text-muted-foreground">No executions yet</p>
-                <p className="text-xs text-zinc-600">
-                  Send a POST request to the trigger URL or use the Test tab.
+                <p className="text-sm text-muted-foreground">
+                  {execStatus === "ALL" ? "No executions yet" : `No ${execStatus.toLowerCase()} executions`}
                 </p>
+                {execStatus === "ALL" && (
+                  <p className="text-xs text-zinc-600">
+                    Send a POST request to the trigger URL or use the Test tab.
+                  </p>
+                )}
               </div>
             ) : (
-              detail.executions.map((exec) => (
-                <ExecutionRow
-                  key={exec.id}
-                  exec={exec}
-                  agentId={agentId}
-                  webhookId={webhookId}
-                  onReplayed={() => void load()}
-                />
-              ))
+              <>
+                <div className="space-y-2">
+                  {execList.map((exec) => (
+                    <ExecutionRow
+                      key={exec.id}
+                      exec={exec}
+                      agentId={agentId}
+                      webhookId={webhookId}
+                      onReplayed={() => void fetchExecutions(true)}
+                    />
+                  ))}
+                </div>
+                {execHasMore && (
+                  <button
+                    type="button"
+                    disabled={loadingMore}
+                    onClick={() => void fetchExecutions(false)}
+                    className="w-full flex items-center justify-center gap-2 rounded-md border border-zinc-800 py-2 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-700 transition-colors disabled:opacity-50"
+                  >
+                    {loadingMore
+                      ? <><Loader2 className="size-3.5 animate-spin" /> Loading…</>
+                      : `Load more — ${execTotal - execList.length} remaining`
+                    }
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
@@ -1318,7 +1452,14 @@ function WebhookDetailPanel({
         )}
 
         {tab === "test" && (
-          <TestPanel agentId={agentId} webhook={detail} />
+          <TestPanel
+            agentId={agentId}
+            webhook={detail}
+            onTestSent={() => {
+              setTab("executions");
+              void fetchExecutions(true);
+            }}
+          />
         )}
       </div>
 
@@ -1347,6 +1488,7 @@ export default function WebhooksPage({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [agentName, setAgentName] = useState<string>("");
+  const [search, setSearch] = useState("");
 
   const loadWebhooks = useCallback(async () => {
     setLoading(true);
@@ -1443,8 +1585,42 @@ export default function WebhooksPage({
               </Button>
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {webhooks.map((wh) => (
+            <div className="flex flex-col flex-1 overflow-hidden">
+              {/* Search input */}
+              <div className="px-2 pt-2 pb-1">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-zinc-500 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search webhooks…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 pl-7 pr-3 py-1.5 text-xs text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-violet-500/50"
+                  />
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => setSearch("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {(() => {
+                const filtered = search
+                  ? webhooks.filter((w) => w.name.toLowerCase().includes(search.toLowerCase()))
+                  : webhooks;
+                if (filtered.length === 0) {
+                  return (
+                    <p className="text-center text-xs text-zinc-600 py-6">
+                      No webhooks matching &ldquo;{search}&rdquo;
+                    </p>
+                  );
+                }
+                return filtered.map((wh) => (
                 <button
                   key={wh.id}
                   type="button"
@@ -1486,7 +1662,9 @@ export default function WebhooksPage({
                     </span>
                   )}
                 </button>
-              ))}
+              ));
+              })()}
+              </div>
             </div>
           )}
         </div>

@@ -21,7 +21,11 @@ import { PropertyPanel } from "./property-panel";
 import { NodePicker } from "./node-picker";
 import { useDebugSession } from "./use-debug-session";
 import { DebugToggleButton, DebugToolbar } from "./debug-toolbar";
-import { DebugContext, buildDebugNodeTypes } from "./debug-node-overlay";
+import { DebugContext, buildDebugNodeTypes, type DebugContextValue } from "./debug-node-overlay";
+import { DebugPanel } from "./debug-panel";
+import { DebugTimeline } from "./debug-timeline";
+import { TraceHistoryPanel } from "./trace-history";
+import { DebugVariableWatchPanel } from "./debug-variable-watch";
 import { MessageNode } from "./nodes/message-node";
 import { CaptureNode } from "./nodes/capture-node";
 import { ConditionNode } from "./nodes/condition-node";
@@ -60,11 +64,12 @@ import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
 import { Button } from "@/components/ui/button";
-import { Save, Plug, X, Clock, Rocket, Circle, Undo2, Redo2, Search } from "lucide-react";
+import { Save, Plug, X, Clock, Rocket, Circle, Undo2, Redo2, Search, BarChart2, History, Variable } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { AgentMCPSelector } from "@/components/mcp/agent-mcp-selector";
 import type { FlowContent, FlowNode } from "@/types";
 import type { NodeTypes as ReactFlowNodeTypes } from "@xyflow/react";
+import { cn } from "@/lib/utils";
 
 interface FlowBuilderProps {
   agentId: string;
@@ -206,6 +211,9 @@ function FlowBuilderCanvas({
 
   // Debug session
   const debugSession = useDebugSession(agentId);
+  const [showTimeline, setShowTimeline] = useState(false);
+  const [showTraceHistory, setShowTraceHistory] = useState(false);
+  const [showVariableWatch, setShowVariableWatch] = useState(false);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -339,13 +347,26 @@ function FlowBuilderCanvas({
     (_event: React.MouseEvent, node: Node) => {
       setSelectedNodeId(node.id);
       setShowMCPPanel(false);
+      // In debug mode, also select node for the debug panel
+      debugSession.selectNode(node.id);
     },
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [debugSession.selectNode]
   );
 
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(null);
   }, []);
+
+  /** Right-click on a node in debug mode → toggle breakpoint */
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      if (!debugSession.state.isDebugMode) return;
+      event.preventDefault();
+      debugSession.toggleBreakpoint(node.id);
+    },
+    [debugSession.state.isDebugMode, debugSession.toggleBreakpoint]
+  );
 
   const addNode = useCallback(
     (type: string, data: Record<string, unknown>) => {
@@ -587,8 +608,61 @@ function FlowBuilderCanvas({
           </Button>
           <DebugToggleButton
             isDebugMode={debugSession.state.isDebugMode}
-            onToggle={debugSession.toggleDebugMode}
+            onToggle={() => {
+              debugSession.toggleDebugMode();
+              // Auto-show timeline + variable watch when entering debug mode
+              if (!debugSession.state.isDebugMode) {
+                setShowTimeline(true);
+                setShowVariableWatch(true);
+              }
+            }}
           />
+          {debugSession.state.isDebugMode && (
+            <>
+              <Button
+                size="sm"
+                variant={showTimeline ? "default" : "outline"}
+                onClick={() => setShowTimeline((v) => !v)}
+                className={cn(
+                  "gap-1.5",
+                  showTimeline && "bg-violet-700 hover:bg-violet-800 border-violet-700 text-white"
+                )}
+                title="Toggle Execution Timeline"
+                aria-label="Toggle Execution Timeline"
+              >
+                <BarChart2 className="size-4" />
+                Timeline
+              </Button>
+              <Button
+                size="sm"
+                variant={showTraceHistory ? "default" : "outline"}
+                onClick={() => setShowTraceHistory((v) => !v)}
+                className={cn(
+                  "gap-1.5",
+                  showTraceHistory && "bg-violet-700 hover:bg-violet-800 border-violet-700 text-white"
+                )}
+                title="Toggle Trace History"
+                aria-label="Toggle Trace History"
+              >
+                <History className="size-4" />
+                History
+              </Button>
+              <Button
+                size="sm"
+                variant={showVariableWatch ? "default" : "outline"}
+                onClick={() => setShowVariableWatch((v) => !v)}
+                className={cn(
+                  "gap-1.5",
+                  showVariableWatch && "bg-violet-700 hover:bg-violet-800 border-violet-700 text-white"
+                )}
+                title="Toggle Variable Watch"
+                aria-label="Toggle Variable Watch"
+              >
+                <Variable className="size-4" />
+                Variables
+              </Button>
+            </>
+          )}
           <Button
             size="sm"
             onClick={handleSave}
@@ -609,6 +683,18 @@ function FlowBuilderCanvas({
           onRun={debugSession.runDebug}
           onStop={debugSession.stopRun}
           onClear={debugSession.clearSession}
+          onContinue={() => {
+            const { debugSessionId } = debugSession.state;
+            if (debugSessionId) {
+              void debugSession.sendControl("continue", agentId, debugSessionId);
+            }
+          }}
+          onStep={() => {
+            const { debugSessionId } = debugSession.state;
+            if (debugSessionId) {
+              void debugSession.sendControl("step", agentId, debugSessionId);
+            }
+          }}
         />
       )}
 
@@ -659,9 +745,26 @@ function FlowBuilderCanvas({
       )}
 
       <div className="flex flex-1 overflow-hidden">
+        {/* Trace History sidebar — left panel, only in debug mode */}
+        {debugSession.state.isDebugMode && showTraceHistory && (
+          <TraceHistoryPanel
+            agentId={agentId}
+            activeTraceId={debugSession.state.savedTraceId}
+            onReplay={(_traceId, testInput) => {
+              debugSession.setTestInput(testInput);
+              setShowTraceHistory(false);
+            }}
+            onClose={() => setShowTraceHistory(false)}
+          />
+        )}
+
         <div className="relative flex-1" data-testid="flow-canvas">
           <FlowErrorBoundary>
-          <DebugContext.Provider value={debugSession.state.nodeStates}>
+          <DebugContext.Provider value={{
+            nodeStates: debugSession.state.nodeStates,
+            breakpoints: debugSession.state.breakpoints,
+            pausedAtNodeId: debugSession.state.pausedAtNodeId,
+          } satisfies DebugContextValue}>
           <ReactFlow
             nodes={nodes}
             edges={debugSession.state.isDebugMode ? debugEdges : edges}
@@ -675,6 +778,7 @@ function FlowBuilderCanvas({
             }}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
+            onNodeContextMenu={onNodeContextMenu}
             onPaneClick={onPaneClick}
             nodeTypes={debugSession.state.isDebugMode ? DEBUG_NODE_TYPES : NODE_TYPES}
             fitView
@@ -690,9 +794,36 @@ function FlowBuilderCanvas({
           </ReactFlow>
           </DebugContext.Provider>
           </FlowErrorBoundary>
+
+          {/* Execution Timeline — absolute bottom overlay on canvas */}
+          {debugSession.state.isDebugMode && showTimeline && (
+            <DebugTimeline
+              nodeStates={debugSession.state.nodeStates}
+              flowSummary={debugSession.state.flowSummary}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={(nodeId) => {
+                setSelectedNodeId(nodeId);
+                debugSession.selectNode(nodeId);
+                setShowMCPPanel(false);
+                setShowVersionPanel(false);
+              }}
+              onClose={() => setShowTimeline(false)}
+            />
+          )}
         </div>
 
-        {selectedNode && (
+        {selectedNode && debugSession.state.isDebugMode && debugSession.state.nodeStates.get(selectedNode.id) ? (
+          /* Debug mode + executed node → show Debug Panel */
+          <DebugPanel
+            nodeState={debugSession.state.nodeStates.get(selectedNode.id)!}
+            nodeName={(selectedNode.data?.label as string | undefined) ?? selectedNode.id}
+            onClose={() => {
+              setSelectedNodeId(null);
+              debugSession.selectNode(null);
+            }}
+          />
+        ) : selectedNode ? (
+          /* Normal mode (or debug mode but node not yet executed) → Property Panel */
           <PropertyPanel
             node={selectedNode}
             allNodes={nodes}
@@ -701,7 +832,7 @@ function FlowBuilderCanvas({
             onDeleteNode={deleteNode}
             onClose={() => setSelectedNodeId(null)}
           />
-        )}
+        ) : null}
 
         {showVersionPanel && !selectedNode && (
           <VersionPanel
@@ -734,6 +865,19 @@ function FlowBuilderCanvas({
               <AgentMCPSelector agentId={agentId} />
             </div>
           </div>
+        )}
+
+        {/* Variable Watch panel — debug mode only, shown on the right */}
+        {debugSession.state.isDebugMode && showVariableWatch && !selectedNode && !showVersionPanel && !showMCPPanel && (
+          <DebugVariableWatchPanel
+            currentVariables={debugSession.state.currentVariables}
+            variableDiff={debugSession.state.variableDiff}
+            pendingEdits={debugSession.state.pendingVariableEdits}
+            isPaused={debugSession.state.isPaused}
+            onEditVariable={debugSession.editVariable}
+            onResetEdits={debugSession.resetVariableEdits}
+            onClose={() => setShowVariableWatch(false)}
+          />
         )}
       </div>
 

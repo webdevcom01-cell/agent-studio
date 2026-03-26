@@ -20,9 +20,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
-    "mcp:playwright": "npx @playwright/mcp --port 3100",
-    "precheck": "bash scripts/pre-push-check.sh",
-    "precheck:file": "bash scripts/pre-push-check.sh"
+    "mcp:playwright": "npx @playwright/mcp --port 3100"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
