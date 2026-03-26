@@ -10,6 +10,9 @@
   <a href="https://github.com/webdevcom01-cell/agent-studio/actions/workflows/docker.yml">
     <img src="https://github.com/webdevcom01-cell/agent-studio/actions/workflows/docker.yml/badge.svg" alt="Docker Build">
   </a>
+  <a href="https://github.com/webdevcom01-cell/agent-studio/pkgs/container/agent-studio">
+    <img src="https://img.shields.io/badge/docker-ghcr.io-2496ED?logo=docker&logoColor=white" alt="Docker Image">
+  </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0">
   </a>
@@ -48,6 +51,16 @@ Connect any LLM provider, ingest your knowledge base, link MCP servers, and let 
 ---
 
 ## Quick Start
+
+**Option A — Pull published image** *(fastest)*
+
+```bash
+docker pull ghcr.io/webdevcom01-cell/agent-studio:latest
+```
+
+Then copy `.env.example` to `.env`, add your API keys, and run with `docker compose up`.
+
+**Option B — Build from source**
 
 ```bash
 git clone https://github.com/webdevcom01-cell/agent-studio.git

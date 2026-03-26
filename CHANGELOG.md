@@ -6,6 +6,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.5.1] - 2026-03-26 — Docker GHCR Publishing
+
+### Added
+- Docker images published to `ghcr.io/webdevcom01-cell/agent-studio` on every push to `main` — tags: `latest` + `sha-<short>`
+- Multi-platform builds: `linux/amd64` + `linux/arm64` (Apple Silicon support)
+- PR build validation — Dockerfile is built but not pushed on pull requests, catching regressions before merge
+- Supply chain attestation via `provenance: true` in `docker/build-push-action`
+- GHCR image badge in README linking to `ghcr.io` package page
+- `docker pull ghcr.io/webdevcom01-cell/agent-studio:latest` Option A in Quick Start
+
+### Changed
+- `docker.yml` workflow renamed to "Docker Build & Push"; timeout increased to 30 min for multi-platform builds
+
+### Fixed
+- Docker Build badge was misleading — image is now actually published and pullable
+
+---
+
 ## [2.5.0] - 2026-03-26 — Template Expansion & Developer Experience
 
 > 216 templates · 19 categories · 1700+ tests · `pnpm precheck` for pre-push CI
