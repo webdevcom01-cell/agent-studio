@@ -413,13 +413,15 @@ export function PropertyPanel({
                 onChange={(e) => update("maxLength", parseInt(e.target.value) || 200)}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Model</Label>
-              <ModelSelect
-                value={(data.model as string) ?? "deepseek-chat"}
-                onChange={(val) => update("model", val)}
-              />
-            </div>
+            <PropertySection title="Advanced" defaultOpen={false}>
+              <div className="space-y-2">
+                <Label>Model</Label>
+                <ModelSelect
+                  value={(data.model as string) ?? "deepseek-chat"}
+                  onChange={(val) => update("model", val)}
+                />
+              </div>
+            </PropertySection>
           </>
         )}
 
@@ -675,6 +677,8 @@ const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
 function HttpProperties({ data, update, variables = [] }: SubPanelProps) {
   const method = (data.method as string) ?? "GET";
+  const bodyMethods = ["POST", "PUT", "PATCH"];
+  const showBody = bodyMethods.includes(method);
 
   return (
     <>
@@ -703,17 +707,19 @@ function HttpProperties({ data, update, variables = [] }: SubPanelProps) {
           placeholder="https://api.example.com/endpoint"
         />
       </div>
-      <div className="space-y-2">
-        <Label>Body</Label>
-        <VariableTextarea
-          value={(data.body as string) ?? ""}
-          onChange={(val) => update("body", val)}
-          variables={variables}
-          rows={4}
-          className="font-mono text-xs"
-          placeholder='{"key": "{{variable}}"}'
-        />
-      </div>
+      {showBody && (
+        <div className="space-y-2">
+          <Label>Body</Label>
+          <VariableTextarea
+            value={(data.body as string) ?? ""}
+            onChange={(val) => update("body", val)}
+            variables={variables}
+            rows={4}
+            className="font-mono text-xs"
+            placeholder='{"key": "{{variable}}"}'
+          />
+        </div>
+      )}
       <div className="space-y-2">
         <Label>Output Variable</Label>
         <Input
@@ -784,13 +790,15 @@ function AIClassifyProperties({ data, update }: SubPanelProps) {
           ))}
         </div>
       </div>
-      <div className="space-y-2">
-        <Label>Model</Label>
-        <ModelSelect
-          value={(data.model as string) ?? "deepseek-chat"}
-          onChange={(val) => update("model", val)}
-        />
-      </div>
+      <PropertySection title="Advanced" defaultOpen={false}>
+        <div className="space-y-2">
+          <Label>Model</Label>
+          <ModelSelect
+            value={(data.model as string) ?? "deepseek-chat"}
+            onChange={(val) => update("model", val)}
+          />
+        </div>
+      </PropertySection>
     </>
   );
 }
@@ -1920,26 +1928,6 @@ function EvaluatorProperties({ data, update }: SubPanelProps) {
       </div>
 
       <div className="space-y-2">
-        <Label>Model</Label>
-        <ModelSelect
-          value={(data.model as string) ?? "deepseek-chat"}
-          onChange={(val) => update("model", val)}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Passing Score (0–10)</Label>
-        <Input
-          type="number"
-          min={0}
-          max={10}
-          step={0.5}
-          value={Number(data.passingScore) || 7}
-          onChange={(e) => update("passingScore", parseFloat(e.target.value) || 7)}
-        />
-      </div>
-
-      <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Criteria</Label>
           <Button variant="ghost" size="sm" className="h-6 px-2" onClick={addCriterion}>
@@ -1982,6 +1970,28 @@ function EvaluatorProperties({ data, update }: SubPanelProps) {
           </div>
         ))}
       </div>
+
+      <PropertySection title="Advanced" defaultOpen={false}>
+        <div className="space-y-2">
+          <Label>Passing Score (0–10)</Label>
+          <Input
+            type="number"
+            min={0}
+            max={10}
+            step={0.5}
+            value={Number(data.passingScore) || 7}
+            onChange={(e) => update("passingScore", parseFloat(e.target.value) || 7)}
+          />
+          <p className="text-xs text-muted-foreground">Scores at or above this pass</p>
+        </div>
+        <div className="space-y-2">
+          <Label>Model</Label>
+          <ModelSelect
+            value={(data.model as string) ?? "deepseek-chat"}
+            onChange={(val) => update("model", val)}
+          />
+        </div>
+      </PropertySection>
 
       <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
         <p className="font-medium mb-1">Outputs:</p>
@@ -2669,23 +2679,6 @@ function EmailSendProperties({ data, update, variables = [] }: SubPanelProps) {
       </div>
 
       <div className="space-y-2">
-        <Label>From Name</Label>
-        <Input
-          value={(data.fromName as string) ?? "Agent Studio"}
-          onChange={(e) => update("fromName", e.target.value)}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Reply-To</Label>
-        <Input
-          value={(data.replyTo as string) ?? ""}
-          onChange={(e) => update("replyTo", e.target.value)}
-          placeholder="Optional reply-to address"
-        />
-      </div>
-
-      <div className="space-y-2">
         <Label>Webhook URL</Label>
         <Input
           value={(data.webhookUrl as string) ?? ""}
@@ -2702,6 +2695,24 @@ function EmailSendProperties({ data, update, variables = [] }: SubPanelProps) {
           onChange={(e) => update("outputVariable", e.target.value)}
         />
       </div>
+
+      <PropertySection title="Advanced" defaultOpen={false}>
+        <div className="space-y-2">
+          <Label>From Name</Label>
+          <Input
+            value={(data.fromName as string) ?? "Agent Studio"}
+            onChange={(e) => update("fromName", e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Reply-To</Label>
+          <Input
+            value={(data.replyTo as string) ?? ""}
+            onChange={(e) => update("replyTo", e.target.value)}
+            placeholder="Optional reply-to address"
+          />
+        </div>
+      </PropertySection>
     </>
   );
 }
