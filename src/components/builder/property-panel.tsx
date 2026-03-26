@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { PropertySection } from "./property-section";
+import { VariableInput, VariableTextarea } from "./variable-input";
 import { type Node } from "@xyflow/react";
 import { Trash2, X, Plus, Search, Database, Plug, Zap, AppWindow } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -87,6 +88,9 @@ export function PropertyPanel({
   const data = node.data as Record<string, unknown>;
   const [confirmDeleteNode, setConfirmDeleteNode] = useState(false);
 
+  /** All variable names available in this flow for {{}} autocomplete */
+  const variables = useMemo(() => extractFlowVariables(allNodes), [allNodes]);
+
   function update(key: string, value: unknown) {
     onUpdateData(node.id, { [key]: value });
   }
@@ -118,10 +122,12 @@ export function PropertyPanel({
         {node.type === "message" && (
           <div className="space-y-2">
             <Label>Message</Label>
-            <Textarea
+            <VariableTextarea
               value={(data.message as string) ?? ""}
-              onChange={(e) => update("message", e.target.value)}
+              onChange={(val) => update("message", val)}
+              variables={variables}
               rows={4}
+              placeholder="Type {{ to insert a variable"
             />
           </div>
         )}
@@ -130,11 +136,12 @@ export function PropertyPanel({
           <>
             <div className="space-y-2">
               <Label>System Prompt</Label>
-              <Textarea
+              <VariableTextarea
                 value={(data.prompt as string) ?? ""}
-                onChange={(e) => update("prompt", e.target.value)}
+                onChange={(val) => update("prompt", val)}
+                variables={variables}
                 rows={4}
-                placeholder="You are a helpful assistant..."
+                placeholder="You are a helpful assistant… type {{ to insert a variable"
               />
             </div>
             <div className="space-y-2">
@@ -239,10 +246,12 @@ export function PropertyPanel({
             </div>
             <div className="space-y-2">
               <Label>Prompt</Label>
-              <Textarea
+              <VariableTextarea
                 value={(data.prompt as string) ?? ""}
-                onChange={(e) => update("prompt", e.target.value)}
+                onChange={(val) => update("prompt", val)}
+                variables={variables}
                 rows={3}
+                placeholder="What would you like to ask? Type {{ to insert a variable"
               />
             </div>
           </>
@@ -271,11 +280,12 @@ export function PropertyPanel({
         {node.type === "end" && (
           <div className="space-y-2">
             <Label>End Message</Label>
-            <Textarea
+            <VariableTextarea
               value={(data.endMessage as string) ?? ""}
-              onChange={(e) => update("endMessage", e.target.value)}
+              onChange={(val) => update("endMessage", val)}
+              variables={variables}
               rows={2}
-              placeholder="Optional goodbye message"
+              placeholder="Optional goodbye message — type {{ to insert a variable"
             />
           </div>
         )}
@@ -316,9 +326,10 @@ export function PropertyPanel({
             </div>
             <div className="space-y-2">
               <Label>Value</Label>
-              <Input
+              <VariableInput
                 value={(data.value as string) ?? ""}
-                onChange={(e) => update("value", e.target.value)}
+                onChange={(val) => update("value", val)}
+                variables={variables}
                 placeholder="e.g. {{last_message}} or static text"
               />
             </div>
@@ -340,15 +351,15 @@ export function PropertyPanel({
         )}
 
         {node.type === "button" && (
-          <ButtonProperties data={data} update={update} />
+          <ButtonProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "api_call" && (
-          <HttpProperties data={data} update={update} />
+          <HttpProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "webhook" && (
-          <HttpProperties data={data} update={update} />
+          <HttpProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "function" && (
@@ -413,19 +424,19 @@ export function PropertyPanel({
         )}
 
         {node.type === "mcp_tool" && (
-          <MCPToolProperties data={data} update={update} />
+          <MCPToolProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "call_agent" && (
-          <CallAgentProperties data={data} update={update} currentAgentId={agentId ?? ""} />
+          <CallAgentProperties data={data} update={update} variables={variables} currentAgentId={agentId ?? ""} />
         )}
 
         {node.type === "human_approval" && (
-          <HumanApprovalProperties data={data} update={update} />
+          <HumanApprovalProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "loop" && (
-          <LoopProperties data={data} update={update} />
+          <LoopProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "parallel" && (
@@ -433,11 +444,11 @@ export function PropertyPanel({
         )}
 
         {node.type === "memory_write" && (
-          <MemoryWriteProperties data={data} update={update} />
+          <MemoryWriteProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "memory_read" && (
-          <MemoryReadProperties data={data} update={update} />
+          <MemoryReadProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "evaluator" && (
@@ -453,15 +464,15 @@ export function PropertyPanel({
         )}
 
         {node.type === "email_send" && (
-          <EmailSendProperties data={data} update={update} />
+          <EmailSendProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "notification" && (
-          <NotificationProperties data={data} update={update} />
+          <NotificationProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "format_transform" && (
-          <FormatTransformProperties data={data} update={update} />
+          <FormatTransformProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "switch" && (
@@ -469,7 +480,7 @@ export function PropertyPanel({
         )}
 
         {node.type === "web_fetch" && (
-          <WebFetchProperties data={data} update={update} />
+          <WebFetchProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "browser_action" && (
@@ -481,11 +492,11 @@ export function PropertyPanel({
         )}
 
         {node.type === "condition" && (
-          <ConditionProperties data={data} update={update} />
+          <ConditionProperties data={data} update={update} variables={variables} />
         )}
 
         {node.type === "learn" && (
-          <LearnProperties data={data} update={update} />
+          <LearnProperties data={data} update={update} variables={variables} />
         )}
       </div>
 
@@ -519,9 +530,67 @@ export function PropertyPanel({
 interface SubPanelProps {
   data: Record<string, unknown>;
   update: (key: string, value: unknown) => void;
+  /** Available variable names from the flow (for {{}} autocomplete) */
+  variables?: string[];
 }
 
-function ButtonProperties({ data, update }: SubPanelProps) {
+// ─── Built-in runtime variables always available in every flow ─────────────────
+const BUILTIN_VARS = [
+  "last_message",
+  "user_input",
+  "conversation_id",
+  "agent_name",
+] as const;
+
+/** Node types that set an output variable that becomes available to downstream nodes */
+const OUTPUT_VAR_TYPES = new Set([
+  "ai_response",
+  "ai_classify",
+  "ai_extract",
+  "ai_summarize",
+  "api_call",
+  "webhook",
+  "function",
+  "kb_search",
+  "mcp_tool",
+  "call_agent",
+  "memory_read",
+  "evaluator",
+  "format_transform",
+  "web_fetch",
+  "browser_action",
+]);
+
+/**
+ * Extract all variable names available at runtime from the flow's nodes.
+ * Includes built-ins + variables captured/set by nodes + node output variables.
+ */
+function extractFlowVariables(allNodes: Node[]): string[] {
+  const names = new Set<string>([...BUILTIN_VARS]);
+
+  for (const n of allNodes) {
+    const d = n.data as Record<string, unknown>;
+    // Variables explicitly set/captured
+    if (n.type === "set_variable" || n.type === "capture") {
+      const name = d.variableName as string | undefined;
+      if (name?.trim()) names.add(name.trim());
+    }
+    // Output variables from processing nodes
+    if (OUTPUT_VAR_TYPES.has(n.type ?? "")) {
+      const out = d.outputVariable as string | undefined;
+      if (out?.trim()) names.add(out.trim());
+    }
+    // Loop index variable
+    if (n.type === "loop") {
+      const loopVar = (d.loopVariable as string | undefined) ?? "loop_index";
+      if (loopVar.trim()) names.add(loopVar.trim());
+    }
+  }
+
+  return Array.from(names).sort();
+}
+
+function ButtonProperties({ data, update, variables = [] }: SubPanelProps) {
   interface ButtonOption {
     id: string;
     label: string;
@@ -550,11 +619,12 @@ function ButtonProperties({ data, update }: SubPanelProps) {
     <>
       <div className="space-y-2">
         <Label>Message</Label>
-        <Textarea
+        <VariableTextarea
           value={(data.message as string) ?? ""}
-          onChange={(e) => update("message", e.target.value)}
+          onChange={(val) => update("message", val)}
+          variables={variables}
           rows={2}
-          placeholder="Choose an option:"
+          placeholder="Choose an option — type {{ to insert a variable"
         />
       </div>
       <div className="space-y-2">
@@ -603,7 +673,7 @@ function ButtonProperties({ data, update }: SubPanelProps) {
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
-function HttpProperties({ data, update }: SubPanelProps) {
+function HttpProperties({ data, update, variables = [] }: SubPanelProps) {
   const method = (data.method as string) ?? "GET";
 
   return (
@@ -626,17 +696,19 @@ function HttpProperties({ data, update }: SubPanelProps) {
       </div>
       <div className="space-y-2">
         <Label>URL</Label>
-        <Input
+        <VariableInput
           value={(data.url as string) ?? ""}
-          onChange={(e) => update("url", e.target.value)}
+          onChange={(val) => update("url", val)}
+          variables={variables}
           placeholder="https://api.example.com/endpoint"
         />
       </div>
       <div className="space-y-2">
         <Label>Body</Label>
-        <Textarea
+        <VariableTextarea
           value={(data.body as string) ?? ""}
-          onChange={(e) => update("body", e.target.value)}
+          onChange={(val) => update("body", val)}
+          variables={variables}
           rows={4}
           className="font-mono text-xs"
           placeholder='{"key": "{{variable}}"}'
@@ -729,7 +801,7 @@ interface MCPServerOption {
   toolsCache: string[] | null;
 }
 
-function MCPToolProperties({ data, update }: SubPanelProps) {
+function MCPToolProperties({ data, update, variables = [] }: SubPanelProps) {
   const [servers, setServers] = useState<MCPServerOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const selectedServerId = (data.mcpServerId as string) ?? "";
@@ -839,9 +911,10 @@ function MCPToolProperties({ data, update }: SubPanelProps) {
               placeholder="param"
               className="flex-1"
             />
-            <Input
+            <VariableInput
               value={value}
-              onChange={(e) => updateMappingValue(key, e.target.value)}
+              onChange={(val) => updateMappingValue(key, val)}
+              variables={variables}
               placeholder="{{variable}}"
               className="flex-1"
             />
@@ -898,7 +971,7 @@ interface ParallelTargetData {
   inputMapping: { key: string; value: string }[];
 }
 
-function CallAgentProperties({ data, update, currentAgentId }: CallAgentPropertiesProps) {
+function CallAgentProperties({ data, update, variables = [], currentAgentId }: CallAgentPropertiesProps) {
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingCard, setIsFetchingCard] = useState(false);
@@ -1223,9 +1296,10 @@ function CallAgentProperties({ data, update, currentAgentId }: CallAgentProperti
               placeholder="param"
               className="flex-1"
             />
-            <Input
+            <VariableInput
               value={mapping.value}
-              onChange={(e) => updateMapping(i, "value", e.target.value)}
+              onChange={(val) => updateMapping(i, "value", val)}
+              variables={variables}
               placeholder="{{variable}}"
               className="flex-1"
             />
@@ -1276,18 +1350,19 @@ function CallAgentProperties({ data, update, currentAgentId }: CallAgentProperti
   );
 }
 
-function HumanApprovalProperties({ data, update }: SubPanelProps) {
+function HumanApprovalProperties({ data, update, variables = [] }: SubPanelProps) {
   const onTimeout = (data.onTimeout as string) ?? "continue";
 
   return (
     <>
       <div className="space-y-2">
         <Label>Prompt</Label>
-        <Textarea
+        <VariableTextarea
           value={(data.prompt as string) ?? ""}
-          onChange={(e) => update("prompt", e.target.value)}
+          onChange={(val) => update("prompt", val)}
+          variables={variables}
           rows={3}
-          placeholder="Please review and approve this response"
+          placeholder="Please review and approve — type {{ to insert a variable"
         />
       </div>
       <div className="space-y-2">
@@ -1440,7 +1515,7 @@ const LOOP_OPERATORS = [
   { value: "is_falsy", label: "is falsy" },
 ] as const;
 
-function LoopProperties({ data, update }: SubPanelProps) {
+function LoopProperties({ data, update, variables = [] }: SubPanelProps) {
   const mode = (data.mode as string) ?? "count";
 
   return (
@@ -1503,10 +1578,11 @@ function LoopProperties({ data, update }: SubPanelProps) {
           </div>
           <div className="space-y-2">
             <Label>Condition Value</Label>
-            <Input
+            <VariableInput
               value={(data.conditionValue as string) ?? ""}
-              onChange={(e) => update("conditionValue", e.target.value)}
-              placeholder="e.g. done"
+              onChange={(val) => update("conditionValue", val)}
+              variables={variables}
+              placeholder="e.g. done or {{status}}"
             />
             <p className="text-xs text-muted-foreground">{"Supports {{variable}} templates"}</p>
           </div>
@@ -1646,23 +1722,25 @@ function ParallelProperties({ data, update }: SubPanelProps) {
   );
 }
 
-function MemoryWriteProperties({ data, update }: SubPanelProps) {
+function MemoryWriteProperties({ data, update, variables = [] }: SubPanelProps) {
   return (
     <>
       <div className="space-y-2">
         <Label>Key (template supported)</Label>
-        <Input
+        <VariableInput
           value={(data.key as string) ?? ""}
-          onChange={(e) => update("key", e.target.value)}
+          onChange={(val) => update("key", val)}
+          variables={variables}
           placeholder="e.g. user_preference or {{topic}}"
         />
       </div>
 
       <div className="space-y-2">
         <Label>Value (template supported)</Label>
-        <Textarea
+        <VariableTextarea
           value={(data.value as string) ?? ""}
-          onChange={(e) => update("value", e.target.value)}
+          onChange={(val) => update("value", val)}
+          variables={variables}
           placeholder='e.g. {{last_message}} or {"key": "value"}'
           rows={3}
         />
@@ -1709,7 +1787,7 @@ function MemoryWriteProperties({ data, update }: SubPanelProps) {
   );
 }
 
-function MemoryReadProperties({ data, update }: SubPanelProps) {
+function MemoryReadProperties({ data, update, variables = [] }: SubPanelProps) {
   const mode = (data.mode as string) ?? "key";
 
   return (
@@ -1731,9 +1809,10 @@ function MemoryReadProperties({ data, update }: SubPanelProps) {
       {mode === "key" && (
         <div className="space-y-2">
           <Label>Key (template supported)</Label>
-          <Input
+          <VariableInput
             value={(data.key as string) ?? ""}
-            onChange={(e) => update("key", e.target.value)}
+            onChange={(val) => update("key", val)}
+            variables={variables}
             placeholder="e.g. user_preference"
           />
         </div>
@@ -1753,9 +1832,10 @@ function MemoryReadProperties({ data, update }: SubPanelProps) {
       {mode === "search" && (
         <div className="space-y-2">
           <Label>Search Query (template supported)</Label>
-          <Textarea
+          <VariableTextarea
             value={(data.searchQuery as string) ?? ""}
-            onChange={(e) => update("searchQuery", e.target.value)}
+            onChange={(val) => update("searchQuery", val)}
+            variables={variables}
             placeholder="e.g. {{last_message}}"
             rows={2}
           />
@@ -2540,14 +2620,15 @@ function WebhookTriggerProperties({ data, update, agentId, nodeId }: WebhookTrig
   );
 }
 
-function EmailSendProperties({ data, update }: SubPanelProps) {
+function EmailSendProperties({ data, update, variables = [] }: SubPanelProps) {
   return (
     <>
       <div className="space-y-2">
         <Label>To (template supported)</Label>
-        <Input
+        <VariableInput
           value={(data.to as string) ?? ""}
-          onChange={(e) => update("to", e.target.value)}
+          onChange={(val) => update("to", val)}
+          variables={variables}
           placeholder="user@example.com or {{user_email}}"
         />
         <p className="text-xs text-muted-foreground">Comma-separated for multiple recipients</p>
@@ -2555,19 +2636,21 @@ function EmailSendProperties({ data, update }: SubPanelProps) {
 
       <div className="space-y-2">
         <Label>Subject (template supported)</Label>
-        <Input
+        <VariableInput
           value={(data.subject as string) ?? ""}
-          onChange={(e) => update("subject", e.target.value)}
+          onChange={(val) => update("subject", val)}
+          variables={variables}
           placeholder="e.g. Report for {{date}}"
         />
       </div>
 
       <div className="space-y-2">
         <Label>Body (template supported)</Label>
-        <Textarea
+        <VariableTextarea
           value={(data.body as string) ?? ""}
-          onChange={(e) => update("body", e.target.value)}
-          placeholder="Email body content..."
+          onChange={(val) => update("body", val)}
+          variables={variables}
+          placeholder="Email body content — type {{ to insert a variable"
           rows={4}
         />
       </div>
@@ -2623,7 +2706,7 @@ function EmailSendProperties({ data, update }: SubPanelProps) {
   );
 }
 
-function NotificationProperties({ data, update }: SubPanelProps) {
+function NotificationProperties({ data, update, variables = [] }: SubPanelProps) {
   const channel = (data.channel as string) ?? "log";
 
   return (
@@ -2662,19 +2745,21 @@ function NotificationProperties({ data, update }: SubPanelProps) {
 
       <div className="space-y-2">
         <Label>Title (template supported)</Label>
-        <Input
+        <VariableInput
           value={(data.title as string) ?? ""}
-          onChange={(e) => update("title", e.target.value)}
+          onChange={(val) => update("title", val)}
+          variables={variables}
           placeholder="Notification title"
         />
       </div>
 
       <div className="space-y-2">
         <Label>Message (template supported)</Label>
-        <Textarea
+        <VariableTextarea
           value={(data.message as string) ?? ""}
-          onChange={(e) => update("message", e.target.value)}
-          placeholder="Notification body..."
+          onChange={(val) => update("message", val)}
+          variables={variables}
+          placeholder="Notification body — type {{ to insert a variable"
           rows={3}
         />
       </div>
@@ -2718,7 +2803,7 @@ const TRANSFORM_FORMATS = [
   { value: "join", label: "Join" },
 ] as const;
 
-function FormatTransformProperties({ data, update }: SubPanelProps) {
+function FormatTransformProperties({ data, update, variables = [] }: SubPanelProps) {
   const format = (data.format as string) || "template";
   const showTemplate = format === "template" || format === "json_to_text";
   const showSeparator = ["csv_to_json", "json_to_csv", "split", "join"].includes(format);
@@ -2753,22 +2838,24 @@ function FormatTransformProperties({ data, update }: SubPanelProps) {
 
       <div className="space-y-2">
         <Label>Direct Input Value</Label>
-        <Textarea
-          placeholder="Or enter data directly..."
+        <VariableTextarea
+          placeholder="Or enter data directly — type {{ to insert a variable"
           rows={3}
           value={(data.inputValue as string) ?? ""}
-          onChange={(e) => update("inputValue", e.target.value)}
+          onChange={(val) => update("inputValue", val)}
+          variables={variables}
         />
       </div>
 
       {showTemplate && (
         <div className="space-y-2">
           <Label>Template</Label>
-          <Textarea
-            placeholder="Use {{variable}} syntax..."
+          <VariableTextarea
+            placeholder="Use {{variable}} syntax — type {{ to see suggestions"
             rows={3}
             value={(data.template as string) ?? ""}
-            onChange={(e) => update("template", e.target.value)}
+            onChange={(val) => update("template", val)}
+            variables={variables}
           />
         </div>
       )}
@@ -2912,14 +2999,15 @@ function SwitchProperties({ data, update }: SubPanelProps) {
   );
 }
 
-function WebFetchProperties({ data, update }: SubPanelProps) {
+function WebFetchProperties({ data, update, variables = [] }: SubPanelProps) {
   return (
     <>
       <div className="space-y-2">
         <Label>URL</Label>
-        <Input
+        <VariableInput
           value={(data.url as string) ?? ""}
-          onChange={(e) => update("url", e.target.value)}
+          onChange={(val) => update("url", val)}
+          variables={variables}
           placeholder="https://example.com or {{url_variable}}"
         />
         <p className="text-xs text-muted-foreground">
@@ -3334,7 +3422,7 @@ interface ConditionBranch {
   value: string;
 }
 
-function ConditionProperties({ data, update }: SubPanelProps) {
+function ConditionProperties({ data, update, variables = [] }: SubPanelProps) {
   const branches = (data.branches as ConditionBranch[]) ?? [];
 
   function addBranch() {
@@ -3421,9 +3509,10 @@ function ConditionProperties({ data, update }: SubPanelProps) {
             </Select>
 
             {!noValueOps.includes(branch.operator) && (
-              <Input
+              <VariableInput
                 value={branch.value}
-                onChange={(e) => updateBranch(i, "value", e.target.value)}
+                onChange={(val) => updateBranch(i, "value", val)}
+                variables={variables}
                 placeholder='Compare value (e.g. "greeting" or {{variable}})'
               />
             )}
@@ -3452,7 +3541,7 @@ function ConditionProperties({ data, update }: SubPanelProps) {
 
 // ─── Learn Node ───────────────────────────────────────────────────────────────
 
-function LearnProperties({ data, update }: SubPanelProps) {
+function LearnProperties({ data, update, variables = [] }: SubPanelProps) {
   return (
     <>
       <div className="space-y-2">
@@ -3462,9 +3551,10 @@ function LearnProperties({ data, update }: SubPanelProps) {
             *
           </span>
         </Label>
-        <Input
+        <VariableInput
           value={(data.patternName as string) ?? ""}
-          onChange={(e) => update("patternName", e.target.value)}
+          onChange={(val) => update("patternName", val)}
+          variables={variables}
           placeholder="e.g. positive_feedback or {{topic}}_pattern"
         />
         <p className="text-xs text-muted-foreground">
@@ -3474,9 +3564,10 @@ function LearnProperties({ data, update }: SubPanelProps) {
 
       <div className="space-y-2">
         <Label>Pattern Description</Label>
-        <Textarea
+        <VariableTextarea
           value={(data.patternDescription as string) ?? ""}
-          onChange={(e) => update("patternDescription", e.target.value)}
+          onChange={(val) => update("patternDescription", val)}
+          variables={variables}
           rows={2}
           placeholder="Describe what this pattern represents (optional)"
         />
