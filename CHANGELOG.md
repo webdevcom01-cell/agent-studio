@@ -6,6 +6,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.7.0] - 2026-03-26 — Eval Enhancements: CSV Export, Scheduled Runs & A/B Comparison
+
+> 12 files · ~900 lines · 9 new unit tests · 0 breaking changes
+
+### Added
+- **CSV export** — per-run export (`GET /api/agents/[agentId]/evals/[suiteId]/run/[runId]/export`) and suite-level bulk export (`GET /api/agents/[agentId]/evals/[suiteId]/export?limit=50`); one row per assertion (N assertions × M test cases), proper RFC-4180 quoting, semicolon-joined tags
+- **Scheduled eval runs** — `scheduleEnabled` + `scheduleCron` fields on `EvalSuite`; pure-JS 5-field cron matcher (`cronMatchesDate`) with no external deps; 4-minute double-run prevention; `POST /api/evals/scheduled` endpoint (CRON_SECRET protected) called by Railway Cron Service
+- **Head-to-head A/B comparison** — `POST /api/agents/[agentId]/evals/[suiteId]/compare` runs two flow versions or two models back-to-back, computes `ComparisonDelta` (scoreDiff, latencyDiffMs, aWins, bWins, ties, winner), stores mutual `comparisonRunId` links
+- **`EvalCompareView` component** — side-by-side summary bar (winner badge, score ring, delta ▲/▼) + per-case table with output A | score A | winner indicator | score B | output B
+- **`TriggeredByBadge` component** in `EvalResultsView` — color-coded pill: zinc=manual, violet=deploy, amber=schedule, blue=compare
+- **Export buttons** in `EvalResultsView` — "Export Run" and "Export All Runs" buttons trigger CSV downloads via `window.open()`
+- **Schedule dialog** in Evals page — cron preset grid (daily 3am, every 6h, weekdays 9am, every Monday 8am, custom), enable/disable toggle, PATCH to suite API
+- **Compare dialog** in Evals page — version vs model toggle, dropdown selectors for A and B, inline `EvalCompareView` results
+- **`comparisonRunId`, `flowVersionId`, `modelOverride`** fields added to `EvalRun` Prisma model
+- **`lastScheduledAt`**, `scheduleEnabled`, `scheduleCron` fields added to `EvalSuite` Prisma model
+- **`evalFlowVersionId` + `evalModelOverride`** params in `/api/agents/[agentId]/chat` — replaces flow content with version snapshot or injects model override into all `ai_response` nodes
+- **9 unit tests** for the CSV export route: auth, 404 cases, Content-Type/Disposition headers, row count, comma/quote escaping, semicolon tags, empty assertions, unicode
+
+### Changed
+- `EvalResultsView` now accepts `agentId` and `suiteId` props for export URL construction
+- `RunEvalOptions.triggeredBy` extended with `"compare"` and `"schedule"` values
+- `CreateEvalSuiteSchema` extended with `scheduleEnabled` and `scheduleCron` (validated cron regex)
+- Suite sidebar shows ⏰ clock icon for suites with schedule enabled
+- Suite dropdown menu has "Schedule runs" / "Edit schedule" item
+
+---
+
 ## [2.6.0] - 2026-03-26 — Webhooks UI Upgrade
 
 > 3 files · ~370 lines · 13 new unit tests · 0 breaking changes

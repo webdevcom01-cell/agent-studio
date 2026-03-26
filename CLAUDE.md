@@ -5,7 +5,7 @@
 Visual AI agent builder with multi-agent orchestration and continuous learning. Build AI agents
 via a flow editor (XyFlow), manage knowledge bases with RAG (chunking + embeddings + hybrid
 search), enable agent-to-agent communication (A2A protocol), and chat with agents. Features
-include: agent marketplace/discovery with faceted search, 137 agent templates across 12
+include: agent marketplace/discovery with faceted search, 216 agent templates across 19
 categories (including 25 ECC Developer Agents), agent-as-tool orchestration (AI dynamically
 calls sibling agents), web browsing capabilities (fetch + browser actions via MCP), an
 embeddable chat widget, a CLI Generator that automatically produces a full MCP server bridge
@@ -78,7 +78,7 @@ src/
     login/page.tsx                    ← Login page (GitHub + Google OAuth)
     analytics/page.tsx                ← Analytics dashboard (charts, response times, KB stats)
     discover/page.tsx                 ← Agent Discovery Marketplace (faceted search, categories, tags)
-    templates/page.tsx                ← Agent Templates Gallery (112 templates, 11 categories)
+    templates/page.tsx                ← Agent Templates Gallery (216 templates, 19 categories)
     templates/templates-client.tsx    ← Templates client component (search + filter)
     builder/[agentId]/page.tsx        ← Flow editor page
     builder/[agentId]/error.tsx       ← Error boundary (Flow Editor Error)
@@ -136,6 +136,9 @@ src/
       agents/[agentId]/evals/[suiteId]/cases/route.ts          ← GET, POST, PUT bulk, DELETE test cases
       agents/[agentId]/evals/[suiteId]/run/route.ts            ← POST trigger run, GET run history
       agents/[agentId]/evals/[suiteId]/run/[runId]/route.ts    ← GET full run detail + per-case results
+      agents/[agentId]/evals/[suiteId]/run/[runId]/export/route.ts ← GET per-run CSV export (one row per assertion)
+      agents/[agentId]/evals/[suiteId]/export/route.ts         ← GET suite-level bulk CSV export (?limit=1-100)
+      agents/[agentId]/evals/[suiteId]/compare/route.ts        ← POST A/B comparison (version or model)
 
   components/
     cli-generator/                ← CLI Generator UI components (pipeline progress, file preview, stuck alert)
@@ -167,7 +170,7 @@ src/
     theme-provider.tsx    ← Dark mode theme provider
 
   data/
-    agent-templates.json  ← 112 agent templates across 11 categories
+    agent-templates.json  ← 216 agent templates across 19 categories
 
   lib/
     ai.ts             ← AI model routing (DeepSeek/OpenAI/Anthropic/Gemini/Groq/Mistral/Kimi)
@@ -335,8 +338,11 @@ EvalSuite — Eval suite for an agent (collection of test cases)
   ├── name, description?
   ├── isDefault Boolean — default suite selected in UI
   ├── runOnDeploy Boolean — auto-run after flow deploy (fire-and-forget)
+  ├── scheduleEnabled Boolean — auto-run on cron schedule
+  ├── scheduleCron String? — cron expression e.g. "0 3 * * *" (5-field)
+  ├── lastScheduledAt DateTime? — used for double-run prevention (4-min window)
   ├── testCases EvalTestCase[], runs EvalRun[]
-  └── Indexes: [agentId], [agentId, runOnDeploy]
+  └── Indexes: [agentId], [agentId, runOnDeploy], [scheduleEnabled]
 
 EvalTestCase — Single test case in a suite
   ├── suiteId (required, cascade delete)
@@ -347,9 +353,12 @@ EvalTestCase — Single test case in a suite
 
 EvalRun — One execution of an entire suite
   ├── suiteId (required, cascade delete)
-  ├── status EvalRunStatus, triggeredBy ("manual"|"deploy"|"schedule")
+  ├── status EvalRunStatus, triggeredBy ("manual"|"deploy"|"schedule"|"compare")
   ├── totalCases, passedCases, failedCases, score Float?, durationMs
   ├── errorMessage?, completedAt?
+  ├── comparisonRunId String? — paired run ID for A/B comparison (mutual reference)
+  ├── flowVersionId String? — which flow version was tested in this run
+  ├── modelOverride String? — model used if comparing different models
   ├── results EvalResult[]
   └── Indexes: [suiteId], [suiteId, createdAt]
 
@@ -430,6 +439,10 @@ EvalResult — One test case result within a run
 | `/api/agents/[agentId]/evals/[suiteId]/cases` | GET, POST, PUT, DELETE | List/create/bulk-update/delete test cases (max 50 per suite) |
 | `/api/agents/[agentId]/evals/[suiteId]/run` | GET, POST | Run history (paginated), trigger new eval run (409 if already running) |
 | `/api/agents/[agentId]/evals/[suiteId]/run/[runId]` | GET | Full run detail with per-case results and assertion breakdowns |
+| `/api/agents/[agentId]/evals/[suiteId]/run/[runId]/export` | GET | Download per-run results as CSV (one row per assertion, RFC-4180 quoting) |
+| `/api/agents/[agentId]/evals/[suiteId]/export` | GET | Download all completed runs as bulk CSV (`?limit=` 1–100, default 50) |
+| `/api/agents/[agentId]/evals/[suiteId]/compare` | POST | Run head-to-head A/B comparison between two flow versions or two models; returns `CompareResult` with `ComparisonDelta` |
+| `/api/evals/scheduled` | POST | CRON_SECRET-protected trigger for Railway Cron — finds due suites and fires `triggerScheduledEvals()` |
 | `/api/auth/*` | GET, POST | NextAuth authentication endpoints |
 | `/api/health` | GET | Health check (DB connectivity + uptime + version) |
 | `/api/analytics` | GET | Analytics dashboard data (response times, KB stats, conversations) |
@@ -608,15 +621,19 @@ Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and mainte
 - `/discover` page with faceted search: categories, tags, model, sort, scope (public/mine/all)
 - `/api/agents/discover` endpoint: 4 parallel Prisma queries (agents, count, category stats, tag aggregation)
 - Agent model fields: `category String?`, `tags String[]`, `isPublic Boolean`
-- Shared categories in `src/lib/constants/agent-categories.ts` (11 categories)
+- Shared categories in `src/lib/constants/agent-categories.ts` (23 categories incl. marketplace-only)
 - Debounced search (300ms), loading skeletons, active filter pills, category badges with colors
 - Searchable agent selector in flow builder property panel (replaces basic HTML select)
 
 ### Agent Templates
-- 112 templates in `src/data/agent-templates.json` across 11 categories
+- 216 templates in `src/data/agent-templates.json` across 19 categories (all at minimum 🟢 Dobro coverage)
 - `/templates` page with server component + client-side search and category filter tabs
 - Dashboard "New Agent" dialog includes "Browse Templates" tab — selecting pre-fills name, description, systemPrompt
 - Template gallery component: `src/components/templates/template-gallery.tsx`
+- **19 template categories** — all at minimum 8 templates (🟢 Dobro); 5 categories at 15+ (🔵 Odlično)
+- New 2026 categories added: `finance` (10), `hr` (10), `sales` (10), `research` (8), `writing` (8), `data` (8), `coding` (8)
+- `CATEGORY_LABELS` in template-gallery.tsx covers all 23 categories (including marketplace-only)
+- When adding templates: update `src/data/agent-templates.json` array + header `total` + `categories` list
 
 ### Human Approval Workflow
 - `human_approval` node type in flow — pauses execution for human review
@@ -724,6 +741,10 @@ Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and mainte
 - **UI:** two-panel layout (`/evals/[agentId]`) — suite sidebar (Star = default, Rocket = runs on deploy) + tabbed main area (Test Cases / Results); recharts LineChart for score trend over time
 - **Schemas:** `src/lib/evals/schemas.ts` — `EvalAssertionSchema` discriminated union, `CreateEvalSuiteSchema` (includes `runOnDeploy`), `TriggerEvalRunSchema`
 - **LLM-as-Judge model:** uses `DEFAULT_MODEL` (deepseek-chat) for cost efficiency, `generateObject()` with `JudgeOutputSchema { score, reasoning }`, maxTokens: 256
+- **CSV export:** one row per assertion (N assertions × M cases = N×M data rows); RFC-4180 quoting (`"${str.replace(/"/g, '""')}"`); per-run route (`run/[runId]/export`) and suite bulk route (`[suiteId]/export?limit=50`)
+- **Scheduled evals:** `triggerScheduledEvals()` in `src/lib/evals/schedule-hook.ts`; pure-JS `cronMatchesDate()` (no dep); 4-min double-run prevention via `lastScheduledAt`; `POST /api/evals/scheduled` protected by `CRON_SECRET` Bearer header
+- **A/B comparison:** `POST /api/agents/[agentId]/evals/[suiteId]/compare`; type `"version"` loads `FlowVersion.content` snapshot; type `"model"` injects `modelOverride` into all `ai_response` node `data.model` fields; runs A then B sequentially; mutual `comparisonRunId` linking via `prisma.$executeRaw`; `ComparisonDelta` = `{ scoreDiff, latencyDiffMs, aWins, bWins, ties, winner }`
+- **Chat API eval params:** `evalFlowVersionId` replaces `context.flowContent` with version snapshot; `evalModelOverride` overrides `data.model` on every `ai_response` node in-memory before execution
 
 ### Inbound Webhooks
 - **Standard Webhooks spec** (standardwebhooks.com): HMAC-SHA256, `x-webhook-id` / `x-webhook-timestamp` / `x-webhook-signature` headers, 5-min timestamp window
@@ -815,11 +836,18 @@ pnpm db:migrate       # Run migrations (dev)
 pnpm db:push          # Sync schema directly
 pnpm db:studio        # Prisma Studio UI
 pnpm db:seed          # Seed dev data
+pnpm precheck         # Pre-push validation (TS + vitest + lucide mocks + strings)
+pnpm precheck:file    # Same, for a specific file (e.g. pnpm precheck:file src/foo.tsx)
 ```
 
 ---
 
 ## 8. CLAUDE WORKING GUIDELINES
+
+### Pre-Push Workflow
+Before every commit+push, run `pnpm precheck` (or `pnpm precheck:file <path>` for a specific file).
+The script simulates CI locally: TypeScript check → targeted vitest → lucide icon mock check → placeholder string consistency.
+All 4 checks must show PASS before pushing. Workflow: **code → precheck → commit → push**.
 
 ### Hard Rules
 - Never edit `src/generated/` — Prisma auto-generates this
@@ -883,7 +911,7 @@ NOT as a separate project or fork. Agent-studio already has 80%+ of the needed i
 
 | ECC Component          | Studio Equivalent                    | Integration Action                    |
 |------------------------|--------------------------------------|---------------------------------------|
-| 25 Agent definitions   | Agent Templates (133 existing)       | Import as new "Developer Agents" category |
+| 25 Agent definitions   | Agent Templates (216 existing)       | Import as new "Developer Agents" category |
 | 108+ SKILL.md files    | Knowledge Base (RAG pipeline)        | Ingest into shared KB + new Skill model |
 | 57 slash commands      | CLI Generator / Flow Templates       | Map to flow triggers + API routes     |
 | Hook system (15+ types)| Webhook system (existing)            | Extend webhook events + new hook middleware |
@@ -942,7 +970,7 @@ src/lib/ecc/                          # ← ECC module root
   └── types.ts                        # ECC-specific TypeScript interfaces
 
 src/data/
-  └── ecc-agent-templates.json        # 25 ECC agent templates (separate from existing 133)
+  └── ecc-agent-templates.json        # 25 ECC agent templates (separate from existing 216)
 
 src/app/skills/
   └── page.tsx                        # Skill Browser UI (search, filter, cards)
@@ -961,6 +989,7 @@ services/ecc-skills-mcp/              # ← Separate Railway service
   └── Dockerfile                      # Optional, Nixpacks auto-detects Python
 
 scripts/
+  ├── pre-push-check.sh               # Pre-push CI simulation (TS + vitest + lucide mocks + strings)
   ├── import-ecc-agents.mjs           # One-time agent import script
   └── import-ecc-skills.mjs           # One-time skill import script
 ```
@@ -1093,7 +1122,7 @@ Applied via: `pnpm db:push`
 
 ### Phase 1: Import 25 ECC Agents as Templates (COMPLETED)
 - New category "Developer Agents" in `src/lib/constants/agent-categories.ts`
-- `src/data/ecc-agent-templates.json` — 25 templates, separate from existing 133
+- `src/data/ecc-agent-templates.json` — 25 templates, separate from existing 216
 - Import script: `scripts/import-ecc-agents.mjs` — parses YAML frontmatter from ECC .md files
 - Agent Card endpoint: `GET /api/agents/[agentId]/card.json` (A2A v0.3 JSON-LD)
 - Tests: schema validation for all 25, snapshot tests

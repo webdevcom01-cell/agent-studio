@@ -36,9 +36,15 @@ export interface RunEvalOptions {
   /** Base URL for the chat API (defaults to http://localhost:3000) */
   baseUrl?: string;
   /** How the run was triggered */
-  triggeredBy?: "manual" | "deploy" | "schedule";
+  triggeredBy?: "manual" | "deploy" | "schedule" | "compare";
   /** Auth cookie or bearer token for the internal chat API call */
   authHeader?: string;
+  /** Specific flow version to test (undefined = use active deployed version) */
+  flowVersionId?: string;
+  /** Model override for comparing different models */
+  modelOverride?: string;
+  /** Paired comparison run ID for A/B linking */
+  comparisonRunId?: string;
 }
 
 export interface EvalRunSummary {
@@ -113,6 +119,8 @@ async function callAgentChat(
   input: string,
   baseUrl: string,
   authHeader?: string,
+  flowVersionId?: string,
+  modelOverride?: string,
 ): Promise<ChatResponse> {
   const start = Date.now();
 
@@ -123,16 +131,20 @@ async function callAgentChat(
     headers["Cookie"] = authHeader;
   }
 
+  const body: Record<string, unknown> = {
+    message: input,
+    stream: false,
+    isEval: true, // flag for optional cleanup in chat route
+  };
+  if (flowVersionId) body.flowVersionId = flowVersionId;
+  if (modelOverride) body.modelOverride = modelOverride;
+
   const response = await fetch(
     `${baseUrl}/api/agents/${agentId}/chat`,
     {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        message: input,
-        stream: false,
-        isEval: true, // flag for optional cleanup in chat route
-      }),
+      body: JSON.stringify(body),
     },
   );
 
@@ -244,6 +256,9 @@ export async function runEvalSuite(
   });
 
   const totalCases = suite.testCases.length;
+  const flowVersionId = options.flowVersionId;
+  const modelOverride = options.modelOverride;
+  const comparisonRunId = options.comparisonRunId;
 
   // ── 2. Create EvalRun record ───────────────────────────────────────────────
   const run = await prisma.evalRun.create({
@@ -252,7 +267,12 @@ export async function runEvalSuite(
       status: "RUNNING",
       totalCases,
       triggeredBy,
-    },
+      // Head-to-head comparison fields (stored as-is; Prisma will ignore unknown fields
+      // until db:push is run on Railway — these are gracefully ignored locally)
+      ...(flowVersionId ? { flowVersionId } : {}),
+      ...(modelOverride ? { modelOverride } : {}),
+      ...(comparisonRunId ? { comparisonRunId } : {}),
+    } as Parameters<typeof prisma.evalRun.create>[0]["data"],
   });
 
   const runStart = Date.now();
@@ -276,6 +296,8 @@ export async function runEvalSuite(
       run.id,
       baseUrl,
       options.authHeader,
+      flowVersionId,
+      modelOverride,
     );
 
     caseResults.push(caseResult);
@@ -342,6 +364,8 @@ async function runSingleTestCase(
   runId: string,
   baseUrl: string,
   authHeader?: string,
+  flowVersionId?: string,
+  modelOverride?: string,
 ): Promise<CaseRunResult> {
   const assertions = parseAssertions(testCase.assertions);
 
@@ -354,12 +378,14 @@ async function runSingleTestCase(
   let status: "PASSED" | "FAILED" | "ERROR" = "ERROR";
 
   try {
-    // Call the agent
+    // Call the agent (with optional version/model override for head-to-head compare)
     const chat = await callAgentChat(
       agentId,
       testCase.input,
       baseUrl,
       authHeader,
+      flowVersionId,
+      modelOverride,
     );
 
     agentOutput = chat.output;

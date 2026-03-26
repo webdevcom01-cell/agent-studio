@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, FlaskConical, Settings2,
   BarChart3, Loader2, MoreVertical, Star, StarOff, Rocket, Sparkles, ShieldCheck,
+  Clock, GitCompare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,9 +21,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { EvalSuiteEditor } from "@/components/evals/eval-suite-editor";
 import { EvalResultsView } from "@/components/evals/eval-results-view";
+import { EvalCompareView } from "@/components/evals/eval-compare-view";
 import { GenerateEvalDialog } from "@/components/evals/generate-eval-dialog";
 import type { EvalRunDetail, RunHistoryItem } from "@/components/evals/eval-results-view";
 import type { EvalTestCase } from "@/components/evals/eval-suite-editor";
+import type { CompareResult } from "@/components/evals/eval-compare-view";
+import { ALL_MODELS } from "@/lib/models";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +36,8 @@ interface EvalSuite {
   description: string | null;
   isDefault: boolean;
   runOnDeploy: boolean;
+  scheduleEnabled: boolean;
+  scheduleCron: string | null;
   testCaseCount: number;
   runCount: number;
   lastRun: {
@@ -53,8 +59,27 @@ interface SuiteDetail {
   description: string | null;
   isDefault: boolean;
   runOnDeploy: boolean;
+  scheduleEnabled: boolean;
+  scheduleCron: string | null;
   testCases: EvalTestCase[];
 }
+
+interface FlowVersion {
+  id: string;
+  label: string | null;
+  status: string;
+  createdAt: string;
+}
+
+// ─── Cron presets ─────────────────────────────────────────────────────────────
+
+const CRON_PRESETS = [
+  { label: "Daily at 3 AM", value: "0 3 * * *" },
+  { label: "Every 6 hours", value: "0 */6 * * *" },
+  { label: "Every 12 hours", value: "0 */12 * * *" },
+  { label: "Weekly (Mon 8 AM)", value: "0 8 * * 1" },
+  { label: "Custom", value: "custom" },
+];
 
 // ─── Create Suite Dialog ──────────────────────────────────────────────────────
 
@@ -197,6 +222,22 @@ export default function EvalsPage({ params }: PageProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+
+  // Schedule state
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleCron, setScheduleCron] = useState("0 3 * * *");
+  const [schedulePreset, setSchedulePreset] = useState("0 3 * * *");
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+
+  // Compare state
+  const [showCompareDialog, setShowCompareDialog] = useState(false);
+  const [compareType, setCompareType] = useState<"version" | "model">("version");
+  const [compareA, setCompareA] = useState("");
+  const [compareB, setCompareB] = useState("");
+  const [flowVersions, setFlowVersions] = useState<FlowVersion[]>([]);
+  const [isComparing, setIsComparing] = useState(false);
+  const [compareResult, setCompareResult] = useState<CompareResult | null>(null);
   const [agentName, setAgentName] = useState<string>("");
 
   // Fetch agent name for breadcrumb
@@ -347,6 +388,91 @@ export default function EvalsPage({ params }: PageProps) {
     }
   }
 
+  // Open schedule dialog — pre-fill from current suite
+  function openScheduleDialog(suite: EvalSuite) {
+    setScheduleEnabled(suite.scheduleEnabled ?? false);
+    const cron = suite.scheduleCron ?? "0 3 * * *";
+    setScheduleCron(cron);
+    const preset = CRON_PRESETS.find((p) => p.value === cron && p.value !== "custom");
+    setSchedulePreset(preset ? cron : "custom");
+    setShowScheduleDialog(true);
+  }
+
+  async function handleSaveSchedule() {
+    if (!activeSuiteId) return;
+    setIsSavingSchedule(true);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/evals/${activeSuiteId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scheduleEnabled,
+          scheduleCron: scheduleEnabled ? scheduleCron : null,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setSuites((prev) =>
+        prev.map((s) =>
+          s.id === activeSuiteId
+            ? { ...s, scheduleEnabled, scheduleCron: scheduleEnabled ? scheduleCron : null }
+            : s,
+        ),
+      );
+      setShowScheduleDialog(false);
+      toast.success(scheduleEnabled ? "Schedule saved" : "Schedule disabled");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save schedule");
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  }
+
+  // Fetch flow versions when compare dialog opens
+  async function openCompareDialog() {
+    setCompareResult(null);
+    setCompareA("");
+    setCompareB("");
+    setCompareType("version");
+    setShowCompareDialog(true);
+
+    // Fetch flow versions
+    try {
+      const res = await fetch(`/api/agents/${agentId}/flow/versions`);
+      const json = await res.json();
+      if (json.success) setFlowVersions(json.data ?? []);
+    } catch {
+      toast.error("Failed to load flow versions");
+    }
+  }
+
+  async function handleRunComparison() {
+    if (!activeSuiteId || !compareA || !compareB) return;
+    setIsComparing(true);
+    try {
+      const res = await fetch(
+        `/api/agents/${agentId}/evals/${activeSuiteId}/compare`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: compareType, a: compareA, b: compareB }),
+        },
+      );
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setCompareResult(json.data as CompareResult);
+      // Refresh run history to show the new compare runs
+      const histRes = await fetch(`/api/agents/${agentId}/evals/${activeSuiteId}/run?limit=10`);
+      const histJson = await histRes.json();
+      if (histJson.success) setRunHistory(histJson.data.runs);
+      toast.success("Comparison complete");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Comparison failed");
+    } finally {
+      setIsComparing(false);
+    }
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -457,6 +583,9 @@ export default function EvalsPage({ params }: PageProps) {
                       {suite.runOnDeploy && (
                         <Rocket className="w-3 h-3 text-violet-400 shrink-0" aria-label="Runs on deploy" />
                       )}
+                      {suite.scheduleEnabled && (
+                        <Clock className="w-3 h-3 text-amber-400 shrink-0" aria-label="Scheduled" />
+                      )}
                       <p className="text-sm font-medium truncate">{suite.name}</p>
                     </div>
                     <p className="text-xs text-zinc-500 mt-0.5">
@@ -492,6 +621,13 @@ export default function EvalsPage({ params }: PageProps) {
                       >
                         <Rocket className="w-3.5 h-3.5 text-violet-400" />
                         {suite.runOnDeploy ? "Disable auto-run on deploy" : "Run on deploy"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-zinc-300 hover:bg-zinc-700 cursor-pointer text-xs gap-2"
+                        onClick={(e) => { e.stopPropagation(); setActiveSuiteId(suite.id); openScheduleDialog(suite); }}
+                      >
+                        <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        {suite.scheduleEnabled ? "Edit schedule" : "Schedule runs"}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-red-400 hover:bg-zinc-700 cursor-pointer text-xs gap-2"
@@ -550,11 +686,27 @@ export default function EvalsPage({ params }: PageProps) {
                         <Rocket className="w-3 h-3" /> Auto-run on deploy
                       </span>
                     )}
+                    {suiteDetail.scheduleEnabled && suiteDetail.scheduleCron && (
+                      <span className="flex items-center gap-1 text-xs px-2 py-0.5 bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full">
+                        <Clock className="w-3 h-3" /> {suiteDetail.scheduleCron}
+                      </span>
+                    )}
                   </div>
                   {suiteDetail.description && (
                     <p className="text-sm text-zinc-500 mt-0.5">{suiteDetail.description}</p>
                   )}
                 </div>
+                {/* Compare button */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-zinc-700 text-zinc-400 hover:bg-zinc-800 shrink-0"
+                  onClick={openCompareDialog}
+                  title="Head-to-head A/B comparison"
+                >
+                  <GitCompare className="w-3.5 h-3.5 mr-1.5" />
+                  Compare
+                </Button>
               </div>
 
               {/* Tabs: Cases / Results */}
@@ -596,6 +748,8 @@ export default function EvalsPage({ params }: PageProps) {
                       run={activeRun}
                       history={runHistory}
                       onSelectRun={(runId) => loadRunDetail(activeSuiteId, runId)}
+                      agentId={agentId}
+                      suiteId={activeSuiteId}
                     />
                   ) : (
                     <div className="text-center py-16">
@@ -639,6 +793,202 @@ export default function EvalsPage({ params }: PageProps) {
           fetchSuites().then(() => setActiveSuiteId(suiteId));
         }}
       />
+
+      {/* ── Schedule dialog ── */}
+      <Dialog open={showScheduleDialog} onOpenChange={(v) => !v && setShowScheduleDialog(false)}>
+        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-400" />
+              Schedule Eval Runs
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Enable toggle */}
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div
+                role="checkbox"
+                aria-checked={scheduleEnabled}
+                tabIndex={0}
+                onClick={() => setScheduleEnabled((v) => !v)}
+                onKeyDown={(e) => (e.key === " " || e.key === "Enter") && setScheduleEnabled((v) => !v)}
+                className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 ${scheduleEnabled ? "bg-amber-600" : "bg-zinc-700"}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${scheduleEnabled ? "translate-x-4" : "translate-x-0"}`} />
+              </div>
+              <div>
+                <p className="text-sm text-zinc-300 font-medium">Enable scheduled runs</p>
+                <p className="text-xs text-zinc-500">Automatically run this suite on a recurring schedule</p>
+              </div>
+            </label>
+
+            {/* Cron preset + input */}
+            {scheduleEnabled && (
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-zinc-300 text-xs mb-2 block">Frequency</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {CRON_PRESETS.map((p) => (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => {
+                          setSchedulePreset(p.value);
+                          if (p.value !== "custom") setScheduleCron(p.value);
+                        }}
+                        className={`text-xs px-3 py-2 rounded border text-left transition-colors ${
+                          schedulePreset === p.value
+                            ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
+                            : "border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-zinc-300 text-xs">Cron expression (UTC)</Label>
+                  <Input
+                    value={scheduleCron}
+                    onChange={(e) => { setScheduleCron(e.target.value); setSchedulePreset("custom"); }}
+                    placeholder="0 3 * * *"
+                    className="bg-zinc-800 border-zinc-600 text-white font-mono text-sm"
+                  />
+                  <p className="text-xs text-zinc-600">
+                    Format: minute hour day month weekday · e.g. <code className="text-amber-400/70">0 3 * * *</code> = daily 3 AM UTC
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowScheduleDialog(false)} className="border-zinc-600 text-zinc-300">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveSchedule}
+              disabled={isSavingSchedule}
+              className="bg-amber-600 hover:bg-amber-500 text-white"
+            >
+              {isSavingSchedule ? "Saving..." : "Save Schedule"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Compare dialog ── */}
+      <Dialog open={showCompareDialog} onOpenChange={(v) => !v && setShowCompareDialog(false)}>
+        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <GitCompare className="w-4 h-4 text-blue-400" />
+              Head-to-Head Comparison
+            </DialogTitle>
+          </DialogHeader>
+
+          {!compareResult ? (
+            <div className="space-y-5 py-2">
+              {/* Compare type toggle */}
+              <div className="flex gap-2">
+                {(["version", "model"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => { setCompareType(t); setCompareA(""); setCompareB(""); }}
+                    className={`text-sm px-4 py-1.5 rounded-full border transition-colors capitalize ${
+                      compareType === t
+                        ? "border-blue-500/60 bg-blue-500/15 text-blue-300"
+                        : "border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                    }`}
+                  >
+                    Compare {t === "version" ? "versions" : "models"}
+                  </button>
+                ))}
+              </div>
+
+              {compareType === "version" ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {(["a", "b"] as const).map((side) => (
+                    <div key={side} className="space-y-1.5">
+                      <Label className="text-zinc-300 text-xs">Version {side.toUpperCase()}</Label>
+                      <select
+                        value={side === "a" ? compareA : compareB}
+                        onChange={(e) => side === "a" ? setCompareA(e.target.value) : setCompareB(e.target.value)}
+                        className="w-full bg-zinc-800 border border-zinc-600 text-zinc-200 rounded-md px-3 py-2 text-sm"
+                      >
+                        <option value="">Select version...</option>
+                        {flowVersions.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.label ?? v.id.slice(0, 8)} — {v.status} — {new Date(v.createdAt).toLocaleDateString()}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  {(["a", "b"] as const).map((side) => (
+                    <div key={side} className="space-y-1.5">
+                      <Label className="text-zinc-300 text-xs">Model {side.toUpperCase()}</Label>
+                      <select
+                        value={side === "a" ? compareA : compareB}
+                        onChange={(e) => side === "a" ? setCompareA(e.target.value) : setCompareB(e.target.value)}
+                        className="w-full bg-zinc-800 border border-zinc-600 text-zinc-200 rounded-md px-3 py-2 text-sm"
+                      >
+                        <option value="">Select model...</option>
+                        {ALL_MODELS.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} ({m.provider})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-xs text-zinc-600">
+                Both {compareType === "version" ? "versions" : "models"} will be run against the same test cases sequentially. This may take a few minutes.
+              </p>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowCompareDialog(false)} className="border-zinc-600 text-zinc-300">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleRunComparison}
+                  disabled={isComparing || !compareA || !compareB || compareA === compareB}
+                  className="bg-blue-600 hover:bg-blue-500 text-white"
+                >
+                  {isComparing ? (
+                    <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Running...</>
+                  ) : (
+                    <><GitCompare className="w-3.5 h-3.5 mr-1.5" /> Run Comparison</>
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="py-2 space-y-4">
+              <EvalCompareView result={compareResult} />
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setCompareResult(null)}
+                  className="border-zinc-600 text-zinc-300"
+                >
+                  Run Another
+                </Button>
+                <Button onClick={() => setShowCompareDialog(false)} className="bg-zinc-700 hover:bg-zinc-600 text-white">
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -65,6 +65,16 @@ export async function POST(
   const conversationId =
     typeof body.conversationId === "string" ? body.conversationId : undefined;
   const isStreaming = body.stream === true;
+  // Eval compare: optional flow version override (only used for head-to-head eval runs)
+  const evalFlowVersionId =
+    typeof body.flowVersionId === "string" && body.flowVersionId.length > 0
+      ? body.flowVersionId
+      : undefined;
+  // Eval compare: optional model override for comparing different models
+  const evalModelOverride =
+    typeof body.modelOverride === "string" && body.modelOverride.length > 0
+      ? body.modelOverride
+      : undefined;
   // Debug mode: only allowed for authenticated agent owners
   const isDebug = body.debug === true;
   // Breakpoints: array of nodeIds to pause at (Phase 6)
@@ -113,8 +123,32 @@ export async function POST(
       }
     }
 
+    // Head-to-head eval compare: override flow content with a specific version
+    if (evalFlowVersionId) {
+      const version = await prisma.flowVersion.findFirst({
+        where: { id: evalFlowVersionId, flow: { agentId } },
+        select: { content: true },
+      });
+      if (version?.content) {
+        // Replace the flow content in context with the versioned snapshot
+        context.flowContent = version.content as unknown as typeof context.flowContent;
+      }
+    }
+
     const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { model: true } });
-    const agentModel = agent?.model;
+    // Head-to-head eval compare: override model if specified
+    // Injects modelOverride into all ai_response nodes in the flow content
+    if (evalModelOverride && context.flowContent?.nodes) {
+      context.flowContent = {
+        ...context.flowContent,
+        nodes: context.flowContent.nodes.map((n) =>
+          n.type === "ai_response"
+            ? { ...n, data: { ...n.data, model: evalModelOverride } }
+            : n,
+        ),
+      };
+    }
+    const agentModel = evalModelOverride ?? agent?.model;
 
     if (isStreaming) {
       const innerStream = executeFlowStreaming(context, message);
