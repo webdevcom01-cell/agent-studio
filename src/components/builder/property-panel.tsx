@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { PropertySection } from "./property-section";
 import { VariableInput, VariableTextarea } from "./variable-input";
 import { type Node } from "@xyflow/react";
-import { Trash2, X, Plus, Search, Database, Plug, Zap, AppWindow, AlertTriangle } from "lucide-react";
+import { Trash2, X, Plus, Search, Database, Plug, Zap, AppWindow, AlertTriangle, Clipboard, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -116,6 +116,7 @@ export function PropertyPanel({
 }: PropertyPanelProps) {
   const data = node.data as Record<string, unknown>;
   const [confirmDeleteNode, setConfirmDeleteNode] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   /** All variable names available in this flow for {{}} autocomplete */
   const variables = useMemo(() => extractFlowVariables(allNodes), [allNodes]);
@@ -124,19 +125,52 @@ export function PropertyPanel({
     onUpdateData(node.id, { [key]: value });
   }
 
+  /** Copy the node's full data as formatted JSON — useful for debugging and sharing configs. */
+  function copyConfig() {
+    const payload = { id: node.id, type: node.type, data: node.data };
+    void navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  /** Escape key closes the panel. */
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <div className="flex w-96 flex-col border-l bg-background" data-testid="property-panel">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <h3 className="text-sm font-semibold">Properties</h3>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7"
-          aria-label="Close properties panel"
-          onClick={onClose}
-        >
-          <X className="size-4" aria-hidden="true" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            aria-label="Copy node config as JSON"
+            title="Copy config as JSON"
+            onClick={copyConfig}
+          >
+            {copied ? (
+              <Check className="size-3.5 text-green-500" aria-hidden="true" />
+            ) : (
+              <Clipboard className="size-3.5" aria-hidden="true" />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            aria-label="Close properties panel"
+            onClick={onClose}
+          >
+            <X className="size-4" aria-hidden="true" />
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
