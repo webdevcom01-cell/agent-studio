@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import {
@@ -23,6 +23,7 @@ import {
 import { PhaseMonitor } from "@/components/cli-generator/phase-monitor";
 import { CLIPreview } from "@/components/cli-generator/cli-preview";
 import { FileViewer } from "@/components/cli-generator/file-viewer";
+import { MCPTestPanel } from "@/components/cli-generator/mcp-test-panel";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { PhaseResult } from "@/lib/cli-generator/types";
 import { cn } from "@/lib/utils";
@@ -78,6 +79,8 @@ export default function CLIGeneratorPage(): React.JSX.Element {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isResumingId, setIsResumingId] = useState<string | null>(null);
+  /** Tracks generation IDs that have already been auto-resumed this session. */
+  const autoResumedRef = useRef<Set<string>>(new Set());
 
   const {
     data: detailResponse,
@@ -123,6 +126,18 @@ export default function CLIGeneratorPage(): React.JSX.Element {
       ),
     );
   }, [detail]);
+
+  // F1: Auto-resume stuck generations when they are selected.
+  // Fires at most once per generation per page session (guarded by autoResumedRef).
+  useEffect(() => {
+    if (!selectedId || isResumingId !== null) return;
+    const gen = generations.find((g) => g.id === selectedId);
+    if (!gen || !isStuck(gen)) return;
+    if (autoResumedRef.current.has(selectedId)) return;
+    autoResumedRef.current.add(selectedId);
+    void handleResume(selectedId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, generations, isResumingId]);
 
   function handleSelect(id: string): void {
     setSelectedId(id);
@@ -272,7 +287,10 @@ export default function CLIGeneratorPage(): React.JSX.Element {
   }
 
   const isCompleted = detail?.status === "COMPLETED";
+  const isRunning = detail !== null && detail !== undefined && isInProgress(detail.status);
+  // Show FileViewer when running (for live preview F2) or when completed with files
   const hasFiles = isCompleted && detail.generatedFiles && Object.keys(detail.generatedFiles).length > 0;
+  const showFileViewer = selectedId && (hasFiles || isRunning);
 
   return (
     <div className="min-h-screen bg-background">
@@ -470,8 +488,8 @@ export default function CLIGeneratorPage(): React.JSX.Element {
                   status={detail.status}
                 />
 
-                {hasFiles && selectedId && (
-                  <FileViewer generationId={selectedId} />
+                {showFileViewer && selectedId && (
+                  <FileViewer generationId={selectedId} isRunning={isRunning} />
                 )}
 
                 {isCompleted && detail.cliConfig && (
@@ -480,6 +498,13 @@ export default function CLIGeneratorPage(): React.JSX.Element {
                       detail.cliConfig as unknown as Parameters<typeof CLIPreview>[0]["cliConfig"]
                     }
                   />
+                )}
+
+                {isCompleted && selectedId && (
+                  <div className="rounded-lg border border-border bg-card p-4">
+                    <h3 className="text-sm font-medium mb-3">Bridge Validation &amp; Config</h3>
+                    <MCPTestPanel generationId={selectedId} />
+                  </div>
                 )}
               </div>
             ) : null}
