@@ -24,6 +24,38 @@ vi.mock("@/lib/mcp/client", () => ({
   getMCPToolsForAgent: mockGetMCPToolsForAgent,
 }));
 
+// Prevent RAG + reformulation from calling generateText before the main handler does.
+// Each returns a no-op / pass-through so tests can focus on the handler logic itself.
+vi.mock("@/lib/knowledge/rag-inject", () => ({
+  injectRAGContext: vi.fn().mockImplementation(
+    async (_agentId: string, systemPrompt: string) => ({
+      augmentedSystemPrompt: systemPrompt,
+      retrievedChunkCount: 0,
+      retrievalTimeMs: 0,
+      knowledgeBaseId: null,
+      retrievedChunks: [],
+    }),
+  ),
+}));
+
+vi.mock("@/lib/knowledge/query-reformulation", () => ({
+  reformulateWithHistory: vi.fn().mockImplementation(async (query: string) => query),
+}));
+
+// Stub observability so it doesn't need real OTLP infrastructure
+vi.mock("@/lib/observability/tracer", () => ({
+  traceGenAI: vi.fn(() => ({
+    setAttributes: vi.fn(),
+    addEvent: vi.fn(),
+    end: vi.fn(),
+  })),
+}));
+
+vi.mock("@/lib/observability/metrics", () => ({
+  recordChatLatency: vi.fn(),
+  recordTokenUsage: vi.fn(),
+}));
+
 import { aiResponseHandler } from "../ai-response-handler";
 import type { FlowNode } from "@/types";
 import type { RuntimeContext } from "../../types";

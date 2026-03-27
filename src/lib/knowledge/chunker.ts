@@ -274,6 +274,7 @@ function detectLanguage(text: string): "python" | "typescript" | "javascript" {
  * Exported for unit testing.
  */
 export function chunkCodeBlock(block: string, maxTokens: number): string[] {
+  if (!block) return [];
   if (countTokens(block) <= maxTokens) return [block];
 
   const sections = block.split(/\n\s*\n/);

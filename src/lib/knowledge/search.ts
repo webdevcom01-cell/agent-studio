@@ -94,14 +94,19 @@ const INJECTION_PATTERNS: RegExp[] = [
 
 /**
  * Sanitizes retrieved chunk content before injecting it into the system prompt.
- * 1. HTML-escapes special characters to prevent XML tag injection.
- * 2. Replaces known prompt-injection patterns with "[FILTERED]".
+ * 1. Replaces known prompt-injection patterns with "[FILTERED]" — must run FIRST
+ *    so angle-bracket tokens like <|im_start|> are caught before HTML-escaping
+ *    converts them to &lt;|im_start|&gt; (which would not match the pattern).
+ * 2. HTML-escapes remaining special characters to prevent XML tag injection.
  */
 export function sanitizeChunkContent(content: string): string {
-  let sanitized = content.replace(HTML_ESCAPE_RE, (ch) => HTML_ESCAPE_MAP[ch]);
+  // Step 1: filter injection patterns on the raw content
+  let sanitized = content;
   for (const pattern of INJECTION_PATTERNS) {
     sanitized = sanitized.replace(pattern, "[FILTERED]");
   }
+  // Step 2: HTML-escape any remaining special characters
+  sanitized = sanitized.replace(HTML_ESCAPE_RE, (ch) => HTML_ESCAPE_MAP[ch]);
   return sanitized;
 }
 
