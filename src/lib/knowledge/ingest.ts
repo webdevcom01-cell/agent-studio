@@ -7,6 +7,7 @@ import type { ChunkingStrategy } from "./chunker";
 import { generateEmbeddings } from "./embeddings";
 import { markChunkEmbeddingModel } from "./embedding-drift";
 import { computeContentHash as computeChunkHash, findDuplicateChunks, deduplicateChunks } from "./deduplication";
+import { enrichChunksWithContext } from "./contextual-enrichment";
 import { logger } from "@/lib/logger";
 
 const BATCH_SIZE = 50;
@@ -35,6 +36,7 @@ interface KBConfig {
   chunkingStrategy: unknown;
   embeddingModel: string | null;
   maxChunks: number | null;
+  contextualEnrichment: boolean;
 }
 
 async function loadKBConfig(sourceId: string): Promise<KBConfig | null> {
@@ -52,7 +54,19 @@ async function loadKBConfig(sourceId: string): Promise<KBConfig | null> {
         },
       },
     });
-    return source?.knowledgeBase ?? null;
+    if (!source?.knowledgeBase) return null;
+
+    // contextualEnrichment is in schema.prisma + DB but not in generated types yet
+    // (pnpm db:generate is blocked in this environment due to 403 on binary fetch).
+    // Fetched via raw query until types are regenerated.
+    const enrichRows = await prisma.$queryRaw<Array<{ contextualEnrichment: boolean }>>(
+      Prisma.sql`SELECT "contextualEnrichment" FROM "KnowledgeBase" WHERE id = ${source.knowledgeBase.id} LIMIT 1`,
+    );
+
+    return {
+      ...source.knowledgeBase,
+      contextualEnrichment: enrichRows[0]?.contextualEnrichment ?? false,
+    };
   } catch {
     return null;
   }
@@ -162,9 +176,28 @@ export async function ingestSource(
       return { chunksCreated: 0 };
     }
 
+    // ── Contextual Enrichment (Anthropic approach) ───────────────────────────
+    // Prepend LLM-generated context to each chunk so embeddings capture
+    // document-level context (company name, time period, section, etc.)
+    // Only runs when enabled in KB settings. Falls back gracefully on failure.
+    let chunksToEmbed = dedupedChunks;
+    if (kbConfig?.contextualEnrichment) {
+      updateProgress(sourceId, "enriching", 45).catch(() => {});
+      logger.info("Starting contextual enrichment", {
+        sourceId,
+        chunkCount: dedupedChunks.length,
+      });
+      chunksToEmbed = await enrichChunksWithContext(dedupedChunks, finalText);
+      logger.info("Contextual enrichment complete", {
+        sourceId,
+        chunkCount: chunksToEmbed.length,
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     updateProgress(sourceId, "embedding", 50).catch(() => {});
 
-    const embeddings = await generateEmbeddings(dedupedChunks, embeddingModel);
+    const embeddings = await generateEmbeddings(chunksToEmbed, embeddingModel);
 
     for (let i = 0; i < embeddings.length; i++) {
       if (!embeddings[i].every((v) => typeof v === "number" && isFinite(v))) {
@@ -176,17 +209,17 @@ export async function ingestSource(
 
     await prisma.kBChunk.deleteMany({ where: { sourceId } });
 
-    for (let batchStart = 0; batchStart < dedupedChunks.length; batchStart += BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, dedupedChunks.length);
+    for (let batchStart = 0; batchStart < chunksToEmbed.length; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, chunksToEmbed.length);
       const values = [];
 
       for (let i = batchStart; i < batchEnd; i++) {
-        const content = dedupedChunks[i];
+        const content = chunksToEmbed[i];
         const embedding = embeddings[i];
         const tokens = estimateTokens(content);
         const vectorStr = `[${embedding.join(",")}]`;
         const hash = chunkHashes[i] ?? "";
-        const metadata = JSON.stringify({ index: i, total: dedupedChunks.length, contentHash: hash });
+        const metadata = JSON.stringify({ index: i, total: chunksToEmbed.length, contentHash: hash });
 
         values.push(
           Prisma.sql`(gen_random_uuid()::text, ${content}, ${vectorStr}::vector, ${tokens}, ${metadata}::jsonb, NOW(), ${sourceId}, ${hash})`

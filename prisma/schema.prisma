@@ -141,9 +141,11 @@ model KnowledgeBase {
   searchThreshold     Float     @default(0.25)
   hybridAlpha         Float     @default(0.7)
   maxChunks           Int       @default(500)
-  contextOrdering     String    @default("relevance")
-  migrationStatus     String?
-  processingProgress  Json?
+  contextOrdering         String    @default("relevance")
+  migrationStatus         String?
+  processingProgress      Json?
+  // Anthropic Contextual Retrieval — prepend LLM-generated context to each chunk during ingest
+  contextualEnrichment    Boolean   @default(false)
 }
 
 enum KBSourceType {

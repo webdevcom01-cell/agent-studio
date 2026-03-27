@@ -12,7 +12,10 @@ import { updateChunkRetrievalStats } from "./maintenance";
 import { logger } from "@/lib/logger";
 import { recordMetric } from "@/lib/observability/metrics";
 
-const DEFAULT_RELEVANCE_THRESHOLD = 0.1;
+// Raised from 0.1 → 0.25 to eliminate low-quality noise results.
+// Most HNSW cosine similarity scores for truly irrelevant chunks fall below 0.25.
+// The per-KB searchThreshold config takes precedence when available.
+const DEFAULT_RELEVANCE_THRESHOLD = 0.25;
 
 interface KBSearchConfig {
   searchTopK: number;
@@ -23,6 +26,7 @@ interface KBSearchConfig {
   embeddingModel: string | null;
   queryTransform: string;
   contextOrdering: string | null;
+  contextualEnrichment: boolean;
 }
 
 async function loadKBConfig(knowledgeBaseId: string): Promise<KBSearchConfig | null> {
@@ -40,7 +44,19 @@ async function loadKBConfig(knowledgeBaseId: string): Promise<KBSearchConfig | n
         contextOrdering: true,
       },
     });
-    return kb;
+    if (!kb) return null;
+
+    // contextualEnrichment is in schema.prisma + DB but not in generated types yet
+    // (pnpm db:generate is blocked in this environment due to 403 on binary fetch).
+    // Fetched via raw query until types are regenerated.
+    const enrichRows = await prisma.$queryRaw<Array<{ contextualEnrichment: boolean }>>(
+      Prisma.sql`SELECT "contextualEnrichment" FROM "KnowledgeBase" WHERE id = ${knowledgeBaseId} LIMIT 1`,
+    );
+
+    return {
+      ...kb,
+      contextualEnrichment: enrichRows[0]?.contextualEnrichment ?? false,
+    };
   } catch {
     return null;
   }
@@ -241,21 +257,42 @@ export function reciprocalRankFusion(
     .map(({ score, result }) => ({ ...result, relevanceScore: score }));
 }
 
-function normalizeRRFScores(results: SearchResult[]): SearchResult[] {
-  if (results.length === 0) return results;
-  const maxScore = results[0].relevanceScore;
-  if (maxScore === 0) return results;
+/**
+ * Min-max normalization of RRF scores.
+ *
+ * Previous implementation divided by max (divide-by-max), which compressed all
+ * scores towards 1.0 and made the threshold filter unreliable. Min-max preserves
+ * the full [0, 1] range and keeps relative distances between results intact.
+ */
+export function normalizeRRFScores(results: SearchResult[]): SearchResult[] {
+  if (results.length <= 1) return results;
+  const scores = results.map((r) => r.relevanceScore);
+  const maxScore = Math.max(...scores);
+  const minScore = Math.min(...scores);
+  const range = maxScore - minScore;
+  if (range === 0) return results; // all scores identical — nothing to normalize
   return results.map((r) => ({
     ...r,
-    relevanceScore: r.relevanceScore / maxScore,
+    relevanceScore: (r.relevanceScore - minScore) / range,
   }));
 }
 
+/**
+ * Adjusts retrieval count based on query complexity.
+ *
+ * Short queries (≤3 words) are usually simple lookups — fewer chunks suffice.
+ * Medium queries benefit from a proportional reduction.
+ * Long queries are analytical and need the full configured topK.
+ *
+ * The previous implementation hard-capped at 7 regardless of KB config.
+ * This was preventing agents configured with topK=10+ from ever using it.
+ */
 export function computeDynamicTopK(query: string, configuredTopK: number): number {
   const wordCount = query.split(/\s+/).filter(Boolean).length;
   if (wordCount <= 3) return Math.min(3, configuredTopK);
-  if (wordCount <= 8) return Math.min(5, configuredTopK);
-  return Math.min(7, configuredTopK);
+  if (wordCount <= 8) return Math.min(configuredTopK, Math.ceil(configuredTopK * 0.6));
+  // Long / analytical queries — use the full configured topK (no cap)
+  return configuredTopK;
 }
 
 interface NeighborChunkRow {
@@ -395,7 +432,11 @@ export async function hybridSearch(
   const kbConfig = await loadKBConfig(knowledgeBaseId);
 
   const topK = options?.topK ?? kbConfig?.searchTopK ?? 5;
-  const semanticWeight = options?.semanticWeight ?? kbConfig?.hybridAlpha ?? 0.7;
+  const contextualEnrichmentEnabled = kbConfig?.contextualEnrichment ?? false;
+  // When Contextual Retrieval is enabled, chunks already embed document context
+  // so semantic embeddings are more accurate → increase their weight (Anthropic 4:1 ratio).
+  const defaultSemanticWeight = contextualEnrichmentEnabled ? 0.8 : 0.7;
+  const semanticWeight = options?.semanticWeight ?? kbConfig?.hybridAlpha ?? defaultSemanticWeight;
   const keywordWeight = options?.keywordWeight ?? (1 - semanticWeight);
   const threshold = kbConfig?.searchThreshold ?? DEFAULT_RELEVANCE_THRESHOLD;
   const retrievalMode = kbConfig?.retrievalMode ?? "hybrid";
