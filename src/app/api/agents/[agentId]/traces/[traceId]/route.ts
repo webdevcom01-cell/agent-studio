@@ -17,8 +17,7 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const trace = await (prisma as any).flowTrace.findFirst({
+    const trace = await prisma.flowTrace.findFirst({
       where: { id: traceId, agentId },
     });
 
@@ -52,8 +51,7 @@ export async function DELETE(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const existing = await (prisma as any).flowTrace.findFirst({
+    const existing = await prisma.flowTrace.findFirst({
       where: { id: traceId, agentId },
       select: { id: true },
     });
@@ -65,8 +63,7 @@ export async function DELETE(
       );
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (prisma as any).flowTrace.delete({ where: { id: traceId } });
+    await prisma.flowTrace.delete({ where: { id: traceId } });
 
     return NextResponse.json({ success: true, data: { deleted: true } });
   } catch (error) {

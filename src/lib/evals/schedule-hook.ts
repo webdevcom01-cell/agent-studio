@@ -144,8 +144,7 @@ export function isSuiteDue(suite: EligibleSuite, now: Date): boolean {
  * Get all eval suites that are schedule-enabled and have at least one test case.
  * Exported for unit testing.
  */
-// Internal shape returned by the Prisma query (fields added via schema migration,
-// not yet reflected in the generated client — cast until next db:generate)
+// Internal shape returned by the Prisma query
 interface RawScheduledSuite {
   id: string;
   name: string;
@@ -156,9 +155,7 @@ interface RawScheduledSuite {
 }
 
 export async function getScheduleEnabledSuites(): Promise<EligibleSuite[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const evalSuiteAny = prisma.evalSuite as any;
-  const suites = (await evalSuiteAny.findMany({
+  const suites = (await prisma.evalSuite.findMany({
     where: {
       scheduleEnabled: true,
       scheduleCron: { not: null },
@@ -241,8 +238,7 @@ async function runScheduledEvals({
       });
 
       // Update lastScheduledAt after successful run
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (prisma.evalSuite as any).update({
+      await prisma.evalSuite.update({
         where: { id: suite.id },
         data: { lastScheduledAt: now },
       });

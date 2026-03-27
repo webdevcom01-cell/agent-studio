@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
-import type { FlowTraceCreateInput } from "@/lib/types/flow-trace";
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -36,8 +36,7 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const traces = await (prisma as any).flowTrace.findMany({
+    const traces = await prisma.flowTrace.findMany({
       where: { agentId },
       orderBy: { createdAt: "desc" },
       take: 20,
@@ -86,16 +85,23 @@ export async function POST(
       );
     }
 
-    const input: FlowTraceCreateInput = {
-      agentId,
-      ...parsed.data,
-      nodeTraces: parsed.data.nodeTraces as Record<string, unknown>,
-      edgeTraces: parsed.data.edgeTraces as Record<string, unknown>,
-      flowSummary: parsed.data.flowSummary as Record<string, unknown> | undefined,
+    const input: Prisma.FlowTraceCreateInput = {
+      agent: { connect: { id: agentId } },
+      conversationId: parsed.data.conversationId,
+      testInput: parsed.data.testInput,
+      status: parsed.data.status,
+      totalDurationMs: parsed.data.totalDurationMs,
+      nodesExecuted: parsed.data.nodesExecuted,
+      nodesFailed: parsed.data.nodesFailed,
+      executionPath: parsed.data.executionPath,
+      nodeTraces: parsed.data.nodeTraces as Prisma.InputJsonValue,
+      edgeTraces: parsed.data.edgeTraces as Prisma.InputJsonValue,
+      flowSummary: parsed.data.flowSummary
+        ? (parsed.data.flowSummary as Prisma.InputJsonValue)
+        : Prisma.DbNull,
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const trace = await (prisma as any).flowTrace.create({ data: input });
+    const trace = await prisma.flowTrace.create({ data: input });
 
     return NextResponse.json({ success: true, data: trace }, { status: 201 });
   } catch (error) {
