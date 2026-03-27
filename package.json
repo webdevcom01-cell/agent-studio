@@ -23,9 +23,9 @@
     "mcp:playwright": "npx @playwright/mcp --port 3100",
     "precheck": "bash scripts/pre-push-check.sh",
     "precheck:file": "bash scripts/pre-push-check.sh",
-    "knip": "knip",
-    "knip:fix": "knip --fix",
-    "knip:ci": "knip --reporter compact --no-exit-code"
+    "knip": "npx knip@5",
+    "knip:fix": "npx knip@5 --fix",
+    "knip:ci": "npx knip@5 --reporter compact --no-exit-code"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
@@ -96,7 +96,6 @@
     "tailwindcss": "^4.1.8",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.1",
-    "knip": "^5.61.1"
+    "vitest": "^3.2.1"
   }
 }
