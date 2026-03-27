@@ -20,7 +20,12 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
-    "mcp:playwright": "npx @playwright/mcp --port 3100"
+    "mcp:playwright": "npx @playwright/mcp --port 3100",
+    "precheck": "bash scripts/pre-push-check.sh",
+    "precheck:file": "bash scripts/pre-push-check.sh",
+    "knip": "knip",
+    "knip:fix": "knip --fix",
+    "knip:ci": "knip --reporter compact --no-exit-code"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
@@ -91,6 +96,7 @@
     "tailwindcss": "^4.1.8",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.1"
+    "vitest": "^3.2.1",
+    "knip": "^5.61.1"
   }
 }
