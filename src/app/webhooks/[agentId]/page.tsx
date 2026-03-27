@@ -6,7 +6,7 @@ import {
   ArrowLeft, Plus, Trash2, Webhook, Copy, Eye, EyeOff, RefreshCw,
   CheckCircle2, XCircle, Loader2, MoreVertical, Clock, Zap, Send,
   ChevronDown, ChevronRight, Filter, Layers, X, ExternalLink, RotateCcw,
-  Search,
+  Search, Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
 import { WEBHOOK_PRESETS, type WebhookPreset } from "@/lib/webhooks/presets";
+import { JsonPathTester } from "@/components/webhooks/json-path-tester";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -548,6 +549,9 @@ function ConfigTab({
           onChange={setBodyMappings}
         />
       </div>
+
+      {/* JSONPath Tester — preview body mappings against a sample payload */}
+      <JsonPathTester bodyMappings={bodyMappings} />
 
       {/* Header Mappings */}
       <div className="space-y-2.5">
@@ -1348,14 +1352,50 @@ function WebhookDetailPanel({
           </button>
         ))}
         {tab === "executions" && (
-          <button
-            type="button"
-            onClick={() => void fetchExecutions(true)}
-            className="ml-auto px-3 text-muted-foreground hover:text-foreground transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw className={`size-3.5 ${loadingExecs ? "animate-spin" : ""}`} />
-          </button>
+          <div className="ml-auto flex items-center gap-1 pr-1">
+            {/* Export dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded"
+                  title="Export execution history as CSV"
+                  disabled={execTotal === 0}
+                >
+                  <Download className="size-3.5" />
+                  <span className="hidden sm:inline">Export</span>
+                  <ChevronDown className="size-2.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {(["ALL", "COMPLETED", "FAILED"] as const).map((s) => (
+                  <DropdownMenuItem
+                    key={s}
+                    asChild
+                  >
+                    <a
+                      href={`/api/agents/${agentId}/webhooks/${webhookId}/executions/export?status=${s}&limit=200`}
+                      download
+                    >
+                      <Download className="mr-2 size-3.5" />
+                      {s === "ALL" ? "All executions" : `${s.charAt(0) + s.slice(1).toLowerCase()} only`}
+                      <span className="ml-auto text-[10px] text-muted-foreground pl-3">CSV</span>
+                    </a>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Refresh */}
+            <button
+              type="button"
+              onClick={() => void fetchExecutions(true)}
+              className="px-2 text-muted-foreground hover:text-foreground transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw className={`size-3.5 ${loadingExecs ? "animate-spin" : ""}`} />
+            </button>
+          </div>
         )}
       </div>
 

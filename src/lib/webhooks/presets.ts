@@ -36,6 +36,12 @@ export interface WebhookPreset {
   commonEvents: string[];
   docs: string;
   signatureNote: string;
+  /**
+   * Representative sample payload for this provider.
+   * Used by the JSONPath Tester in the Configuration tab so developers
+   * can validate their body mappings without sending a real webhook.
+   */
+  samplePayload: Record<string, unknown>;
 }
 
 // ─── GitHub ────────────────────────────────────────────────────────────────────
@@ -82,6 +88,24 @@ const GITHUB: WebhookPreset = {
     "GitHub signs requests with HMAC-SHA256 in the x-hub-signature-256 header. " +
     "This uses the Standard Webhooks header format — configure the webhook secret " +
     "in your GitHub repo → Settings → Webhooks.",
+  samplePayload: {
+    action: "opened",
+    ref: "refs/heads/main",
+    repository: {
+      full_name: "octocat/Hello-World",
+      html_url: "https://github.com/octocat/Hello-World",
+      private: false,
+    },
+    sender: { login: "octocat", id: 1 },
+    head_commit: {
+      id: "abc123def456",
+      message: "Fix all the bugs",
+      author: { name: "Octocat", email: "octocat@github.com" },
+    },
+    commits: [
+      { id: "abc123def456", message: "Fix all the bugs", added: [], removed: [], modified: ["README.md"] },
+    ],
+  },
 };
 
 // ─── Stripe ────────────────────────────────────────────────────────────────────
@@ -133,6 +157,23 @@ const STRIPE: WebhookPreset = {
   signatureNote:
     "Stripe signs requests with HMAC-SHA256 in the stripe-signature header. " +
     "Use the Stripe webhook signing secret from your Stripe Dashboard → Webhooks as this webhook's secret.",
+  samplePayload: {
+    id: "evt_1NirD82eZvKYlo2CIvbtLWuY",
+    object: "event",
+    type: "payment_intent.succeeded",
+    created: 1690988796,
+    data: {
+      object: {
+        id: "pi_3NirD82eZvKYlo2C1PFPdCbD",
+        object: "payment_intent",
+        amount: 2000,
+        currency: "usd",
+        status: "succeeded",
+        customer: "cus_9s6XKzkNRiz8i3",
+      },
+    },
+    livemode: false,
+  },
 };
 
 // ─── Slack ─────────────────────────────────────────────────────────────────────
@@ -180,6 +221,20 @@ const SLACK: WebhookPreset = {
     "returned before signature verification. For event signing, use your Slack app's " +
     "Signing Secret. Note: Slack uses a different signature scheme (v0=hmac-sha256); " +
     "the trigger endpoint accepts Standard Webhooks format for consistent verification.",
+  samplePayload: {
+    token: "XXYYZZ",
+    team_id: "T123ABC456",
+    api_app_id: "A123ABC456",
+    type: "event_callback",
+    event: {
+      type: "app_mention",
+      user: "U123ABC456",
+      text: "<@U0LAN0Z89> Hello!",
+      ts: "1355517523.000005",
+      channel: "C123ABC456",
+    },
+    event_time: 1355517523,
+  },
 };
 
 // ─── Generic / Custom ──────────────────────────────────────────────────────────
@@ -197,6 +252,16 @@ const GENERIC: WebhookPreset = {
   signatureNote:
     "Uses Standard Webhooks HMAC-SHA256 signing. Include x-webhook-id, " +
     "x-webhook-timestamp, and x-webhook-signature headers with each request.",
+  samplePayload: {
+    id: "evt_abc123",
+    type: "resource.created",
+    timestamp: "2026-01-15T10:00:00Z",
+    data: {
+      id: "res_xyz789",
+      status: "active",
+      name: "Example Resource",
+    },
+  },
 };
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
