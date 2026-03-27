@@ -264,9 +264,77 @@ const GENERIC: WebhookPreset = {
   },
 };
 
+// ─── GitHub PR (DevSecOps) ─────────────────────────────────────────────────────
+
+/**
+ * Specialized GitHub preset for the DevSecOps Pipeline.
+ * Extracts full PR context needed by the Orchestrator agent.
+ */
+const GITHUB_PR: WebhookPreset = {
+  id: "github-pr",
+  name: "GitHub PR (DevSecOps)",
+  icon: "🔐",
+  description: "Pull request events for the autonomous DevSecOps pipeline — extracts PR number, author, diff URL, files changed, and branch info",
+  bodyMappings: [
+    { jsonPath: "$.action",                              variableName: "action",            type: "string" },
+    { jsonPath: "$.number",                              variableName: "pr_number",         type: "number" },
+    { jsonPath: "$.pull_request.title",                  variableName: "pr_title",          type: "string" },
+    { jsonPath: "$.pull_request.html_url",               variableName: "pr_url",            type: "string" },
+    { jsonPath: "$.pull_request.diff_url",               variableName: "pr_diff_url",       type: "string" },
+    { jsonPath: "$.pull_request.user.login",             variableName: "pr_author",         type: "string" },
+    { jsonPath: "$.pull_request.base.ref",               variableName: "base_branch",       type: "string" },
+    { jsonPath: "$.pull_request.head.ref",               variableName: "head_branch",       type: "string" },
+    { jsonPath: "$.pull_request.head.sha",               variableName: "head_sha",          type: "string" },
+    { jsonPath: "$.pull_request.additions",              variableName: "additions",         type: "number" },
+    { jsonPath: "$.pull_request.deletions",              variableName: "deletions",         type: "number" },
+    { jsonPath: "$.pull_request.changed_files",          variableName: "changed_files_count", type: "number" },
+    { jsonPath: "$.pull_request.draft",                  variableName: "is_draft",          type: "boolean" },
+    { jsonPath: "$.pull_request.body",                   variableName: "pr_description",    type: "string" },
+    { jsonPath: "$.repository.full_name",                variableName: "repo_full_name",    type: "string" },
+    { jsonPath: "$.repository.html_url",                 variableName: "repo_url",          type: "string" },
+  ],
+  headerMappings: [
+    { headerName: "x-github-event",    variableName: "github_event" },
+    { headerName: "x-github-delivery", variableName: "github_delivery_id" },
+  ],
+  eventFilters: ["pull_request"],
+  commonEvents: [
+    "pull_request",
+    "pull_request_review",
+    "pull_request_review_comment",
+  ],
+  docs: "https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request",
+  signatureNote:
+    "GitHub signs requests with HMAC-SHA256 in the x-hub-signature-256 header. " +
+    "Configure the webhook secret in your GitHub repo → Settings → Webhooks. " +
+    "Set Content-Type to application/json and select 'Pull requests' events only.",
+  samplePayload: {
+    action: "opened",
+    number: 42,
+    pull_request: {
+      title: "feat: add user authentication flow",
+      html_url: "https://github.com/octocat/Hello-World/pull/42",
+      diff_url: "https://github.com/octocat/Hello-World/pull/42.diff",
+      user: { login: "octocat" },
+      base: { ref: "main" },
+      head: { ref: "feature/auth-flow", sha: "abc123def456789" },
+      additions: 156,
+      deletions: 23,
+      changed_files: 8,
+      draft: false,
+      body: "Implements OAuth2 flow with GitHub and Google providers.\n\nCloses #38",
+    },
+    repository: {
+      full_name: "octocat/Hello-World",
+      html_url: "https://github.com/octocat/Hello-World",
+    },
+    sender: { login: "octocat" },
+  },
+};
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
-export const WEBHOOK_PRESETS: WebhookPreset[] = [GITHUB, STRIPE, SLACK, GENERIC];
+export const WEBHOOK_PRESETS: WebhookPreset[] = [GITHUB, GITHUB_PR, STRIPE, SLACK, GENERIC];
 
 export function getPreset(id: string): WebhookPreset | undefined {
   return WEBHOOK_PRESETS.find((p) => p.id === id);

@@ -39,6 +39,7 @@ export const AGENT_CATEGORY_METADATA: CategoryMeta[] = [
   { id: "finance",           label: "Finance",           emoji: "💹", color: "green",   description: "Financial analysis, reporting and compliance" },
   { id: "hr",                label: "HR & Recruiting",   emoji: "👥", color: "blue",    description: "Talent acquisition and people operations" },
   { id: "sales",             label: "Sales & CRM",       emoji: "🤝", color: "orange",  description: "Sales automation and customer success" },
+  { id: "devsecops",         label: "DevSecOps",         emoji: "🔐", color: "red",     description: "Autonomous CI/CD security scanning and PR review pipeline" },
 ];
 
 export const AGENT_CATEGORIES = AGENT_CATEGORY_METADATA.map(

@@ -347,4 +347,601 @@ export const STARTER_FLOWS: Record<string, FlowContent> = {
     ],
     variables: [],
   },
+
+  // ── DevSecOps Pipeline ────────────────────────────────────────────────────
+
+  /**
+   * Autonomous DevSecOps Pipeline — full 2026 CI/CD security guard.
+   *
+   * Architecture:
+   *   GitHub PR Webhook
+   *     → Payload Parser (extracts PR context)
+   *     → Parallel Analysis (3 agents simultaneously)
+   *         ├── Code Quality Analyzer    (ESLint / TS / complexity)
+   *         ├── Security Scanner         (OWASP / SAST / secrets)
+   *         └── Test Intelligence Agent  (coverage delta / test gen)
+   *     → Risk Aggregator (calculates score 0-100)
+   *     → Decision Switch
+   *         ├── score ≥ 80  → Auto-approve path
+   *         ├── score 50-79 → Human review path
+   *         └── score < 50  → Auto-block path
+   *     → [Human Approval] (only on NEEDS_REVIEW path)
+   *     → PR Review Publisher (GitHub comment + Slack notification)
+   *     → Done
+   *
+   * Node count: 15 nodes — complex enough to stress-test the engine.
+   * Uses: webhook_trigger, parallel, call_agent, ai_response, switch,
+   *       human_approval, notification, set_variable, mcp_tool.
+   */
+  "devsecops-orchestrator": {
+    nodes: [
+      // ── Entry: GitHub Webhook ───────────────────────────────────────────
+      {
+        id: "wh_trigger",
+        type: "webhook_trigger",
+        position: pos(0),
+        data: {
+          label: "GitHub PR Webhook",
+          outputVariable: "pr_payload",
+          eventTypeVariable: "github_event",
+          description: "Receives GitHub pull_request events. Configure webhook at: repo → Settings → Webhooks",
+        },
+      },
+
+      // ── Stage 1: Parse PR Context ───────────────────────────────────────
+      {
+        id: "pr_parser",
+        type: "ai_response",
+        position: pos(1),
+        data: {
+          label: "Parse PR Context",
+          prompt: `Extract and structure the PR context from this GitHub webhook payload.
+
+Webhook payload: {{pr_payload}}
+GitHub event: {{github_event}}
+
+Return a JSON object with:
+{
+  "pr_number": number,
+  "pr_title": string,
+  "pr_url": string,
+  "author": string,
+  "base_branch": string,
+  "head_branch": string,
+  "repo_full_name": string,
+  "files_changed": string[],
+  "additions": number,
+  "deletions": number,
+  "diff_summary": string,
+  "commit_messages": string[],
+  "is_draft": boolean
+}
+
+If the event is not a pull_request open/synchronize event, return { "skip": true, "reason": "not a PR event" }.`,
+          outputVariable: "pr_context",
+          model: "deepseek-chat",
+        },
+      },
+
+      // ── Stage 2: Parallel Analysis (3 agents) ──────────────────────────
+      {
+        id: "analysis_parallel",
+        type: "parallel",
+        position: pos(2),
+        data: {
+          label: "Parallel Security Analysis",
+          mergeStrategy: "all",
+          timeoutSeconds: 120,
+          branches: [
+            { branchId: "b_quality",   label: "Code Quality",   outputVariable: "quality_result"   },
+            { branchId: "b_security",  label: "Security Scan",  outputVariable: "security_result"  },
+            { branchId: "b_tests",     label: "Test Coverage",  outputVariable: "test_result"      },
+          ],
+        },
+      },
+
+      // Branch A: Code Quality Analyzer
+      {
+        id: "code_quality",
+        type: "call_agent",
+        position: ppos(3, -1),
+        data: {
+          label: "Code Quality Analyzer",
+          mode: "internal",
+          targetAgentId: "",   // → link to devsecops-code-quality agent
+          outputVariable: "quality_result",
+          inputMapping: [
+            { key: "pr_context",     value: "{{pr_context}}" },
+            { key: "files_changed",  value: "{{pr_context.files_changed}}" },
+            { key: "diff_summary",   value: "{{pr_context.diff_summary}}" },
+          ],
+          onError: "continue",
+        },
+      },
+
+      // Branch B: Security Scanner
+      {
+        id: "security_scan",
+        type: "call_agent",
+        position: ppos(3, 0),
+        data: {
+          label: "Security Scanner",
+          mode: "internal",
+          targetAgentId: "",   // → link to devsecops-security-scanner agent
+          outputVariable: "security_result",
+          inputMapping: [
+            { key: "pr_context",     value: "{{pr_context}}" },
+            { key: "files_changed",  value: "{{pr_context.files_changed}}" },
+            { key: "diff_summary",   value: "{{pr_context.diff_summary}}" },
+            { key: "repo_name",      value: "{{pr_context.repo_full_name}}" },
+          ],
+          onError: "continue",
+        },
+      },
+
+      // Branch C: Test Intelligence
+      {
+        id: "test_intel",
+        type: "call_agent",
+        position: ppos(3, 1),
+        data: {
+          label: "Test Intelligence Agent",
+          mode: "internal",
+          targetAgentId: "",   // → link to devsecops-test-intelligence agent
+          outputVariable: "test_result",
+          inputMapping: [
+            { key: "pr_context",     value: "{{pr_context}}" },
+            { key: "files_changed",  value: "{{pr_context.files_changed}}" },
+            { key: "diff_summary",   value: "{{pr_context.diff_summary}}" },
+          ],
+          onError: "continue",
+        },
+      },
+
+      // ── Stage 3: Risk Aggregator ────────────────────────────────────────
+      {
+        id: "risk_aggregator",
+        type: "ai_response",
+        position: pos(4),
+        data: {
+          label: "Risk Aggregator",
+          prompt: `You are the final risk aggregator for a DevSecOps pipeline.
+
+Aggregate these analysis results and produce a final risk assessment:
+
+PR Context: {{pr_context}}
+Code Quality Result: {{quality_result}}
+Security Scan Result: {{security_result}}
+Test Coverage Result: {{test_result}}
+
+Calculate a risk score using this model:
+- Start at 100
+- Critical security vulnerability: -40 pts each (max -80)
+- High severity finding: -20 pts each (max -40)
+- Medium severity finding: -10 pts each (max -20)
+- Lint errors: -5 pts each (max -15)
+- Missing tests for new code: -10 pts
+- Test coverage < 60%: -5 pts
+
+Determine decision:
+- score ≥ 80: "AUTO_APPROVE"
+- score 50-79: "NEEDS_REVIEW"
+- score < 50: "BLOCK"
+
+Return JSON:
+{
+  "risk_score": number,
+  "decision": "AUTO_APPROVE" | "NEEDS_REVIEW" | "BLOCK",
+  "decision_reasoning": string,
+  "critical_findings": string[],
+  "high_findings": string[],
+  "medium_findings": string[],
+  "positive_observations": string[],
+  "recommended_actions": string[],
+  "quality_score": number,
+  "security_score": number,
+  "test_score": number
+}`,
+          outputVariable: "risk_assessment",
+          model: "deepseek-chat",
+        },
+      },
+
+      // ── Stage 4: Decision Gate (Switch) ────────────────────────────────
+      {
+        id: "decision_switch",
+        type: "switch",
+        position: pos(5),
+        data: {
+          label: "Decision Gate",
+          variable: "risk_assessment.decision",
+          operator: "equals",
+          outputVariable: "switch_result",
+          cases: [
+            { value: "AUTO_APPROVE", label: "✅ Auto Approve (score ≥ 80)" },
+            { value: "NEEDS_REVIEW", label: "⚠️ Needs Review (score 50-79)" },
+            { value: "BLOCK",        label: "🚫 Block (score < 50)" },
+          ],
+        },
+      },
+
+      // ── Path A: Auto Approve ────────────────────────────────────────────
+      {
+        id: "set_auto_approve",
+        type: "set_variable",
+        position: ppos(6, -1),
+        data: {
+          label: "Set: Auto Approve",
+          assignments: [
+            { variable: "final_decision",    value: "AUTO_APPROVE" },
+            { variable: "review_event_type", value: "APPROVE" },
+          ],
+        },
+      },
+
+      // ── Path B: Human Review ────────────────────────────────────────────
+      {
+        id: "human_review",
+        type: "human_approval",
+        position: ppos(6, 0),
+        data: {
+          label: "Human Security Review",
+          prompt: `A PR requires your review before merge decision.
+
+**PR:** {{pr_context.pr_title}} (#{{pr_context.pr_number}})
+**Author:** {{pr_context.author}}
+**Risk Score:** {{risk_assessment.risk_score}}/100
+
+**Key Findings:**
+{{risk_assessment.high_findings}}
+
+**Recommended Actions:**
+{{risk_assessment.recommended_actions}}
+
+Do you approve this PR for merge?`,
+          inputVariable: "risk_assessment",
+          outputVariable: "human_decision",
+          timeoutMinutes: 60,
+          onTimeout: "continue",
+          defaultValue: "APPROVED",
+        },
+      },
+
+      // ── Path C: Auto Block ──────────────────────────────────────────────
+      {
+        id: "set_block",
+        type: "set_variable",
+        position: ppos(6, 1),
+        data: {
+          label: "Set: Block PR",
+          assignments: [
+            { variable: "final_decision",    value: "BLOCK" },
+            { variable: "review_event_type", value: "REQUEST_CHANGES" },
+          ],
+        },
+      },
+
+      // ── Stage 5: Merge Paths → Publish ─────────────────────────────────
+      {
+        id: "publish_review",
+        type: "call_agent",
+        position: pos(7),
+        data: {
+          label: "PR Review Publisher",
+          mode: "internal",
+          targetAgentId: "",   // → link to devsecops-pr-review-publisher agent
+          outputVariable: "published_review",
+          inputMapping: [
+            { key: "pr_context",     value: "{{pr_context}}"     },
+            { key: "risk_assessment", value: "{{risk_assessment}}" },
+            { key: "quality_result", value: "{{quality_result}}" },
+            { key: "security_result", value: "{{security_result}}" },
+            { key: "test_result",    value: "{{test_result}}"    },
+            { key: "final_decision", value: "{{final_decision}}" },
+            { key: "review_event_type", value: "{{review_event_type}}" },
+          ],
+          onError: "continue",
+        },
+      },
+
+      // ── Stage 6: Slack Notification ────────────────────────────────────
+      {
+        id: "slack_notify",
+        type: "notification",
+        position: pos(8),
+        data: {
+          label: "Slack Notification",
+          message: `🔐 *DevSecOps Pipeline* — PR #{{pr_context.pr_number}}: {{pr_context.pr_title}}
+
+Decision: {{risk_assessment.decision}} (Score: {{risk_assessment.risk_score}}/100)
+Author: @{{pr_context.author}} → \`{{pr_context.head_branch}}\`
+
+{{risk_assessment.decision_reasoning}}
+
+🔗 {{pr_context.pr_url}}`,
+          channel: "webhook",
+          webhookUrl: "",  // → configure with Slack webhook URL
+        },
+      },
+
+      // ── Done ────────────────────────────────────────────────────────────
+      {
+        id: "done",
+        type: "end",
+        position: pos(9),
+        data: {
+          label: "Pipeline Complete",
+          message: "✅ DevSecOps pipeline completed. Decision: {{risk_assessment.decision}} ({{risk_assessment.risk_score}}/100)",
+        },
+      },
+    ],
+
+    edges: [
+      // Main flow
+      edge("wh_trigger",        "pr_parser"),
+      edge("pr_parser",         "analysis_parallel"),
+
+      // Parallel branches
+      { id: "e_parallel_quality",   source: "analysis_parallel", target: "code_quality",  sourceHandle: "b_quality"  },
+      { id: "e_parallel_security",  source: "analysis_parallel", target: "security_scan", sourceHandle: "b_security" },
+      { id: "e_parallel_tests",     source: "analysis_parallel", target: "test_intel",    sourceHandle: "b_tests"    },
+
+      // After parallel merge → risk aggregator
+      edge("analysis_parallel", "risk_aggregator"),
+
+      // Risk → Switch
+      edge("risk_aggregator", "decision_switch"),
+
+      // Switch → 3 paths
+      { id: "e_switch_approve", source: "decision_switch", target: "set_auto_approve", sourceHandle: "case_0" },
+      { id: "e_switch_review",  source: "decision_switch", target: "human_review",     sourceHandle: "case_1" },
+      { id: "e_switch_block",   source: "decision_switch", target: "set_block",        sourceHandle: "case_2" },
+
+      // All 3 paths → Publish
+      edge("set_auto_approve", "publish_review"),
+      edge("human_review",     "publish_review"),
+      edge("set_block",        "publish_review"),
+
+      // Publish → Notify → Done
+      edge("publish_review", "slack_notify"),
+      edge("slack_notify",   "done"),
+    ],
+
+    variables: [
+      { name: "pr_payload",         type: "object" as const, default: null   },
+      { name: "github_event",       type: "string" as const, default: ""     },
+      { name: "pr_context",         type: "object" as const, default: null   },
+      { name: "quality_result",     type: "object" as const, default: null   },
+      { name: "security_result",    type: "object" as const, default: null   },
+      { name: "test_result",        type: "object" as const, default: null   },
+      { name: "risk_assessment",    type: "object" as const, default: null   },
+      { name: "final_decision",     type: "string" as const, default: ""     },
+      { name: "review_event_type",  type: "string" as const, default: "COMMENT" },
+      { name: "human_decision",     type: "string" as const, default: ""     },
+      { name: "published_review",   type: "object" as const, default: null   },
+    ],
+  },
+
+  // ── DevSecOps individual agent flows ──────────────────────────────────────
+
+  "devsecops-code-quality": {
+    nodes: [
+      {
+        id: "in",
+        type: "message",
+        position: pos(0),
+        data: { label: "Code Input", message: "{{user_input}}" },
+      },
+      {
+        id: "kb_rules",
+        type: "kb_search",
+        position: pos(1),
+        data: {
+          label: "Fetch Quality Rules",
+          query: "code quality rules TypeScript ESLint complexity best practices",
+          outputVariable: "quality_rules",
+          topK: 5,
+        },
+      },
+      {
+        id: "analyze",
+        type: "ai_response",
+        position: pos(2),
+        data: {
+          label: "Analyze Code Quality",
+          prompt: `Perform a comprehensive code quality analysis on the provided code.
+
+Code/Diff: {{user_input}}
+PR Context: {{pr_context}}
+Files Changed: {{files_changed}}
+
+Quality Rules Reference: {{quality_rules}}
+
+Analyze for:
+1. TypeScript strict mode compliance (no any, proper types)
+2. Cyclomatic complexity (flag functions > 10)
+3. Code duplication (DRY violations)
+4. Error handling completeness
+5. Performance anti-patterns
+6. Architectural concerns
+
+Return structured JSON with quality_score (0-100) and detailed findings.`,
+          outputVariable: "quality_result",
+          model: "deepseek-chat",
+        },
+      },
+      {
+        id: "out",
+        type: "message",
+        position: pos(3),
+        data: { label: "Quality Report", message: "{{quality_result}}" },
+      },
+    ],
+    edges: [edge("in", "kb_rules"), edge("kb_rules", "analyze"), edge("analyze", "out")],
+    variables: [],
+  },
+
+  "devsecops-security-scanner": {
+    nodes: [
+      {
+        id: "in",
+        type: "message",
+        position: pos(0),
+        data: { label: "Code Input", message: "{{user_input}}" },
+      },
+      {
+        id: "kb_owasp",
+        type: "kb_search",
+        position: pos(1),
+        data: {
+          label: "Fetch OWASP Rules",
+          query: "OWASP Top 10 vulnerabilities injection XSS CSRF authentication security patterns",
+          outputVariable: "owasp_rules",
+          topK: 8,
+        },
+      },
+      {
+        id: "scan",
+        type: "ai_response",
+        position: pos(2),
+        data: {
+          label: "Security SAST Scan",
+          prompt: `Perform SAST (Static Application Security Testing) on the provided code.
+
+Code/Diff: {{user_input}}
+PR Context: {{pr_context}}
+Files Changed: {{files_changed}}
+Repo: {{repo_name}}
+
+OWASP Security Rules: {{owasp_rules}}
+
+Scan for:
+1. OWASP Top 10 (2025) vulnerabilities
+2. Secret/credential exposure (API keys, passwords, tokens)
+3. Injection flaws (SQL, NoSQL, command, SSTI)
+4. Authentication and authorization bypasses
+5. Cryptographic weaknesses
+6. SSRF vulnerabilities
+7. Dependency CVEs
+
+Return structured JSON with security_score (0-100), risk_level, and detailed vulnerabilities with CVSS scores.`,
+          outputVariable: "security_result",
+          model: "deepseek-chat",
+        },
+      },
+      {
+        id: "out",
+        type: "message",
+        position: pos(3),
+        data: { label: "Security Report", message: "{{security_result}}" },
+      },
+    ],
+    edges: [edge("in", "kb_owasp"), edge("kb_owasp", "scan"), edge("scan", "out")],
+    variables: [],
+  },
+
+  "devsecops-test-intelligence": {
+    nodes: [
+      {
+        id: "in",
+        type: "message",
+        position: pos(0),
+        data: { label: "Code Input", message: "{{user_input}}" },
+      },
+      {
+        id: "kb_testing",
+        type: "kb_search",
+        position: pos(1),
+        data: {
+          label: "Fetch Testing Patterns",
+          query: "unit testing integration tests Vitest Jest coverage best practices",
+          outputVariable: "testing_patterns",
+          topK: 5,
+        },
+      },
+      {
+        id: "analyze_coverage",
+        type: "ai_response",
+        position: pos(2),
+        data: {
+          label: "Analyze Test Coverage",
+          prompt: `Analyze test coverage for the provided code changes.
+
+Code/Diff: {{user_input}}
+PR Context: {{pr_context}}
+Files Changed: {{files_changed}}
+
+Testing Patterns Reference: {{testing_patterns}}
+
+Analyze:
+1. New functions/methods without test coverage
+2. Modified logic without updated tests
+3. New API routes without integration tests
+4. Error paths without error handling tests
+5. Coverage delta estimation
+
+Generate missing tests following Vitest/Jest 2026 standards.
+
+Return structured JSON with coverage_score (0-100), files_missing_tests, and generated_tests array.`,
+          outputVariable: "test_result",
+          model: "deepseek-chat",
+        },
+      },
+      {
+        id: "out",
+        type: "message",
+        position: pos(3),
+        data: { label: "Coverage Report", message: "{{test_result}}" },
+      },
+    ],
+    edges: [edge("in", "kb_testing"), edge("kb_testing", "analyze_coverage"), edge("analyze_coverage", "out")],
+    variables: [],
+  },
+
+  "devsecops-pr-review-publisher": {
+    nodes: [
+      {
+        id: "in",
+        type: "message",
+        position: pos(0),
+        data: { label: "Analysis Input", message: "{{user_input}}" },
+      },
+      {
+        id: "format_review",
+        type: "ai_response",
+        position: pos(1),
+        data: {
+          label: "Format GitHub Review",
+          prompt: `Format a comprehensive GitHub PR review comment from the pipeline results.
+
+PR Context: {{pr_context}}
+Risk Assessment: {{risk_assessment}}
+Code Quality: {{quality_result}}
+Security Scan: {{security_result}}
+Test Coverage: {{test_result}}
+Final Decision: {{final_decision}}
+
+Create a rich Markdown comment with:
+1. Risk score badge and decision
+2. Summary table (Quality / Security / Tests scores)
+3. Critical and high findings with code snippets and fixes
+4. Positive observations
+5. Action items checklist ([ ] format)
+6. Collapsible full details section
+
+Use emoji-coded severity: 🚫 Critical, ⚠️ High, 💛 Medium, ℹ️ Low`,
+          outputVariable: "formatted_review",
+          model: "deepseek-chat",
+        },
+      },
+      {
+        id: "out",
+        type: "message",
+        position: pos(2),
+        data: { label: "Publish Review", message: "{{formatted_review}}" },
+      },
+    ],
+    edges: [edge("in", "format_review"), edge("format_review", "out")],
+    variables: [],
+  },
 };

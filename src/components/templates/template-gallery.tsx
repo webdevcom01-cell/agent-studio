@@ -67,6 +67,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   finance:            "Finance",
   hr:                 "HR & Recruiting",
   sales:              "Sales & CRM",
+  // 2026 DevSecOps pipeline
+  devsecops:          "DevSecOps",
 };
 
 interface TemplateGalleryProps {
