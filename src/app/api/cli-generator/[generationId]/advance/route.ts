@@ -14,7 +14,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { PIPELINE_PHASES, PHASE_COUNT, STATUS_FOR_PHASE } from "@/lib/cli-generator/types";
-import type { PhaseResult, PipelineConfig, OnFileGenerated } from "@/lib/cli-generator/types";
+import type { PhaseResult, PipelineConfig } from "@/lib/cli-generator/types";
 import {
   aiAnalyze,
   aiDesign,
@@ -25,41 +25,32 @@ import {
 } from "@/lib/cli-generator/ai-phases";
 import { registerCLIBridgeAsMCP } from "@/lib/cli-generator/mcp-registration";
 import { extractPythonSignatures, extractTypeScriptSignatures } from "@/lib/cli-generator/prompts";
-import { applyAutoFixes } from "@/lib/cli-generator/auto-fix";
-import { validatePythonOutput } from "@/lib/cli-generator/py-validator";
-import { generateQuickStartFiles } from "@/lib/cli-generator/quickstart";
 
 export const maxDuration = 300;
 
 type PhaseRunner = (
   config: PipelineConfig,
   previousResults: PhaseResult[],
-) => Promise<{ result: unknown; generatedFiles?: Record<string, string>; tokensUsed?: { input: number; output: number }; modelUsed?: string; retryCount?: number }>;
+) => Promise<{ result: unknown; generatedFiles?: Record<string, string>; tokensUsed?: { input: number; output: number }; modelUsed?: string }>;
 
 /**
  * Builds the phase runner array for a given target.
  * Phases 0 (analyze) and 1 (design) are language-agnostic and shared.
  * Phase 3 (test) uses the correct signature extractor for the target.
  * Phases 2, 4, 5 branch internally in ai-phases.ts based on config.target.
- *
- * The optional onFileGenerated callback fires after each parallel file resolves
- * during the implement and test phases, enabling live-preview incremental DB writes.
  */
-function buildPhaseRunners(
-  target: "python" | "typescript",
-  callbacks?: { onFileGenerated?: OnFileGenerated },
-): PhaseRunner[] {
+function buildPhaseRunners(target: "python" | "typescript"): PhaseRunner[] {
   const extractSignatures =
     target === "typescript" ? extractTypeScriptSignatures : extractPythonSignatures;
 
   return [
     (config) => aiAnalyze(config),
     (config, prev) => aiDesign(config, prev[0]?.output),
-    (config, prev) => aiImplement(config, prev[1]?.output, callbacks?.onFileGenerated),
+    (config, prev) => aiImplement(config, prev[1]?.output),
     // Pass extracted function/class signatures instead of truncated raw file content.
     // This gives the test phase actual function names and parameter lists rather than
     // the first 200 chars of each file (which is typically just imports).
-    (config, prev) => aiTest(config, extractSignatures(prev[2]?.output), callbacks?.onFileGenerated),
+    (config, prev) => aiTest(config, extractSignatures(prev[2]?.output)),
     (config, prev) => aiDocs(config, prev[1]?.output),
     (config, prev) => aiPublish(config, prev[1]?.output),
   ];
@@ -120,19 +111,8 @@ export async function POST(
           status: "pending" as const,
         }));
 
-    // Find the next phase to run.
-    // Prefer "pending" phases. If none exist, check for a "running" phase that
-    // was left over from a previous crashed invocation — auto-heal it back to
-    // pending so this invocation picks it up cleanly (F1: stuck auto-heal).
-    let nextPhaseIndex = phases.findIndex((p) => p.status === "pending");
-    if (nextPhaseIndex === -1) {
-      const stuckRunningIdx = phases.findIndex((p) => p.status === "running");
-      if (stuckRunningIdx !== -1) {
-        phases[stuckRunningIdx].status = "pending";
-        nextPhaseIndex = stuckRunningIdx;
-        logger.info("Auto-healed stuck running phase", { generationId, phase: stuckRunningIdx });
-      }
-    }
+    // Find the next pending phase
+    const nextPhaseIndex = phases.findIndex((p) => p.status === "pending");
     if (nextPhaseIndex === -1) {
       // All phases completed but status not updated — fix it
       return NextResponse.json({
@@ -175,26 +155,8 @@ export async function POST(
         target,
       };
 
-      // Incremental DB write callback — fires after each parallel file resolves
-      // during implement and test phases, enabling live file preview (F2).
-      const onFileGenerated: OnFileGenerated = async (filename, content) => {
-        existingFiles[filename] = content;
-        try {
-          await prisma.cLIGeneration.update({
-            where: { id: generationId },
-            data: { generatedFiles: JSON.parse(JSON.stringify(existingFiles)) },
-          });
-        } catch (writeErr) {
-          logger.warn("Incremental file write failed", {
-            generationId,
-            filename,
-            error: writeErr instanceof Error ? writeErr.message : String(writeErr),
-          });
-        }
-      };
-
       // Build phase runners for the correct target language
-      const PHASE_RUNNERS = buildPhaseRunners(target, { onFileGenerated });
+      const PHASE_RUNNERS = buildPhaseRunners(target);
 
       const runner = PHASE_RUNNERS[nextPhaseIndex];
       if (!runner) {
@@ -230,27 +192,10 @@ export async function POST(
         aiOutput = await runner(config, phases);
       }
 
-      // F3: Auto-fix + validate immediately after implement phase (phase 2)
-      const IMPLEMENT_PHASE_IDX = 2;
-      if (nextPhaseIndex === IMPLEMENT_PHASE_IDX && aiOutput.generatedFiles) {
-        const { files: fixedFiles } = applyAutoFixes(aiOutput.generatedFiles, target);
-        aiOutput.generatedFiles = fixedFiles;
-        // Propagate fixed files into result so phase 3 (test) uses corrected code
-        aiOutput.result = fixedFiles;
-
-        // Run static validation (log only — never block completion)
-        if (target === "python") {
-          validatePythonOutput(fixedFiles);
-        }
-        // TypeScript validation already runs inside aiImplement via validateTSOutput
-      }
-
-      // Save phase result — persist modelUsed and retryCount from AI response (F1)
+      // Save docs phase result
       phase.output = aiOutput.result;
       phase.generatedFiles = aiOutput.generatedFiles;
       phase.tokensUsed = aiOutput.tokensUsed;
-      phase.modelUsed = aiOutput.modelUsed;
-      phase.retryCount = aiOutput.retryCount;
       phase.status = "completed";
       phase.completedAt = new Date().toISOString();
 
@@ -265,8 +210,6 @@ export async function POST(
           publishPhase.output = publishOutput.result;
           publishPhase.generatedFiles = publishOutput.generatedFiles;
           publishPhase.tokensUsed = publishOutput.tokensUsed;
-          publishPhase.modelUsed = publishOutput.modelUsed;
-          publishPhase.retryCount = publishOutput.retryCount;
           publishPhase.status = "completed";
           publishPhase.completedAt = new Date().toISOString();
         }
@@ -279,16 +222,6 @@ export async function POST(
       const lastCompletedPhase = isDocsPhase && publishOutput ? PUBLISH_PHASE_IDX : nextPhaseIndex;
       const isLastPhase = lastCompletedPhase === PHASE_COUNT - 1;
       const newStatus = isLastPhase ? "COMPLETED" : statusForPhase;
-
-      // F5: Generate quick-start files (install.sh, Dockerfile) on pipeline completion.
-      // Pure string generation — no AI call, negligible latency.
-      if (isLastPhase) {
-        const quickStartFiles = generateQuickStartFiles({
-          applicationName: config.applicationName,
-          target,
-        });
-        Object.assign(existingFiles, quickStartFiles);
-      }
 
       // Extract cliConfig from publish output (publish phase returns "mcp_config" key)
       const publishResult = publishOutput

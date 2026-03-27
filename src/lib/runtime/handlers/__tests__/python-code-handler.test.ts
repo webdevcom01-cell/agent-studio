@@ -231,6 +231,156 @@ describe("pythonCodeHandler", () => {
     expect(mockExecutePython).not.toHaveBeenCalled();
   });
 
+  // ── Extended blocked patterns (Session 7 hardening) ───────────────────────
+
+  it("blocks import sys", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "import sys\nsys.exit(1)" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("blocks import importlib", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "import importlib\nimportlib.import_module('os')" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("blocks import ctypes", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "import ctypes" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("blocks import shutil", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "from shutil import rmtree" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("blocks __builtins__ access", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "__builtins__.__import__('os')" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("blocks __subclasses__ traversal", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "().__class__.__bases__[0].__subclasses__()" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("blocks getattr() calls", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "getattr(__builtins__, '__import__')('os')" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("blocks import pickle", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "import pickle" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("blocks import multiprocessing", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "from multiprocessing import Process" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("blocks import http", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "from http.server import HTTPServer" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("blocks globals() call", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "x = globals()" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("blocks breakpoint()", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "breakpoint()" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  // ── Extended blocked packages (Session 7 hardening) ─────────────────────
+
+  it("blocks paramiko package", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "result = 1", packages: "paramiko" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("not allowed");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("blocks fabric package", async () => {
+    const result = await pythonCodeHandler(
+      makeNode({ code: "result = 1", packages: "fabric" }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("not allowed");
+    expect(mockExecutePython).not.toHaveBeenCalled();
+  });
+
+  it("allows safe open-like function names (no false positive)", async () => {
+    mockExecutePython.mockResolvedValueOnce({
+      success: true,
+      output: "",
+      result: null,
+      plots: [],
+    });
+    const result = await pythonCodeHandler(
+      makeNode({ code: "myfunction_open()" }),
+      makeContext(),
+    );
+    // Should NOT be blocked — the open() pattern uses negative lookbehind
+    expect(mockExecutePython).toHaveBeenCalled();
+    // No "blocked" message should exist — messages array is empty on clean success
+    const blockedMessages = result.messages.filter((m) =>
+      m.content.includes("blocked")
+    );
+    expect(blockedMessages).toHaveLength(0);
+  });
+
   // ── Execution errors ───────────────────────────────────────────────────────
 
   it("returns error message on Python execution failure", async () => {

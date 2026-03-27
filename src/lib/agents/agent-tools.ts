@@ -11,7 +11,7 @@
  * @see https://sdk.vercel.ai/docs/ai-sdk-core/tools-and-tool-calling — Vercel AI SDK tools
  */
 import { z } from "zod";
-import { dynamicTool, zodSchema, type ToolSet } from "ai";
+import { zodSchema } from "ai";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import {
@@ -24,6 +24,7 @@ import {
   A2ACircuitError,
 } from "@/lib/a2a/circuit-breaker";
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
+import type { FlowContent } from "@/types";
 import { parseFlowContent } from "@/lib/validators/flow-content";
 
 const DEFAULT_TIMEOUT_SECONDS = 30;
@@ -88,7 +89,8 @@ export interface AgentToolContext {
 export async function getAgentToolsForAgent(
   callerAgentId: string,
   ctx: AgentToolContext
-): Promise<ToolSet> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<Record<string, any>> {
   const depth = ctx.depth ?? 0;
 
   // Don't generate agent tools if we're already at max depth
@@ -106,7 +108,8 @@ export async function getAgentToolsForAgent(
 
     if (agents.length === 0) return {};
 
-    const tools: ToolSet = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tools: Record<string, any> = {};
 
     for (const agent of agents) {
       const toolName = sanitizeToolName(agent.name, agent.id);
@@ -122,14 +125,13 @@ export async function getAgentToolsForAgent(
           ),
       });
 
-      tools[toolName] = dynamicTool({
+      tools[toolName] = {
         description: buildToolDescription(capturedAgent, metadata),
-        inputSchema: zodSchema(inputSchema),
-        execute: async (args: unknown) => {
-          const { input } = args as { input: string };
-          return executeAgentTool(capturedAgent, input, capturedCtx);
+        parameters: zodSchema(inputSchema),
+        execute: async (args: { input: string }) => {
+          return executeAgentTool(capturedAgent, args.input, capturedCtx);
         },
-      });
+      };
     }
 
     logger.info("Agent tools loaded", {

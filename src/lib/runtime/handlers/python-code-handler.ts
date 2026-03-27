@@ -10,8 +10,14 @@ const MAX_PACKAGES = 10;
 /** Allowed package name pattern — prevents shell injection */
 const PACKAGE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*([<>=!~]+[a-zA-Z0-9._*]+)?$/;
 
-/** Packages that mirror blocked system modules — extra safety layer */
-const BLOCKED_PACKAGES = new Set(["os-sys", "shell", "ptyprocess", "pexpect"]);
+/** Packages that mirror blocked system modules or enable system access */
+const BLOCKED_PACKAGES = new Set([
+  "os-sys", "shell", "ptyprocess", "pexpect",
+  "subprocess32", "plumbum", "sh", "invoke", "fabric",
+  "paramiko", "pyautogui", "keyboard", "mouse",
+  "ctypes", "cffi", "pycparser",
+  "dill", "cloudpickle",
+]);
 
 function parsePackages(raw: string): { packages: string[]; error: string | null } {
   const candidates = raw
@@ -36,24 +42,62 @@ function parsePackages(raw: string): { packages: string[]; error: string | null 
   return { packages: candidates, error: null };
 }
 
-/** Dangerous module patterns blocked in Python code */
+/**
+ * Dangerous modules blocked in Python code.
+ * Checked against both `import X` and `from X import ...` forms.
+ * NOTE: This is a defense-in-depth layer — the executor itself should also
+ * restrict builtins. Regex filtering alone is NOT a security boundary.
+ */
+const BLOCKED_MODULES = [
+  "os", "subprocess", "socket", "urllib", "requests", "httpx", "aiohttp",
+  "sys", "importlib", "ctypes", "shutil", "pathlib", "signal",
+  "multiprocessing", "threading", "asyncio",
+  "pickle", "marshal", "shelve", "code", "codeop",
+  "pty", "pdb", "profile", "trace", "webbrowser",
+  "tempfile", "glob", "fnmatch",
+  "io", "fcntl", "termios", "resource", "select", "mmap",
+  "http", "xmlrpc", "ftplib", "smtplib", "poplib", "imaplib", "telnetlib",
+];
+
+/** Build import patterns from module list — catches `import X` and `from X import ...` */
+const BLOCKED_IMPORT_PATTERNS: RegExp[] = BLOCKED_MODULES.flatMap((mod) => [
+  new RegExp(`\\bimport\\s+${mod}\\b`),
+  new RegExp(`\\bfrom\\s+${mod}\\b`),
+]);
+
+/** Dangerous builtins and metaprogramming patterns */
+const BLOCKED_CALLABLE_PATTERNS: RegExp[] = [
+  /\b__import__\s*\(/,          // Dynamic import
+  /\beval\s*\(/,                // Code evaluation
+  /\bexec\s*\(/,                // Code execution
+  /\bcompile\s*\(/,             // Code compilation
+  /\bgetattr\s*\(/,             // Arbitrary attribute access (bypass blocklist)
+  /\bsetattr\s*\(/,             // Arbitrary attribute mutation
+  /\bdelattr\s*\(/,             // Arbitrary attribute deletion
+  /\b__builtins__\b/,           // Direct builtins access
+  /\b__subclasses__\b/,         // Class hierarchy traversal (sandbox escape)
+  /\b__globals__\b/,            // Global scope access
+  /\b__code__\b/,               // Code object manipulation
+  /\b__bases__\b/,              // Base class manipulation
+  /\b__mro__\b/,                // Method resolution order traversal
+  /\bbreakpoint\s*\(/,          // Debugger invocation
+  /\bglobals\s*\(\s*\)/,        // globals() call
+  /\blocals\s*\(\s*\)/,         // locals() call
+  /\bvars\s*\(\s*\)/,           // vars() call
+  /\bdir\s*\(\s*__/,            // dir() on dunder objects
+  /\btype\s*\(\s*['"][^'"]+['"]\s*,/, // Dynamic class creation via type()
+];
+
+/** File I/O patterns — more precise than bare `open(` to reduce false positives */
+const BLOCKED_IO_PATTERNS: RegExp[] = [
+  /(?<![a-zA-Z_])open\s*\(/,    // Standalone open() — not myfunction_open()
+  /\bFile\s*\(/,                // pathlib.Path-style
+];
+
 const BLOCKED_PATTERNS = [
-  /\bimport\s+os\b/,
-  /\bfrom\s+os\b/,
-  /\bimport\s+subprocess\b/,
-  /\bfrom\s+subprocess\b/,
-  /\bimport\s+socket\b/,
-  /\bfrom\s+socket\b/,
-  /\bimport\s+urllib\b/,
-  /\bfrom\s+urllib\b/,
-  /\bimport\s+requests\b/,
-  /\bfrom\s+requests\b/,
-  /\bopen\s*\(/,
-  /\b__import__\s*\(/,
-  /\beval\s*\(/,
-  /\bexec\s*\(/,
-  /\bcompile\s*\(/,
-  /\bgetattr\s*\(\s*__builtins__/,
+  ...BLOCKED_IMPORT_PATTERNS,
+  ...BLOCKED_CALLABLE_PATTERNS,
+  ...BLOCKED_IO_PATTERNS,
 ];
 
 function validatePythonCode(code: string): string | null {

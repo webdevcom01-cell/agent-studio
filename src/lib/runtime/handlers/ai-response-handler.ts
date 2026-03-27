@@ -5,8 +5,8 @@ import { getMCPToolsForAgent } from "@/lib/mcp/client";
 import { getAgentToolsForAgent, type AgentToolContext } from "@/lib/agents/agent-tools";
 import { traceGenAI } from "@/lib/observability/tracer";
 import { recordChatLatency, recordTokenUsage } from "@/lib/observability/metrics";
-import { injectRAGContext } from "@/lib/knowledge/rag-inject";
-import { reformulateWithHistory } from "@/lib/knowledge/query-reformulation";
+// TODO: integrate citations when kb_search results are available in context
+// import { extractCitations, formatCitationsForAI } from "@/lib/knowledge/citations";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 
@@ -63,51 +63,18 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
   const maxTokens = (node.data.maxTokens as number) ?? 2000;
   const outputVariable = (node.data.outputVariable as string) ?? "";
   const enableAgentTools = (node.data.enableAgentTools as boolean) ?? false;
-  // enableRAG defaults to true — agents with a KB always use it unless explicitly disabled
-  const enableRAG = (node.data.enableRAG as boolean) ?? true;
 
   try {
     const model = getModel(modelId);
+
+    const systemMessages = prompt
+      ? [{ role: "system" as const, content: prompt }]
+      : [];
 
     const historyMessages = context.messageHistory.slice(-20).map((m) => ({
       role: m.role as "user" | "assistant" | "system",
       content: m.content,
     }));
-
-    // ── RAG injection ──────────────────────────────────────────────────────────
-    // Find the latest user message to use as the retrieval query.
-    const latestUserMsg = [...historyMessages]
-      .reverse()
-      .find((m) => m.role === "user")?.content ?? "";
-
-    let effectiveSystemPrompt = prompt;
-    if (latestUserMsg) {
-      // Reformulate query using conversation history (handles "tell me more", pronouns, etc.)
-      const reformulatedQuery = await reformulateWithHistory(
-        latestUserMsg,
-        context.messageHistory,
-      );
-      const ragResult = await injectRAGContext(
-        context.agentId,
-        effectiveSystemPrompt,
-        reformulatedQuery,
-        context.conversationId,
-        { disabled: !enableRAG },
-      );
-      effectiveSystemPrompt = ragResult.augmentedSystemPrompt;
-      if (ragResult.retrievedChunkCount > 0) {
-        logger.info("RAG injected into ai_response node", {
-          agentId: context.agentId,
-          chunks: ragResult.retrievedChunkCount,
-          retrievalMs: ragResult.retrievalTimeMs,
-        });
-      }
-    }
-    // ──────────────────────────────────────────────────────────────────────────
-
-    const systemMessages = effectiveSystemPrompt
-      ? [{ role: "system" as const, content: effectiveSystemPrompt }]
-      : [];
 
     // Load MCP tools (always)
     const mcpTools = await loadMCPTools(context.agentId);

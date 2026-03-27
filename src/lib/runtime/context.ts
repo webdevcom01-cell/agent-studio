@@ -80,7 +80,6 @@ export async function saveMessages(
       conversationId,
       role: m.role === "assistant" ? "ASSISTANT" as const : "SYSTEM" as const,
       content: m.content,
-      ...(m.metadata ? { metadata: m.metadata as object } : {}),
     })),
   });
 }

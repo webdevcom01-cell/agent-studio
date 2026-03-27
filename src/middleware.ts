@@ -79,30 +79,8 @@ function isCsrfSafe(request: NextRequest): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return true;
 
-  // Compare the browser Origin host against all plausible representations
-  // of the server host. We check multiple sources because Railway (and other
-  // reverse-proxies) may forward requests with an internal IP/port in the
-  // raw URL while the real public hostname is carried in x-forwarded-host.
-  //
-  // Candidate hosts (in preference order):
-  //   1. x-forwarded-host  — set by Railway's edge proxy, the external hostname
-  //   2. host              — the Host header forwarded by the proxy
-  //   3. request.nextUrl   — Next.js-reconstructed URL (may already use header 1)
-  //   4. request.url       — raw internal URL (may be http://10.x.x.x:PORT/)
-  //
-  // If ANY candidate matches the Origin host, the request is same-host.
-  try {
-    const originHost = new URL(origin).host;
-    const candidates: (string | null)[] = [
-      request.headers.get("x-forwarded-host"),
-      request.headers.get("host"),
-      request.nextUrl.host,
-      (() => { try { return new URL(request.url).host; } catch { return null; } })(),
-    ];
-    return candidates.some((h) => h !== null && h === originHost);
-  } catch {
-    return false;
-  }
+  const requestOrigin = new URL(request.url).origin;
+  return origin === requestOrigin;
 }
 
 export function middleware(request: NextRequest): NextResponse {

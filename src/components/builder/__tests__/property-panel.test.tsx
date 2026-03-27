@@ -127,8 +127,6 @@ vi.mock("lucide-react", () => {
     Phone: Icon,
     Workflow: Icon,
     Bot: Icon,
-    Clipboard: Icon,
-    ChevronRight: Icon,
   };
 });
 
@@ -288,7 +286,7 @@ describe("PropertyPanel", () => {
         />
       );
       // The Template textarea has a specific placeholder
-      expect(screen.getByPlaceholderText("Use {{variable}} syntax — type {{ to see suggestions")).toBeDefined();
+      expect(screen.getByPlaceholderText("Use {{variable}} syntax...")).toBeDefined();
     });
 
     it("shows Separator field when format needs it", () => {
@@ -309,7 +307,7 @@ describe("PropertyPanel", () => {
         />
       );
       // Template textarea should not be present
-      expect(screen.queryByPlaceholderText("Use {{variable}} syntax — type {{ to see suggestions")).toBeNull();
+      expect(screen.queryByPlaceholderText("Use {{variable}} syntax...")).toBeNull();
     });
 
     it("hides Separator field for non-separator formats", () => {

@@ -25,7 +25,7 @@ interface RouteParams {
   }>;
 }
 
-export async function POST(_request: Request, { params }: RouteParams) {
+export async function POST(request: Request, { params }: RouteParams) {
   const { agentId, webhookId, executionId } = await params;
 
   // ── Auth guard ─────────────────────────────────────────────────────────────

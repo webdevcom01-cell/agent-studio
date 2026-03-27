@@ -100,10 +100,9 @@ export default function ChatPage({
       const json = await res.json();
       if (json.success) {
         const msgs: ChatMessage[] = json.data.messages.map(
-          (m: { role: string; content: string; metadata?: Record<string, unknown> }) => ({
+          (m: { role: string; content: string }) => ({
             role: m.role as "user" | "assistant",
             content: m.content,
-            ...(m.metadata ? { metadata: m.metadata } : {}),
           })
         );
         loadConversation(conv.id, msgs);
@@ -241,28 +240,13 @@ export default function ChatPage({
                   )}
                 >
                   {msg.role === "assistant" ? (
-                    <>
-                      {msg.content ? (
-                        <div className="markdown-body">
-                          <ReactMarkdown>{msg.content}</ReactMarkdown>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground italic">...</span>
-                      )}
-                      {(msg.metadata as { plots?: string[] } | undefined)?.plots?.map((src, pi) => (
-                        <div
-                          key={pi}
-                          className="mt-3 overflow-hidden rounded-lg border border-border bg-muted/30"
-                        >
-                          <img
-                            src={src}
-                            alt={`Python plot ${pi + 1}`}
-                            className="max-w-full"
-                            loading="lazy"
-                          />
-                        </div>
-                      ))}
-                    </>
+                    msg.content ? (
+                      <div className="markdown-body">
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground italic">...</span>
+                    )
                   ) : (
                     msg.content
                   )}

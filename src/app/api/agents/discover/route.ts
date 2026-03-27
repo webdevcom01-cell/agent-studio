@@ -22,10 +22,10 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { Prisma } from "@/generated/prisma";
 import { prismaRead } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
+import { AGENT_CATEGORIES } from "@/lib/constants/agent-categories";
 
 const discoverSchema = z.object({
   q: z.string().max(200).optional(),
@@ -111,7 +111,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const { q, category, tags, model, sort, limit, offset, scope } = parsed.data;
     const tagList = tags ? tags.split(",").map((t) => t.trim()).filter(Boolean) : [];
 
-    const where: Prisma.AgentWhereInput = {};
+    // Build where clause — uses `any` for new fields not yet in generated client
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: Record<string, any> = {};
 
     // Scope filter
     if (scope === "mine") {
@@ -147,13 +149,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     // Text search (name + description)
     if (q) {
-      const existingAnd = Array.isArray(where.AND)
-        ? (where.AND as Prisma.AgentWhereInput[])
-        : where.AND
-          ? [where.AND as Prisma.AgentWhereInput]
-          : [];
       where.AND = [
-        ...existingAnd,
+        ...(where.AND ?? []),
         {
           OR: [
             { name: { contains: q, mode: "insensitive" } },
@@ -163,7 +160,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       ];
     }
 
-    let orderBy: Prisma.AgentOrderByWithRelationInput;
+    // Sort order
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let orderBy: Record<string, any>;
     switch (sort) {
       case "newest":
         orderBy = { createdAt: "desc" };
@@ -179,7 +178,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
 
     // Execute queries in parallel
-    const findManyArgs: Parameters<typeof prismaRead.agent.findMany>[0] = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const findManyArgs: any = {
       where,
       orderBy,
       skip: offset,
@@ -199,7 +199,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     };
 
     // Category stats query — group by category
-    const groupByArgs: Parameters<typeof prismaRead.agent.groupBy>[0] = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const groupByArgs: any = {
       by: ["category"],
       where: {
         OR: [
@@ -215,7 +216,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     };
 
     // Tags query — find all agents with tags
-    const tagsQueryArgs: Parameters<typeof prismaRead.agent.findMany>[0] = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tagsQueryArgs: any = {
       where: {
         OR: [
           { userId: authResult.userId },

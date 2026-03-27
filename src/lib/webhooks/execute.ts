@@ -19,7 +19,6 @@ import { logger } from "@/lib/logger";
 import { loadContext, saveContext, saveMessages } from "@/lib/runtime/context";
 import { executeFlow } from "@/lib/runtime/engine";
 import { verifyWebhookSignature, decryptWebhookSecret } from "./verify";
-import { resolveJsonPath } from "./json-path";
 
 /** Per-webhook rate limit: 60 requests per minute. */
 const WEBHOOK_RATE_LIMIT = 60;
@@ -50,6 +49,28 @@ export interface WebhookExecuteResult {
   error?: string;
   /** When true, caller should respond with 409 Conflict (idempotent skip) */
   skipped?: boolean;
+}
+
+/**
+ * Resolves a simple dot-notation or bracket-notation JSON path against an object.
+ * Supports: "repository.name", "event.type", "commits[0].message"
+ * Does NOT support wildcard queries — keeps the dependency footprint zero.
+ */
+function resolveJsonPath(obj: unknown, path: string): unknown {
+  if (typeof obj !== "object" || obj === null) return undefined;
+
+  // Normalise: "$.foo.bar" → "foo.bar", then split on "." and "["
+  const normalised = path.startsWith("$.") ? path.slice(2) : path;
+  const parts = normalised
+    .split(/[.[\]]/)
+    .filter((p) => p.length > 0);
+
+  let current: unknown = obj;
+  for (const part of parts) {
+    if (typeof current !== "object" || current === null) return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
 }
 
 /**

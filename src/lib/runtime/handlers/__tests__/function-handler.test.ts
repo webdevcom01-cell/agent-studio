@@ -162,20 +162,25 @@ describe("functionHandler (vm sandbox)", () => {
     expect(result.messages[0].content).toBe("Function blocked due to policy restriction.");
   });
 
-  it("cannot access process in sandbox even without keyword block", async () => {
-    // vm sandbox has no process — even if the keyword check were bypassed
-    // the sandbox context doesn't include it
+  it("blocks setTimeout in regex layer (defense-in-depth)", async () => {
+    // setTimeout is now caught by BLOCKED_PATTERNS before reaching vm sandbox
     const node = makeNode({ code: "return typeof setTimeout;" });
-    // "setTimeout" is not in BLOCKED_PATTERNS, but is not in sandbox either
     const result = await functionHandler(node, makeContext());
-    expect(result.updatedVariables).toEqual({ result: "undefined" });
+    expect(result.messages[0].content).toBe("Function blocked due to policy restriction.");
   });
 
-  it("cannot create new Function inside sandbox (code generation disabled)", async () => {
-    // The vm context has codeGeneration: { strings: false }
-    // Trying Function constructor inside sandbox should throw
-    // But "Function" is in BLOCKED_PATTERNS, so test with a workaround
-    const node = makeNode({ code: "return typeof setTimeout;" });
+  it("blocks Promise in regex layer (defense-in-depth)", async () => {
+    // Promise could be used to escape timeout enforcement
+    const node = makeNode({ code: "return new Promise(r => r(1));" });
+    const result = await functionHandler(node, makeContext());
+    expect(result.messages[0].content).toBe("Function blocked due to policy restriction.");
+  });
+
+  it("sandbox context does not expose dangerous globals", async () => {
+    // Test that even safe-looking code cannot access host globals
+    // Use 'typeof' on something that's genuinely not blocked by regex
+    // but also not provided in sandbox — like 'Buffer'
+    const node = makeNode({ code: "return typeof console;" });
     const result = await functionHandler(node, makeContext());
     expect(result.updatedVariables).toEqual({ result: "undefined" });
   });

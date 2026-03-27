@@ -130,6 +130,11 @@ async function getNodeWorker(): Promise<NodeWorkerState> {
 
   const worker = new Worker(workerPath, {
     env: {}, // Worker itself uses a safe env, but we isolate at the subprocess level
+    resourceLimits: {
+      maxOldGenerationSizeMb: 128,   // Cap V8 heap to 128 MB
+      maxYoungGenerationSizeMb: 32,  // Cap V8 young generation to 32 MB
+      stackSizeMb: 4,                // 4 MB stack (prevents stack overflow attacks)
+    },
   });
 
   const state: NodeWorkerState = { worker, busy: false, pending };
