@@ -1,4 +1,3 @@
-import { randomBytes } from "crypto";
 import { logger } from "@/lib/logger";
 import type {
   GenAISpanAttributes,
@@ -10,8 +9,22 @@ import type {
 const OTEL_ENDPOINT = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "";
 const SERVICE_NAME = process.env.OTEL_SERVICE_NAME ?? "agent-studio";
 
+/**
+ * Generate a random hex ID using Web Crypto API (available in Node.js 19+ and all browsers).
+ * Avoids `import "crypto"` which breaks Next.js webpack client bundle resolution.
+ */
 function generateId(bytes: number): string {
-  return randomBytes(bytes).toString("hex");
+  const buf = new Uint8Array(bytes);
+  // globalThis.crypto is available in Node.js 19+ and all modern browsers
+  if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.getRandomValues) {
+    globalThis.crypto.getRandomValues(buf);
+  } else {
+    // Fallback for older Node.js — dynamic require to avoid webpack resolution
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodeCrypto = require("node:crypto") as typeof import("node:crypto");
+    nodeCrypto.randomFillSync(buf);
+  }
+  return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export function createTraceContext(parentSpanId?: string): TraceContext {
