@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, use } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, Plus, Trash2, FlaskConical, Settings2,
-  BarChart3, Loader2, MoreVertical, Star, StarOff, Rocket, Sparkles, ShieldCheck,
+  BarChart3, Loader2, MoreVertical, Star, Rocket, Sparkles, ShieldCheck,
   Clock, GitCompare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
