@@ -1,19 +1,19 @@
-// Next.js instrumentation hook — runs once per server startup
+// Next.js instrumentation hook — runs once per server startup.
 // Uses custom OTLP push implementation (not @opentelemetry/sdk-node)
 // because the full SDK conflicts with Next.js edge runtime in 15.5.
 //
-// The observability module (src/lib/observability/) provides:
-// - tracer.ts: span creation + OTLP /v1/traces push
-// - metrics.ts: metric recording + OTLP /v1/metrics push (30s flush)
-//
-// Both are zero-dependency, fire-and-forget, and gracefully no-op
-// when OTEL_EXPORTER_OTLP_ENDPOINT is not configured.
-
-import { logger } from "@/lib/logger";
+// IMPORTANT: No top-level imports of Node.js-only modules (logger, crypto, etc.)
+// instrumentation.ts is compiled for BOTH Node.js and Edge runtimes.
+// All Node.js-specific code must be behind a dynamic import inside the function,
+// gated on NEXT_RUNTIME !== "edge". See: https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
 
 export async function register(): Promise<void> {
-  // Only run on Node.js server (not edge runtime)
+  // Only run on Node.js server — not in Edge runtime (middleware/edge functions)
+  // Edge runtime lacks process.stdout, fs, worker_threads, etc.
   if (process.env.NEXT_RUNTIME === "edge") return;
+
+  // Dynamic import — keeps logger.ts (uses process.stdout) out of the edge bundle
+  const { logger } = await import("@/lib/logger");
 
   // ── Validate critical environment variables ───────────────────────────────
   const requiredVars = ["DATABASE_URL", "DEEPSEEK_API_KEY", "OPENAI_API_KEY", "AUTH_SECRET"];
@@ -45,7 +45,6 @@ export async function register(): Promise<void> {
   // ── Graceful shutdown: flush pending metrics on process exit ───────────────
   const shutdown = async (): Promise<void> => {
     try {
-      // Dynamic import to avoid edge runtime issues
       const { flushMetrics, stopMetricsFlusher } = await import("@/lib/observability");
       const flushed = await flushMetrics();
       stopMetricsFlusher();

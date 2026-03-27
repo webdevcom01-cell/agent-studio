@@ -11,19 +11,12 @@ const SERVICE_NAME = process.env.OTEL_SERVICE_NAME ?? "agent-studio";
 
 /**
  * Generate a random hex ID using Web Crypto API (available in Node.js 19+ and all browsers).
- * Avoids `import "crypto"` which breaks Next.js webpack client bundle resolution.
+ * Uses globalThis.crypto exclusively — no node:crypto import to avoid webpack UnhandledSchemeError.
+ * Node.js 20 (used in CI and Railway) always has globalThis.crypto available.
  */
 function generateId(bytes: number): string {
   const buf = new Uint8Array(bytes);
-  // globalThis.crypto is available in Node.js 19+ and all modern browsers
-  if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.getRandomValues) {
-    globalThis.crypto.getRandomValues(buf);
-  } else {
-    // Fallback for older Node.js — dynamic require to avoid webpack resolution
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const nodeCrypto = require("node:crypto") as typeof import("node:crypto");
-    nodeCrypto.randomFillSync(buf);
-  }
+  globalThis.crypto.getRandomValues(buf);
   return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
