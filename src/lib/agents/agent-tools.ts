@@ -11,7 +11,7 @@
  * @see https://sdk.vercel.ai/docs/ai-sdk-core/tools-and-tool-calling — Vercel AI SDK tools
  */
 import { z } from "zod";
-import { zodSchema } from "ai";
+import { dynamicTool, zodSchema, type ToolSet } from "ai";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import {
@@ -88,8 +88,7 @@ export interface AgentToolContext {
 export async function getAgentToolsForAgent(
   callerAgentId: string,
   ctx: AgentToolContext
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<Record<string, any>> {
+): Promise<ToolSet> {
   const depth = ctx.depth ?? 0;
 
   // Don't generate agent tools if we're already at max depth
@@ -107,8 +106,7 @@ export async function getAgentToolsForAgent(
 
     if (agents.length === 0) return {};
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools: Record<string, any> = {};
+    const tools: ToolSet = {};
 
     for (const agent of agents) {
       const toolName = sanitizeToolName(agent.name, agent.id);
@@ -124,13 +122,14 @@ export async function getAgentToolsForAgent(
           ),
       });
 
-      tools[toolName] = {
+      tools[toolName] = dynamicTool({
         description: buildToolDescription(capturedAgent, metadata),
-        parameters: zodSchema(inputSchema),
-        execute: async (args: { input: string }) => {
-          return executeAgentTool(capturedAgent, args.input, capturedCtx);
+        inputSchema: zodSchema(inputSchema),
+        execute: async (args: unknown) => {
+          const { input } = args as { input: string };
+          return executeAgentTool(capturedAgent, input, capturedCtx);
         },
-      };
+      });
     }
 
     logger.info("Agent tools loaded", {
