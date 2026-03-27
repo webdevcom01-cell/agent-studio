@@ -68,7 +68,7 @@ function PipelineDiagram() {
         {/* ── Row 3: Parallel Box ── */}
         <rect x="60" y="200" width="780" height="54" rx="10" fill="#0c1a0c" stroke="#22c55e" strokeWidth="1.5" strokeDasharray="5,3" />
         <text x="450" y="220" textAnchor="middle" fill="#86efac" fontSize="11" fontWeight="600">⚡ Parallel Analysis — 3 agents simultaneously</text>
-        <text x="450" y="238" textAnchor="middle" fill="#4ade80" fontSize="10">mergeStrategy: "all" · timeout: 120s</text>
+        <text x="450" y="238" textAnchor="middle" fill="#4ade80" fontSize="10">mergeStrategy: &quot;all&quot; · timeout: 120s</text>
 
         {/* 3 branch arrows */}
         <line x1="200" y1="254" x2="200" y2="284" stroke="#22c55e" strokeWidth="1.5" markerEnd="url(#arrow-green)" />
@@ -511,7 +511,7 @@ https://hooks.slack.com/services/T.../B.../...`}
             Node Inventory — All 15 Flow Nodes
           </h2>
           <p className="text-sm text-zinc-400 mb-6">
-            This pipeline is the most comprehensive use of Agent Studio's capabilities —
+            This pipeline is the most comprehensive use of Agent Studio&apos;s capabilities —
             it uses 8 out of 32 available node types in a single flow.
           </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
