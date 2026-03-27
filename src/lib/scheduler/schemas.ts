@@ -19,7 +19,7 @@ const scheduleTypeSchema = z.enum(["CRON", "INTERVAL", "MANUAL"], {
   errorMap: () => ({ message: "scheduleType must be CRON, INTERVAL, or MANUAL" }),
 });
 
-const cronExpressionSchema = z
+export const cronExpressionSchema = z
   .string()
   .trim()
   .min(1, "Cron expression is required")
@@ -28,7 +28,7 @@ const cronExpressionSchema = z
     (expr) => ({ message: validateCronExpression(expr).error ?? "Invalid cron expression" }),
   );
 
-const intervalMinutesSchema = z
+export const intervalMinutesSchema = z
   .number()
   .int("Interval must be a whole number of minutes")
   .refine(

@@ -22,7 +22,17 @@ export interface PhaseResult {
   error?: string;
   generatedFiles?: GeneratedFiles;
   tokensUsed?: { input: number; output: number };
+  /** Which AI model completed this phase (primary or fallback). */
+  modelUsed?: string;
+  /** Number of retry attempts before success (0 = first attempt). */
+  retryCount?: number;
 }
+
+/**
+ * Callback fired as each file is generated during parallel implement/test phases.
+ * Used by advance/route.ts to write files to DB incrementally (live preview).
+ */
+export type OnFileGenerated = (filename: string, content: string) => Promise<void>;
 
 export interface PipelineConfig {
   applicationName: string;

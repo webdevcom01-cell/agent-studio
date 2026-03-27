@@ -10,8 +10,24 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
-  { ignores: ["src/generated/**"] },
+  { ignores: ["src/generated/**", "test-*.ts"] },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    rules: {
+      // Catch leftover debug logging (allow in test files)
+      "no-console": ["warn", { allow: ["error", "warn"] }],
+      // Prefer TypeScript-aware unused vars rule
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+        },
+      ],
+    },
+  },
 ];
 
 export default eslintConfig;

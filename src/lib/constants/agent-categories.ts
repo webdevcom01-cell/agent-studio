@@ -36,6 +36,9 @@ export const AGENT_CATEGORY_METADATA: CategoryMeta[] = [
   { id: "paid-media",         label: "Paid Media",         emoji: "💰", color: "red",    description: "Advertising and paid campaigns" },
   { id: "desktop-automation", label: "Desktop Automation", emoji: "🖥️", color: "emerald", description: "Desktop app control via CLI bridge" },
   { id: "developer-agents",  label: "Developer Agents",  emoji: "🛠️", color: "fuchsia", description: "ECC specialized development agents" },
+  { id: "finance",           label: "Finance",           emoji: "💹", color: "green",   description: "Financial analysis, reporting and compliance" },
+  { id: "hr",                label: "HR & Recruiting",   emoji: "👥", color: "blue",    description: "Talent acquisition and people operations" },
+  { id: "sales",             label: "Sales & CRM",       emoji: "🤝", color: "orange",  description: "Sales automation and customer success" },
 ];
 
 export const AGENT_CATEGORIES = AGENT_CATEGORY_METADATA.map(

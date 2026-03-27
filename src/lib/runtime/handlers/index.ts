@@ -33,6 +33,7 @@ import { webFetchHandler } from "./web-fetch-handler";
 import { browserActionHandler } from "./browser-action-handler";
 import { desktopAppHandler } from "./desktop-app-handler";
 import { learnHandler } from "./learn-handler";
+import { pythonCodeHandler } from "./python-code-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -69,6 +70,7 @@ const handlers: Record<string, NodeHandler> = {
   browser_action: browserActionHandler,
   desktop_app: desktopAppHandler,
   learn: learnHandler,
+  python_code: pythonCodeHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

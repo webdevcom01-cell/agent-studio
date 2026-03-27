@@ -10,7 +10,7 @@
 
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
-import { encrypt, decrypt, isEncryptionConfigured } from "@/lib/crypto";
+import { encrypt, isEncryptionConfigured } from "@/lib/crypto";
 import type { Adapter, AdapterAccount } from "next-auth/adapters";
 
 const KEY_NAME = "OAUTH_ENCRYPTION_KEY" as const;
@@ -29,23 +29,6 @@ function encryptTokens(
     const value = result[field];
     if (typeof value === "string" && value.length > 0) {
       result[field] = encrypt(value, KEY_NAME);
-    }
-  }
-  return result;
-}
-
-function decryptTokens<T extends Record<string, unknown>>(account: T): T {
-  if (!account.tokensEncrypted) return account;
-
-  const result = { ...account };
-  for (const field of TOKEN_FIELDS) {
-    const value = result[field];
-    if (typeof value === "string" && value.length > 0) {
-      try {
-        (result as Record<string, unknown>)[field] = decrypt(value, KEY_NAME);
-      } catch {
-        (result as Record<string, unknown>)[field] = null;
-      }
     }
   }
   return result;

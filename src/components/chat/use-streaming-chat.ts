@@ -4,6 +4,7 @@ import { parseChunk } from "@/lib/runtime/stream-protocol";
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  metadata?: Record<string, unknown>;
 }
 
 interface UseStreamingChatOptions {
@@ -105,7 +106,11 @@ export function useStreamingChat({
             case "message":
               setMessages((prev) => [
                 ...prev,
-                { role: "assistant", content: chunk.content },
+                {
+                  role: "assistant",
+                  content: chunk.content,
+                  ...(chunk.metadata ? { metadata: chunk.metadata } : {}),
+                },
               ]);
               break;
 
@@ -174,7 +179,14 @@ export function useStreamingChat({
         if (chunk) {
           switch (chunk.type) {
             case "message":
-              setMessages((prev) => [...prev, { role: "assistant", content: chunk.content }]);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: chunk.content,
+                  ...(chunk.metadata ? { metadata: chunk.metadata } : {}),
+                },
+              ]);
               break;
             case "done":
               if (chunk.conversationId) {

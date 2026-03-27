@@ -34,6 +34,9 @@ const NODE_TYPES = [
   "web_fetch",
   "browser_action",
   "desktop_app",
+  "webhook_trigger",
+  "learn",
+  "python_code",
 ] as const;
 
 const VARIABLE_TYPES = ["string", "number", "boolean", "object"] as const;
