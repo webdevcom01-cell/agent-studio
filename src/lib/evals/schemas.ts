@@ -76,6 +76,23 @@ const RelevanceSchema = z.object({
   threshold: z.number().min(0).max(1).default(0.7),
 });
 
+// ─── Layer 3: RAGAS-style RAG Assertions (Faza 3) ────────────────────────────
+
+const RAGFaithfulnessSchema = z.object({
+  type: z.literal("rag_faithfulness"),
+  threshold: z.number().min(0).max(1).default(0.7),
+});
+
+const RAGContextPrecisionSchema = z.object({
+  type: z.literal("rag_context_precision"),
+  threshold: z.number().min(0).max(1).default(0.7),
+});
+
+const RAGAnswerRelevancySchema = z.object({
+  type: z.literal("rag_answer_relevancy"),
+  threshold: z.number().min(0).max(1).default(0.7),
+});
+
 // ─── Combined Assertion Schema ────────────────────────────────────────────────
 
 export const EvalAssertionSchema = z.discriminatedUnion("type", [
@@ -91,6 +108,9 @@ export const EvalAssertionSchema = z.discriminatedUnion("type", [
   LLMRubricSchema,
   KBFaithfulnessSchema,
   RelevanceSchema,
+  RAGFaithfulnessSchema,
+  RAGContextPrecisionSchema,
+  RAGAnswerRelevancySchema,
 ]);
 
 export type EvalAssertion = z.infer<typeof EvalAssertionSchema>;
@@ -224,7 +244,10 @@ export type SemanticAssertionType = "semantic_similarity";
 export type LLMJudgeAssertionType =
   | "llm_rubric"
   | "kb_faithfulness"
-  | "relevance";
+  | "relevance"
+  | "rag_faithfulness"
+  | "rag_context_precision"
+  | "rag_answer_relevancy";
 
 export const DETERMINISTIC_ASSERTION_TYPES: DeterministicAssertionType[] = [
   "exact_match",
@@ -259,7 +282,14 @@ export const ASSERTION_LAYERS = {
   },
   L3: {
     label: "LLM Judge",
-    types: ["llm_rubric", "kb_faithfulness", "relevance"] as string[],
+    types: [
+      "llm_rubric",
+      "kb_faithfulness",
+      "relevance",
+      "rag_faithfulness",
+      "rag_context_precision",
+      "rag_answer_relevancy",
+    ] as string[],
   },
 } as const;
 

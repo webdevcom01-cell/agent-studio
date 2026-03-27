@@ -8,9 +8,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { hybridSearch, computeDynamicTopK, expandChunksWithContext, sanitizeChunkContent } from "./search";
+import type { SearchResult } from "./search";
 import { extractCitations, formatCitationsForAI } from "./citations";
 import { trackKBSearch } from "@/lib/analytics";
 import { logger } from "@/lib/logger";
+import { shouldRetrieve } from "./agentic-retrieval";
+import { classifyQuery, getSearchConfigForQueryType } from "./query-router";
 
 export interface RAGInjectionResult {
   augmentedSystemPrompt: string;
@@ -20,6 +23,10 @@ export interface RAGInjectionResult {
   retrievalTimeMs: number;
   /** The knowledge base ID used, or null if agent has no KB. */
   knowledgeBaseId: string | null;
+  /** Raw retrieved chunks — exposed so callers can run grounding check post-generation. */
+  retrievedChunks: SearchResult[];
+  /** Machine-readable reason for skipping retrieval (undefined = retrieval was attempted). */
+  skippedReason?: string;
 }
 
 export interface RAGInjectionOptions {
@@ -53,6 +60,7 @@ export async function injectRAGContext(
     retrievedChunkCount: 0,
     retrievalTimeMs: 0,
     knowledgeBaseId: null,
+    retrievedChunks: [],
   };
 
   if (options.disabled) return noResult;
@@ -60,6 +68,7 @@ export async function injectRAGContext(
 
   // ── 1. Look up KB for this agent ────────────────────────────────────────────
   let kbId: string;
+  let hasKB = false;
   try {
     const kb = await prisma.knowledgeBase.findUnique({
       where: { agentId },
@@ -67,6 +76,7 @@ export async function injectRAGContext(
     });
     if (!kb || kb._count.sources === 0) return { ...noResult, knowledgeBaseId: kb?.id ?? null };
     kbId = kb.id;
+    hasKB = true;
   } catch (err) {
     logger.warn("RAG inject: KB lookup failed", {
       agentId,
@@ -75,12 +85,22 @@ export async function injectRAGContext(
     return noResult;
   }
 
+  // ── 1b. Agentic retrieval decision — skip for greetings / trivial queries ───
+  const retrievalDecision = shouldRetrieve(userQuery, hasKB);
+  if (!retrievalDecision.retrieve) {
+    return { ...noResult, knowledgeBaseId: kbId, skippedReason: retrievalDecision.reason };
+  }
+
+  // ── 1c. Adaptive query routing — pick topK / rerank based on query type ─────
+  const queryType = classifyQuery(userQuery);
+  const queryConfig = getSearchConfigForQueryType(queryType);
+
   const start = Date.now();
 
   // ── 2. Hybrid search ────────────────────────────────────────────────────────
   let results;
   try {
-    const topK = options.topK ?? computeDynamicTopK(userQuery, 5);
+    const topK = options.topK ?? queryConfig.topK ?? computeDynamicTopK(userQuery, 5);
     results = await hybridSearch(userQuery, kbId, { topK });
     if (results.length === 0) return { ...noResult, knowledgeBaseId: kbId };
 
@@ -130,5 +150,6 @@ Use the knowledge base context above to answer accurately. Cite sources by numbe
     retrievedChunkCount: results.length,
     retrievalTimeMs,
     knowledgeBaseId: kbId,
+    retrievedChunks: results,
   };
 }

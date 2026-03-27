@@ -31,6 +31,17 @@ vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+// Mock agentic-retrieval so existing tests are not affected by the shouldRetrieve gate
+vi.mock("../agentic-retrieval", () => ({
+  shouldRetrieve: vi.fn().mockReturnValue({ retrieve: true, reason: "standard_query" }),
+}));
+
+// Mock query-router to return a predictable config
+vi.mock("../query-router", () => ({
+  classifyQuery: vi.fn().mockReturnValue("factual"),
+  getSearchConfigForQueryType: vi.fn().mockReturnValue({ topK: 5 }),
+}));
+
 import { injectRAGContext } from "../rag-inject";
 import { prisma } from "@/lib/prisma";
 import { hybridSearch, expandChunksWithContext } from "../search";
