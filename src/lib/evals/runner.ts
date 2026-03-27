@@ -23,7 +23,7 @@ import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { evaluateAllAssertions } from "./assertions";
 import { EvalAssertionSchema } from "./schemas";
-import type { AssertionContext, EvalAssertion } from "./schemas";
+import type { AssertionContext, EvalAssertion, AssertionResult } from "./schemas";
 import type {
   EvalTestCase,
 } from "@/generated/prisma";
@@ -67,6 +67,23 @@ export interface CaseRunResult {
   errorMessage?: string;
 }
 
+// ─── Timeout / retry constants ────────────────────────────────────────────────
+
+/** Maximum time to wait for a single agent chat response (ms). */
+export const EVAL_CHAT_TIMEOUT_MS = 45_000;
+
+/** Maximum time to wait for a single LLM-as-Judge assertion evaluation (ms). */
+export const EVAL_ASSERTION_TIMEOUT_MS = 15_000;
+
+/** Number of retry attempts for transient chat API failures. */
+export const EVAL_MAX_RETRIES = 3;
+
+/** Base delay (ms) for exponential backoff between retries. */
+const EVAL_RETRY_BASE_MS = 1_000;
+
+/** HTTP status codes that warrant a retry (transient server/gateway errors). */
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 /**
@@ -76,6 +93,12 @@ export interface CaseRunResult {
 export function parseAssertionsForTest(raw: unknown): EvalAssertion[] {
   return parseAssertions(raw);
 }
+
+/** @internal Exported for unit testing only — not part of public API. */
+export const callAgentChatForTest = callAgentChat;
+
+/** @internal Exported for unit testing only — not part of public API. */
+export const evaluateAssertionsWithTimeoutForTest = evaluateAllAssertionsWithTimeout;
 
 function parseAssertions(raw: unknown): EvalAssertion[] {
   if (!Array.isArray(raw)) return [];
@@ -95,11 +118,88 @@ function average(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
+/** LLM-as-Judge assertion types that require external API calls and can hang. */
+const LLM_JUDGE_TYPES = new Set(["llm_rubric", "kb_faithfulness", "relevance"]);
+
+/**
+ * Wrap evaluateAllAssertions with a per-assertion timeout for Layer 3 (LLM-as-Judge).
+ * L1 (deterministic) and L2 (semantic) assertions run without a timeout since they
+ * are fast and CPU/cache-bound. L3 assertions are wrapped in a race with a deadline.
+ */
+async function evaluateAllAssertionsWithTimeout(
+  assertions: EvalAssertion[],
+  ctx: AssertionContext,
+): Promise<{ results: AssertionResult[]; score: number; passed: boolean }> {
+  // Split into fast (L1+L2) and slow (L3) assertion groups
+  const fastAssertions = assertions.filter((a) => !LLM_JUDGE_TYPES.has(a.type));
+  const slowAssertions = assertions.filter((a) => LLM_JUDGE_TYPES.has(a.type));
+
+  // Run fast assertions normally (no timeout needed)
+  const fastResult = fastAssertions.length > 0
+    ? await evaluateAllAssertions(fastAssertions, ctx)
+    : { results: [] as AssertionResult[], score: 1, passed: true };
+
+  if (slowAssertions.length === 0) {
+    return fastResult;
+  }
+
+  // Run L3 assertions with a timeout guard
+  let slowResult: { results: AssertionResult[]; score: number; passed: boolean };
+  try {
+    slowResult = await Promise.race([
+      evaluateAllAssertions(slowAssertions, ctx),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`LLM-as-Judge timed out after ${EVAL_ASSERTION_TIMEOUT_MS / 1000}s`)),
+          EVAL_ASSERTION_TIMEOUT_MS,
+        ),
+      ),
+    ]);
+  } catch (err) {
+    // On timeout — mark all L3 assertions as failed with timeout message
+    const message = err instanceof Error ? err.message : "LLM-as-Judge evaluation timed out";
+    logger.warn("eval_assertion_timeout", { error: message, slowCount: slowAssertions.length });
+    slowResult = {
+      results: slowAssertions.map((a) => ({
+        type: a.type,
+        passed: false,
+        score: 0,
+        message,
+      })),
+      score: 0,
+      passed: false,
+    };
+  }
+
+  // Merge fast + slow results, recalculate overall score
+  const allResults = [...fastResult.results, ...slowResult.results];
+  const overallScore = average(allResults.map((r) => r.score));
+  const overallPassed = allResults.every((r) => r.passed);
+
+  return { results: allResults, score: overallScore, passed: overallPassed };
+}
+
 // ─── Chat API caller ──────────────────────────────────────────────────────────
+
+/**
+ * Sentinel error subclass used to signal that a chat API error should NOT be
+ * retried (e.g. 400, 401, 403, 404 — client errors where retrying is pointless).
+ * The catch block inside the retry loop checks for this type and re-throws immediately.
+ */
+class NonRetryableChatError extends Error {
+  constructor(
+    public readonly httpStatus: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "NonRetryableChatError";
+  }
+}
 
 interface ChatResponse {
   output: string;
   latencyMs: number;
+  retryCount: number;
 }
 
 interface KBSearchResult {
@@ -109,8 +209,11 @@ interface KBSearchResult {
 
 /**
  * Send a single message to the agent chat API (non-streaming).
- * Creates a temporary conversation that will be cleaned up.
- * Returns the agent's text output and measured latency.
+ * Includes timeout protection (EVAL_CHAT_TIMEOUT_MS) and exponential-backoff
+ * retries for transient errors (429, 5xx). Non-transient errors (4xx) are
+ * thrown immediately without retrying.
+ *
+ * Returns the agent's text output, measured latency, and retry count.
  */
 async function callAgentChat(
   agentId: string,
@@ -120,8 +223,6 @@ async function callAgentChat(
   flowVersionId?: string,
   modelOverride?: string,
 ): Promise<ChatResponse> {
-  const start = Date.now();
-
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -137,45 +238,105 @@ async function callAgentChat(
   if (flowVersionId) body.flowVersionId = flowVersionId;
   if (modelOverride) body.modelOverride = modelOverride;
 
-  const response = await fetch(
-    `${baseUrl}/api/agents/${agentId}/chat`,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    },
-  );
+  let lastError: Error | null = null;
 
-  const latencyMs = Date.now() - start;
+  for (let attempt = 0; attempt <= EVAL_MAX_RETRIES; attempt++) {
+    // Exponential backoff with ±25% jitter — skip on first attempt
+    if (attempt > 0) {
+      const delay = EVAL_RETRY_BASE_MS * Math.pow(2, attempt - 1) * (0.75 + Math.random() * 0.5);
+      await new Promise((resolve) => setTimeout(resolve, Math.round(delay)));
+    }
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(
-      `Chat API returned ${response.status}: ${text.slice(0, 200)}`,
-    );
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), EVAL_CHAT_TIMEOUT_MS);
+
+    const start = Date.now();
+    try {
+      const response = await fetch(`${baseUrl}/api/agents/${agentId}/chat`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      const latencyMs = Date.now() - start;
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        const message = `Chat API returned ${response.status}: ${text.slice(0, 200)}`;
+
+        if (RETRYABLE_STATUS_CODES.has(response.status)) {
+          // Transient server error — retry if attempts remain
+          if (attempt < EVAL_MAX_RETRIES) {
+            logger.warn("eval_chat_retry", {
+              agentId, attempt: attempt + 1, status: response.status,
+            });
+            lastError = new Error(message);
+            continue;
+          }
+          // Max retries exhausted — throw accumulated retry error
+          throw new Error(`Chat API failed after ${EVAL_MAX_RETRIES} retries: ${message}`);
+        }
+
+        // Non-retryable HTTP error (4xx client errors) — throw a typed error that
+        // the catch block will re-throw immediately without entering the retry loop.
+        throw new NonRetryableChatError(response.status, message);
+      }
+
+      const data = (await response.json()) as {
+        success: boolean;
+        data?: {
+          message?: string;
+          response?: string;
+          messages?: { role: string; content: string }[];
+        };
+        error?: string;
+      };
+
+      if (!data.success) {
+        throw new Error(data.error ?? "Chat API returned success: false");
+      }
+
+      // The chat route returns { success: true, data: { messages: [{role, content}] } }
+      // Support legacy message/response fields as fallback
+      const assistantMessages = data.data?.messages?.filter((m) => m.role === "assistant") ?? [];
+      const fromMessages = assistantMessages.map((m) => m.content).join("\n").trim();
+      const output = fromMessages || (data.data?.message ?? data.data?.response ?? "");
+
+      return { output, latencyMs, retryCount: attempt };
+    } catch (err) {
+      clearTimeout(timeoutId);
+
+      // AbortError = timeout — do not retry (agent is genuinely slow / stuck)
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error(
+          `Chat API timed out after ${EVAL_CHAT_TIMEOUT_MS / 1000}s — the agent did not respond in time`,
+        );
+      }
+
+      // Non-retryable HTTP error (4xx) — re-throw immediately, no retry
+      if (err instanceof NonRetryableChatError) {
+        throw err;
+      }
+
+      // Re-throw non-retryable errors immediately
+      if (attempt >= EVAL_MAX_RETRIES) {
+        if (lastError) {
+          throw new Error(
+            `Chat API failed after ${EVAL_MAX_RETRIES} retries: ${lastError.message}`,
+          );
+        }
+        throw err;
+      }
+
+      lastError = err instanceof Error ? err : new Error(String(err));
+      logger.warn("eval_chat_retry", { agentId, attempt: attempt + 1, error: lastError.message });
+    }
   }
 
-  const data = (await response.json()) as {
-    success: boolean;
-    data?: {
-      message?: string;
-      response?: string;
-      messages?: { role: string; content: string }[];
-    };
-    error?: string;
-  };
-
-  if (!data.success) {
-    throw new Error(data.error ?? "Chat API returned success: false");
-  }
-
-  // The chat route returns { success: true, data: { messages: [{role, content}] } }
-  // Support legacy message/response fields as fallback
-  const assistantMessages = data.data?.messages?.filter((m) => m.role === "assistant") ?? [];
-  const fromMessages = assistantMessages.map((m) => m.content).join("\n").trim();
-  const output = fromMessages || (data.data?.message ?? data.data?.response ?? "");
-
-  return { output, latencyMs };
+  // Should never reach here — loop always returns or throws
+  throw lastError ?? new Error("Chat API failed after retries");
 }
 
 // ─── KB Context fetcher (for kb_faithfulness assertions) ─────────────────────
@@ -404,8 +565,8 @@ async function runSingleTestCase(
       ...(kbContext ? { kbContext } : {}),
     };
 
-    // Evaluate assertions
-    const evalResult = await evaluateAllAssertions(assertions, ctx);
+    // Evaluate assertions — wrap with per-assertion timeout for Layer 3 (LLM-as-Judge)
+    const evalResult = await evaluateAllAssertionsWithTimeout(assertions, ctx);
     assertionResults = evalResult.results;
     score = evalResult.score;
     passed = evalResult.passed;

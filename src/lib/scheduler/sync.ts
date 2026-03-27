@@ -54,7 +54,8 @@ interface SyncResult {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-type ValidScheduleType = "CRON" | "INTERVAL" | "MANUAL";
+const VALID_SCHEDULE_TYPES = ["CRON", "INTERVAL", "MANUAL"] as const;
+type ValidScheduleType = (typeof VALID_SCHEDULE_TYPES)[number];
 
 const SCHEDULE_TYPE_MAP: Record<string, ValidScheduleType> = {
   cron: "CRON",

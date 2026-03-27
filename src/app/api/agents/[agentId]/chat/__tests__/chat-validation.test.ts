@@ -35,13 +35,6 @@ vi.mock("@/lib/prisma", () => ({
     },
   },
 }));
-// auth-guard is used in chat/route.ts for debug mode — mock to avoid pulling
-// in next-auth which fails to resolve next/server in the vitest browser env
-vi.mock("@/lib/api/auth-guard", () => ({
-  requireAgentOwner: vi.fn().mockResolvedValue({ userId: "test-user", agentId: "test-agent-1" }),
-  isAuthError: vi.fn().mockReturnValue(false),
-  requireAuth: vi.fn().mockResolvedValue({ userId: "test-user" }),
-}));
 
 import { POST } from "../route";
 

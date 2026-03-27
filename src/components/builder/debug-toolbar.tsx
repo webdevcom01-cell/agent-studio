@@ -10,9 +10,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
-  Pause,
-  StepForward,
-  CircleDot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -50,16 +47,7 @@ export function DebugToggleButton({ isDebugMode, onToggle }: DebugToggleButtonPr
 // DebugStatusBar — summary strip shown at very bottom of the toolbar row
 // ---------------------------------------------------------------------------
 function DebugStatusBar({ state }: { state: DebugSessionState }) {
-  const { flowSummary, isRunning, isPaused } = state;
-
-  if (isPaused) {
-    return (
-      <span className="flex items-center gap-1.5 text-xs text-orange-400 ml-auto shrink-0 animate-pulse">
-        <Pause className="size-3" />
-        Paused at breakpoint
-      </span>
-    );
-  }
+  const { flowSummary, isRunning } = state;
 
   if (isRunning) {
     return (
@@ -104,8 +92,6 @@ interface DebugToolbarProps {
   onRun: () => void;
   onStop: () => void;
   onClear: () => void;
-  onContinue: () => void;
-  onStep: () => void;
 }
 
 export function DebugToolbar({
@@ -114,10 +100,8 @@ export function DebugToolbar({
   onRun,
   onStop,
   onClear,
-  onContinue,
-  onStep,
 }: DebugToolbarProps) {
-  const { isRunning, isPaused, testInput, nodeStates, flowSummary, breakpoints } = state;
+  const { isRunning, testInput, nodeStates, flowSummary } = state;
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-focus the input when debug mode becomes active
@@ -163,67 +147,18 @@ export function DebugToolbar({
 
         {/* Action buttons */}
         <div className="flex flex-col gap-1.5 pt-0.5 shrink-0">
-          {isPaused ? (
-            /* ── Paused at breakpoint ── */
-            <>
-              <Button
-                size="sm"
-                onClick={onContinue}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-8"
-                title="Continue (resume until next breakpoint)"
-              >
-                <Play className="size-3.5" />
-                Continue
-              </Button>
-              <Button
-                size="sm"
-                onClick={onStep}
-                variant="outline"
-                className="gap-1.5 h-8 border-orange-700/60 text-orange-300 hover:bg-orange-900/30"
-                title="Step Over (execute one node, then pause)"
-              >
-                <StepForward className="size-3.5" />
-                Step
-              </Button>
-              <Button
-                size="sm"
-                onClick={onStop}
-                variant="destructive"
-                className="gap-1.5 h-8"
-                title="Stop execution"
-              >
-                <Square className="size-3.5" />
-                Stop
-              </Button>
-            </>
-          ) : !isRunning ? (
-            /* ── Idle ── */
-            <>
-              <Button
-                size="sm"
-                onClick={onRun}
-                disabled={!canRun}
-                className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5 h-8"
-                title="Run (Ctrl+Enter)"
-              >
-                <Play className="size-3.5" />
-                Run
-              </Button>
-              {hasResults && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={onClear}
-                  className="gap-1.5 h-8 text-muted-foreground hover:text-foreground"
-                  title="Clear results"
-                >
-                  <Trash2 className="size-3.5" />
-                  Clear
-                </Button>
-              )}
-            </>
+          {!isRunning ? (
+            <Button
+              size="sm"
+              onClick={onRun}
+              disabled={!canRun}
+              className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5 h-8"
+              title="Run (Ctrl+Enter)"
+            >
+              <Play className="size-3.5" />
+              Run
+            </Button>
           ) : (
-            /* ── Running ── */
             <Button
               size="sm"
               onClick={onStop}
@@ -235,20 +170,25 @@ export function DebugToolbar({
               Stop
             </Button>
           )}
+          {hasResults && !isRunning && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onClear}
+              className="gap-1.5 h-8 text-muted-foreground hover:text-foreground"
+              title="Clear results"
+            >
+              <Trash2 className="size-3.5" />
+              Clear
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Status line */}
       <div className="flex items-center mt-1.5 min-h-[16px]">
-        <span className="text-xs text-violet-400/70 mr-2 flex items-center gap-1">
-          {breakpoints.size > 0 ? (
-            <>
-              <CircleDot className="size-3 text-red-400" />
-              {breakpoints.size} breakpoint{breakpoints.size !== 1 ? "s" : ""} set · right-click node to toggle
-            </>
-          ) : (
-            "Debug mode · right-click a node to set a breakpoint"
-          )}
+        <span className="text-xs text-violet-400/70 mr-2">
+          Debug mode · changes to the flow are not saved while running
         </span>
         <DebugStatusBar state={state} />
       </div>

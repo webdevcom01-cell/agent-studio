@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "pnpm install --no-frozen-lockfile && pnpm run build"
+buildCommand = "pnpm add ioredis && pnpm run build"
 
 [deploy]
 startCommand = "node server.js"
@@ -9,14 +9,3 @@ healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
 numReplicas = 2
-watchPaths = [
-  "src/**",
-  "prisma/**",
-  "public/**",
-  "package.json",
-  "pnpm-lock.yaml",
-  "next.config.ts",
-  "railway.toml",
-  "nixpacks.toml",
-  "Dockerfile"
-]

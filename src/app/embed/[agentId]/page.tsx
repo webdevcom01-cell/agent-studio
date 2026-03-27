@@ -137,16 +137,6 @@ function EmbedChatContent({ agentId }: { agentId: string }) {
               {msg.content || (
                 <span className="text-muted-foreground italic text-xs">...</span>
               )}
-              {msg.role === "assistant" &&
-                (msg.metadata as { plots?: string[] } | undefined)?.plots?.map((src, pi) => (
-                  <img
-                    key={pi}
-                    src={src}
-                    alt={`Python plot ${pi + 1}`}
-                    className="mt-2 max-w-full rounded-lg"
-                    loading="lazy"
-                  />
-                ))}
             </div>
           </div>
         ))}

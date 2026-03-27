@@ -2,7 +2,7 @@ import { generateObject } from "ai";
 import type { z } from "zod";
 import { getModel } from "@/lib/ai";
 import { logger } from "@/lib/logger";
-import type { PipelineConfig, AIPhaseOutput, GeneratedFiles, OnFileGenerated } from "./types";
+import type { PipelineConfig, AIPhaseOutput, GeneratedFiles } from "./types";
 import { validateTSOutput } from "./ts-validator";
 import {
   buildAnalyzePrompt,
@@ -144,12 +144,10 @@ async function callAIObject<TSchema extends z.ZodTypeAny>(
       }
     }
 
-    // Exponential backoff between rounds: 1s, 2s with ±25% jitter to avoid thundering herd
+    // Exponential backoff between rounds: 1s, 2s, 4s
     if (round < MAX_ROUNDS - 1) {
-      const baseMs = 1000 * Math.pow(2, round);
-      const jitter = Math.round(baseMs * (Math.random() * 0.5 - 0.25));
-      const delayMs = baseMs + jitter;
-      logger.info(`AI retry backoff: ${delayMs}ms`, { phase, round: round + 1, baseMs, jitter });
+      const delayMs = 1000 * Math.pow(2, round);
+      logger.info(`AI retry backoff: ${delayMs}ms`, { phase, round: round + 1 });
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
@@ -214,7 +212,6 @@ export async function aiDesign(
 export async function aiImplement(
   config: PipelineConfig,
   designResult: unknown,
-  onFileGenerated?: OnFileGenerated,
 ): Promise<AIPhaseOutput> {
   const isTS = config.target === "typescript";
   const ctx = {
@@ -235,13 +232,7 @@ export async function aiImplement(
         buildPrompt(ctx, fileSpec),
         `implement:${fileSpec.filename}`,
         { maxTokens: 2048 },
-      ).then(async (res) => {
-        // Fire live-preview callback as each file resolves — enables incremental DB writes
-        if (onFileGenerated) {
-          await onFileGenerated(fileSpec.filename, res.object.content);
-        }
-        return { fileSpec, res };
-      }),
+      ).then((res) => ({ fileSpec, res })),
     ),
   );
 
@@ -292,7 +283,6 @@ export async function aiImplement(
 export async function aiTest(
   config: PipelineConfig,
   implementResult: unknown,
-  onFileGenerated?: OnFileGenerated,
 ): Promise<AIPhaseOutput> {
   const isTS = config.target === "typescript";
 
@@ -319,12 +309,7 @@ export async function aiTest(
         buildPrompt(ctx, fileSpec, signatures),
         `test:${fileSpec.filename}`,
         { maxTokens: 2048 },
-      ).then(async (res) => {
-        if (onFileGenerated) {
-          await onFileGenerated(fileSpec.filename, res.object.content);
-        }
-        return { fileSpec, res };
-      }),
+      ).then((res) => ({ fileSpec, res })),
     ),
   );
 

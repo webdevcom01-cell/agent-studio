@@ -6,6 +6,7 @@ import {
   ArrowLeft, ShieldCheck, BookOpen, ChevronDown,
   CheckCircle2, Circle,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   GLOBAL_EVAL_ASSERTIONS,
   CATEGORY_EVAL_STANDARDS,

@@ -1,4 +1,4 @@
-import type { ParsedSkill as _ParsedSkill } from "./types";
+import type { ParsedSkill } from "./types";
 
 interface TaskAnalysis {
   taskType: string;

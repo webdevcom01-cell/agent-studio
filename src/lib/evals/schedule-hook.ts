@@ -10,6 +10,12 @@
  *     the current time falls within the cron schedule window
  *     (haven't run since the last expected occurrence)
  *
+ * Timezone encoding:
+ *   - scheduleCron can include an optional IANA timezone suffix: "0 3 * * *|Europe/Belgrade"
+ *   - If no suffix is present, UTC is assumed (backward-compatible)
+ *   - parseCronWithTimezone() splits the cron and timezone parts
+ *   - Timezone-aware matching uses Intl.DateTimeFormat to convert UTC → local time
+ *
  * Design decisions:
  *   - Fire-and-forget: same pattern as deploy-hook (void runScheduledEvals)
  *   - Sequential suites: avoid parallel rate-limit pressure
@@ -38,6 +44,94 @@ export interface EligibleSuite {
   agentId: string;
   scheduleCron: string;
   lastScheduledAt: Date | null;
+}
+
+// ─── Timezone-aware cron helpers ───────────────────────────────────────────────
+
+/**
+ * Split a scheduleCron string into its cron expression and optional IANA timezone.
+ *
+ * Format: "0 3 * * *" (UTC) or "0 3 * * *|Europe/Belgrade" (with TZ suffix).
+ * Returns { cron: "0 3 * * *", timezone: "Europe/Belgrade" | "UTC" }.
+ * Exported for unit testing.
+ */
+export function parseCronWithTimezone(raw: string): { cron: string; timezone: string } {
+  const pipeIdx = raw.lastIndexOf("|");
+  if (pipeIdx === -1) {
+    return { cron: raw.trim(), timezone: "UTC" };
+  }
+  const cron = raw.slice(0, pipeIdx).trim();
+  const timezone = raw.slice(pipeIdx + 1).trim() || "UTC";
+  return { cron, timezone };
+}
+
+/**
+ * Validate an IANA timezone string using Intl.DateTimeFormat.
+ * Returns true if valid, false if unknown.
+ */
+export function isValidTimezone(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extract date parts (minute, hour, dom, month, dow) from a UTC Date
+ * converted to the given IANA timezone.
+ * Falls back to UTC parts if the timezone is invalid.
+ */
+export function getLocalizedDateParts(
+  date: Date,
+  timezone: string,
+): { minute: number; hour: number; dom: number; month: number; dow: number } {
+  // Validate timezone — fall back to UTC on invalid input
+  const tz = isValidTimezone(timezone) ? timezone : "UTC";
+
+  if (tz === "UTC") {
+    return {
+      minute: date.getUTCMinutes(),
+      hour: date.getUTCHours(),
+      dom: date.getUTCDate(),
+      month: date.getUTCMonth() + 1, // 1-12
+      dow: date.getUTCDay(), // 0=Sunday
+    };
+  }
+
+  // Use Intl.DateTimeFormat to extract parts in the target timezone
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    minute: "numeric",
+    hour: "numeric",
+    day: "numeric",
+    month: "numeric",
+    weekday: "short",
+    hour12: false,
+  });
+
+  const parts = fmt.formatToParts(date);
+  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? "0";
+
+  // Intl hour12:false returns "24" for midnight — normalise to 0
+  const rawHour = parseInt(get("hour"), 10);
+  const hour = rawHour === 24 ? 0 : rawHour;
+
+  // Weekday mapping: short English names → 0-6 (Sun=0)
+  const DOW_MAP: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  };
+  const dowLabel = get("weekday");
+  const dow = DOW_MAP[dowLabel] ?? date.getUTCDay();
+
+  return {
+    minute: parseInt(get("minute"), 10),
+    hour,
+    dom: parseInt(get("day"), 10),
+    month: parseInt(get("month"), 10),
+    dow,
+  };
 }
 
 // ─── Cron matching ─────────────────────────────────────────────────────────────
@@ -74,11 +168,17 @@ function matchesCronField(field: string, value: number): boolean {
 }
 
 /**
- * Check if a cron expression matches a given Date.
+ * Check if a cron expression matches a given Date, with optional timezone support.
+ *
+ * Accepts raw scheduleCron strings in two formats:
+ *   - "0 3 * * *"                   → UTC matching (legacy, backward-compatible)
+ *   - "0 3 * * *|Europe/Belgrade"   → localized matching in given IANA timezone
+ *
  * Supports: minute, hour, day-of-month, month, day-of-week (5-field standard cron).
  * Does NOT support seconds or named months/weekdays.
  */
-export function cronMatchesDate(cron: string, date: Date): boolean {
+export function cronMatchesDate(rawCron: string, date: Date): boolean {
+  const { cron, timezone } = parseCronWithTimezone(rawCron);
   const fields = cron.trim().split(/\s+/);
   if (fields.length !== 5) return false;
 
@@ -86,11 +186,7 @@ export function cronMatchesDate(cron: string, date: Date): boolean {
     string, string, string, string, string,
   ];
 
-  const minute = date.getUTCMinutes();
-  const hour = date.getUTCHours();
-  const dom = date.getUTCDate();
-  const month = date.getUTCMonth() + 1; // 1-12
-  const dow = date.getUTCDay(); // 0=Sunday
+  const { minute, hour, dom, month, dow } = getLocalizedDateParts(date, timezone);
 
   return (
     matchesCronField(minuteField, minute) &&
@@ -102,10 +198,11 @@ export function cronMatchesDate(cron: string, date: Date): boolean {
 }
 
 /**
- * Validate a cron expression string (5 fields, basic syntax).
+ * Validate a scheduleCron string (5-field cron, optional "|TZ" suffix).
  * Returns true if the expression is syntactically valid.
  */
-export function isValidCronExpression(cron: string): boolean {
+export function isValidCronExpression(rawCron: string): boolean {
+  const { cron } = parseCronWithTimezone(rawCron);
   const fields = cron.trim().split(/\s+/);
   if (fields.length !== 5) return false;
   const [min, hour, dom, month, dow] = fields;
@@ -126,6 +223,7 @@ export function isValidCronExpression(cron: string): boolean {
  * in at least (interval - 5 min) — we run.
  */
 export function isSuiteDue(suite: EligibleSuite, now: Date): boolean {
+  // scheduleCron may include a "|TZ" suffix — both helpers handle it transparently
   if (!isValidCronExpression(suite.scheduleCron)) return false;
   if (!cronMatchesDate(suite.scheduleCron, now)) return false;
 
@@ -170,7 +268,7 @@ export async function getScheduleEnabledSuites(): Promise<EligibleSuite[]> {
     },
   })) as RawScheduledSuite[];
 
-  // Filter to suites that actually have test cases + valid cron
+  // Filter to suites that actually have test cases + valid cron (including TZ suffix)
   return suites
     .filter(
       (s) =>
@@ -182,6 +280,7 @@ export async function getScheduleEnabledSuites(): Promise<EligibleSuite[]> {
       id: s.id,
       name: s.name,
       agentId: s.agentId,
+      // scheduleCron is passed through as-is; parseCronWithTimezone() is called downstream
       scheduleCron: s.scheduleCron as string,
       lastScheduledAt: s.lastScheduledAt,
     }));

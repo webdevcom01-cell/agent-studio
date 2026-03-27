@@ -121,43 +121,18 @@ export type EvalTestCaseInput = z.infer<typeof EvalTestCaseInputSchema>;
 
 // ─── Suite Create/Update ──────────────────────────────────────────────────────
 
-/** Basic cron expression validation: 5 whitespace-separated fields */
-const cronExpressionSchema = z
-  .string()
-  .regex(/^(\S+\s+){4}\S+$/, "Invalid cron expression — must be 5 fields (e.g. '0 3 * * *')");
-
 export const CreateEvalSuiteSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().max(1000).optional(),
   isDefault: z.boolean().optional(),
   /** Auto-run this suite every time the agent flow is deployed */
   runOnDeploy: z.boolean().optional(),
-  /** Auto-run this suite on a cron schedule */
-  scheduleEnabled: z.boolean().optional(),
-  /** Cron expression for scheduled runs (e.g. "0 3 * * *") */
-  scheduleCron: cronExpressionSchema.optional(),
 });
 
 export const UpdateEvalSuiteSchema = CreateEvalSuiteSchema.partial();
 
 export type CreateEvalSuiteInput = z.infer<typeof CreateEvalSuiteSchema>;
 export type UpdateEvalSuiteInput = z.infer<typeof UpdateEvalSuiteSchema>;
-
-// ─── Compare Input ────────────────────────────────────────────────────────────
-
-export const CompareEvalRunSchema = z.object({
-  /** Type of comparison */
-  type: z.enum(["version", "model"]),
-  /** ID of flow version A (or model ID if type="model") */
-  a: z.string().min(1),
-  /** ID of flow version B (or model ID if type="model") */
-  b: z.string().min(1),
-}).refine((data) => data.a !== data.b, {
-  message: "Version/model A and B must be different",
-  path: ["b"],
-});
-
-export type CompareEvalRunInput = z.infer<typeof CompareEvalRunSchema>;
 
 // ─── Run Trigger ──────────────────────────────────────────────────────────────
 

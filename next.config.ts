@@ -5,9 +5,6 @@ const CDN_URL = process.env.CDN_URL;
 const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["pdf-parse", "mammoth", "tiktoken"],
-  // ESLint runs in CI (GitHub Actions) — skip during Railway builds to avoid
-  // pre-existing lint debt blocking deploys.
-  eslint: { ignoreDuringBuilds: true },
 
   // When CDN_URL is configured, serve _next/static/* from CDN edge.
   // Example: CDN_URL=https://cdn.example.com

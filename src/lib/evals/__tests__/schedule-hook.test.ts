@@ -26,6 +26,8 @@ import {
   isValidCronExpression,
   isSuiteDue,
   getScheduleEnabledSuites,
+  parseCronWithTimezone,
+  getLocalizedDateParts,
 } from "../schedule-hook";
 import { prisma } from "@/lib/prisma";
 import { runEvalSuite } from "../runner";
@@ -35,6 +37,97 @@ const mockPrisma = prisma as {
   evalSuite: { findMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
 };
 const mockRunEvalSuite = runEvalSuite as ReturnType<typeof vi.fn>;
+
+// ─── parseCronWithTimezone ────────────────────────────────────────────────────
+
+describe("parseCronWithTimezone", () => {
+  it("returns UTC and full cron when no pipe present", () => {
+    const result = parseCronWithTimezone("0 3 * * *");
+    expect(result.cron).toBe("0 3 * * *");
+    expect(result.timezone).toBe("UTC");
+  });
+
+  it("splits cron and timezone on last pipe", () => {
+    const result = parseCronWithTimezone("0 3 * * *|Europe/Belgrade");
+    expect(result.cron).toBe("0 3 * * *");
+    expect(result.timezone).toBe("Europe/Belgrade");
+  });
+
+  it("trims whitespace from both parts", () => {
+    const result = parseCronWithTimezone("  0 3 * * *  |  America/New_York  ");
+    expect(result.cron).toBe("0 3 * * *");
+    expect(result.timezone).toBe("America/New_York");
+  });
+
+  it("returns UTC when timezone part is empty", () => {
+    const result = parseCronWithTimezone("0 3 * * *|");
+    expect(result.cron).toBe("0 3 * * *");
+    expect(result.timezone).toBe("UTC");
+  });
+
+  it("uses last pipe as delimiter when multiple pipes present", () => {
+    // Edge case: timezone names don't contain pipes, so last pipe is always the separator
+    const result = parseCronWithTimezone("0 3 * * *|America/New_York");
+    expect(result.cron).toBe("0 3 * * *");
+    expect(result.timezone).toBe("America/New_York");
+  });
+});
+
+// ─── getLocalizedDateParts ─────────────────────────────────────────────────────
+
+describe("getLocalizedDateParts", () => {
+  it("returns UTC parts for UTC timezone", () => {
+    // 2026-03-01T03:30:00Z = minute=30, hour=3, dom=1, month=3, dow=0 (Sunday)
+    const date = new Date("2026-03-01T03:30:00Z");
+    const parts = getLocalizedDateParts(date, "UTC");
+    expect(parts.minute).toBe(30);
+    expect(parts.hour).toBe(3);
+    expect(parts.dom).toBe(1);
+    expect(parts.month).toBe(3);
+    expect(parts.dow).toBe(0); // Sunday
+  });
+
+  it("adjusts parts to Europe/Belgrade timezone (UTC+1 in winter)", () => {
+    // 2026-03-01T03:00:00Z = 04:00 in Belgrade (UTC+1 winter time)
+    const date = new Date("2026-03-01T03:00:00Z");
+    const parts = getLocalizedDateParts(date, "Europe/Belgrade");
+    expect(parts.hour).toBe(4);
+    expect(parts.minute).toBe(0);
+  });
+
+  it("falls back to UTC for invalid timezone", () => {
+    const date = new Date("2026-03-01T03:00:00Z");
+    const partsInvalid = getLocalizedDateParts(date, "Not/A_Timezone");
+    const partsUTC = getLocalizedDateParts(date, "UTC");
+    expect(partsInvalid.hour).toBe(partsUTC.hour);
+    expect(partsInvalid.minute).toBe(partsUTC.minute);
+  });
+});
+
+// ─── cronMatchesDate (timezone-aware) ─────────────────────────────────────────
+
+describe("cronMatchesDate — timezone suffix", () => {
+  it("matches a Belgrade-time cron at the correct UTC offset", () => {
+    // "0 4 * * *|Europe/Belgrade" → fires at 04:00 Belgrade = 03:00 UTC (winter)
+    const utcDate = new Date("2026-03-01T03:00:00Z");
+    expect(cronMatchesDate("0 4 * * *|Europe/Belgrade", utcDate)).toBe(true);
+  });
+
+  it("does not match a Belgrade cron at the wrong UTC time", () => {
+    // "0 4 * * *|Europe/Belgrade" should NOT match at 04:00 UTC (which is 05:00 Belgrade)
+    const utcDate = new Date("2026-03-01T04:00:00Z");
+    expect(cronMatchesDate("0 4 * * *|Europe/Belgrade", utcDate)).toBe(false);
+  });
+
+  it("isValidCronExpression accepts cron with valid TZ suffix", () => {
+    expect(isValidCronExpression("0 3 * * *|Europe/Belgrade")).toBe(true);
+    expect(isValidCronExpression("*/5 * * * *|America/New_York")).toBe(true);
+  });
+
+  it("isValidCronExpression still accepts plain cron without TZ suffix", () => {
+    expect(isValidCronExpression("0 3 * * *")).toBe(true);
+  });
+});
 
 // ─── cronMatchesDate ──────────────────────────────────────────────────────────
 

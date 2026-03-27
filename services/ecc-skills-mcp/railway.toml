@@ -4,10 +4,7 @@ builder = "NIXPACKS"
 [deploy]
 startCommand = "python main.py"
 healthcheckPath = "/health"
-healthcheckTimeout = 60
+healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 numReplicas = 1
-watchPaths = [
-  "services/ecc-skills-mcp/**"
-]

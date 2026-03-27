@@ -1,7 +1,9 @@
 "use client";
 
-import { CheckCircle2, XCircle, Minus, Trophy, Clock, TrendingUp, TrendingDown } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, XCircle, Minus, Trophy, Clock, TrendingUp, TrendingDown, ChevronDown, ChevronRight } from "lucide-react";
 import type { CompareResult } from "@/app/api/agents/[agentId]/evals/[suiteId]/compare/route";
+import type { AssertionLayerBreakdown } from "@/lib/evals/schemas";
 
 // ─── Re-export the type for consumers ─────────────────────────────────────────
 export type { CompareResult };
@@ -33,6 +35,129 @@ function diffBadge(diff: number, unit = ""): React.ReactNode {
       <Icon className="w-3 h-3" />
       {label}
     </span>
+  );
+}
+
+// ─── Assertion breakdown panel ────────────────────────────────────────────────
+
+const LAYER_COLORS: Record<string, string> = {
+  L1: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+  L2: "text-blue-400 bg-blue-500/10 border-blue-500/20",
+  L3: "text-purple-400 bg-purple-500/10 border-purple-500/20",
+};
+
+const LAYER_LABEL_COLORS: Record<string, string> = {
+  L1: "text-emerald-400",
+  L2: "text-blue-400",
+  L3: "text-purple-400",
+};
+
+function deltaColor(delta: number): string {
+  if (delta > 0.01) return "text-emerald-400";
+  if (delta < -0.01) return "text-red-400";
+  return "text-zinc-500";
+}
+
+function AssertionBreakdownPanel({
+  breakdown,
+  labelA,
+  labelB,
+}: {
+  breakdown: AssertionLayerBreakdown[];
+  labelA: string;
+  labelB: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (breakdown.length === 0) return null;
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-800/40 transition-colors"
+      >
+        <span className="text-sm font-semibold text-zinc-300">Assertion Breakdown by Layer</span>
+        {open ? (
+          <ChevronDown className="w-4 h-4 text-zinc-500" />
+        ) : (
+          <ChevronRight className="w-4 h-4 text-zinc-500" />
+        )}
+      </button>
+
+      {open && (
+        <div className="border-t border-zinc-800">
+          {/* Header */}
+          <div className="grid grid-cols-[100px_1fr_80px_80px_80px_90px] gap-2 px-4 py-2 text-xs text-zinc-500 bg-zinc-800/30">
+            <span>Layer</span>
+            <span>Assertion types</span>
+            <span className="text-center">{labelA}</span>
+            <span className="text-center">{labelB}</span>
+            <span className="text-center">Δ</span>
+            <span className="text-center">A / Tie / B</span>
+          </div>
+
+          <div className="divide-y divide-zinc-800/50">
+            {breakdown.map((row) => (
+              <div
+                key={row.layer}
+                className="grid grid-cols-[100px_1fr_80px_80px_80px_90px] gap-2 px-4 py-3 items-center"
+              >
+                {/* Layer badge */}
+                <div>
+                  <span
+                    className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded border ${LAYER_COLORS[row.layer] ?? "text-zinc-400 bg-zinc-800 border-zinc-700"}`}
+                  >
+                    {row.layer} · {row.layerLabel}
+                  </span>
+                </div>
+
+                {/* Assertion types */}
+                <div className="flex flex-wrap gap-1">
+                  {row.assertionTypes.map((t) => (
+                    <span
+                      key={t}
+                      className="text-xs px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 font-mono"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Score A */}
+                <span className={`text-center text-sm font-mono font-bold ${scoreColor(row.avgScoreA)}`}>
+                  {scorePct(row.avgScoreA)}
+                </span>
+
+                {/* Score B */}
+                <span className={`text-center text-sm font-mono font-bold ${scoreColor(row.avgScoreB)}`}>
+                  {scorePct(row.avgScoreB)}
+                </span>
+
+                {/* Delta */}
+                <span className={`text-center text-xs font-mono font-bold ${deltaColor(row.scoreDelta)}`}>
+                  {row.scoreDelta > 0 ? "+" : ""}{(row.scoreDelta * 100).toFixed(1)}%
+                </span>
+
+                {/* Wins / Ties / Losses */}
+                <div className={`text-center text-xs font-mono ${LAYER_LABEL_COLORS[row.layer] ?? "text-zinc-400"}`}>
+                  <span className="text-emerald-400">{row.aWins}</span>
+                  <span className="text-zinc-600"> / </span>
+                  <span className="text-zinc-500">{row.ties}</span>
+                  <span className="text-zinc-600"> / </span>
+                  <span className="text-blue-400">{row.bWins}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="px-4 py-2 text-xs text-zinc-600 border-t border-zinc-800/50">
+            Δ = B score − A score · A&nbsp;wins&nbsp;/&nbsp;Ties&nbsp;/&nbsp;B&nbsp;wins per layer
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -117,6 +242,15 @@ export function EvalCompareView({ result }: EvalCompareViewProps) {
           </span>
         </div>
       </div>
+
+      {/* ── Assertion breakdown panel ── */}
+      {delta.assertionBreakdown && delta.assertionBreakdown.length > 0 && (
+        <AssertionBreakdownPanel
+          breakdown={delta.assertionBreakdown}
+          labelA={labelA}
+          labelB={labelB}
+        />
+      )}
 
       {/* ── Per-case table ── */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">

@@ -4,19 +4,15 @@ import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { runEvalSuite } from "@/lib/evals/runner";
 import { CompareEvalRunSchema } from "@/lib/evals/schemas";
+import type { ComparisonDelta } from "@/lib/evals/schemas";
 import type { EvalRunSummary } from "@/lib/evals/runner";
+import { calculateDelta } from "@/lib/evals/compare-utils";
+
+// Re-export so UI imports keep working
+export type { ComparisonDelta };
 
 interface RouteParams {
   params: Promise<{ agentId: string; suiteId: string }>;
-}
-
-export interface ComparisonDelta {
-  scoreDiff: number;        // runA.score - runB.score (positive = A wins)
-  latencyDiffMs: number;    // avg latency A - avg latency B
-  aWins: number;            // test cases where A scored higher
-  bWins: number;            // test cases where B scored higher
-  ties: number;             // test cases with equal scores
-  winner: "a" | "b" | "tie";
 }
 
 export interface CompareResult {
@@ -142,8 +138,20 @@ export async function POST(
       logger.warn("eval_compare: failed to link runA comparisonRunId", { err });
     });
 
-    // Calculate delta from per-case results
-    const delta = calculateDelta(summaryA, summaryB);
+    // Load per-case assertion results from DB for assertion-level breakdown
+    const [rawResultsA, rawResultsB] = await Promise.all([
+      prisma.evalResult.findMany({
+        where: { runId: summaryA.runId },
+        select: { testCaseId: true, assertions: true },
+      }),
+      prisma.evalResult.findMany({
+        where: { runId: summaryB.runId },
+        select: { testCaseId: true, assertions: true },
+      }),
+    ]);
+
+    // Calculate delta from per-case results + assertion breakdown
+    const delta = calculateDelta(summaryA, summaryB, rawResultsA, rawResultsB);
 
     logger.info("eval_compare_completed", {
       suiteId,
@@ -173,49 +181,3 @@ export async function POST(
   }
 }
 
-// ─── Delta calculator ─────────────────────────────────────────────────────────
-
-function calculateDelta(
-  summaryA: EvalRunSummary,
-  summaryB: EvalRunSummary,
-): ComparisonDelta {
-  let aWins = 0;
-  let bWins = 0;
-  let ties = 0;
-
-  // Compare per-case scores
-  const casesA = summaryA.results;
-  const casesB = summaryB.results;
-
-  const maxLen = Math.max(casesA.length, casesB.length);
-  for (let i = 0; i < maxLen; i++) {
-    const scoreA = casesA[i]?.score ?? 0;
-    const scoreB = casesB[i]?.score ?? 0;
-    if (scoreA > scoreB) aWins++;
-    else if (scoreB > scoreA) bWins++;
-    else ties++;
-  }
-
-  // Average latency
-  const avgLatencyA =
-    casesA.length > 0
-      ? casesA.reduce((acc, c) => acc + c.latencyMs, 0) / casesA.length
-      : 0;
-  const avgLatencyB =
-    casesB.length > 0
-      ? casesB.reduce((acc, c) => acc + c.latencyMs, 0) / casesB.length
-      : 0;
-
-  const scoreDiff = summaryA.score - summaryB.score;
-  const winner: "a" | "b" | "tie" =
-    aWins > bWins ? "a" : bWins > aWins ? "b" : "tie";
-
-  return {
-    scoreDiff: Math.round(scoreDiff * 1000) / 1000,
-    latencyDiffMs: Math.round(avgLatencyA - avgLatencyB),
-    aWins,
-    bWins,
-    ties,
-    winner,
-  };
-}

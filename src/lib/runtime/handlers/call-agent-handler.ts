@@ -8,6 +8,7 @@ import {
   recordFailure,
   checkDepthLimit,
   checkCycleDetection,
+  MAX_AGENT_DEPTH,
   A2ACircuitError,
 } from "@/lib/a2a/circuit-breaker";
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
