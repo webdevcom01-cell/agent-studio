@@ -4,6 +4,37 @@ import type { NodeHandler } from "../types";
 
 const MAX_CODE_LENGTH = 20_000;
 const EXECUTION_TIMEOUT_MS = 10_000;
+const EXECUTION_TIMEOUT_WITH_PACKAGES_MS = 60_000;
+const MAX_PACKAGES = 10;
+
+/** Allowed package name pattern — prevents shell injection */
+const PACKAGE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*([<>=!~]+[a-zA-Z0-9._*]+)?$/;
+
+/** Packages that mirror blocked system modules — extra safety layer */
+const BLOCKED_PACKAGES = new Set(["os-sys", "shell", "ptyprocess", "pexpect"]);
+
+function parsePackages(raw: string): { packages: string[]; error: string | null } {
+  const candidates = raw
+    .split("\n")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  if (candidates.length > MAX_PACKAGES) {
+    return { packages: [], error: `Maximum ${MAX_PACKAGES} packages allowed per node.` };
+  }
+
+  const invalid = candidates.find((p) => !PACKAGE_NAME_RE.test(p));
+  if (invalid) {
+    return { packages: [], error: `Invalid package name: "${invalid}". Use alphanumeric names only.` };
+  }
+
+  const blocked = candidates.find((p) => BLOCKED_PACKAGES.has(p.split(/[<>=!~]/)[0]));
+  if (blocked) {
+    return { packages: [], error: `Package "${blocked}" is not allowed.` };
+  }
+
+  return { packages: candidates, error: null };
+}
 
 /** Dangerous module patterns blocked in Python code */
 const BLOCKED_PATTERNS = [
@@ -40,6 +71,7 @@ function validatePythonCode(code: string): string | null {
 export const pythonCodeHandler: NodeHandler = async (node, context) => {
   const code = (node.data.code as string) ?? "";
   const outputVariable = (node.data.outputVariable as string) ?? "";
+  const packagesRaw = (node.data.packages as string) ?? "";
 
   if (!code.trim()) {
     return { messages: [], nextNodeId: null, waitForInput: false };
@@ -59,11 +91,21 @@ export const pythonCodeHandler: NodeHandler = async (node, context) => {
     };
   }
 
+  const { packages, error: pkgError } = parsePackages(packagesRaw);
+  if (pkgError) {
+    return {
+      messages: [{ role: "assistant", content: `⚠️ Package error: ${pkgError}` }],
+      nextNodeId: null,
+      waitForInput: false,
+    };
+  }
+
   try {
     const response = await executePython({
       code,
       variables: context.variables,
-      timeout: EXECUTION_TIMEOUT_MS,
+      timeout: packages.length > 0 ? EXECUTION_TIMEOUT_WITH_PACKAGES_MS : EXECUTION_TIMEOUT_MS,
+      packages,
     });
 
     if (!response.success) {

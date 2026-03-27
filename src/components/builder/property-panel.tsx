@@ -483,6 +483,21 @@ export function PropertyPanel({
                 Stores the value of <code>result</code> from your Python code
               </p>
             </div>
+            <div className="space-y-2">
+              <Label>Additional Packages</Label>
+              <Textarea
+                value={(data.packages as string) ?? ""}
+                onChange={(e) => update("packages", e.target.value)}
+                rows={3}
+                className="font-mono text-xs"
+                placeholder={"scipy\nscikit-learn\nstatsmodels"}
+              />
+              <p className="text-xs text-muted-foreground">
+                One package per line. <code>numpy</code>, <code>pandas</code>, and{" "}
+                <code>matplotlib</code> are pre-loaded. Browser supports Pyodide-compatible
+                (pure Python) packages only.
+              </p>
+            </div>
           </>
         )}
 

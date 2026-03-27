@@ -3,7 +3,7 @@
  * Loaded from /pyodide-worker.js and communicated via postMessage.
  *
  * Message protocol:
- *   IN:  { type: "run", id: string, code: string, variables: object, timeout: number }
+ *   IN:  { type: "run", id: string, code: string, variables: object, timeout: number, packages?: string[] }
  *   OUT: { type: "result", id: string, success: bool, output: string, result: any, error?: string, plots: string[] }
  *   OUT: { type: "stdout", id: string, text: string }  (streaming stdout lines)
  */
@@ -12,6 +12,20 @@
 
 let pyodideReady = null;
 let pyodide = null;
+
+/**
+ * Pyodide built-in packages that can be loaded via loadPackage() (no micropip needed).
+ * Source: https://pyodide.org/en/stable/usage/packages-in-pyodide.html
+ */
+const PYODIDE_BUILTINS = new Set([
+  "numpy", "pandas", "matplotlib", "scipy", "scikit-learn",
+  "seaborn", "sympy", "pillow", "statsmodels", "networkx",
+  "sqlalchemy", "pyyaml", "lxml", "beautifulsoup4", "regex",
+  "cryptography", "pytz", "six", "attrs", "packaging",
+]);
+
+/** Track packages already installed in this worker session (avoids redundant installs). */
+const installedPackages = new Set(["numpy", "pandas"]);
 
 async function initPyodide() {
   if (pyodide) return pyodide;
@@ -33,6 +47,52 @@ async function initPyodide() {
 
 // Kick off init immediately
 pyodideReady = initPyodide();
+
+/**
+ * Install additional packages into the Pyodide runtime.
+ * Uses loadPackage() for Pyodide built-ins, micropip.install() for pure-Python PyPI packages.
+ * Packages already installed in this session are skipped.
+ *
+ * @param {object} py - Pyodide instance
+ * @param {string[]} packages - package names (may include version specifiers like "scipy>=1.10")
+ */
+async function installPackages(py, packages) {
+  if (!packages || packages.length === 0) return;
+
+  // Strip version specifiers to check against the builtins set
+  const nameOnly = (pkg) => pkg.split(/[<>=!~]/)[0].toLowerCase().trim();
+
+  const builtins = packages.filter(
+    (p) => PYODIDE_BUILTINS.has(nameOnly(p)) && !installedPackages.has(nameOnly(p))
+  );
+  const pypiPkgs = packages.filter(
+    (p) => !PYODIDE_BUILTINS.has(nameOnly(p)) && !installedPackages.has(nameOnly(p))
+  );
+
+  if (builtins.length > 0) {
+    self.postMessage({ type: "stdout", text: `[setup] Loading packages: ${builtins.join(", ")}\n` });
+    await py.loadPackage(builtins);
+    builtins.forEach((p) => installedPackages.add(nameOnly(p)));
+  }
+
+  if (pypiPkgs.length > 0) {
+    self.postMessage({ type: "stdout", text: `[setup] Installing via micropip: ${pypiPkgs.join(", ")}\n` });
+    await py.loadPackage("micropip");
+    const micropip = py.pyimport("micropip");
+    for (const pkg of pypiPkgs) {
+      try {
+        await micropip.install(pkg);
+        installedPackages.add(nameOnly(pkg));
+        self.postMessage({ type: "stdout", text: `[setup] Installed ${pkg}\n` });
+      } catch (err) {
+        self.postMessage({
+          type: "stdout",
+          text: `[warn] Could not install ${pkg}: ${err.message || String(err)}\n`,
+        });
+      }
+    }
+  }
+}
 
 // Python wrapper that captures output and plots
 const WRAPPER_CODE = `
@@ -99,13 +159,16 @@ def _execute_user_code(user_code, variables_json):
 `;
 
 self.addEventListener("message", async (event) => {
-  const { type, id, code, variables, timeout = 10000 } = event.data;
+  const { type, id, code, variables, timeout = 10000, packages } = event.data;
   if (type !== "run") return;
 
   let currentId = id;
 
   try {
     const py = await pyodideReady;
+
+    // Install additional packages before running user code
+    await installPackages(py, packages);
 
     // Attach wrapper if not already loaded
     py.runPython(WRAPPER_CODE);

@@ -282,6 +282,7 @@ model Message {
   role           MessageRole
   content        String       @db.Text
   citations      Json?
+  metadata       Json?
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())

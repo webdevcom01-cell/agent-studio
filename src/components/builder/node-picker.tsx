@@ -451,13 +451,13 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
   {
     type: "python_code",
     label: "Python Code",
-    description: "Execute Python code with numpy, pandas, and matplotlib",
+    description: "Execute Python with data libraries, custom packages, and matplotlib charts",
     usageExample:
-      "Run data analysis, generate charts, or process flow variables with real Python",
+      "Run data analysis, install packages, generate inline charts, or process flow variables",
     icon: Code2,
     color: "yellow",
     category: "logic",
-    defaultData: { label: "Python Code", code: "", outputVariable: "" },
+    defaultData: { label: "Python Code", code: "", outputVariable: "", packages: "" },
   },
 
   // ── Integrations ──────────────────────────────────────────────────────

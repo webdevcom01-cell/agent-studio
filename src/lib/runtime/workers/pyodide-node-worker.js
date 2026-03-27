@@ -3,7 +3,7 @@
  * Uses python3 subprocess to run user code safely.
  *
  * Message protocol (via parentPort):
- *   IN:  { id: string, code: string, variables: object, timeout: number }
+ *   IN:  { id: string, code: string, variables: object, timeout: number, packages?: string[] }
  *   OUT: { id: string, success: bool, output: string, result: any, error?: string, plots: string[] }
  */
 
@@ -93,8 +93,51 @@ function buildSafeEnv() {
   };
 }
 
-parentPort.on("message", ({ id, code, variables, timeout = 10000 }) => {
+/** Packages installed in this worker session — avoids redundant pip calls. */
+const installedNodePackages = new Set();
+
+/**
+ * Install pip packages before executing user code.
+ * Silently skips packages already installed in this session.
+ * Returns any install warnings as a string (does not throw).
+ *
+ * @param {string[]} packages
+ * @returns {string} warning output (empty string if all OK)
+ */
+function installPipPackages(packages) {
+  if (!packages || packages.length === 0) return "";
+
+  const nameOnly = (pkg) => pkg.split(/[<>=!~]/)[0].toLowerCase().trim();
+  const toInstall = packages.filter((p) => !installedNodePackages.has(nameOnly(p)));
+  if (toInstall.length === 0) return "";
+
+  const result = spawnSync(
+    "pip3",
+    ["install", "--quiet", "--user", "--no-warn-script-location", ...toInstall],
+    {
+      encoding: "utf8",
+      timeout: 55_000, // 55s — handler gives 60s for package installs
+      env: buildSafeEnv(),
+    }
+  );
+
+  if (!result.error && result.status === 0) {
+    toInstall.forEach((p) => installedNodePackages.add(nameOnly(p)));
+    return "";
+  }
+
+  // Non-fatal: return a warning string that will be prepended to output
+  const reason = result.error
+    ? result.error.message
+    : result.stderr || `pip3 exited with status ${result.status}`;
+  return `[warn] Package install issues: ${reason.trim()}\n`;
+}
+
+parentPort.on("message", ({ id, code, variables, timeout = 10000, packages }) => {
   try {
+    // Install additional packages first (if any)
+    const installWarnings = installPipPackages(packages);
+
     const input = JSON.stringify({ code, variables: variables ?? {} });
 
     const result = spawnSync("python3", ["-c", PYTHON_WRAPPER], {
@@ -151,6 +194,10 @@ parentPort.on("message", ({ id, code, variables, timeout = 10000 }) => {
       return;
     }
 
+    // Prepend any install warnings to the output
+    if (installWarnings && parsed.output !== undefined) {
+      parsed.output = installWarnings + parsed.output;
+    }
     parentPort.postMessage({ id, ...parsed });
   } catch (err) {
     parentPort.postMessage({

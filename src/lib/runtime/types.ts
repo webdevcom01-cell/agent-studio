@@ -90,7 +90,7 @@ export interface DebugFlowSummary {
 
 export type StreamChunk =
   // ── Chat chunks (existing) ───────────────────────────────────────────────
-  | { type: "message"; role: "assistant" | "system"; content: string }
+  | { type: "message"; role: "assistant" | "system"; content: string; metadata?: Record<string, unknown> }
   | { type: "stream_start" }
   | { type: "stream_delta"; content: string }
   | { type: "stream_end"; content: string }

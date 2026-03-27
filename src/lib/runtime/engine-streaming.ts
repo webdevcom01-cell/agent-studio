@@ -319,6 +319,7 @@ export function executeFlowStreaming(
                 type: "message",
                 role: msg.role,
                 content: msg.content,
+                ...(msg.metadata ? { metadata: msg.metadata } : {}),
               });
             }
           }

@@ -3,6 +3,8 @@ export interface PythonRequest {
   code: string;
   variables: Record<string, unknown>;
   timeout?: number; // ms, default 10000
+  /** Additional pip/micropip packages to install before execution (one per entry) */
+  packages?: string[];
 }
 
 /** Response returned from the Python executor. */
