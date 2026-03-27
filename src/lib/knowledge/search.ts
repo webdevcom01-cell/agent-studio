@@ -76,8 +76,33 @@ const HTML_ESCAPE_MAP: Record<string, string> = {
 
 const HTML_ESCAPE_RE = /[&<>"']/g;
 
+/**
+ * Patterns that attempt to break out of the XML <knowledge_base_context> wrapper
+ * and inject instructions into the LLM's system prompt.
+ * Each match is replaced with "[FILTERED]".
+ */
+const INJECTION_PATTERNS: RegExp[] = [
+  /\[SYSTEM\]/gi,
+  /\[INST\]/gi,
+  /ignore\s+(previous|above|all)\s+instructions/gi,
+  /<\|im_start\|>/gi,
+  /###\s*(System|Instruction|Prompt)/gi,
+  /\bASSISTANT:\s/gi,
+  /\bHUMAN:\s/gi,
+  /<\/?(system|instruction|prompt)>/gi,
+];
+
+/**
+ * Sanitizes retrieved chunk content before injecting it into the system prompt.
+ * 1. HTML-escapes special characters to prevent XML tag injection.
+ * 2. Replaces known prompt-injection patterns with "[FILTERED]".
+ */
 export function sanitizeChunkContent(content: string): string {
-  return content.replace(HTML_ESCAPE_RE, (ch) => HTML_ESCAPE_MAP[ch]);
+  let sanitized = content.replace(HTML_ESCAPE_RE, (ch) => HTML_ESCAPE_MAP[ch]);
+  for (const pattern of INJECTION_PATTERNS) {
+    sanitized = sanitized.replace(pattern, "[FILTERED]");
+  }
+  return sanitized;
 }
 
 export interface SearchResult {
