@@ -1234,3 +1234,268 @@ test.describe("Webhooks UI — Execution Replay", () => {
     }
   });
 });
+
+// ─── 9. Webhooks UI — Replay Chain ────────────────────────────────────────────
+
+/**
+ * Tests for replay chain behavior:
+ *   - replayed execution shows "Replayed from" field in expanded detail
+ *   - a replay of a replay still shows a Replay button when rawPayload is set
+ *   - replay badge appears on the new execution produced by a replay
+ */
+test.describe("Webhooks UI — replay chain", () => {
+  test("expanded replayed execution shows the original execution ID in 'Replayed from' field", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+
+    const ORIGINAL_EXEC_ID = "exec_original_999";
+    const webhookWithReplayChain = {
+      ...MOCK_WEBHOOK,
+      executions: [
+        {
+          id: "exec_replayed_child",
+          status: "COMPLETED",
+          triggeredAt: new Date(Date.now() - 20_000).toISOString(),
+          completedAt: new Date(Date.now() - 19_500).toISOString(),
+          durationMs: 280,
+          eventType: "push",
+          sourceIp: "127.0.0.1",
+          conversationId: "conv_replay_child",
+          errorMessage: null,
+          rawPayload: JSON.stringify({ action: "opened" }),
+          isReplay: true,
+          replayOf: ORIGINAL_EXEC_ID,
+        },
+      ],
+    };
+
+    await mockWebhooksAPI(page, {
+      agentId: sharedAgentId,
+      webhooks: [webhookWithReplayChain],
+    });
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    // Expand the execution row to see its detail
+    await page.getByText(/completed/i).first().click();
+
+    // "Replayed from" label and the original execution ID should both be visible
+    await expect(
+      page.getByText(/replayed from/i).first()
+    ).toBeVisible({ timeout: 8_000 });
+    await expect(
+      page.getByText(ORIGINAL_EXEC_ID, { exact: false }).first()
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("a replayed execution that still has rawPayload shows the Replay button", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+
+    const webhookReplayWithPayload = {
+      ...MOCK_WEBHOOK,
+      executions: [
+        {
+          id: "exec_replay_has_payload",
+          status: "COMPLETED",
+          triggeredAt: new Date(Date.now() - 15_000).toISOString(),
+          completedAt: new Date(Date.now() - 14_500).toISOString(),
+          durationMs: 320,
+          eventType: "push",
+          sourceIp: "127.0.0.1",
+          conversationId: "conv_replay_payload",
+          errorMessage: null,
+          rawPayload: JSON.stringify({ action: "created" }),  // has payload → Replay button shown
+          isReplay: true,
+          replayOf: "exec_grandparent",
+        },
+      ],
+    };
+
+    await mockWebhooksAPI(page, {
+      agentId: sharedAgentId,
+      webhooks: [webhookReplayWithPayload],
+    });
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    // Replay button should be visible even on a replay-of-a-replay
+    const replayBtn = page.getByRole("button", { name: /^replay$/i }).first();
+    await replayBtn.waitFor({ state: "visible", timeout: 8_000 });
+    await expect(replayBtn).toBeVisible();
+  });
+
+  test("replaying an execution shows the new execution ID in the inline success banner", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+
+    const NEW_EXEC_ID = "exec_chain_new_001";
+
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await mockWebhookReplay(page, {
+      agentId: sharedAgentId,
+      executionId: NEW_EXEC_ID,
+    });
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    const replayBtn = page.getByRole("button", { name: /^replay$/i }).first();
+    await replayBtn.waitFor({ state: "visible", timeout: 8_000 });
+    await replayBtn.click();
+
+    // The inline success banner in the expanded row should mention the new execution ID
+    await expect(
+      page.getByText(NEW_EXEC_ID, { exact: false }).first()
+    ).toBeVisible({ timeout: 8_000 });
+  });
+});
+
+// ─── 10. Webhooks UI — Execution Status Filtering ─────────────────────────────
+
+/**
+ * Tests for the execution status filter pills in the Executions tab.
+ *   - "All" filter pill is active by default
+ *   - clicking a status pill triggers a new executions fetch with that status param
+ *   - the execution count indicator shows the correct "N of M" total
+ *   - the export CSV link reflects the currently active status filter
+ */
+test.describe("Webhooks UI — execution status filtering", () => {
+  test("the 'All' filter pill is active by default", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    // The "All" pill should have the active class (bg-zinc-700) applied
+    const allPill = page.getByRole("button", { name: /^all$/i }).first();
+    await allPill.waitFor({ state: "visible", timeout: 8_000 });
+    await expect(allPill).toBeVisible();
+    // Active pills contain bg-zinc-700 in their class (as opposed to bg-transparent)
+    await expect(allPill).toHaveClass(/bg-zinc-700/);
+  });
+
+  test("clicking 'Failed' pill re-fetches executions with status=FAILED param", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+
+    const capturedUrls: string[] = [];
+    await page.route(
+      `**/api/agents/${sharedAgentId}/webhooks/**/executions**`,
+      (route) => {
+        capturedUrls.push(route.request().url());
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: [], total: 0, hasMore: false, nextCursor: null }),
+        });
+      }
+    );
+
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    // Click the Failed filter pill
+    const failedPill = page.getByRole("button", { name: /^failed$/i }).first();
+    await failedPill.waitFor({ state: "visible", timeout: 8_000 });
+    await failedPill.click();
+
+    // Wait for the refetch to fire
+    await page.waitForTimeout(500);
+
+    // At least one of the captured executions requests should contain status=FAILED
+    const hasFailedQuery = capturedUrls.some((u) => u.includes("status=FAILED"));
+    expect(hasFailedQuery).toBe(true);
+  });
+
+  test("'No failed executions' empty state appears after clicking Failed with no results", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+
+    // Override executions endpoint to return empty for FAILED
+    await page.route(
+      `**/api/agents/${sharedAgentId}/webhooks/**/executions**`,
+      (route) => {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: [], total: 0, hasMore: false, nextCursor: null }),
+        });
+      }
+    );
+
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    const failedPill = page.getByRole("button", { name: /^failed$/i }).first();
+    await failedPill.waitFor({ state: "visible", timeout: 8_000 });
+    await failedPill.click();
+
+    // Empty state message
+    await expect(
+      page.getByText(/no failed executions/i).first()
+    ).toBeVisible({ timeout: 8_000 });
+  });
+
+  test("Export button is present in the executions tab header area", async ({
+    webhooksPage,
+    page,
+  }) => {
+    if (!sharedAgentId) { test.skip(); return; }
+    await mockWebhooksAPI(page, { agentId: sharedAgentId });
+    await webhooksPage.goto(sharedAgentId);
+    await page.waitForLoadState("networkidle");
+
+    // The Export button/dropdown should be in the executions tab
+    await expect(
+      page.getByText(/export/i).first()
+    ).toBeVisible({ timeout: 8_000 });
+  });
+
+  test("API — executions export endpoint returns CSV for a webhook", async ({
+    request,
+  }) => {
+    // Direct API test — create agent + webhook, then fetch the export endpoint
+    const agentRes = await request.post("/api/agents", {
+      data: { name: "Export API E2E" },
+    });
+    if (agentRes.status() !== 201) { test.skip(); return; }
+    const agentId = (await agentRes.json()).data.id;
+
+    try {
+      const whRes = await request.post(`/api/agents/${agentId}/webhooks`, {
+        data: { name: "Export Test Webhook" },
+      });
+      if (whRes.status() !== 201) { test.skip(); return; }
+      const webhookId = (await whRes.json()).data.id;
+
+      // Fetch the CSV export (no executions yet — should return header row only)
+      const exportRes = await request.get(
+        `/api/agents/${agentId}/webhooks/${webhookId}/executions/export?limit=10`
+      );
+      expect(exportRes.status()).toBe(200);
+      expect(exportRes.headers()["content-type"]).toContain("text/csv");
+      expect(exportRes.headers()["content-disposition"]).toContain("attachment");
+
+      const text = await exportRes.text();
+      // Must have the CSV header row
+      expect(text).toContain("id,status,event_type");
+    } finally {
+      await request.delete(`/api/agents/${agentId}`);
+    }
+  });
+});

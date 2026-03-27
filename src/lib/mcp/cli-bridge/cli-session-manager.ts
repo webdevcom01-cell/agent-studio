@@ -131,6 +131,8 @@ export async function executeCommand(
     cwd: entry.config.workingDirectory,
     env,
     timeout: entry.config.timeout,
+    shell: false as const, // SECURITY: never invoke via shell — prevents metacharacter injection
+    windowsHide: true,
   };
 
   return new Promise<CLIExecutionResult>((resolve) => {

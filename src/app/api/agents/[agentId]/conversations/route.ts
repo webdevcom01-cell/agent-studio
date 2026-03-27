@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -10,6 +11,9 @@ export async function GET(
   { params }: RouteParams
 ): Promise<NextResponse> {
   const { agentId } = await params;
+
+  const authResult = await requireAgentOwner(agentId);
+  if (isAuthError(authResult)) return authResult;
 
   try {
     const conversations = await prisma.conversation.findMany({

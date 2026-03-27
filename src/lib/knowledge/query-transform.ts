@@ -12,12 +12,24 @@ import { logger } from "@/lib/logger";
 const TRANSFORM_MODEL = "deepseek-chat";
 const MAX_EXPANDED_QUERIES = 3;
 
-export async function hydeTransform(query: string, context?: string): Promise<string> {
+export async function hydeTransform(
+  query: string,
+  context?: string,
+  kbConfig?: { embeddingModel?: string | null },
+): Promise<string> {
   try {
     const userPrompt = context ? `${query}\n\nContext: ${context}` : query;
 
+    // Use a model compatible with the KB's embedding strategy.
+    // OpenAI-embedded KBs pair well with GPT-family for HyDE; others use deepseek-chat.
+    const hydeModel =
+      kbConfig?.embeddingModel?.toLowerCase().includes("openai") ||
+      kbConfig?.embeddingModel?.toLowerCase().includes("text-embedding")
+        ? "gpt-4o-mini"
+        : TRANSFORM_MODEL;
+
     const { text } = await generateText({
-      model: getModel(TRANSFORM_MODEL),
+      model: getModel(hydeModel),
       system:
         "You are a helpful assistant. Given a user question, write a short hypothetical document passage (2-3 sentences) that would directly answer this question. Write ONLY the passage content, no preamble.",
       prompt: userPrompt,
@@ -51,7 +63,12 @@ export async function multiQueryExpand(query: string): Promise<string[]> {
       .filter(Boolean)
       .slice(0, MAX_EXPANDED_QUERIES);
 
-    return [query, ...expanded];
+    // Deduplicate: remove any expanded query that matches the original (case-insensitive)
+    const uniqueExpanded = expanded.filter(
+      (q) => q.toLowerCase() !== query.toLowerCase(),
+    );
+
+    return [query, ...new Set(uniqueExpanded)];
   } catch (err) {
     logger.warn("Multi-query expansion failed, using original query", {
       error: err instanceof Error ? err.message : String(err),

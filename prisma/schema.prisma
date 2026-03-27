@@ -102,6 +102,7 @@ model Agent {
   skillPermissions  AgentSkillPermission[]
   instincts         Instinct[]
   eccEnabled        Boolean        @default(false)
+  flowTraces        FlowTrace[]
 
   @@index([userId])
   @@index([userId, updatedAt])
@@ -140,9 +141,11 @@ model KnowledgeBase {
   searchThreshold     Float     @default(0.25)
   hybridAlpha         Float     @default(0.7)
   maxChunks           Int       @default(500)
-  contextOrdering     String    @default("relevance")
-  migrationStatus     String?
-  processingProgress  Json?
+  contextOrdering         String    @default("relevance")
+  migrationStatus         String?
+  processingProgress      Json?
+  // Anthropic Contextual Retrieval — prepend LLM-generated context to each chunk during ingest
+  contextualEnrichment    Boolean   @default(false)
 }
 
 enum KBSourceType {
@@ -281,6 +284,7 @@ model Message {
   role           MessageRole
   content        String       @db.Text
   citations      Json?
+  metadata       Json?
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())
@@ -769,20 +773,25 @@ enum EvalResultStatus {
 }
 
 model EvalSuite {
-  id           String         @id @default(cuid())
-  name         String
-  description  String?
-  agentId      String
-  agent        Agent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  testCases    EvalTestCase[]
-  runs         EvalRun[]
-  isDefault    Boolean        @default(false)
-  runOnDeploy  Boolean        @default(false)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id                String         @id @default(cuid())
+  name              String
+  description       String?
+  agentId           String
+  agent             Agent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  testCases         EvalTestCase[]
+  runs              EvalRun[]
+  isDefault         Boolean        @default(false)
+  runOnDeploy       Boolean        @default(false)
+  // Scheduled eval runs
+  scheduleEnabled   Boolean        @default(false)
+  scheduleCron      String?        // cron expression e.g. "0 3 * * *" or "0 3 * * *|Europe/Belgrade" (with TZ suffix)
+  lastScheduledAt   DateTime?      // last time this suite was auto-run by schedule
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   @@index([agentId])
   @@index([agentId, runOnDeploy])
+  @@index([scheduleEnabled])
 }
 
 model EvalTestCase {
@@ -802,20 +811,24 @@ model EvalTestCase {
 }
 
 model EvalRun {
-  id           String        @id @default(cuid())
-  suiteId      String
-  suite        EvalSuite     @relation(fields: [suiteId], references: [id], onDelete: Cascade)
-  status       EvalRunStatus @default(PENDING)
-  totalCases   Int           @default(0)
-  passedCases  Int           @default(0)
-  failedCases  Int           @default(0)
-  score        Float?
-  durationMs   Int?
-  triggeredBy  String?                     // "manual" | "deploy" | "schedule"
-  results      EvalResult[]
-  errorMessage String?
-  createdAt    DateTime      @default(now())
-  completedAt  DateTime?
+  id              String        @id @default(cuid())
+  suiteId         String
+  suite           EvalSuite     @relation(fields: [suiteId], references: [id], onDelete: Cascade)
+  status          EvalRunStatus @default(PENDING)
+  totalCases      Int           @default(0)
+  passedCases     Int           @default(0)
+  failedCases     Int           @default(0)
+  score           Float?
+  durationMs      Int?
+  triggeredBy     String?                  // "manual" | "deploy" | "schedule" | "compare"
+  results         EvalResult[]
+  errorMessage    String?
+  createdAt       DateTime      @default(now())
+  completedAt     DateTime?
+  // Head-to-head comparison fields
+  comparisonRunId String?                  // paired run ID for A/B comparison
+  flowVersionId   String?                  // which flow version was tested (null = active)
+  modelOverride   String?                  // model used if comparing different models
 
   @@index([suiteId])
   @@index([suiteId, createdAt])
@@ -943,4 +956,34 @@ model AuditLog {
 
   @@index([resourceType, resourceId])
   @@index([userId, timestamp])
+}
+
+// ---------------------------------------------------------------------------
+// Visual Flow Debugger — Trace Persistence (Phase 5)
+// ---------------------------------------------------------------------------
+
+enum TraceStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model FlowTrace {
+  id              String      @id @default(cuid())
+  agentId         String
+  agent           Agent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  conversationId  String?
+  testInput       String?     @db.Text
+  status          TraceStatus @default(RUNNING)
+  totalDurationMs Int?
+  nodesExecuted   Int?
+  nodesFailed     Int?
+  executionPath   String[]
+  nodeTraces      Json        // Map<nodeId, NodeDebugState>
+  edgeTraces      Json        // Map<edgeKey, EdgeDebugState>
+  flowSummary     Json?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([agentId, createdAt])
 }

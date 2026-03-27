@@ -3,12 +3,11 @@
 import { useState } from "react";
 import {
   CheckCircle2, XCircle, AlertCircle, Clock, ChevronDown,
-  ChevronUp, TrendingUp, TrendingDown, Minus,
+  ChevronUp, TrendingUp, TrendingDown, Minus, Download,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
-import { Badge } from "@/components/ui/badge";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,6 +69,8 @@ interface EvalResultsViewProps {
   run: EvalRunDetail;
   history: RunHistoryItem[];
   onSelectRun: (runId: string) => void;
+  agentId: string;
+  suiteId: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -105,6 +106,21 @@ function StatusPill({ status }: { status: string }) {
   return (
     <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${map[status] ?? map.PENDING}`}>
       {status}
+    </span>
+  );
+}
+
+function TriggeredByBadge({ triggeredBy }: { triggeredBy: string | null }) {
+  const value = triggeredBy ?? "manual";
+  const map: Record<string, string> = {
+    manual:   "bg-zinc-700/50 text-zinc-400",
+    deploy:   "bg-violet-500/15 text-violet-400",
+    schedule: "bg-amber-500/15 text-amber-400",
+    compare:  "bg-blue-500/15 text-blue-400",
+  };
+  return (
+    <span className={`px-1.5 py-0.5 rounded text-xs font-medium capitalize ${map[value] ?? map.manual}`}>
+      {value}
     </span>
   );
 }
@@ -260,11 +276,45 @@ function TrendChart({ history }: { history: RunHistoryItem[] }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function EvalResultsView({ run, history, onSelectRun }: EvalResultsViewProps) {
+export function EvalResultsView({ run, history, onSelectRun, agentId, suiteId }: EvalResultsViewProps) {
   const passRate = run.totalCases > 0 ? run.passedCases / run.totalCases : 0;
+
+  function handleDownloadRun() {
+    window.open(
+      `/api/agents/${agentId}/evals/${suiteId}/run/${run.id}/export`,
+      "_blank",
+    );
+  }
+
+  function handleDownloadAllRuns() {
+    window.open(
+      `/api/agents/${agentId}/evals/${suiteId}/export`,
+      "_blank",
+    );
+  }
 
   return (
     <div className="space-y-4">
+      {/* Export buttons row */}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          onClick={handleDownloadRun}
+          className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors px-2.5 py-1.5 rounded border border-zinc-700 hover:border-zinc-600 bg-zinc-900 hover:bg-zinc-800"
+          title="Download this run as CSV"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Export Run
+        </button>
+        <button
+          onClick={handleDownloadAllRuns}
+          className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors px-2.5 py-1.5 rounded border border-zinc-700 hover:border-zinc-600 bg-zinc-900 hover:bg-zinc-800"
+          title="Download all completed runs in this suite as CSV"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Export All Runs
+        </button>
+      </div>
+
       {/* Summary bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3">
@@ -355,8 +405,8 @@ export function EvalResultsView({ run, history, onSelectRun }: EvalResultsViewPr
                     <td className="px-3 py-2 text-right text-zinc-400 text-xs font-mono">
                       {durationLabel(r.durationMs)}
                     </td>
-                    <td className="px-3 py-2 text-zinc-500 text-xs capitalize">
-                      {r.triggeredBy ?? "manual"}
+                    <td className="px-3 py-2 text-xs">
+                      <TriggeredByBadge triggeredBy={r.triggeredBy} />
                     </td>
                   </tr>
                 ))}

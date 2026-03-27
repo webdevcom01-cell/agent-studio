@@ -4,15 +4,15 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { ALL_MODEL_IDS, DEFAULT_MODEL } from "@/lib/models";
 
-const VALID_MODELS = ["deepseek-chat", "gpt-4o-mini", "gpt-4o", "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"] as const;
 const MAX_AGENTS_PER_USER = 100;
 
 const createAgentSchema = z.object({
   name: z.string().min(1, "Name is required").max(200, "Name must be 200 characters or less"),
   description: z.string().max(2000).optional().default(""),
   systemPrompt: z.string().max(50000).optional().default("You are a helpful assistant."),
-  model: z.enum(VALID_MODELS).optional().default("deepseek-chat"),
+  model: z.enum(ALL_MODEL_IDS).optional().default(DEFAULT_MODEL),
 });
 
 export async function GET(): Promise<NextResponse> {

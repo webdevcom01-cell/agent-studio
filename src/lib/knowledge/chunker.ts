@@ -96,9 +96,10 @@ export function chunkText(text: string, options?: ChunkOptions): string[] {
     const overlapText = prevWords.slice(-overlapWordCount).join(" ");
     const combined = `${overlapText} ${chunks[i]}`.trim();
 
-    if (countTokens(combined) <= maxTokens * 1.3) {
+    if (countTokens(combined) <= maxTokens) {
       overlappedChunks.push(combined);
     } else {
+      // Overlap would push chunk over the token limit — skip overlap for this pair.
       overlappedChunks.push(chunks[i]);
     }
   }
@@ -223,7 +224,9 @@ export function chunkMarkdown(
       if (currentChunk.trim()) chunks.push(currentChunk.trim());
 
       if (preserveHeaders && lastHeader && !line.match(HEADING_RE)) {
-        currentChunk = `${lastHeader}\n${line}`;
+        const withHeader = `${lastHeader}\n${line}`;
+        // Only prepend the header if it doesn't immediately overflow the chunk limit
+        currentChunk = countTokens(withHeader) <= chunkSize ? withHeader : line;
       } else {
         currentChunk = line;
       }
@@ -265,6 +268,33 @@ function detectLanguage(text: string): "python" | "typescript" | "javascript" {
   return "javascript";
 }
 
+/**
+ * Splits a single large code block into smaller chunks when it exceeds maxTokens.
+ * Splits on blank lines inside the block (logical paragraph-level boundaries).
+ * Exported for unit testing.
+ */
+export function chunkCodeBlock(block: string, maxTokens: number): string[] {
+  if (!block) return [];
+  if (countTokens(block) <= maxTokens) return [block];
+
+  const sections = block.split(/\n\s*\n/);
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const section of sections) {
+    const candidate = current ? `${current}\n\n${section}` : section;
+    if (countTokens(candidate) > maxTokens && current) {
+      chunks.push(current);
+      current = section;
+    } else {
+      current = candidate;
+    }
+  }
+
+  if (current) chunks.push(current);
+  return chunks.filter(Boolean);
+}
+
 export function chunkCode(
   text: string,
   config: { language: "python" | "typescript" | "javascript" | "auto" }
@@ -293,7 +323,9 @@ export function chunkCode(
 
   if (currentBlock.body.trim()) blocks.push(currentBlock);
 
-  return blocks.map((b) => b.body.trim()).filter(Boolean);
+  // Sub-chunk any block that exceeds the default token limit (400 tokens)
+  const MAX_CODE_CHUNK_TOKENS = 400;
+  return blocks.flatMap((b) => chunkCodeBlock(b.body.trim(), MAX_CODE_CHUNK_TOKENS)).filter(Boolean);
 }
 
 // ── Sentence Chunker ─────────────────────────────────────────────────────

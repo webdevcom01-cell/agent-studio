@@ -13,6 +13,11 @@ import {
   evaluateKBFaithfulness,
   evaluateRelevance,
 } from "./llm-judge";
+import {
+  evaluateRAGFaithfulness,
+  evaluateRAGContextPrecision,
+  evaluateRAGAnswerRelevancy,
+} from "./rag-assertions";
 import type {
   AssertionContext,
   AssertionResult,
@@ -217,6 +222,20 @@ export async function evaluateAssertion(
 
       case "relevance":
         return evaluateRelevance(ctx.input, ctx.output, assertion.threshold);
+
+      case "rag_faithfulness":
+        return evaluateRAGFaithfulness(
+          ctx.input,
+          ctx.output,
+          ctx.kbContext,
+          assertion.threshold,
+        );
+
+      case "rag_context_precision":
+        return evaluateRAGContextPrecision(ctx.input, ctx.kbContext, assertion.threshold);
+
+      case "rag_answer_relevancy":
+        return evaluateRAGAnswerRelevancy(ctx.input, ctx.output, assertion.threshold);
 
       default: {
         // TypeScript exhaustiveness guard

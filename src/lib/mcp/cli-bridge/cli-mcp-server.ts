@@ -3,6 +3,7 @@ import { cliConfigSchema, type CLIConfig, type CLIToolSchema } from "./types";
 import { discoverCLI, commandToToolSchema } from "./cli-discovery";
 import { registerCLI, unregisterCLI, getToolsForCLI, getConfigForCLI } from "./cli-registry";
 import { getOrCreateSession, executeCommand, removeSession } from "./cli-session-manager";
+import { validateCLIConfig, validateArgs } from "./cli-security";
 
 interface CLIBridgeToolResult {
   success: boolean;
@@ -43,6 +44,7 @@ function buildArgs(
 
   const extraArgs = params["_args"] as string | undefined;
   if (extraArgs) {
+    // Split and filter — argument-level validation happens in callCLITool via validateArgs
     const splitArgs = extraArgs.split(/\s+/).filter(Boolean);
     args.push(...splitArgs);
   }
@@ -65,6 +67,25 @@ export async function initializeCLIBridge(
   }
 
   const config = parsed.data;
+
+  // Security gate: validate CLI path, env vars, and working directory
+  const securityResult = await validateCLIConfig({
+    cliPath: config.cliPath,
+    workingDirectory: config.workingDirectory,
+    envVars: config.envVars,
+  });
+  if (!securityResult.valid) {
+    logger.warn("CLI bridge blocked by security validation", {
+      serverId,
+      cliPath: config.cliPath,
+      reason: securityResult.error,
+    });
+    return {
+      success: false,
+      tools: [],
+      error: securityResult.error ?? "Security validation failed",
+    };
+  }
 
   try {
     const discovery = await discoverCLI(config.cliPath);
@@ -146,6 +167,23 @@ export async function callCLITool(
 
   const sessionId = getOrCreateSession(serverId, config);
   const commandArgs = buildArgs(config, toolName, args);
+
+  // Security gate: validate all arguments before execution
+  const argsCheck = validateArgs(commandArgs);
+  if (!argsCheck.valid) {
+    logger.warn("CLI tool call blocked — dangerous arguments", {
+      serverId,
+      toolName,
+      reason: argsCheck.error,
+    });
+    return {
+      success: false,
+      output: "",
+      exitCode: 1,
+      durationMs: 0,
+      error: argsCheck.error ?? "Argument validation failed",
+    };
+  }
 
   try {
     const result = await executeCommand(sessionId, config.cliPath, commandArgs);

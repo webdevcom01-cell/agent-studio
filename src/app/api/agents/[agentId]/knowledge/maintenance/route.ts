@@ -27,7 +27,7 @@ interface RouteParams {
 }
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: RouteParams
 ): Promise<NextResponse> {
   const { agentId } = await params;

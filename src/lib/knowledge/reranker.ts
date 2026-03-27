@@ -22,8 +22,10 @@ export async function cohereRerank(
 ): Promise<SearchResult[]> {
   const apiKey = process.env.COHERE_API_KEY;
   if (!apiKey) {
-    logger.warn("COHERE_API_KEY not set, skipping Cohere rerank");
-    return candidates.slice(0, topK);
+    throw new Error(
+      "COHERE_API_KEY is not configured. Change the reranking model in KB settings " +
+        "to 'llm-rubric' or 'none', or add the COHERE_API_KEY environment variable.",
+    );
   }
 
   if (candidates.length === 0) return [];

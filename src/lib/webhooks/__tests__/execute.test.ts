@@ -651,8 +651,8 @@ describe("executeWebhookTrigger", () => {
     it("stores rawPayload when body fits within 1 MB", async () => {
       vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
 
-      const ts = makeTimestamp();
-      const id = "msg_store_test";
+      const _ts = makeTimestamp();
+      const _id = "msg_store_test";
       await executeWebhookTrigger({
         agentId: AGENT_ID,
         webhookId: WEBHOOK_ID,
@@ -770,6 +770,331 @@ describe("executeWebhookTrigger", () => {
       expect(result["x-github-event"]).toBe("push");
       expect(result["x-webhook-id"]).toBe("msg_001");
       expect(result["content-type"]).toBe("application/json");
+    });
+  });
+
+  // ── Variable name conflicts ──────────────────────────────────────────────────
+
+  describe("variable name conflicts in mappings", () => {
+    it("body mapping can overwrite __webhook_payload system variable (documents behavior)", async () => {
+      const bodyMappings = [
+        { jsonPath: "$.action", variableName: "__webhook_payload" },
+      ];
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ bodyMappings }) as never
+      );
+      const { executeFlow } = await import("@/lib/runtime/engine");
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders(),
+      });
+
+      const contextArg = (executeFlow as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      // Body mapping overwrites the system variable — last write wins
+      expect(contextArg.variables.__webhook_payload).toBe("opened");
+    });
+
+    it("duplicate variable names in body mappings — last mapping wins", async () => {
+      const bodyMappings = [
+        { jsonPath: "$.action", variableName: "my_var" },
+        { jsonPath: "$.repo", variableName: "my_var" }, // same name
+      ];
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ bodyMappings }) as never
+      );
+      const { executeFlow } = await import("@/lib/runtime/engine");
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders(),
+      });
+
+      const contextArg = (executeFlow as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      // Second mapping ("$.repo" → "agent-studio") overwrites the first
+      expect(contextArg.variables.my_var).toBe("agent-studio");
+    });
+
+    it("header mapping overwrites body mapping when both use the same variable name", async () => {
+      const bodyMappings = [{ jsonPath: "$.action", variableName: "shared_var" }];
+      const headerMappings = [{ headerName: "x-github-event", variableName: "shared_var" }];
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(
+        makeWebhookConfig({ bodyMappings, headerMappings }) as never
+      );
+      const { executeFlow } = await import("@/lib/runtime/engine");
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders({ "x-github-event": "push" }),
+      });
+
+      const contextArg = (executeFlow as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      // Header mappings run after body mappings — header value wins
+      expect(contextArg.variables.shared_var).toBe("push");
+    });
+  });
+
+  // ── Flow execution failure ───────────────────────────────────────────────────
+
+  describe("flow execution failure", () => {
+    it("returns status 500 when executeFlow throws", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+      const { executeFlow } = await import("@/lib/runtime/engine");
+      vi.mocked(executeFlow).mockRejectedValueOnce(new Error("flow exploded"));
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.status).toBe(500);
+      expect(result.error).toBe("flow exploded");
+    });
+
+    it("persists FAILED status to DB when executeFlow throws", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+      const { executeFlow } = await import("@/lib/runtime/engine");
+      vi.mocked(executeFlow).mockRejectedValueOnce(new Error("crash"));
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders(),
+      });
+
+      // Both webhookExecution.update AND webhookConfig.update share the same mock.
+      // Calls: [RUNNING update, FAILED status update, webhookConfig update].
+      // The final status update is the one where status !== "RUNNING".
+      const allUpdateCalls = vi.mocked(prisma.webhookExecution.update).mock.calls;
+      const statusCall = allUpdateCalls.find(([arg]) => {
+        const d = arg.data as Record<string, unknown>;
+        return "status" in d && d.status !== "RUNNING";
+      });
+      expect(statusCall).toBeDefined();
+      const statusData = statusCall![0].data as Record<string, unknown>;
+      expect(statusData.status).toBe("FAILED");
+      expect(statusData.errorMessage).toBe("crash");
+    });
+
+    it("increments failureCount on webhook config when executeFlow throws", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+      const { executeFlow } = await import("@/lib/runtime/engine");
+      vi.mocked(executeFlow).mockRejectedValueOnce(new Error("crash"));
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders(),
+      });
+
+      // webhookConfig.update and webhookExecution.update share the same mock.
+      // The webhookConfig update is the call that contains `data.failureCount`.
+      const allUpdateCalls = vi.mocked(prisma.webhookConfig.update).mock.calls;
+      const configCall = allUpdateCalls.find(([arg]) => "failureCount" in (arg.data as Record<string, unknown>));
+      expect(configCall).toBeDefined();
+      const configData = configCall![0].data as Record<string, unknown>;
+      expect(configData.failureCount).toEqual({ increment: 1 });
+    });
+  });
+
+  // ── Empty / edge-case body ───────────────────────────────────────────────────
+
+  describe("empty and edge-case body handling", () => {
+    it("empty string body produces empty parsedBody object {}", async () => {
+      const emptyBody = "";
+      const ts = makeTimestamp();
+      const id = "msg_empty_body";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, emptyBody, SECRET),
+      };
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+      const { executeFlow } = await import("@/lib/runtime/engine");
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: emptyBody,
+        headers,
+      });
+
+      const contextArg = (executeFlow as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(contextArg.variables.__webhook_payload).toEqual({});
+    });
+
+    it("whitespace-only body produces empty parsedBody object {}", async () => {
+      const wsBody = "   ";
+      const ts = makeTimestamp();
+      const id = "msg_ws_body";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, wsBody, SECRET),
+      };
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+      const { executeFlow } = await import("@/lib/runtime/engine");
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: wsBody,
+        headers,
+      });
+
+      const contextArg = (executeFlow as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(contextArg.variables.__webhook_payload).toEqual({});
+    });
+
+    it("invalid JSON body is stored as { __raw: rawBody }", async () => {
+      const badJson = "{not valid json!!!";
+      const ts = makeTimestamp();
+      const id = "msg_bad_json";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, badJson, SECRET),
+      };
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+      const { executeFlow } = await import("@/lib/runtime/engine");
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: badJson,
+        headers,
+      });
+
+      const contextArg = (executeFlow as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect((contextArg.variables.__webhook_payload as { __raw: string }).__raw).toBe(badJson);
+    });
+  });
+
+  // ── Payload size boundary ────────────────────────────────────────────────────
+
+  describe("payload size boundary (1 MB cap for rawPayload storage)", () => {
+    it("stores rawPayload when body is exactly 1,048,576 bytes (1 MB)", async () => {
+      const exactMbBody = "x".repeat(1_048_576);
+      const ts = makeTimestamp();
+      const id = "msg_exact_mb";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, exactMbBody, SECRET),
+      };
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: exactMbBody,
+        headers,
+      });
+
+      const createCall = vi.mocked(prisma.webhookExecution.create).mock.calls[0][0];
+      expect(createCall.data.rawPayload).toBe(exactMbBody);
+    });
+
+    it("stores null rawPayload when body exceeds 1 MB by 1 byte", async () => {
+      const overMbBody = "x".repeat(1_048_577);
+      const ts = makeTimestamp();
+      const id = "msg_over_mb";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, overMbBody, SECRET),
+      };
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: overMbBody,
+        headers,
+      });
+
+      const createCall = vi.mocked(prisma.webhookExecution.create).mock.calls[0][0];
+      expect(createCall.data.rawPayload).toBeNull();
+    });
+
+    it("oversized payload still executes flow successfully (no request rejection)", async () => {
+      const overMbBody = "x".repeat(1_048_577);
+      const ts = makeTimestamp();
+      const id = "msg_over_mb_flow";
+      const headers = {
+        "x-webhook-id": id,
+        "x-webhook-timestamp": ts,
+        "x-webhook-signature": makeSignature(id, ts, overMbBody, SECRET),
+      };
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: overMbBody,
+        headers,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.status).toBe(200);
+    });
+  });
+
+  // ── Broken context / saveMessages failure ────────────────────────────────────
+
+  describe("broken context and persistence failures", () => {
+    it("returns 500 when loadContext throws", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+      const { loadContext } = await import("@/lib/runtime/context");
+      vi.mocked(loadContext).mockRejectedValueOnce(new Error("DB connection lost"));
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.status).toBe(500);
+    });
+
+    it("execution is still marked COMPLETED when saveMessages throws (Promise.allSettled)", async () => {
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue(makeWebhookConfig() as never);
+      const { saveMessages } = await import("@/lib/runtime/context");
+      vi.mocked(saveMessages).mockRejectedValueOnce(new Error("write failed"));
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: RAW_BODY,
+        headers: makeHeaders(),
+      });
+
+      // saveMessages failure is swallowed by Promise.allSettled — flow still succeeds
+      expect(result.success).toBe(true);
+      expect(result.status).toBe(200);
+
+      // Both webhookExecution.update and webhookConfig.update share the same mock.
+      // The final status update is the one where status !== "RUNNING".
+      const allUpdateCalls = vi.mocked(prisma.webhookExecution.update).mock.calls;
+      const statusCall = allUpdateCalls.find(([arg]) => {
+        const d = arg.data as Record<string, unknown>;
+        return "status" in d && d.status !== "RUNNING";
+      });
+      expect(statusCall).toBeDefined();
+      expect((statusCall![0].data as Record<string, unknown>).status).toBe("COMPLETED");
     });
   });
 });

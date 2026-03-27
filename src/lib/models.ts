@@ -59,3 +59,10 @@ export const ALL_MODELS: ModelOption[] = [
 ];
 
 export const DEFAULT_MODEL = "deepseek-chat";
+
+/**
+ * All model IDs as a tuple — single source of truth for Zod enum validation.
+ * Used by API routes to validate model selection on agent create/update.
+ * Automatically stays in sync when models are added/removed from ALL_MODELS.
+ */
+export const ALL_MODEL_IDS = ALL_MODELS.map((m) => m.id) as [string, ...string[]];

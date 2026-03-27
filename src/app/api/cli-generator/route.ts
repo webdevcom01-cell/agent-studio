@@ -91,7 +91,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const { applicationName, description, capabilities, platform, target } =
+    const { applicationName, description: _description, capabilities: _capabilities, platform: _platform, target } =
       parsed.data;
 
     const generation = await prisma.cLIGeneration.create({

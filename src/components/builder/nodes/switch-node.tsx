@@ -44,7 +44,7 @@ export function SwitchNode({ data, selected }: NodeProps) {
       </div>
 
       {/* One output handle per case + default */}
-      {cases.map((c, i) => (
+      {cases.map((_c, i) => (
         <Handle
           key={`case_${i}`}
           type="source"

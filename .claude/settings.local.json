@@ -3,7 +3,8 @@
     "allow": [
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "Bash(pnpm typecheck:*)"
     ]
   }
 }

@@ -5,7 +5,7 @@
 Visual AI agent builder with multi-agent orchestration and continuous learning. Build AI agents
 via a flow editor (XyFlow), manage knowledge bases with RAG (chunking + embeddings + hybrid
 search), enable agent-to-agent communication (A2A protocol), and chat with agents. Features
-include: agent marketplace/discovery with faceted search, 137 agent templates across 12
+include: agent marketplace/discovery with faceted search, 216 agent templates across 19
 categories (including 25 ECC Developer Agents), agent-as-tool orchestration (AI dynamically
 calls sibling agents), web browsing capabilities (fetch + browser actions via MCP), an
 embeddable chat widget, a CLI Generator that automatically produces a full MCP server bridge
@@ -78,7 +78,7 @@ src/
     login/page.tsx                    ← Login page (GitHub + Google OAuth)
     analytics/page.tsx                ← Analytics dashboard (charts, response times, KB stats)
     discover/page.tsx                 ← Agent Discovery Marketplace (faceted search, categories, tags)
-    templates/page.tsx                ← Agent Templates Gallery (112 templates, 11 categories)
+    templates/page.tsx                ← Agent Templates Gallery (216 templates, 19 categories)
     templates/templates-client.tsx    ← Templates client component (search + filter)
     builder/[agentId]/page.tsx        ← Flow editor page
     builder/[agentId]/error.tsx       ← Error boundary (Flow Editor Error)
@@ -131,11 +131,15 @@ src/
       cli-generator/[generationId]/download/route.ts ← GET download all files as .zip
       cli-generator/[generationId]/logs/route.ts     ← GET per-phase logs and token usage
       cli-generator/[generationId]/publish/route.ts  ← POST register generated bridge as MCP server
+      cli-generator/[generationId]/test-mcp/route.ts ← GET static validation + Claude Desktop config JSON (py-validator / ts-validator)
       agents/[agentId]/evals/route.ts                          ← GET list suites, POST create suite
       agents/[agentId]/evals/[suiteId]/route.ts                ← GET detail, PATCH update, DELETE
       agents/[agentId]/evals/[suiteId]/cases/route.ts          ← GET, POST, PUT bulk, DELETE test cases
       agents/[agentId]/evals/[suiteId]/run/route.ts            ← POST trigger run, GET run history
       agents/[agentId]/evals/[suiteId]/run/[runId]/route.ts    ← GET full run detail + per-case results
+      agents/[agentId]/evals/[suiteId]/run/[runId]/export/route.ts ← GET per-run CSV export (one row per assertion)
+      agents/[agentId]/evals/[suiteId]/export/route.ts         ← GET suite-level bulk CSV export (?limit=1-100)
+      agents/[agentId]/evals/[suiteId]/compare/route.ts        ← POST A/B comparison (version or model)
 
   components/
     cli-generator/                ← CLI Generator UI components (pipeline progress, file preview, stuck alert)
@@ -167,7 +171,7 @@ src/
     theme-provider.tsx    ← Dark mode theme provider
 
   data/
-    agent-templates.json  ← 112 agent templates across 11 categories
+    agent-templates.json  ← 216 agent templates across 19 categories
 
   lib/
     ai.ts             ← AI model routing (DeepSeek/OpenAI/Anthropic/Gemini/Groq/Mistral/Kimi)
@@ -243,11 +247,15 @@ src/
       scraper.ts      ← URL content fetching (safe redirect following, DNS validation)
       ingest.ts       ← Source ingestion pipeline (scrape → parse → chunk → embed → store)
     cli-generator/
-      types.ts        ← PipelineConfig (incl. target?: "python"|"typescript"), PhaseResult, PIPELINE_PHASES, STATUS_FOR_PHASE, STUCK_THRESHOLD_MS
+      types.ts        ← PipelineConfig, PhaseResult (incl. modelUsed?, retryCount?), OnFileGenerated callback type, PIPELINE_PHASES, STUCK_THRESHOLD_MS
       schemas.ts      ← Zod schemas for all 6 phases; TSPublishOutputSchema for TypeScript publish phase
       prompts.ts      ← System/user prompt pairs per phase; Python + TypeScript variants; extractPythonSignatures, extractTypeScriptSignatures
-      ai-phases.ts    ← Phase runners: aiAnalyze, aiDesign, aiImplement, aiTest, aiDocs, aiPublish — branches by config.target for phases 2–5
+      ai-phases.ts    ← Phase runners with retry jitter + OnFileGenerated callback; aiAnalyze, aiDesign, aiImplement, aiTest, aiDocs, aiPublish
       mcp-registration.ts ← Auto-register generated bridge as MCP server; extractToolsFromFiles routes by target
+      py-validator.ts ← Post-generation validation for Python FastMCP: checks FastMCP import, @mcp.tool, mcp.run(), requirements.txt, file presence
+      auto-fix.ts     ← Deterministic auto-fix: mcp.Server()→FastMCP, server.tool()→registerTool(), missing .js ESM extensions
+      quickstart.ts   ← Generates install.sh + Dockerfile for Python FastMCP and TypeScript MCP SDK targets
+      ts-validator.ts ← Post-generation validation for TypeScript MCP SDK output (8 validation rules)
       __tests__/      ← Unit tests for prompts, pipeline, schemas, MCP registration (Python + TypeScript paths)
     evals/
       schemas.ts      ← Zod schemas for all 12 assertion types, test case input, suite create/update
@@ -335,8 +343,11 @@ EvalSuite — Eval suite for an agent (collection of test cases)
   ├── name, description?
   ├── isDefault Boolean — default suite selected in UI
   ├── runOnDeploy Boolean — auto-run after flow deploy (fire-and-forget)
+  ├── scheduleEnabled Boolean — auto-run on cron schedule
+  ├── scheduleCron String? — cron expression e.g. "0 3 * * *" (5-field)
+  ├── lastScheduledAt DateTime? — used for double-run prevention (4-min window)
   ├── testCases EvalTestCase[], runs EvalRun[]
-  └── Indexes: [agentId], [agentId, runOnDeploy]
+  └── Indexes: [agentId], [agentId, runOnDeploy], [scheduleEnabled]
 
 EvalTestCase — Single test case in a suite
   ├── suiteId (required, cascade delete)
@@ -347,9 +358,12 @@ EvalTestCase — Single test case in a suite
 
 EvalRun — One execution of an entire suite
   ├── suiteId (required, cascade delete)
-  ├── status EvalRunStatus, triggeredBy ("manual"|"deploy"|"schedule")
+  ├── status EvalRunStatus, triggeredBy ("manual"|"deploy"|"schedule"|"compare")
   ├── totalCases, passedCases, failedCases, score Float?, durationMs
   ├── errorMessage?, completedAt?
+  ├── comparisonRunId String? — paired run ID for A/B comparison (mutual reference)
+  ├── flowVersionId String? — which flow version was tested in this run
+  ├── modelOverride String? — model used if comparing different models
   ├── results EvalResult[]
   └── Indexes: [suiteId], [suiteId, createdAt]
 
@@ -425,11 +439,16 @@ EvalResult — One test case result within a run
 | `/api/cli-generator/[generationId]/download` | GET | Download all generated files as a .zip archive |
 | `/api/cli-generator/[generationId]/logs` | GET | Per-phase execution logs and token usage |
 | `/api/cli-generator/[generationId]/publish` | POST | Register generated bridge as an MCP server in user's account |
+| `/api/cli-generator/[generationId]/test-mcp` | GET | Static validation (py-validator / ts-validator) + Claude Desktop config JSON for completed generation |
 | `/api/agents/[agentId]/evals` | GET, POST | List eval suites (with last run + counts), create suite |
 | `/api/agents/[agentId]/evals/[suiteId]` | GET, PATCH, DELETE | Suite detail (test cases + last 5 runs), update (name/desc/isDefault/runOnDeploy), delete |
 | `/api/agents/[agentId]/evals/[suiteId]/cases` | GET, POST, PUT, DELETE | List/create/bulk-update/delete test cases (max 50 per suite) |
 | `/api/agents/[agentId]/evals/[suiteId]/run` | GET, POST | Run history (paginated), trigger new eval run (409 if already running) |
 | `/api/agents/[agentId]/evals/[suiteId]/run/[runId]` | GET | Full run detail with per-case results and assertion breakdowns |
+| `/api/agents/[agentId]/evals/[suiteId]/run/[runId]/export` | GET | Download per-run results as CSV (one row per assertion, RFC-4180 quoting) |
+| `/api/agents/[agentId]/evals/[suiteId]/export` | GET | Download all completed runs as bulk CSV (`?limit=` 1–100, default 50) |
+| `/api/agents/[agentId]/evals/[suiteId]/compare` | POST | Run head-to-head A/B comparison between two flow versions or two models; returns `CompareResult` with `ComparisonDelta` |
+| `/api/evals/scheduled` | POST | CRON_SECRET-protected trigger for Railway Cron — finds due suites and fires `triggerScheduledEvals()` |
 | `/api/auth/*` | GET, POST | NextAuth authentication endpoints |
 | `/api/health` | GET | Health check (DB connectivity + uptime + version) |
 | `/api/analytics` | GET | Analytics dashboard data (response times, KB stats, conversations) |
@@ -608,15 +627,19 @@ Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and mainte
 - `/discover` page with faceted search: categories, tags, model, sort, scope (public/mine/all)
 - `/api/agents/discover` endpoint: 4 parallel Prisma queries (agents, count, category stats, tag aggregation)
 - Agent model fields: `category String?`, `tags String[]`, `isPublic Boolean`
-- Shared categories in `src/lib/constants/agent-categories.ts` (11 categories)
+- Shared categories in `src/lib/constants/agent-categories.ts` (23 categories incl. marketplace-only)
 - Debounced search (300ms), loading skeletons, active filter pills, category badges with colors
 - Searchable agent selector in flow builder property panel (replaces basic HTML select)
 
 ### Agent Templates
-- 112 templates in `src/data/agent-templates.json` across 11 categories
+- 216 templates in `src/data/agent-templates.json` across 19 categories (all at minimum 🟢 Dobro coverage)
 - `/templates` page with server component + client-side search and category filter tabs
 - Dashboard "New Agent" dialog includes "Browse Templates" tab — selecting pre-fills name, description, systemPrompt
 - Template gallery component: `src/components/templates/template-gallery.tsx`
+- **19 template categories** — all at minimum 8 templates (🟢 Dobro); 5 categories at 15+ (🔵 Odlično)
+- New 2026 categories added: `finance` (10), `hr` (10), `sales` (10), `research` (8), `writing` (8), `data` (8), `coding` (8)
+- `CATEGORY_LABELS` in template-gallery.tsx covers all 23 categories (including marketplace-only)
+- When adding templates: update `src/data/agent-templates.json` array + header `total` + `categories` list
 
 ### Human Approval Workflow
 - `human_approval` node type in flow — pauses execution for human review
@@ -706,6 +729,17 @@ Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and mainte
   - `TSPublishOutputSchema` in `schemas.ts` outputs `package.json` + `tsconfig.json` + `mcp_config`
 - Stuck detection: `STUCK_THRESHOLD_MS = 5 min` — UI shows AlertTriangle on generations where `updatedAt` exceeds threshold without COMPLETED/FAILED
 - Resume endpoint resets the stuck phase and re-invokes the phase runner
+- **Auto-heal** in `advance/route.ts` — if a phase is found in `"running"` state (leftover from a crashed invocation), it is automatically reset to `"pending"` before re-running (no manual resume needed for crash recovery)
+- **Retry jitter** in `callAIObject()` — ±25% random jitter on top of exponential backoff (`baseMs * (random * 0.5 - 0.25)`) to avoid thundering-herd on provider rate limits
+- **`modelUsed` + `retryCount`** persisted per `PhaseResult` in DB — tracks which model actually completed the phase (primary or fallback) and how many retries were needed
+- **Frontend auto-resume** — `useEffect` in `page.tsx` detects stuck generations on select and triggers `handleResume` once per session (guarded by `autoResumedRef: Set<string>`)
+- **`OnFileGenerated` callback** — `aiImplement` and `aiTest` accept an optional async callback that fires after each parallel file resolves; `advance/route.ts` passes an incremental DB write callback (enables live file preview)
+- **Live file preview** — `FileViewer` shown during running state (not just completed); `isRunning=true` prop triggers 2 s SWR polling on `/files` endpoint
+- **Python validator** (`py-validator.ts`) — runs after implement phase for Python target; checks FastMCP import, `@mcp.tool`, `mcp.run()`, `mcp` in requirements.txt, and required file presence; logs only, never blocks
+- **Auto-fix engine** (`auto-fix.ts`) — runs after implement phase for both targets; deterministic corrections: `mcp.Server()→FastMCP`, `from mcp import Server→from mcp.server.fastmcp import FastMCP`, `server.tool()→server.registerTool()`, missing `.js` ESM import extensions
+- **Quick-start files** (`quickstart.ts`) — `generateQuickStartFiles()` called on pipeline completion; appends `install.sh` and `Dockerfile` to `generatedFiles`; Python and TypeScript variants; rendered in `FileViewer` Quick Start section
+- **`GET /api/cli-generator/[generationId]/test-mcp`** — static validation + Claude Desktop config export; accessible after `COMPLETED` status; requires auth (owner check)
+- **`MCPTestPanel`** component (`mcp-test-panel.tsx`) — SWR-fetched validation panel shown in `page.tsx` after generation completes; displays issues + copy-to-clipboard config JSON
 - Publish phase registers the generated bridge as an MCP server (`MCPServer` model) linked to the user
 - `extractToolsFromFiles()` in `mcp-registration.ts` auto-detects target: Python (parses `@server.tool()` decorators) vs TypeScript (parses `server.registerTool()` calls, ignores `.test.ts` files)
 - `STUCK_THRESHOLD_MS` lives in `src/lib/cli-generator/types.ts` — never export constants from `route.ts`
@@ -724,6 +758,10 @@ Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and mainte
 - **UI:** two-panel layout (`/evals/[agentId]`) — suite sidebar (Star = default, Rocket = runs on deploy) + tabbed main area (Test Cases / Results); recharts LineChart for score trend over time
 - **Schemas:** `src/lib/evals/schemas.ts` — `EvalAssertionSchema` discriminated union, `CreateEvalSuiteSchema` (includes `runOnDeploy`), `TriggerEvalRunSchema`
 - **LLM-as-Judge model:** uses `DEFAULT_MODEL` (deepseek-chat) for cost efficiency, `generateObject()` with `JudgeOutputSchema { score, reasoning }`, maxTokens: 256
+- **CSV export:** one row per assertion (N assertions × M cases = N×M data rows); RFC-4180 quoting (`"${str.replace(/"/g, '""')}"`); per-run route (`run/[runId]/export`) and suite bulk route (`[suiteId]/export?limit=50`)
+- **Scheduled evals:** `triggerScheduledEvals()` in `src/lib/evals/schedule-hook.ts`; pure-JS `cronMatchesDate()` (no dep); 4-min double-run prevention via `lastScheduledAt`; `POST /api/evals/scheduled` protected by `CRON_SECRET` Bearer header
+- **A/B comparison:** `POST /api/agents/[agentId]/evals/[suiteId]/compare`; type `"version"` loads `FlowVersion.content` snapshot; type `"model"` injects `modelOverride` into all `ai_response` node `data.model` fields; runs A then B sequentially; mutual `comparisonRunId` linking via `prisma.$executeRaw`; `ComparisonDelta` = `{ scoreDiff, latencyDiffMs, aWins, bWins, ties, winner }`
+- **Chat API eval params:** `evalFlowVersionId` replaces `context.flowContent` with version snapshot; `evalModelOverride` overrides `data.model` on every `ai_response` node in-memory before execution
 
 ### Inbound Webhooks
 - **Standard Webhooks spec** (standardwebhooks.com): HMAC-SHA256, `x-webhook-id` / `x-webhook-timestamp` / `x-webhook-signature` headers, 5-min timestamp window
@@ -815,11 +853,18 @@ pnpm db:migrate       # Run migrations (dev)
 pnpm db:push          # Sync schema directly
 pnpm db:studio        # Prisma Studio UI
 pnpm db:seed          # Seed dev data
+pnpm precheck         # Pre-push validation (TS + vitest + lucide mocks + strings)
+pnpm precheck:file    # Same, for a specific file (e.g. pnpm precheck:file src/foo.tsx)
 ```
 
 ---
 
 ## 8. CLAUDE WORKING GUIDELINES
+
+### Pre-Push Workflow
+Before every commit+push, run `pnpm precheck` (or `pnpm precheck:file <path>` for a specific file).
+The script simulates CI locally: TypeScript check → targeted vitest → lucide icon mock check → placeholder string consistency.
+All 4 checks must show PASS before pushing. Workflow: **code → precheck → commit → push**.
 
 ### Hard Rules
 - Never edit `src/generated/` — Prisma auto-generates this
@@ -883,7 +928,7 @@ NOT as a separate project or fork. Agent-studio already has 80%+ of the needed i
 
 | ECC Component          | Studio Equivalent                    | Integration Action                    |
 |------------------------|--------------------------------------|---------------------------------------|
-| 25 Agent definitions   | Agent Templates (133 existing)       | Import as new "Developer Agents" category |
+| 25 Agent definitions   | Agent Templates (216 existing)       | Import as new "Developer Agents" category |
 | 108+ SKILL.md files    | Knowledge Base (RAG pipeline)        | Ingest into shared KB + new Skill model |
 | 57 slash commands      | CLI Generator / Flow Templates       | Map to flow triggers + API routes     |
 | Hook system (15+ types)| Webhook system (existing)            | Extend webhook events + new hook middleware |
@@ -942,7 +987,7 @@ src/lib/ecc/                          # ← ECC module root
   └── types.ts                        # ECC-specific TypeScript interfaces
 
 src/data/
-  └── ecc-agent-templates.json        # 25 ECC agent templates (separate from existing 133)
+  └── ecc-agent-templates.json        # 25 ECC agent templates (separate from existing 216)
 
 src/app/skills/
   └── page.tsx                        # Skill Browser UI (search, filter, cards)
@@ -961,6 +1006,7 @@ services/ecc-skills-mcp/              # ← Separate Railway service
   └── Dockerfile                      # Optional, Nixpacks auto-detects Python
 
 scripts/
+  ├── pre-push-check.sh               # Pre-push CI simulation (TS + vitest + lucide mocks + strings)
   ├── import-ecc-agents.mjs           # One-time agent import script
   └── import-ecc-skills.mjs           # One-time skill import script
 ```
@@ -1093,7 +1139,7 @@ Applied via: `pnpm db:push`
 
 ### Phase 1: Import 25 ECC Agents as Templates (COMPLETED)
 - New category "Developer Agents" in `src/lib/constants/agent-categories.ts`
-- `src/data/ecc-agent-templates.json` — 25 templates, separate from existing 133
+- `src/data/ecc-agent-templates.json` — 25 templates, separate from existing 216
 - Import script: `scripts/import-ecc-agents.mjs` — parses YAML frontmatter from ECC .md files
 - Agent Card endpoint: `GET /api/agents/[agentId]/card.json` (A2A v0.3 JSON-LD)
 - Tests: schema validation for all 25, snapshot tests
@@ -1294,3 +1340,81 @@ All 10 phases completed and deployed to production.
 8. **Push metrics, not pull**: Railway doesn't support Prometheus scrape. Use OTLP push exporter
 9. **Separate MCP service**: ECC Skills MCP is a separate Railway service (Python), not embedded in Next.js
 10. **Production URL**: configured per deployment (see Railway dashboard or env vars)
+
+---
+
+## 15. DEAL FLOW AGENT — M&A Due Diligence Subproject
+
+### Overview
+Standalone Python FastAPI backend located at `deal-flow-agent/` — wraps 5 specialized M&A
+due diligence agents into a REST API. Runs independently of the Next.js app on port 8000.
+The same 5 agents also exist as native Agent Studio agents (created 2026-03-27) for chat-based use.
+
+### Tech Stack
+- **Framework:** FastAPI 0.115 + Uvicorn
+- **AI:** Anthropic Claude (primary) + OpenAI (fallback) via direct SDK
+- **DB:** SQLAlchemy + asyncpg + pgvector (shared Supabase instance, separate schema)
+- **Validation:** Pydantic v2
+
+### Folder Structure
+```
+deal-flow-agent/
+  backend/
+    main.py               ← FastAPI app (lifespan, CORS, /health, all routers)
+    config.py             ← Settings (DATABASE_URL, API keys, AI model)
+    agents/
+      base_agent.py       ← BaseAgent class (common scoring, LLM calls)
+      screening_agent.py  ← Strategic fit, market position, red flags
+      financial_agent.py  ← DCF, EBITDA multiples, revenue trends, valuation
+      risk_agent.py       ← Operational, market, regulatory, ESG risks
+      competitive_agent.py← Moat, Porter's Five Forces, market positioning
+      legal_agent.py      ← Contracts, IP, compliance, litigation exposure
+    routers/
+      deals.py            ← CRUD: POST/GET /deals, GET/DELETE /deals/{id}
+      agents.py           ← POST /agents/run/{deal_id} (all 5 parallel), GET /agents/results/{deal_id}
+      memos.py            ← POST /memos/generate/{deal_id}, GET /memos/{deal_id}
+    database/             ← SQLAlchemy models + async session
+    integrations/         ← External data sources (LinkedIn, Crunchbase stubs)
+    memo/                 ← Investment memo generator (Markdown output)
+  Dockerfile
+  docker-compose.yml      ← includes pgvector/pgvector:pg16 on port 5433
+  requirements.txt
+```
+
+### Scoring Model
+- Weighted overall score: Screening 15% + Financial 30% + Risk 25% + Competitive 20% + Legal 10%
+- Recommendation: ≥72 → **BUY**, ≥55 → **HOLD**, <55 → **PASS**
+
+### Running Locally
+```bash
+cd deal-flow-agent
+pip install -r requirements.txt
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+# Swagger UI: http://localhost:8000/docs
+# Health:     http://localhost:8000/health
+```
+
+### API Endpoints
+| Method | Route | Purpose |
+|--------|-------|---------|
+| POST | `/deals` | Create new deal |
+| GET | `/deals` | List all deals |
+| GET | `/deals/{id}` | Get deal detail |
+| DELETE | `/deals/{id}` | Delete deal |
+| POST | `/agents/run/{deal_id}` | Run all 5 agents in parallel |
+| POST | `/agents/run/{deal_id}/{name}` | Run single agent (screening/financial/risk/competitive/legal) |
+| GET | `/agents/results/{deal_id}` | Get all agent results for a deal |
+| POST | `/memos/generate/{deal_id}` | Generate investment memo (requires agent results) |
+| GET | `/memos/{deal_id}` | Get generated memo |
+| GET | `/memos/{deal_id}/markdown` | Get memo as raw Markdown |
+| GET | `/health` | Health check (DB status, uptime, AI model, mode) |
+
+### Agent Studio Integration
+The same 5 agents exist as native Agent Studio agents (IDs in DB):
+- 🔍 M&A Screening Agent
+- 💰 M&A Financial Agent
+- ⚠️ M&A Risk Agent
+- 🏆 M&A Competitive Agent
+- ⚖️ M&A Legal Agent
+
+Use Agent Studio chat for interactive analysis; use the FastAPI backend for programmatic/batch workflows.

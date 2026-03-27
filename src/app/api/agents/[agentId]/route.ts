@@ -5,14 +5,13 @@ import { upsertAgentCard } from "@/lib/a2a/card-generator";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { AGENT_CATEGORIES } from "@/lib/constants/agent-categories";
-
-const VALID_MODELS = ["deepseek-chat", "gpt-4o-mini", "gpt-4o", "claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"] as const;
+import { ALL_MODEL_IDS } from "@/lib/models";
 
 const updateAgentSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),
   systemPrompt: z.string().max(50000).optional(),
-  model: z.enum(VALID_MODELS).optional(),
+  model: z.enum(ALL_MODEL_IDS).optional(),
   temperature: z.number().min(0).max(2).optional(),
   category: z.enum(AGENT_CATEGORIES).nullable().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
