@@ -261,6 +261,41 @@ export function PropertyPanel({
               <div className="space-y-2">
                 <div className="flex items-center justify-between rounded-md border border-zinc-700 bg-zinc-800/50 p-3">
                   <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Use Knowledge Base</Label>
+                    <p className="text-xs text-zinc-400">
+                      Automatically retrieve context from KB on each message
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={(data.enableRAG as boolean) ?? true}
+                    onClick={() => update("enableRAG", !((data.enableRAG as boolean) ?? true))}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
+                      ((data.enableRAG as boolean) ?? true)
+                        ? "bg-green-600"
+                        : "bg-zinc-600"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                        ((data.enableRAG as boolean) ?? true)
+                          ? "translate-x-4"
+                          : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+                {!((data.enableRAG as boolean) ?? true) && (
+                  <p className="rounded bg-zinc-800/50 px-2 py-1.5 text-xs text-zinc-400">
+                    Knowledge Base retrieval is disabled for this node.
+                    Use a kb_search node to retrieve context manually.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between rounded-md border border-zinc-700 bg-zinc-800/50 p-3">
+                  <div className="space-y-0.5">
                     <Label className="text-sm font-medium">Agent Orchestration</Label>
                     <p className="text-xs text-zinc-400">
                       Let AI dynamically call your other agents as tools
