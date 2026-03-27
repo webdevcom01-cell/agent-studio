@@ -8,9 +8,10 @@ import { logger } from "@/lib/logger";
 const ALLOWED_PATH_PREFIXES = [
   "/usr/bin/",
   "/usr/local/bin/",
+  "/bin/",          // standard system binaries (symlink to /usr/bin on modern Linux)
   "/opt/homebrew/bin/",
-  "/home/",       // user-installed CLIs in home directories
-  "/snap/bin/",   // Ubuntu snap packages
+  "/home/",         // user-installed CLIs in home directories
+  "/snap/bin/",     // Ubuntu snap packages
 ] as const;
 
 // Explicitly blocked executables — even if they're in allowed directories.
