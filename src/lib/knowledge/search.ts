@@ -186,6 +186,14 @@ export async function searchKnowledgeBase(
   // ::vector cast directly. No user input reaches vectorStr.
   const vectorStr = `[${queryEmbedding.join(",")}]`;
 
+  // Dynamic ef_search tuning for HNSW index.
+  // Short queries need fewer candidates (fast); long queries benefit from deeper search (precise).
+  // SET LOCAL scopes to the current transaction — thread-safe, no global state.
+  const wordCount = query.split(/\s+/).filter(Boolean).length;
+  const efSearch = wordCount <= 3 ? 40 : wordCount <= 8 ? 60 : 100;
+  await prisma.$executeRaw`SET LOCAL hnsw.ef_search = ${efSearch}`;
+
+  const searchStart = performance.now();
   const results = await prisma.$queryRaw<VectorSearchRow[]>(
     Prisma.sql`
       SELECT
@@ -201,6 +209,13 @@ export async function searchKnowledgeBase(
       LIMIT ${topK}
     `
   );
+  const searchDurationMs = performance.now() - searchStart;
+  recordMetric("kb.search.vector_query_ms", searchDurationMs, "ms", {
+    knowledgeBaseId,
+    efSearch: String(efSearch),
+    topK: String(topK),
+    resultCount: String(results.length),
+  });
 
   return results.map((r) => {
     const meta = parseMetadata(r.metadata);
@@ -224,6 +239,7 @@ async function keywordSearch(
   query: string,
   topK: number
 ): Promise<SearchResult[]> {
+  const keywordStart = performance.now();
   const results = await prisma.$queryRaw<KeywordSearchRow[]>(
     Prisma.sql`
       SELECT
@@ -239,6 +255,12 @@ async function keywordSearch(
       LIMIT ${topK}
     `
   );
+  const keywordDurationMs = performance.now() - keywordStart;
+  recordMetric("kb.search.keyword_query_ms", keywordDurationMs, "ms", {
+    knowledgeBaseId,
+    topK: String(topK),
+    resultCount: String(results.length),
+  });
 
   return results.map((r) => {
     const meta = parseMetadata(r.metadata);
