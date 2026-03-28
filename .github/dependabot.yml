@@ -31,6 +31,10 @@ updates:
       - "ci"
     reviewers:
       - "webdevcom01-cell"
+    ignore:
+      # We use SHA-pinned actions — major bumps reviewed manually
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # Docker
   - package-ecosystem: "docker"
@@ -41,6 +45,10 @@ updates:
       - "docker"
     reviewers:
       - "webdevcom01-cell"
+    ignore:
+      # Major Node/Alpine base image bumps reviewed manually
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # ECC Skills MCP service
   - package-ecosystem: "pip"
