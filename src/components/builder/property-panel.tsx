@@ -702,6 +702,12 @@ export function PropertyPanel({
         {node.type === "trajectory_evaluator" && (
           <TrajectoryEvaluatorProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "plan_and_execute" && (
+          <PlanAndExecuteProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "reflexive_loop" && (
+          <ReflexiveLoopProperties data={data} update={update} variables={variables} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -764,6 +770,8 @@ const OUTPUT_VAR_TYPES = new Set([
   "format_transform",
   "web_fetch",
   "browser_action",
+  "plan_and_execute",
+  "reflexive_loop",
 ]);
 
 /**
@@ -4273,6 +4281,7 @@ function CostMonitorProperties({ data, update }: Omit<SubPanelProps, "variables"
             <SelectItem value="monitor">Monitor (log only)</SelectItem>
             <SelectItem value="budget">Budget (enforce limit)</SelectItem>
             <SelectItem value="alert">Alert (warn at threshold)</SelectItem>
+            <SelectItem value="adaptive">Adaptive (auto-downgrade tier)</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -5229,6 +5238,260 @@ function TrajectoryEvaluatorProperties({ data, update, variables = [] }: SubPane
           value={(data.outputVariable as string) ?? "trajectory_score"}
           onChange={(e) => update("outputVariable", e.target.value)}
           placeholder="trajectory_score"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Plan & Execute ────────────────────────────────────────────────────────
+
+function PlanAndExecuteProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Planner Model</Label>
+        <Select
+          value={(data.plannerModel as string) ?? "deepseek-reasoner"}
+          onValueChange={(val) => update("plannerModel", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {ALL_MODELS.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name} ({m.tier})</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">Powerful model for task decomposition</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Input Variable</Label>
+        <VariableInput
+          value={(data.inputVariable as string) ?? ""}
+          onChange={(val) => update("inputVariable", val)}
+          variables={variables}
+          placeholder="user_input"
+        />
+        <p className="text-xs text-muted-foreground">Leave empty to use last_message</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Max Sub-tasks</Label>
+        <Input
+          type="number"
+          value={(data.maxSubtasks as number) ?? 8}
+          onChange={(e) => update("maxSubtasks", Number(e.target.value))}
+          min={1}
+          max={12}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Execution Strategy</Label>
+        <Select
+          value={(data.executionStrategy as string) ?? "auto"}
+          onValueChange={(val) => update("executionStrategy", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Auto (planner decides)</SelectItem>
+            <SelectItem value="sequential">Sequential</SelectItem>
+            <SelectItem value="parallel">Parallel</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Parallel Limit</Label>
+        <Input
+          type="number"
+          value={(data.parallelLimit as number) ?? 5}
+          onChange={(e) => update("parallelLimit", Number(e.target.value))}
+          min={1}
+          max={5}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Timeout per Sub-task (ms)</Label>
+        <Input
+          type="number"
+          value={(data.timeoutPerSubtask as number) ?? 30000}
+          onChange={(e) => update("timeoutPerSubtask", Number(e.target.value))}
+          min={5000}
+          max={120000}
+          step={5000}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "plan_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="plan_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Reflexive Loop ────────────────────────────────────────────────────────
+
+function ReflexiveLoopProperties({ data, update, variables = [] }: SubPanelProps) {
+  const criteria = (data.criteria as Array<{ name: string; description: string; weight: number }>) ?? [];
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Executor Model</Label>
+        <Select
+          value={(data.executorModel as string) ?? "deepseek-chat"}
+          onValueChange={(val) => update("executorModel", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {ALL_MODELS.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Evaluator Model</Label>
+        <Select
+          value={(data.evaluatorModel as string) ?? "deepseek-chat"}
+          onValueChange={(val) => update("evaluatorModel", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {ALL_MODELS.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">Use a different model than executor to avoid self-bias</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Input Variable</Label>
+        <VariableInput
+          value={(data.inputVariable as string) ?? ""}
+          onChange={(val) => update("inputVariable", val)}
+          variables={variables}
+          placeholder="user_input"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>System Prompt</Label>
+        <Textarea
+          value={(data.systemPrompt as string) ?? ""}
+          onChange={(e) => update("systemPrompt", e.target.value)}
+          rows={3}
+          className="text-xs"
+          placeholder="Optional system instructions for the executor..."
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Max Iterations</Label>
+        <Input
+          type="number"
+          value={(data.maxIterations as number) ?? 3}
+          onChange={(e) => update("maxIterations", Number(e.target.value))}
+          min={1}
+          max={5}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Passing Score (0-10)</Label>
+        <Input
+          type="number"
+          value={(data.passingScore as number) ?? 7}
+          onChange={(e) => update("passingScore", Number(e.target.value))}
+          min={0}
+          max={10}
+          step={0.5}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Evaluation Criteria ({criteria.length})</Label>
+        {criteria.map((c, i) => (
+          <div key={i} className="rounded border p-2 space-y-1">
+            <Input
+              value={c.name}
+              onChange={(e) => {
+                const updated = [...criteria];
+                updated[i] = { ...updated[i], name: e.target.value };
+                update("criteria", updated);
+              }}
+              placeholder="Criterion name"
+              className="text-xs"
+            />
+            <Input
+              value={c.description}
+              onChange={(e) => {
+                const updated = [...criteria];
+                updated[i] = { ...updated[i], description: e.target.value };
+                update("criteria", updated);
+              }}
+              placeholder="Description"
+              className="text-xs"
+            />
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={c.weight}
+                onChange={(e) => {
+                  const updated = [...criteria];
+                  updated[i] = { ...updated[i], weight: Number(e.target.value) };
+                  update("criteria", updated);
+                }}
+                min={0}
+                max={10}
+                step={0.5}
+                className="w-20 text-xs"
+              />
+              <span className="text-xs text-muted-foreground">weight</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto h-6 text-xs text-destructive"
+                onClick={() => {
+                  update("criteria", criteria.filter((_, j) => j !== i));
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-xs"
+          onClick={() => {
+            update("criteria", [
+              ...criteria,
+              { name: "", description: "", weight: 1 },
+            ]);
+          }}
+        >
+          + Add Criterion
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "reflexive_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="reflexive_result"
         />
       </div>
     </>

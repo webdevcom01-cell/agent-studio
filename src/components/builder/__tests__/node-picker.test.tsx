@@ -159,8 +159,8 @@ describe("NodePicker", () => {
 
   // ── Node definitions completeness ─────────────────────────────────────
 
-  it("has exactly 53 node definitions", () => {
-    expect(NODE_DEFINITIONS.length).toBe(53);
+  it("has exactly 55 node definitions", () => {
+    expect(NODE_DEFINITIONS.length).toBe(55);
   });
 
   it("every node has a usageExample", () => {
@@ -219,7 +219,7 @@ describe("NodePicker", () => {
       counts[node.category]++;
     }
     expect(counts.triggers).toBe(2);
-    expect(counts.ai).toBe(11);
+    expect(counts.ai).toBe(13);
     expect(counts.knowledge).toBe(3);
     expect(counts.logic).toBe(13);
     expect(counts.integrations).toBe(11);

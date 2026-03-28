@@ -79,6 +79,8 @@ import { MCPTaskRunnerNode } from "./nodes/mcp-task-runner-node";
 import { GuardrailsNode } from "./nodes/guardrails-node";
 import { CodeInterpreterNode } from "./nodes/code-interpreter-node";
 import { TrajectoryEvaluatorNode } from "./nodes/trajectory-evaluator-node";
+import { PlanAndExecuteNode } from "./nodes/plan-and-execute-node";
+import { ReflexiveLoopNode } from "./nodes/reflexive-loop-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -150,6 +152,8 @@ const NODE_TYPES: NodeTypes = {
   guardrails: GuardrailsNode,
   code_interpreter: CodeInterpreterNode,
   trajectory_evaluator: TrajectoryEvaluatorNode,
+  plan_and_execute: PlanAndExecuteNode,
+  reflexive_loop: ReflexiveLoopNode,
 };
 
 // Debug-wrapped versions of all node types (stable reference, created once)

@@ -1098,6 +1098,60 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       outputVariable: "trajectory_score",
     },
   },
+
+  // ── Orchestration (Phase 1+2 — Multi-Agent Improvement) ─────────────
+  {
+    type: "plan_and_execute",
+    label: "Plan & Execute",
+    description:
+      "Powerful model plans, cheap models execute — 40-60% cost savings",
+    usageExample:
+      "Decompose a complex task into sub-tasks, route each to the optimal model tier, then synthesize results",
+    icon: Compass,
+    color: "indigo",
+    category: "ai",
+    defaultData: {
+      label: "Plan & Execute",
+      plannerModel: "deepseek-reasoner",
+      maxSubtasks: 8,
+      executionStrategy: "auto",
+      enableSynthesis: true,
+      timeoutPerSubtask: 30000,
+      parallelLimit: 5,
+      inputVariable: "",
+      outputVariable: "plan_result",
+    },
+  },
+  {
+    type: "reflexive_loop",
+    label: "Reflexive Loop",
+    description:
+      "Self-correcting: generate, evaluate quality, retry with feedback until passing",
+    usageExample:
+      "Write an email, score it against tone and accuracy criteria, improve iteratively until score >= 7/10",
+    icon: RefreshCcw,
+    color: "fuchsia",
+    category: "ai",
+    defaultData: {
+      label: "Reflexive Loop",
+      executorModel: "deepseek-chat",
+      evaluatorModel: "deepseek-chat",
+      maxIterations: 3,
+      passingScore: 7,
+      criteria: [
+        {
+          name: "quality",
+          description: "Overall output quality and correctness",
+          weight: 1,
+        },
+      ],
+      includeHistory: true,
+      inputVariable: "",
+      systemPrompt: "",
+      maxTokens: 2000,
+      outputVariable: "reflexive_result",
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------

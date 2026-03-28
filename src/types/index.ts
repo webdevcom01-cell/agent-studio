@@ -78,4 +78,6 @@ export type NodeType =
   | "mcp_task_runner"
   | "guardrails"
   | "code_interpreter"
-  | "trajectory_evaluator";
+  | "trajectory_evaluator"
+  | "plan_and_execute"
+  | "reflexive_loop";

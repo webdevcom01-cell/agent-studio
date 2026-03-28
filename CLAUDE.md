@@ -652,8 +652,8 @@ FlowTrace — Full execution trace snapshot for debugging
 ## 6. KEY CONVENTIONS & PATTERNS
 
 ### Runtime Engine
-- 53 node handlers registered in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants: ai-response-streaming, parallel-streaming)
-- Node types (53): message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, webhook_trigger, email_send, notification, format_transform, switch, web_fetch, browser_action, desktop_app, learn, python_code, structured_output, cache, embeddings, retry, ab_test, semantic_router, cost_monitor, aggregate, web_search, multimodal_input, image_generation, speech_audio, database_query, file_operations, mcp_task_runner, guardrails, code_interpreter, trajectory_evaluator
+- 55 node handlers registered in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants: ai-response-streaming, parallel-streaming)
+- Node types (55): message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, webhook_trigger, email_send, notification, format_transform, switch, web_fetch, browser_action, desktop_app, learn, python_code, structured_output, cache, embeddings, retry, ab_test, semantic_router, cost_monitor, aggregate, web_search, multimodal_input, image_generation, speech_audio, database_query, file_operations, mcp_task_runner, guardrails, code_interpreter, trajectory_evaluator, plan_and_execute, reflexive_loop
 - Safety limits: MAX_ITERATIONS=50, MAX_HISTORY=100
 - Handlers return `ExecutionResult` with messages, nextNodeId, waitForInput, updatedVariables
 - Handlers never throw — always return graceful fallback
@@ -807,6 +807,31 @@ Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and mainte
 - Protection stack: circuit breaker, rate limiter, circular call detection, depth limiting (max 3), audit logging
 - Property panel: "Agent Orchestration" toggle on ai_response nodes
 - `stopWhen: stepCountIs(20)` for multi-step tool calling (increased from 5 for web agent use cases)
+
+### Heterogeneous Model Routing (Plan-and-Execute)
+- `plan_and_execute` node: powerful model decomposes task → cheap models execute sub-tasks by complexity tier
+- Model tier selection: simple → fast tier, moderate → balanced tier, complex → powerful tier
+- `getModelByTier(tier, preferredProvider?)` in `src/lib/ai.ts` — selects first available model for tier
+- `getModelFallbackChain(modelId)` — builds fallback chain: same-tier alternatives → cheaper tier
+- `getModelsByTier(tier)` + `buildFallbackChain(modelId)` in `src/lib/models.ts` — client-safe helpers
+- Cost savings: 40-60% by routing routine tasks to cheap models, reserving powerful models for planning
+- Adaptive cost monitor: `mode: "adaptive"` on cost_monitor node auto-downgrades tier at 60%/80%/95% budget
+- `__model_tier_override` context variable used by plan_and_execute to read cost monitor tier decisions
+- Starter flow template: "orchestration-plan-and-execute-pipeline" in `src/data/starter-flows.ts`
+
+### Reflexive Self-Correcting Loop
+- `reflexive_loop` node: generate → evaluate → retry with feedback until quality passes
+- Combines ai_response + evaluator + retry in a single handler
+- Max 5 iterations (hard cap), configurable passing score (0-10)
+- Separate executor and evaluator models to avoid self-bias
+- Trajectory tracking: stores `[{iteration, output, score, feedback, model, durationMs}]`
+- Routes to "passed" or "failed" sourceHandle based on final quality score
+
+### LLM-Based Meta-Orchestrator
+- `src/lib/ecc/meta-orchestrator.ts` upgraded from keyword matching to LLM classification
+- Uses fast model (DeepSeek V3 / Haiku) for task type classification (~$0.001/call)
+- Falls back to keyword matching if LLM fails or ECC is disabled
+- `analyzeTask(description, { useLLM })` returns taskType, complexity, pipeline, subtasks
 
 ### Web Browsing Capabilities
 - `web_fetch` node — HTTP fetch with URL validation and SSRF protection

@@ -97,6 +97,60 @@ export const costMonitorHandler: NodeHandler = async (node, context) => {
     };
   }
 
+  // Adaptive mode: dynamically downgrade model tier based on budget usage
+  if (mode === "adaptive") {
+    let tierOverride: string | undefined;
+
+    if (state.budgetPercent > 0.95) {
+      // >95% budget: stop flow (same as budget mode)
+      return {
+        messages: [
+          {
+            role: "assistant",
+            content: `Adaptive budget limit reached: $${state.totalCostUsd.toFixed(4)} / $${budgetUsd.toFixed(2)} (${(state.budgetPercent * 100).toFixed(0)}%). Flow stopped.`,
+          },
+        ],
+        nextNodeId: null,
+        waitForInput: false,
+        updatedVariables: {
+          ...context.variables,
+          [getTrackingVariable(trackingVariable)]: state,
+          [outputVariable]: output,
+        },
+      };
+    } else if (state.budgetPercent > 0.8) {
+      tierOverride = "fast";
+    } else if (state.budgetPercent > 0.6) {
+      tierOverride = "balanced";
+    }
+    // ≤60%: no override, use original tier
+
+    logger.info("Adaptive cost monitor", {
+      agentId: context.agentId,
+      budgetPercent: (state.budgetPercent * 100).toFixed(0) + "%",
+      tierOverride: tierOverride ?? "none",
+    });
+
+    return {
+      messages: tierOverride
+        ? [
+            {
+              role: "assistant",
+              content: `Cost adaptive: ${(state.budgetPercent * 100).toFixed(0)}% budget used. Model tier downgraded to "${tierOverride}".`,
+            },
+          ]
+        : [],
+      nextNodeId: null,
+      waitForInput: false,
+      updatedVariables: {
+        ...context.variables,
+        [getTrackingVariable(trackingVariable)]: state,
+        [outputVariable]: output,
+        ...(tierOverride ? { __model_tier_override: tierOverride } : {}),
+      },
+    };
+  }
+
   // Monitor mode or budget not yet exceeded: pass through
   return {
     messages: [],

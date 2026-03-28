@@ -944,4 +944,80 @@ Use emoji-coded severity: 🚫 Critical, ⚠️ High, 💛 Medium, ℹ️ Low`,
     edges: [edge("in", "format_review"), edge("format_review", "out")],
     variables: [],
   },
+
+  // ── Orchestration ─────────────────────────────────────────────────────
+
+  "orchestration-plan-and-execute-pipeline": {
+    nodes: [
+      {
+        id: "msg_in",
+        type: "message",
+        position: pos(0),
+        data: { label: "User Task", message: "{{user_input}}" },
+      },
+      {
+        id: "cost",
+        type: "cost_monitor",
+        position: ppos(1, 0),
+        data: {
+          label: "Budget Guard",
+          mode: "adaptive",
+          budgetUsd: 0.5,
+          alertThreshold: 0.6,
+          trackingVariable: "cost_tracking",
+          outputVariable: "cost_status",
+        },
+      },
+      {
+        id: "plan",
+        type: "plan_and_execute",
+        position: ppos(2, 0),
+        data: {
+          label: "Plan & Execute",
+          plannerModel: "deepseek-reasoner",
+          maxSubtasks: 6,
+          executionStrategy: "auto",
+          enableSynthesis: true,
+          timeoutPerSubtask: 30000,
+          parallelLimit: 5,
+          inputVariable: "user_input",
+          outputVariable: "plan_result",
+        },
+      },
+      {
+        id: "eval",
+        type: "reflexive_loop",
+        position: ppos(3, 0),
+        data: {
+          label: "Quality Check",
+          executorModel: "deepseek-chat",
+          evaluatorModel: "gpt-4.1-mini",
+          maxIterations: 2,
+          passingScore: 7,
+          criteria: [
+            { name: "accuracy", description: "Factual correctness", weight: 2 },
+            { name: "completeness", description: "Covers all aspects of the task", weight: 1 },
+          ],
+          includeHistory: true,
+          inputVariable: "plan_result",
+          outputVariable: "refined_result",
+        },
+      },
+      {
+        id: "msg_out",
+        type: "message",
+        position: ppos(4, 0),
+        data: { label: "Final Answer", message: "{{refined_result.finalOutput}}" },
+      },
+    ],
+    edges: [
+      edge("msg_in", "cost"),
+      edge("cost", "plan"),
+      { id: "e_plan_eval", source: "plan", target: "eval", sourceHandle: "done" },
+      { id: "e_eval_out", source: "eval", target: "msg_out", sourceHandle: "passed" },
+      { id: "e_plan_out", source: "plan", target: "msg_out", sourceHandle: "failed" },
+      { id: "e_eval_out_fail", source: "eval", target: "msg_out", sourceHandle: "failed" },
+    ],
+    variables: [],
+  },
 };

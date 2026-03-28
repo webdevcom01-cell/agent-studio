@@ -5,7 +5,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
 import { createMistral } from "@ai-sdk/mistral";
 import { getEnv } from "@/lib/env";
-import { ALL_MODELS, type ModelOption } from "@/lib/models";
+import { ALL_MODELS, getModelsByTier, buildFallbackChain, type ModelOption } from "@/lib/models";
 export type { ModelOption };
 
 function getDeepSeek() {
@@ -126,5 +126,56 @@ export function getAvailableModels(): ModelOption[] {
   return ALL_MODELS.filter((m) => {
     if (!m.envKey) return true;
     return !!env[m.envKey as keyof typeof env];
+  });
+}
+
+/**
+ * Get a model by tier — selects the first available model for the given tier.
+ * Checks env keys to ensure the model is actually usable.
+ * @param tier - "fast" | "balanced" | "powerful"
+ * @param preferredProvider - Optional provider preference (e.g., "DeepSeek", "OpenAI")
+ */
+export function getModelByTier(
+  tier: "fast" | "balanced" | "powerful",
+  preferredProvider?: string,
+) {
+  const env = getEnv();
+  const candidates = getModelsByTier(tier);
+
+  // Try preferred provider first
+  if (preferredProvider) {
+    const preferred = candidates.find(
+      (m) =>
+        m.provider === preferredProvider &&
+        (!m.envKey || !!env[m.envKey as keyof typeof env]),
+    );
+    if (preferred) return getModel(preferred.id);
+  }
+
+  // Fall back to first available
+  for (const candidate of candidates) {
+    if (!candidate.envKey || !!env[candidate.envKey as keyof typeof env]) {
+      return getModel(candidate.id);
+    }
+  }
+
+  // Ultimate fallback: default model
+  return getModel(DEFAULT_MODEL);
+}
+
+/**
+ * Get a fallback chain of model IDs for a given model.
+ * Filters to only include models with configured API keys.
+ * Used by plan-and-execute and reflexive loop for automatic model failover.
+ */
+export function getModelFallbackChain(modelId: string): string[] {
+  const env = getEnv();
+  const chain = buildFallbackChain(modelId);
+
+  return chain.filter((id) => {
+    const model = ALL_MODELS.find((m) => m.id === id);
+    if (!model) return false;
+    if (!model.envKey) return true;
+    return !!env[model.envKey as keyof typeof env];
   });
 }

@@ -66,3 +66,47 @@ export const DEFAULT_MODEL = "deepseek-chat";
  * Automatically stays in sync when models are added/removed from ALL_MODELS.
  */
 export const ALL_MODEL_IDS = ALL_MODELS.map((m) => m.id) as [string, ...string[]];
+
+/**
+ * Get models filtered by tier — client-safe helper for tier-based routing.
+ * Returns only models whose tier matches, ordered by: always-available first.
+ */
+export function getModelsByTier(tier: "fast" | "balanced" | "powerful"): ModelOption[] {
+  return ALL_MODELS.filter((m) => m.tier === tier).sort((a, b) => {
+    // Prefer always-available models (no envKey) first
+    if (!a.envKey && b.envKey) return -1;
+    if (a.envKey && !b.envKey) return 1;
+    return 0;
+  });
+}
+
+/**
+ * Build a fallback chain for a given model: same-tier alternatives → cheaper tier.
+ * Client-safe — does NOT check env keys (that happens in ai.ts at call time).
+ */
+export function buildFallbackChain(modelId: string): string[] {
+  const model = ALL_MODELS.find((m) => m.id === modelId);
+  if (!model) return [DEFAULT_MODEL];
+
+  const tierOrder: Array<"fast" | "balanced" | "powerful"> =
+    model.tier === "powerful"
+      ? ["powerful", "balanced", "fast"]
+      : model.tier === "balanced"
+        ? ["balanced", "fast"]
+        : ["fast"];
+
+  const chain: string[] = [];
+  for (const tier of tierOrder) {
+    const candidates = getModelsByTier(tier).filter((m) => m.id !== modelId);
+    for (const c of candidates) {
+      chain.push(c.id);
+    }
+  }
+
+  // Always end with default model as ultimate fallback
+  if (!chain.includes(DEFAULT_MODEL)) {
+    chain.push(DEFAULT_MODEL);
+  }
+
+  return chain;
+}
