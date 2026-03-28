@@ -1,5 +1,5 @@
 # ── Stage 1: Install dependencies ─────────────────────────────────────────────
-FROM node:20-alpine AS deps
+FROM node:25-alpine AS deps
 
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9 --activate
@@ -10,7 +10,7 @@ COPY package.json pnpm-lock.yaml .npmrc ./
 RUN pnpm install --no-frozen-lockfile
 
 # ── Stage 2: Build the application ───────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:25-alpine AS builder
 
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
@@ -25,7 +25,7 @@ ENV NODE_ENV=production
 RUN pnpm build
 
 # ── Stage 3: Production runner ───────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:25-alpine AS runner
 
 RUN apk add --no-cache curl
 
