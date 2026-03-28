@@ -72,4 +72,7 @@ export type NodeType =
   | "web_search"
   | "multimodal_input"
   | "image_generation"
-  | "speech_audio";
+  | "speech_audio"
+  | "database_query"
+  | "file_operations"
+  | "mcp_task_runner";

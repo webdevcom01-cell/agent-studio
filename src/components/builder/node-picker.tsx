@@ -51,6 +51,8 @@ import {
   ImageIcon,
   ImagePlus,
   Volume2,
+  FolderOpen,
+  PlayCircle,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -969,6 +971,68 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       model: "tts-1",
       outputFormat: "mp3",
       outputVariable: "audio_result",
+    },
+  },
+
+  // ── Sprint 5: New Nodes ─────────────────────────────────────────────────
+  {
+    type: "database_query",
+    label: "Database Query",
+    description: "Execute SQL queries against PostgreSQL, MySQL, or SQLite",
+    usageExample:
+      "Query a database for user records, aggregate analytics, or run reports",
+    icon: Database,
+    color: "blue",
+    category: "integrations",
+    defaultData: {
+      label: "Database Query",
+      dbType: "postgres",
+      connectionString: "",
+      query: "",
+      params: [],
+      readOnly: true,
+      maxRows: 1000,
+      outputVariable: "query_result",
+    },
+  },
+  {
+    type: "file_operations",
+    label: "File Operations",
+    description: "Read, write, and manage files on S3, Google Drive, or base64",
+    usageExample:
+      "Upload generated reports to S3, read files from Google Drive, create presigned URLs",
+    icon: FolderOpen,
+    color: "yellow",
+    category: "integrations",
+    defaultData: {
+      label: "File Operations",
+      operation: "read",
+      provider: "s3",
+      path: "",
+      contentVariable: "",
+      bucket: "",
+      contentType: "application/octet-stream",
+      outputVariable: "file_result",
+    },
+  },
+  {
+    type: "mcp_task_runner",
+    label: "MCP Task Runner",
+    description: "Run long-running MCP tasks with progress tracking and retry",
+    usageExample:
+      "Execute compute-heavy MCP operations with progress polling and automatic retries",
+    icon: PlayCircle,
+    color: "violet",
+    category: "integrations",
+    defaultData: {
+      label: "MCP Task Runner",
+      mcpServerUrl: "",
+      taskName: "",
+      inputMapping: [],
+      pollIntervalMs: 2000,
+      maxDurationMs: 3600000,
+      retryOnFailure: true,
+      outputVariable: "task_result",
     },
   },
 ];

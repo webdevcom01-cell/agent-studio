@@ -46,6 +46,9 @@ import { webSearchHandler } from "./web-search-handler";
 import { multimodalInputHandler } from "./multimodal-input-handler";
 import { imageGenerationHandler } from "./image-generation-handler";
 import { speechAudioHandler } from "./speech-audio-handler";
+import { databaseQueryHandler } from "./database-query-handler";
+import { fileOperationsHandler } from "./file-operations-handler";
+import { mcpTaskRunnerHandler } from "./mcp-task-runner-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -95,6 +98,9 @@ const handlers: Record<string, NodeHandler> = {
   multimodal_input: multimodalInputHandler,
   image_generation: imageGenerationHandler,
   speech_audio: speechAudioHandler,
+  database_query: databaseQueryHandler,
+  file_operations: fileOperationsHandler,
+  mcp_task_runner: mcpTaskRunnerHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

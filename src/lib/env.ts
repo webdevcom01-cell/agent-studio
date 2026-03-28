@@ -47,6 +47,14 @@ const envSchema = z.object({
   STABILITY_API_KEY: optionalStr,
   ELEVENLABS_API_KEY: optionalStr,
   DEEPGRAM_API_KEY: optionalStr,
+  DATABASE_QUERY_MAX_ROWS: optionalStr,
+  DATABASE_QUERY_TIMEOUT_MS: optionalStr,
+  AWS_ACCESS_KEY_ID: optionalStr,
+  AWS_SECRET_ACCESS_KEY: optionalStr,
+  AWS_REGION: optionalStr,
+  AWS_S3_BUCKET: optionalStr,
+  MCP_TASK_POLL_INTERVAL_MS: optionalStr,
+  MCP_TASK_MAX_DURATION_MS: optionalStr,
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),

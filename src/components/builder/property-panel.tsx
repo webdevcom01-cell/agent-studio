@@ -684,6 +684,15 @@ export function PropertyPanel({
         {node.type === "speech_audio" && (
           <SpeechAudioProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "database_query" && (
+          <DatabaseQueryProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "file_operations" && (
+          <FileOperationsProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "mcp_task_runner" && (
+          <MCPTaskRunnerProperties data={data} update={update} variables={variables} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -4831,6 +4840,178 @@ function SpeechAudioProperties({ data, update, variables = [] }: SubPanelProps) 
           value={(data.outputVariable as string) ?? "audio_result"}
           onChange={(e) => update("outputVariable", e.target.value)}
           placeholder="audio_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Database Query ────────────────────────────────────────────────────────
+
+function DatabaseQueryProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Database Type</Label>
+        <Select
+          value={(data.dbType as string) ?? "postgres"}
+          onValueChange={(val) => update("dbType", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="postgres">PostgreSQL</SelectItem>
+            <SelectItem value="mysql">MySQL</SelectItem>
+            <SelectItem value="sqlite">SQLite</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Connection String</Label>
+        <VariableInput
+          value={(data.connectionString as string) ?? ""}
+          onChange={(val) => update("connectionString", val)}
+          variables={variables}
+          placeholder="postgresql://user:pass@host:5432/db"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>SQL Query</Label>
+        <Textarea
+          value={(data.query as string) ?? ""}
+          onChange={(e) => update("query", e.target.value)}
+          rows={6}
+          className="font-mono text-xs"
+          placeholder="SELECT * FROM users WHERE id = $1"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Max Rows</Label>
+        <Input
+          type="number"
+          value={(data.maxRows as number) ?? 1000}
+          onChange={(e) => update("maxRows", Number(e.target.value))}
+          min={1}
+          max={10000}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "query_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="query_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── File Operations ───────────────────────────────────────────────────────
+
+function FileOperationsProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Operation</Label>
+        <Select
+          value={(data.operation as string) ?? "read"}
+          onValueChange={(val) => update("operation", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="read">Read</SelectItem>
+            <SelectItem value="write">Write</SelectItem>
+            <SelectItem value="list">List</SelectItem>
+            <SelectItem value="delete">Delete</SelectItem>
+            <SelectItem value="presigned_url">Presigned URL</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Provider</Label>
+        <Select
+          value={(data.provider as string) ?? "s3"}
+          onValueChange={(val) => update("provider", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="s3">Amazon S3</SelectItem>
+            <SelectItem value="gdrive">Google Drive</SelectItem>
+            <SelectItem value="base64">Base64 (in-memory)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Path / Key</Label>
+        <VariableInput
+          value={(data.path as string) ?? ""}
+          onChange={(val) => update("path", val)}
+          variables={variables}
+          placeholder="uploads/report.pdf or {{file_path}}"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "file_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="file_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── MCP Task Runner ───────────────────────────────────────────────────────
+
+function MCPTaskRunnerProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>MCP Server URL</Label>
+        <VariableInput
+          value={(data.mcpServerUrl as string) ?? ""}
+          onChange={(val) => update("mcpServerUrl", val)}
+          variables={variables}
+          placeholder="http://mcp-server:8000"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Task Name</Label>
+        <Input
+          value={(data.taskName as string) ?? ""}
+          onChange={(e) => update("taskName", e.target.value)}
+          placeholder="compute_embeddings"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Poll Interval (ms)</Label>
+        <Input
+          type="number"
+          value={(data.pollIntervalMs as number) ?? 2000}
+          onChange={(e) => update("pollIntervalMs", Number(e.target.value))}
+          min={500}
+          max={30000}
+          step={500}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Max Duration (ms)</Label>
+        <Input
+          type="number"
+          value={(data.maxDurationMs as number) ?? 3600000}
+          onChange={(e) => update("maxDurationMs", Number(e.target.value))}
+          min={5000}
+          max={86400000}
+          step={60000}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "task_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="task_result"
         />
       </div>
     </>

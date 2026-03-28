@@ -73,6 +73,9 @@ import { WebSearchNode } from "./nodes/web-search-node";
 import { MultimodalInputNode } from "./nodes/multimodal-input-node";
 import { ImageGenerationNode } from "./nodes/image-generation-node";
 import { SpeechAudioNode } from "./nodes/speech-audio-node";
+import { DatabaseQueryNode } from "./nodes/database-query-node";
+import { FileOperationsNode } from "./nodes/file-operations-node";
+import { MCPTaskRunnerNode } from "./nodes/mcp-task-runner-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -138,6 +141,9 @@ const NODE_TYPES: NodeTypes = {
   multimodal_input: MultimodalInputNode,
   image_generation: ImageGenerationNode,
   speech_audio: SpeechAudioNode,
+  database_query: DatabaseQueryNode,
+  file_operations: FileOperationsNode,
+  mcp_task_runner: MCPTaskRunnerNode,
 };
 
 // Debug-wrapped versions of all node types (stable reference, created once)
