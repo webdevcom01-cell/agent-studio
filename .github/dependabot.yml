@@ -17,6 +17,10 @@ updates:
       - "dependencies"
     reviewers:
       - "webdevcom01-cell"
+    ignore:
+      # Block all major version bumps — review and upgrade manually
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
