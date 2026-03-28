@@ -16,13 +16,5 @@ jobs:
       - uses: googleapis/release-please-action@c3fc4de07084f75a2b61a5b933069bda6edf3d5c # v4
         with:
           release-type: node
-          changelog-types: |
-            [
-              {"type":"feat","section":"Features","hidden":false},
-              {"type":"fix","section":"Bug Fixes","hidden":false},
-              {"type":"perf","section":"Performance","hidden":false},
-              {"type":"docs","section":"Documentation","hidden":false},
-              {"type":"chore","section":"Maintenance","hidden":false},
-              {"type":"ci","section":"CI/CD","hidden":false},
-              {"type":"security","section":"Security","hidden":false}
-            ]
+          config-file: .github/release-please-config.json
+          manifest-file: .github/.release-please-manifest.json
