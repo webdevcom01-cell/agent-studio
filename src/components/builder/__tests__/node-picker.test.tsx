@@ -109,6 +109,9 @@ vi.mock("lucide-react", () => {
     "Brain",
     "BookOpen",
     "Settings",
+    "FileJson",
+    "Binary",
+    "RefreshCcw",
   ];
   const mocks: Record<string, unknown> = {};
   for (const name of icons) {
@@ -146,8 +149,8 @@ describe("NodePicker", () => {
 
   // ── Node definitions completeness ─────────────────────────────────────
 
-  it("has exactly 35 node definitions", () => {
-    expect(NODE_DEFINITIONS.length).toBe(35);
+  it("has exactly 40 node definitions", () => {
+    expect(NODE_DEFINITIONS.length).toBe(40);
   });
 
   it("every node has a usageExample", () => {
@@ -206,12 +209,12 @@ describe("NodePicker", () => {
       counts[node.category]++;
     }
     expect(counts.triggers).toBe(2);
-    expect(counts.ai).toBe(5);
+    expect(counts.ai).toBe(7);
     expect(counts.knowledge).toBe(3);
-    expect(counts.logic).toBe(9);
+    expect(counts.logic).toBe(11);
     expect(counts.integrations).toBe(7);
     expect(counts.messaging).toBe(6);
-    expect(counts.utilities).toBe(3);
+    expect(counts.utilities).toBe(4);
   });
 
   // ── Node rendering per category ───────────────────────────────────────

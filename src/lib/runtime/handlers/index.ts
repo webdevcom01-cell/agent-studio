@@ -34,6 +34,11 @@ import { browserActionHandler } from "./browser-action-handler";
 import { desktopAppHandler } from "./desktop-app-handler";
 import { learnHandler } from "./learn-handler";
 import { pythonCodeHandler } from "./python-code-handler";
+import { structuredOutputHandler } from "./structured-output-handler";
+import { cacheHandler } from "./cache-handler";
+import { embeddingsHandler } from "./embeddings-handler";
+import { retryHandler } from "./retry-handler";
+import { abTestHandler } from "./ab-test-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -71,6 +76,11 @@ const handlers: Record<string, NodeHandler> = {
   desktop_app: desktopAppHandler,
   learn: learnHandler,
   python_code: pythonCodeHandler,
+  structured_output: structuredOutputHandler,
+  cache: cacheHandler,
+  embeddings: embeddingsHandler,
+  retry: retryHandler,
+  ab_test: abTestHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

@@ -60,4 +60,9 @@ export type NodeType =
   | "browser_action"
   | "desktop_app"
   | "learn"
-  | "python_code";
+  | "python_code"
+  | "structured_output"
+  | "cache"
+  | "embeddings"
+  | "retry"
+  | "ab_test";

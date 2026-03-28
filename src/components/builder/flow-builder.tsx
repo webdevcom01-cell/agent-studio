@@ -61,6 +61,11 @@ import { BrowserActionNode } from "./nodes/browser-action-node";
 import { DesktopAppNode } from "./nodes/desktop-app-node";
 import { LearnNode } from "./nodes/learn-node";
 import { PythonCodeNode } from "./nodes/python-code-node";
+import { StructuredOutputNode } from "./nodes/structured-output-node";
+import { CacheNode } from "./nodes/cache-node";
+import { EmbeddingsNode } from "./nodes/embeddings-node";
+import { RetryNode } from "./nodes/retry-node";
+import { ABTestNode } from "./nodes/ab-test-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -114,6 +119,11 @@ const NODE_TYPES: NodeTypes = {
   desktop_app: DesktopAppNode,
   learn: LearnNode,
   python_code: PythonCodeNode,
+  structured_output: StructuredOutputNode,
+  cache: CacheNode,
+  embeddings: EmbeddingsNode,
+  retry: RetryNode,
+  ab_test: ABTestNode,
 };
 
 // Debug-wrapped versions of all node types (stable reference, created once)

@@ -42,6 +42,9 @@ import {
   Brain,
   BookOpen,
   Settings,
+  FileJson,
+  Binary,
+  RefreshCcw,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -721,6 +724,97 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       patternName: "",
       patternDescription: "",
       outputVariable: "learn_result",
+    },
+  },
+
+  // ── Sprint 1: New Nodes ─────────────────────────────────────────────────
+  {
+    type: "structured_output",
+    label: "Structured Output",
+    description: "Force LLM to return JSON matching a given schema",
+    usageExample:
+      "Extract structured data from free text, ensure API-ready responses",
+    icon: FileJson,
+    color: "violet",
+    category: "ai",
+    defaultData: {
+      label: "Structured Output",
+      prompt: "",
+      jsonSchema: '{\n  "type": "object",\n  "properties": {\n    "name": { "type": "string" },\n    "score": { "type": "number" }\n  },\n  "required": ["name", "score"]\n}',
+      outputVariable: "structured_result",
+      model: "deepseek-chat",
+    },
+  },
+  {
+    type: "cache",
+    label: "Cache",
+    description: "Read/write cache with exact or semantic matching",
+    usageExample:
+      "Cache expensive API results, deduplicate repeated LLM calls",
+    icon: Database,
+    color: "orange",
+    category: "utilities",
+    defaultData: {
+      label: "Cache",
+      operation: "get",
+      cacheKey: "",
+      value: "",
+      outputVariable: "cache_result",
+      ttlSeconds: 300,
+      matchMode: "exact",
+    },
+  },
+  {
+    type: "embeddings",
+    label: "Embeddings",
+    description: "Generate vector embeddings for text",
+    usageExample:
+      "Create embeddings for similarity search, clustering, or classification",
+    icon: Binary,
+    color: "indigo",
+    category: "ai",
+    defaultData: {
+      label: "Embeddings",
+      inputText: "",
+      outputVariable: "embedding_result",
+      mode: "single",
+      embeddingModel: "",
+    },
+  },
+  {
+    type: "retry",
+    label: "Retry",
+    description: "Retry any node with exponential backoff",
+    usageExample:
+      "Wrap unreliable API calls or LLM calls with automatic retry logic",
+    icon: RefreshCcw,
+    color: "amber",
+    category: "logic",
+    defaultData: {
+      label: "Retry",
+      targetNodeId: "",
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      outputVariable: "retry_result",
+    },
+  },
+  {
+    type: "ab_test",
+    label: "A/B Test",
+    description: "Split traffic between variants with weighted routing",
+    usageExample:
+      "Test different prompts, models, or response strategies with measurable splits",
+    icon: GitBranch,
+    color: "pink",
+    category: "logic",
+    defaultData: {
+      label: "A/B Test",
+      variants: [
+        { id: "A", weight: 50 },
+        { id: "B", weight: 50 },
+      ],
+      outputVariable: "ab_variant",
+      stickyKey: "",
     },
   },
 ];

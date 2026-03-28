@@ -648,6 +648,21 @@ export function PropertyPanel({
         {node.type === "learn" && (
           <LearnProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "structured_output" && (
+          <StructuredOutputProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "cache" && (
+          <CacheProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "embeddings" && (
+          <EmbeddingsProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "retry" && (
+          <RetryProperties data={data} update={update} />
+        )}
+        {node.type === "ab_test" && (
+          <ABTestProperties data={data} update={update} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -3748,6 +3763,322 @@ function LearnProperties({ data, update, variables = [] }: SubPanelProps) {
         <p>First run: creates instinct with confidence 0.1</p>
         <p>Subsequent runs: confidence +0.1 (max 1.0)</p>
         <p>At confidence ≥ 0.85: eligible for promotion to KB skill</p>
+      </div>
+    </>
+  );
+}
+
+// ── Structured Output ─────────────────────────────────────────────────────
+
+function StructuredOutputProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Prompt</Label>
+        <VariableTextarea
+          value={(data.prompt as string) ?? ""}
+          onChange={(val) => update("prompt", val)}
+          variables={variables}
+          rows={3}
+          placeholder="Extract the name and score from the text"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>JSON Schema</Label>
+        <Textarea
+          value={(data.jsonSchema as string) ?? "{}"}
+          onChange={(e) => update("jsonSchema", e.target.value)}
+          rows={8}
+          className="font-mono text-xs"
+          placeholder='{ "type": "object", "properties": { ... } }'
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Model</Label>
+        <Select
+          value={(data.model as string) ?? "deepseek-chat"}
+          onValueChange={(val) => update("model", val)}
+        >
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ALL_MODELS.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "structured_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="structured_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Cache ──────────────────────────────────────────────────────────────────
+
+function CacheProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Operation</Label>
+        <Select
+          value={(data.operation as string) ?? "get"}
+          onValueChange={(val) => update("operation", val)}
+        >
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="get">Get</SelectItem>
+            <SelectItem value="set">Set</SelectItem>
+            <SelectItem value="delete">Delete</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Cache Key</Label>
+        <VariableInput
+          value={(data.cacheKey as string) ?? ""}
+          onChange={(val) => update("cacheKey", val)}
+          variables={variables}
+          placeholder="my_cache_key or {{variable}}"
+        />
+      </div>
+      {(data.operation as string) === "set" && (
+        <div className="space-y-2">
+          <Label>Value</Label>
+          <VariableTextarea
+            value={(data.value as string) ?? ""}
+            onChange={(val) => update("value", val)}
+            variables={variables}
+            rows={3}
+            placeholder="Value to cache"
+          />
+        </div>
+      )}
+      <div className="space-y-2">
+        <Label>Match Mode</Label>
+        <Select
+          value={(data.matchMode as string) ?? "exact"}
+          onValueChange={(val) => update("matchMode", val)}
+        >
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="exact">Exact Match</SelectItem>
+            <SelectItem value="semantic">Semantic Match</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>TTL (seconds)</Label>
+        <Input
+          type="number"
+          value={(data.ttlSeconds as number) ?? 300}
+          onChange={(e) => update("ttlSeconds", Number(e.target.value))}
+          min={1}
+          max={86400}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "cache_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="cache_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Embeddings ────────────────────────────────────────────────────────────
+
+function EmbeddingsProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Input Text</Label>
+        <VariableTextarea
+          value={(data.inputText as string) ?? ""}
+          onChange={(val) => update("inputText", val)}
+          variables={variables}
+          rows={3}
+          placeholder="Text to embed (batch: one per line)"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Mode</Label>
+        <Select
+          value={(data.mode as string) ?? "single"}
+          onValueChange={(val) => update("mode", val)}
+        >
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="single">Single Text</SelectItem>
+            <SelectItem value="batch">Batch (one per line)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "embedding_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="embedding_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Retry ─────────────────────────────────────────────────────────────────
+
+function RetryProperties({ data, update }: Omit<SubPanelProps, "variables">) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Target Node ID</Label>
+        <Input
+          value={(data.targetNodeId as string) ?? ""}
+          onChange={(e) => update("targetNodeId", e.target.value)}
+          placeholder="node-id-to-retry"
+        />
+        <p className="text-xs text-muted-foreground">
+          The ID of the node to wrap with retry logic
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label>Max Retries</Label>
+        <Input
+          type="number"
+          value={(data.maxRetries as number) ?? 3}
+          onChange={(e) => update("maxRetries", Number(e.target.value))}
+          min={1}
+          max={10}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Base Delay (ms)</Label>
+        <Input
+          type="number"
+          value={(data.baseDelayMs as number) ?? 1000}
+          onChange={(e) => update("baseDelayMs", Number(e.target.value))}
+          min={100}
+          max={30000}
+          step={100}
+        />
+        <p className="text-xs text-muted-foreground">
+          Exponential backoff: delay doubles each retry
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "retry_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="retry_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── A/B Test ──────────────────────────────────────────────────────────────
+
+interface ABVariantEdit {
+  id: string;
+  weight: number;
+}
+
+function ABTestProperties({ data, update }: Omit<SubPanelProps, "variables">) {
+  const variants: ABVariantEdit[] = Array.isArray(data.variants)
+    ? (data.variants as ABVariantEdit[])
+    : [{ id: "A", weight: 50 }, { id: "B", weight: 50 }];
+
+  const updateVariant = (index: number, field: keyof ABVariantEdit, value: string | number) => {
+    const next = variants.map((v, i) =>
+      i === index ? { ...v, [field]: value } : v
+    );
+    update("variants", next);
+  };
+
+  const addVariant = () => {
+    const nextId = String.fromCharCode(65 + variants.length);
+    update("variants", [...variants, { id: nextId, weight: 0 }]);
+  };
+
+  const removeVariant = (index: number) => {
+    update("variants", variants.filter((_, i) => i !== index));
+  };
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Variants</Label>
+        {variants.map((v, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Input
+              value={v.id}
+              onChange={(e) => updateVariant(i, "id", e.target.value)}
+              className="w-20 text-xs"
+              placeholder="ID"
+            />
+            <Input
+              type="number"
+              value={v.weight}
+              onChange={(e) => updateVariant(i, "weight", Number(e.target.value))}
+              className="w-20 text-xs"
+              min={0}
+              max={100}
+              placeholder="Weight"
+            />
+            <span className="text-xs text-muted-foreground">%</span>
+            {variants.length > 2 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={() => removeVariant(i)}
+              >
+                <X className="size-3" />
+              </Button>
+            )}
+          </div>
+        ))}
+        <Button variant="outline" size="sm" onClick={addVariant} className="w-full">
+          <Plus className="mr-1.5 size-3" />
+          Add Variant
+        </Button>
+      </div>
+      <div className="space-y-2">
+        <Label>Sticky Key (optional)</Label>
+        <Input
+          value={(data.stickyKey as string) ?? ""}
+          onChange={(e) => update("stickyKey", e.target.value)}
+          placeholder="e.g. user_variant"
+        />
+        <p className="text-xs text-muted-foreground">
+          Variable to store variant assignment for consistent routing
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "ab_variant"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="ab_variant"
+        />
       </div>
     </>
   );
