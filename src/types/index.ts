@@ -68,4 +68,6 @@ export type NodeType =
   | "ab_test"
   | "semantic_router"
   | "cost_monitor"
-  | "aggregate";
+  | "aggregate"
+  | "web_search"
+  | "multimodal_input";

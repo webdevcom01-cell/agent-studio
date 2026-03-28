@@ -48,6 +48,7 @@ import {
   Compass,
   DollarSign,
   Combine,
+  ImageIcon,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -880,6 +881,48 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       mergeMode: "concat",
       branchVariables: [],
       outputVariable: "aggregate_result",
+    },
+  },
+
+  // ── Sprint 3: New Nodes ─────────────────────────────────────────────────
+  {
+    type: "web_search",
+    label: "Web Search",
+    description: "Semantic web search via Tavily or Brave",
+    usageExample:
+      "Search the web for current information, research topics, or find documentation",
+    icon: Search,
+    color: "blue",
+    category: "integrations",
+    defaultData: {
+      label: "Web Search",
+      query: "",
+      provider: "tavily",
+      maxResults: 5,
+      searchDepth: "basic",
+      includeImages: false,
+      includeDomains: [],
+      excludeDomains: [],
+      outputVariable: "search_results",
+    },
+  },
+  {
+    type: "multimodal_input",
+    label: "Vision Input",
+    description: "Analyze images with vision-capable AI models",
+    usageExample:
+      "Describe a screenshot, extract text via OCR, or answer questions about an image",
+    icon: ImageIcon,
+    color: "purple",
+    category: "ai",
+    defaultData: {
+      label: "Vision Input",
+      imageVariable: "",
+      prompt: "",
+      model: "gpt-4.1",
+      outputFormat: "description",
+      maxImageSize: 2048,
+      outputVariable: "vision_result",
     },
   },
 ];

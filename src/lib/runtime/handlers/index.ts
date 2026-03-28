@@ -42,6 +42,8 @@ import { abTestHandler } from "./ab-test-handler";
 import { semanticRouterHandler } from "./semantic-router-handler";
 import { costMonitorHandler } from "./cost-monitor-handler";
 import { aggregateHandler } from "./aggregate-handler";
+import { webSearchHandler } from "./web-search-handler";
+import { multimodalInputHandler } from "./multimodal-input-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -87,6 +89,8 @@ const handlers: Record<string, NodeHandler> = {
   semantic_router: semanticRouterHandler,
   cost_monitor: costMonitorHandler,
   aggregate: aggregateHandler,
+  web_search: webSearchHandler,
+  multimodal_input: multimodalInputHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

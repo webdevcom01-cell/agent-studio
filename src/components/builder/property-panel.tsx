@@ -672,6 +672,12 @@ export function PropertyPanel({
         {node.type === "aggregate" && (
           <AggregateProperties data={data} update={update} />
         )}
+        {node.type === "web_search" && (
+          <WebSearchProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "multimodal_input" && (
+          <MultimodalInputProperties data={data} update={update} variables={variables} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -4426,6 +4432,171 @@ function AggregateProperties({ data, update }: Omit<SubPanelProps, "variables">)
           value={(data.outputVariable as string) ?? "aggregate_result"}
           onChange={(e) => update("outputVariable", e.target.value)}
           placeholder="aggregate_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Web Search ────────────────────────────────────────────────────────────
+
+function WebSearchProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Query</Label>
+        <VariableInput
+          value={(data.query as string) ?? ""}
+          onChange={(val) => update("query", val)}
+          variables={variables}
+          placeholder="Search query or {{variable}}"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Provider</Label>
+        <Select
+          value={(data.provider as string) ?? "tavily"}
+          onValueChange={(val) => update("provider", val)}
+        >
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="tavily">Tavily (recommended)</SelectItem>
+            <SelectItem value="brave">Brave Search</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Max Results</Label>
+        <Input
+          type="number"
+          value={(data.maxResults as number) ?? 5}
+          onChange={(e) => update("maxResults", Number(e.target.value))}
+          min={1}
+          max={10}
+        />
+      </div>
+
+      {(data.provider as string) !== "brave" && (
+        <div className="space-y-2">
+          <Label>Search Depth</Label>
+          <Select
+            value={(data.searchDepth as string) ?? "basic"}
+            onValueChange={(val) => update("searchDepth", val)}
+          >
+            <SelectTrigger className="w-full text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="basic">Basic</SelectItem>
+              <SelectItem value="advanced">Advanced (higher quality, slower)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "search_results"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="search_results"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Multimodal Input ──────────────────────────────────────────────────────
+
+const VISION_MODEL_OPTIONS = [
+  { id: "gpt-4.1", name: "GPT-4.1" },
+  { id: "gpt-4.1-mini", name: "GPT-4.1 Mini" },
+  { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+  { id: "mistral-small-3.1-2503", name: "Mistral Small 3.1" },
+];
+
+function MultimodalInputProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Image Variable</Label>
+        <VariableInput
+          value={(data.imageVariable as string) ?? ""}
+          onChange={(val) => update("imageVariable", val)}
+          variables={variables}
+          placeholder="Variable with base64 or URL"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Prompt</Label>
+        <VariableTextarea
+          value={(data.prompt as string) ?? ""}
+          onChange={(val) => update("prompt", val)}
+          variables={variables}
+          rows={3}
+          placeholder="What do you want to know about this image?"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Model</Label>
+        <Select
+          value={(data.model as string) ?? "gpt-4.1"}
+          onValueChange={(val) => update("model", val)}
+        >
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {VISION_MODEL_OPTIONS.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Format</Label>
+        <Select
+          value={(data.outputFormat as string) ?? "description"}
+          onValueChange={(val) => update("outputFormat", val)}
+        >
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="description">Description</SelectItem>
+            <SelectItem value="ocr">OCR (text extraction)</SelectItem>
+            <SelectItem value="json">JSON extraction</SelectItem>
+            <SelectItem value="qa">Q&A (answer a question)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Max Image Size (px)</Label>
+        <Input
+          type="number"
+          value={(data.maxImageSize as number) ?? 2048}
+          onChange={(e) => update("maxImageSize", Number(e.target.value))}
+          min={256}
+          max={4096}
+          step={256}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "vision_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="vision_result"
         />
       </div>
     </>
