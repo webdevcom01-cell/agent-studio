@@ -26,6 +26,7 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === "/api/health") return true;
   if (pathname === "/login") return true;
   if (pathname.startsWith("/embed")) return true;
+  if (pathname === "/evals/standards") return true;
   if (pathname.startsWith("/chat/")) return true;
   if (pathname.startsWith("/api/auth")) return true;
 

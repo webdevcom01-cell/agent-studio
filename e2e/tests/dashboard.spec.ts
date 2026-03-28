@@ -14,7 +14,7 @@ test.describe("Dashboard — Agent Management", () => {
     await dashboardPage.createAgentButton.click();
 
     // Switch to Blank Agent tab
-    await page.getByRole("tab", { name: /blank/i }).click();
+    await page.getByRole("button", { name: /start blank/i }).click();
 
     // Fill in name and description using placeholder selectors
     // (Label has no htmlFor, Input has no id, so getByLabel won't work)

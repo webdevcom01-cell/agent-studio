@@ -96,7 +96,7 @@ test.describe("Generate Eval Suite dialog", () => {
     // Create an agent so we have a valid agentId
     await dashboardPage.goto();
     await dashboardPage.createAgentButton.click();
-    await page.getByRole("tab", { name: /blank/i }).click();
+    await page.getByRole("button", { name: /start blank/i }).click();
     await page.getByPlaceholder("My Agent").fill("Eval Gen E2E Agent");
     await page
       .getByRole("dialog")
@@ -123,7 +123,7 @@ test.describe("Generate Eval Suite dialog", () => {
   }) => {
     await dashboardPage.goto();
     await dashboardPage.createAgentButton.click();
-    await page.getByRole("tab", { name: /blank/i }).click();
+    await page.getByRole("button", { name: /start blank/i }).click();
     await page.getByPlaceholder("My Agent").fill("Dialog Test Agent");
     await page
       .getByRole("dialog")
