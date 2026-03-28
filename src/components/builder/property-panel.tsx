@@ -663,6 +663,15 @@ export function PropertyPanel({
         {node.type === "ab_test" && (
           <ABTestProperties data={data} update={update} />
         )}
+        {node.type === "semantic_router" && (
+          <SemanticRouterProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "cost_monitor" && (
+          <CostMonitorProperties data={data} update={update} />
+        )}
+        {node.type === "aggregate" && (
+          <AggregateProperties data={data} update={update} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -4078,6 +4087,345 @@ function ABTestProperties({ data, update }: Omit<SubPanelProps, "variables">) {
           value={(data.outputVariable as string) ?? "ab_variant"}
           onChange={(e) => update("outputVariable", e.target.value)}
           placeholder="ab_variant"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Semantic Router ───────────────────────────────────────────────────────
+
+interface RouteEdit {
+  id: string;
+  label: string;
+  description: string;
+  examples: string[];
+}
+
+function SemanticRouterProperties({ data, update, variables = [] }: SubPanelProps) {
+  const routes: RouteEdit[] = Array.isArray(data.routes)
+    ? (data.routes as RouteEdit[])
+    : [];
+
+  const updateRoute = (index: number, field: keyof RouteEdit, value: unknown) => {
+    const next = routes.map((r, i) =>
+      i === index ? { ...r, [field]: value } : r,
+    );
+    update("routes", next);
+  };
+
+  const addRoute = () => {
+    const nextId = `route_${routes.length + 1}`;
+    update("routes", [...routes, { id: nextId, label: nextId, description: "", examples: [] }]);
+  };
+
+  const removeRoute = (index: number) => {
+    update("routes", routes.filter((_, i) => i !== index));
+  };
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Input Variable</Label>
+        <VariableInput
+          value={(data.inputVariable as string) ?? ""}
+          onChange={(val) => update("inputVariable", val)}
+          variables={variables}
+          placeholder="user_message"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Routes</Label>
+        {routes.map((r, i) => (
+          <div key={i} className="space-y-1 rounded border p-2">
+            <div className="flex items-center gap-2">
+              <Input
+                value={r.id}
+                onChange={(e) => updateRoute(i, "id", e.target.value)}
+                className="w-24 text-xs"
+                placeholder="ID"
+              />
+              <Input
+                value={r.label}
+                onChange={(e) => updateRoute(i, "label", e.target.value)}
+                className="flex-1 text-xs"
+                placeholder="Label"
+              />
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => removeRoute(i)}>
+                <X className="size-3" />
+              </Button>
+            </div>
+            <Input
+              value={r.description}
+              onChange={(e) => updateRoute(i, "description", e.target.value)}
+              className="text-xs"
+              placeholder="Description"
+            />
+            <Input
+              value={r.examples.join(", ")}
+              onChange={(e) => updateRoute(i, "examples", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
+              className="text-xs"
+              placeholder="Examples: help, issue, problem"
+            />
+          </div>
+        ))}
+        <Button variant="outline" size="sm" onClick={addRoute} className="w-full">
+          <Plus className="mr-1.5 size-3" />
+          Add Route
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Fallback Route</Label>
+        <Input
+          value={(data.fallbackRoute as string) ?? "fallback"}
+          onChange={(e) => update("fallbackRoute", e.target.value)}
+          placeholder="fallback"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Confidence Threshold</Label>
+        <Input
+          type="number"
+          value={(data.confidenceThreshold as number) ?? 0.7}
+          onChange={(e) => update("confidenceThreshold", Number(e.target.value))}
+          min={0}
+          max={1}
+          step={0.05}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Model</Label>
+        <Select
+          value={(data.model as string) ?? "deepseek-chat"}
+          onValueChange={(val) => update("model", val)}
+        >
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ALL_MODELS.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "router_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="router_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Cost Monitor ──────────────────────────────────────────────────────────
+
+function CostMonitorProperties({ data, update }: Omit<SubPanelProps, "variables">) {
+  const mode = (data.mode as string) ?? "monitor";
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Mode</Label>
+        <Select value={mode} onValueChange={(val) => update("mode", val)}>
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="monitor">Monitor (log only)</SelectItem>
+            <SelectItem value="budget">Budget (enforce limit)</SelectItem>
+            <SelectItem value="alert">Alert (warn at threshold)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {mode !== "monitor" && (
+        <>
+          <div className="space-y-2">
+            <Label>Budget (USD)</Label>
+            <Input
+              type="number"
+              value={(data.budgetUsd as number) ?? 1.0}
+              onChange={(e) => update("budgetUsd", Number(e.target.value))}
+              min={0.01}
+              max={1000}
+              step={0.1}
+            />
+          </div>
+
+          {mode === "alert" && (
+            <div className="space-y-2">
+              <Label>Alert Threshold</Label>
+              <Input
+                type="number"
+                value={(data.alertThreshold as number) ?? 0.8}
+                onChange={(e) => update("alertThreshold", Number(e.target.value))}
+                min={0.1}
+                max={1.0}
+                step={0.05}
+              />
+              <p className="text-xs text-muted-foreground">
+                Fraction of budget that triggers alert (0.0-1.0)
+              </p>
+            </div>
+          )}
+
+          {mode === "budget" && (
+            <div className="space-y-2">
+              <Label>On Budget Exceeded</Label>
+              <Select
+                value={(data.onBudgetExceeded as string) ?? "stop_flow"}
+                onValueChange={(val) => update("onBudgetExceeded", val)}
+              >
+                <SelectTrigger className="w-full text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="stop_flow">Stop Flow</SelectItem>
+                  <SelectItem value="continue_with_warning">Continue with Warning</SelectItem>
+                  <SelectItem value="route_to_handle">Route to Handle</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="space-y-2">
+        <Label>Tracking Variable</Label>
+        <Input
+          value={(data.trackingVariable as string) ?? "cost_tracking"}
+          onChange={(e) => update("trackingVariable", e.target.value)}
+          placeholder="cost_tracking"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "cost_status"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="cost_status"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Aggregate ─────────────────────────────────────────────────────────────
+
+function AggregateProperties({ data, update }: Omit<SubPanelProps, "variables">) {
+  const strategy = (data.strategy as string) ?? "wait_all";
+  const branchVars: string[] = Array.isArray(data.branchVariables)
+    ? (data.branchVariables as string[])
+    : [];
+
+  const addBranchVar = () => {
+    update("branchVariables", [...branchVars, ""]);
+  };
+
+  const updateBranchVar = (index: number, value: string) => {
+    const next = branchVars.map((v, i) => (i === index ? value : v));
+    update("branchVariables", next);
+  };
+
+  const removeBranchVar = (index: number) => {
+    update("branchVariables", branchVars.filter((_, i) => i !== index));
+  };
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Strategy</Label>
+        <Select value={strategy} onValueChange={(val) => update("strategy", val)}>
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="wait_all">Wait All</SelectItem>
+            <SelectItem value="wait_first">Wait First (race)</SelectItem>
+            <SelectItem value="wait_n">Wait N</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {strategy === "wait_n" && (
+        <div className="space-y-2">
+          <Label>N (branches to wait for)</Label>
+          <Input
+            type="number"
+            value={(data.waitN as number) ?? 1}
+            onChange={(e) => update("waitN", Number(e.target.value))}
+            min={1}
+            max={20}
+          />
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Branch Variables</Label>
+        {branchVars.map((v, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Input
+              value={v}
+              onChange={(e) => updateBranchVar(i, e.target.value)}
+              className="flex-1 text-xs"
+              placeholder="branch_result_variable"
+            />
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => removeBranchVar(i)}>
+              <X className="size-3" />
+            </Button>
+          </div>
+        ))}
+        <Button variant="outline" size="sm" onClick={addBranchVar} className="w-full">
+          <Plus className="mr-1.5 size-3" />
+          Add Branch Variable
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Merge Mode</Label>
+        <Select
+          value={(data.mergeMode as string) ?? "concat"}
+          onValueChange={(val) => update("mergeMode", val)}
+        >
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="concat">Concatenate</SelectItem>
+            <SelectItem value="first">First Result</SelectItem>
+            <SelectItem value="last">Last Result</SelectItem>
+            <SelectItem value="object">Merge as Object</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Timeout (seconds)</Label>
+        <Input
+          type="number"
+          value={(data.timeout as number) ?? 30}
+          onChange={(e) => update("timeout", Number(e.target.value))}
+          min={1}
+          max={300}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "aggregate_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="aggregate_result"
         />
       </div>
     </>

@@ -45,6 +45,9 @@ import {
   FileJson,
   Binary,
   RefreshCcw,
+  Compass,
+  DollarSign,
+  Combine,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -815,6 +818,68 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       ],
       outputVariable: "ab_variant",
       stickyKey: "",
+    },
+  },
+
+  // ── Sprint 2: New Nodes ─────────────────────────────────────────────────
+  {
+    type: "semantic_router",
+    label: "Semantic Router",
+    description: "LLM-based intent classifier with dynamic routing",
+    usageExample:
+      "Route user messages to support, sales, or FAQ flows based on intent",
+    icon: Compass,
+    color: "emerald",
+    category: "ai",
+    defaultData: {
+      label: "Semantic Router",
+      inputVariable: "",
+      routes: [
+        { id: "support", label: "Support", description: "Customer support requests", examples: ["help", "issue", "problem"] },
+        { id: "sales", label: "Sales", description: "Pricing and purchase queries", examples: ["pricing", "buy", "cost"] },
+      ],
+      fallbackRoute: "fallback",
+      model: "deepseek-chat",
+      confidenceThreshold: 0.7,
+      outputVariable: "router_result",
+    },
+  },
+  {
+    type: "cost_monitor",
+    label: "Cost Monitor",
+    description: "Track token usage and enforce budget limits",
+    usageExample:
+      "Monitor AI spending per conversation, stop flow when budget is exceeded",
+    icon: DollarSign,
+    color: "emerald",
+    category: "utilities",
+    defaultData: {
+      label: "Cost Monitor",
+      mode: "monitor",
+      budgetUsd: 1.0,
+      alertThreshold: 0.8,
+      onBudgetExceeded: "stop_flow",
+      trackingVariable: "cost_tracking",
+      outputVariable: "cost_status",
+    },
+  },
+  {
+    type: "aggregate",
+    label: "Aggregate",
+    description: "Merge parallel branches with advanced strategies",
+    usageExample:
+      "Wait for the first of 3 API calls to complete, or collect N results before proceeding",
+    icon: Combine,
+    color: "sky",
+    category: "logic",
+    defaultData: {
+      label: "Aggregate",
+      strategy: "wait_all",
+      waitN: 1,
+      timeout: 30,
+      mergeMode: "concat",
+      branchVariables: [],
+      outputVariable: "aggregate_result",
     },
   },
 ];

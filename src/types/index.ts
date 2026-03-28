@@ -65,4 +65,7 @@ export type NodeType =
   | "cache"
   | "embeddings"
   | "retry"
-  | "ab_test";
+  | "ab_test"
+  | "semantic_router"
+  | "cost_monitor"
+  | "aggregate";

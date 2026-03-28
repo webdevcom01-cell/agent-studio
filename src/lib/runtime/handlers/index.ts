@@ -39,6 +39,9 @@ import { cacheHandler } from "./cache-handler";
 import { embeddingsHandler } from "./embeddings-handler";
 import { retryHandler } from "./retry-handler";
 import { abTestHandler } from "./ab-test-handler";
+import { semanticRouterHandler } from "./semantic-router-handler";
+import { costMonitorHandler } from "./cost-monitor-handler";
+import { aggregateHandler } from "./aggregate-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -81,6 +84,9 @@ const handlers: Record<string, NodeHandler> = {
   embeddings: embeddingsHandler,
   retry: retryHandler,
   ab_test: abTestHandler,
+  semantic_router: semanticRouterHandler,
+  cost_monitor: costMonitorHandler,
+  aggregate: aggregateHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

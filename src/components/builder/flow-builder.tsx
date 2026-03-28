@@ -66,6 +66,9 @@ import { CacheNode } from "./nodes/cache-node";
 import { EmbeddingsNode } from "./nodes/embeddings-node";
 import { RetryNode } from "./nodes/retry-node";
 import { ABTestNode } from "./nodes/ab-test-node";
+import { SemanticRouterNode } from "./nodes/semantic-router-node";
+import { CostMonitorNode } from "./nodes/cost-monitor-node";
+import { AggregateNode } from "./nodes/aggregate-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -124,6 +127,9 @@ const NODE_TYPES: NodeTypes = {
   embeddings: EmbeddingsNode,
   retry: RetryNode,
   ab_test: ABTestNode,
+  semantic_router: SemanticRouterNode,
+  cost_monitor: CostMonitorNode,
+  aggregate: AggregateNode,
 };
 
 // Debug-wrapped versions of all node types (stable reference, created once)
