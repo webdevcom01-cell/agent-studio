@@ -682,6 +682,30 @@ FlowTrace — Full execution trace snapshot for debugging
 - Parent document retrieval — returns broader context around matched chunks
 - UI: Add Source dialog has URL, Text, and File tabs with client-side 10 MB validation
 
+### Vector Search Indexes (HNSW + GIN)
+Production-optimized database indexes for sub-10ms vector and keyword search.
+
+**HNSW Indexes** (pgvector 0.8.0, deployed 2026-03-28):
+- `kbchunk_embedding_hnsw_idx` — HNSW on `KBChunk.embedding` (vector_cosine_ops, m=16, ef_construction=64)
+- `agentmemory_embedding_hnsw_idx` — HNSW on `AgentMemory.embedding` (vector_cosine_ops, m=16, ef_construction=64)
+- Both use cosine distance operator (`<=>`), approximate nearest neighbor (~98-99% recall)
+- Dynamic `SET LOCAL hnsw.ef_search` per query: 40 (≤3 words), 60 (4-8 words), 100 (9+ words)
+
+**Full-Text Search Index**:
+- `kbchunk_content_fts_idx` — GIN on `to_tsvector('simple', content)` for BM25 keyword search
+
+**Filtered B-tree Index**:
+- `kbchunk_source_embedding_ready_idx` — B-tree on `sourceId` WHERE `embedding IS NOT NULL`
+
+**Search Latency Metrics**:
+- `kb.search.vector_query_ms` — semantic search SQL execution time (with efSearch, topK, resultCount tags)
+- `kb.search.keyword_query_ms` — keyword search SQL execution time
+
+**Parameters (design rationale)**:
+- `m=16`: standard for 1536-dim vectors; 8=faster build but lower recall, 32=better recall but 2x memory
+- `ef_construction=64`: Google Cloud/AWS recommended range 64-100; sufficient for <1M vectors
+- `ef_search` dynamic: short queries need speed (40), long analytical queries need precision (100)
+
 ### Enterprise RAG Pipeline
 Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and maintenance.
 

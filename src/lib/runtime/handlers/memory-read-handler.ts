@@ -162,7 +162,10 @@ export const memoryReadHandler: NodeHandler = async (node, context) => {
 
         const vectorStr = `[${embedding.join(",")}]`;
 
-        // Cosine similarity search
+        // Set HNSW ef_search for memory lookups (short lookups, speed-optimized)
+        await prisma.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = 40`);
+
+        // Cosine similarity search (accelerated by HNSW index)
         const memories = await prisma.$queryRawUnsafe<
           Array<{
             id: string;
