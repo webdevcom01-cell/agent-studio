@@ -60,18 +60,20 @@ describe("cacheHandler", () => {
     expect(result.messages[0].content).toContain("no key");
   });
 
-  it("returns cache miss when key not found", async () => {
+  it("routes to 'miss' handle when key not found", async () => {
     const result = await cacheHandler(makeNode(), makeContext());
     expect(result.updatedVariables?.cache_result).toBe("");
     expect(result.updatedVariables?.cache_result_hit).toBe(false);
+    expect(result.nextNodeId).toBe("miss");
   });
 
-  it("returns cached value on hit", async () => {
+  it("routes to 'hit' handle when value found", async () => {
     mockCacheGet.mockResolvedValueOnce("cached_value");
 
     const result = await cacheHandler(makeNode(), makeContext());
     expect(result.updatedVariables?.cache_result).toBe("cached_value");
     expect(result.updatedVariables?.cache_result_hit).toBe(true);
+    expect(result.nextNodeId).toBe("hit");
   });
 
   it("stores value with set operation", async () => {

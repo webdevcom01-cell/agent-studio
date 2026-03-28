@@ -1,9 +1,9 @@
 "use client";
 
 import { memo } from "react";
-import { type NodeProps } from "@xyflow/react";
+import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Database } from "lucide-react";
-import { BaseNode } from "./base-node";
+import { cn } from "@/lib/utils";
 
 const OP_LABELS: Record<string, string> = {
   get: "Get",
@@ -14,19 +14,62 @@ const OP_LABELS: Record<string, string> = {
 function CacheNodeComponent({ data, selected }: NodeProps) {
   const operation = (data.operation as string) || "get";
   const cacheKey = (data.cacheKey as string) || "";
+  const isGet = operation === "get";
 
   return (
-    <BaseNode
-      icon={<Database className="size-4" />}
-      label={(data.label as string) || "Cache"}
-      color="orange"
-      selected={selected}
+    <div
+      className={cn(
+        "min-w-[180px] rounded-lg border bg-card p-3 shadow-sm transition-shadow",
+        selected && "ring-2 ring-primary",
+      )}
     >
-      <p className="truncate">
-        <span className="font-semibold">{OP_LABELS[operation] ?? operation}</span>{" "}
-        {cacheKey ? <span className="font-mono">{cacheKey}</span> : <span className="italic">no key</span>}
-      </p>
-    </BaseNode>
+      <Handle type="target" position={Position.Top} />
+
+      <div className="flex items-center gap-2 mb-2">
+        <div className="flex size-7 items-center justify-center rounded-md bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+          <Database className="size-4" />
+        </div>
+        <span className="text-sm font-medium">
+          {String(data.label || "Cache")}
+        </span>
+      </div>
+
+      <div className="space-y-1 text-xs text-muted-foreground">
+        <p className="truncate">
+          <span className="font-semibold">{OP_LABELS[operation] ?? operation}</span>{" "}
+          {cacheKey ? (
+            <span className="font-mono text-foreground">{cacheKey}</span>
+          ) : (
+            <span className="italic">no key</span>
+          )}
+        </p>
+        {isGet && (
+          <p className="text-[10px]">
+            <span className="text-green-500">Hit</span>{" / "}
+            <span className="text-red-400">Miss</span>
+          </p>
+        )}
+      </div>
+
+      {isGet ? (
+        <>
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="hit"
+            style={{ left: "33%" }}
+          />
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id="miss"
+            style={{ left: "66%" }}
+          />
+        </>
+      ) : (
+        <Handle type="source" position={Position.Bottom} />
+      )}
+    </div>
   );
 }
 

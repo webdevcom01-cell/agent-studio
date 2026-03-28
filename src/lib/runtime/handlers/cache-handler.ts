@@ -79,14 +79,16 @@ export const cacheHandler: NodeHandler = async (node, context) => {
       cached = await getCacheValue(cacheKey);
     }
 
+    const isHit = cached !== null;
+
     return {
       messages: [],
-      nextNodeId: null,
+      nextNodeId: isHit ? "hit" : "miss",
       waitForInput: false,
       updatedVariables: {
         ...context.variables,
         [outputVariable]: cached ?? "",
-        [`${outputVariable}_hit`]: cached !== null,
+        [`${outputVariable}_hit`]: isHit,
       },
     };
   } catch (err) {
