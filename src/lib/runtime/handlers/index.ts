@@ -49,6 +49,9 @@ import { speechAudioHandler } from "./speech-audio-handler";
 import { databaseQueryHandler } from "./database-query-handler";
 import { fileOperationsHandler } from "./file-operations-handler";
 import { mcpTaskRunnerHandler } from "./mcp-task-runner-handler";
+import { guardrailsHandler } from "./guardrails-handler";
+import { codeInterpreterHandler } from "./code-interpreter-handler";
+import { trajectoryEvaluatorHandler } from "./trajectory-evaluator-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -101,6 +104,9 @@ const handlers: Record<string, NodeHandler> = {
   database_query: databaseQueryHandler,
   file_operations: fileOperationsHandler,
   mcp_task_runner: mcpTaskRunnerHandler,
+  guardrails: guardrailsHandler,
+  code_interpreter: codeInterpreterHandler,
+  trajectory_evaluator: trajectoryEvaluatorHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

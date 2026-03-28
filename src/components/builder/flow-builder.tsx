@@ -76,6 +76,9 @@ import { SpeechAudioNode } from "./nodes/speech-audio-node";
 import { DatabaseQueryNode } from "./nodes/database-query-node";
 import { FileOperationsNode } from "./nodes/file-operations-node";
 import { MCPTaskRunnerNode } from "./nodes/mcp-task-runner-node";
+import { GuardrailsNode } from "./nodes/guardrails-node";
+import { CodeInterpreterNode } from "./nodes/code-interpreter-node";
+import { TrajectoryEvaluatorNode } from "./nodes/trajectory-evaluator-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -144,6 +147,9 @@ const NODE_TYPES: NodeTypes = {
   database_query: DatabaseQueryNode,
   file_operations: FileOperationsNode,
   mcp_task_runner: MCPTaskRunnerNode,
+  guardrails: GuardrailsNode,
+  code_interpreter: CodeInterpreterNode,
+  trajectory_evaluator: TrajectoryEvaluatorNode,
 };
 
 // Debug-wrapped versions of all node types (stable reference, created once)

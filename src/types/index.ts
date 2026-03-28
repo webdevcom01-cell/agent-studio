@@ -75,4 +75,7 @@ export type NodeType =
   | "speech_audio"
   | "database_query"
   | "file_operations"
-  | "mcp_task_runner";
+  | "mcp_task_runner"
+  | "guardrails"
+  | "code_interpreter"
+  | "trajectory_evaluator";

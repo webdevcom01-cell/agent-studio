@@ -55,6 +55,11 @@ const envSchema = z.object({
   AWS_S3_BUCKET: optionalStr,
   MCP_TASK_POLL_INTERVAL_MS: optionalStr,
   MCP_TASK_MAX_DURATION_MS: optionalStr,
+  GUARDRAILS_PROVIDER: optionalStr,
+  AZURE_CONTENT_SAFETY_KEY: optionalStr,
+  AZURE_CONTENT_SAFETY_ENDPOINT: optionalStr,
+  CODE_INTERPRETER_TIMEOUT_MS: optionalStr,
+  CODE_INTERPRETER_MEMORY_MB: optionalStr,
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),

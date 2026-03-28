@@ -693,6 +693,15 @@ export function PropertyPanel({
         {node.type === "mcp_task_runner" && (
           <MCPTaskRunnerProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "guardrails" && (
+          <GuardrailsProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "code_interpreter" && (
+          <CodeInterpreterProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "trajectory_evaluator" && (
+          <TrajectoryEvaluatorProperties data={data} update={update} variables={variables} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -5012,6 +5021,214 @@ function MCPTaskRunnerProperties({ data, update, variables = [] }: SubPanelProps
           value={(data.outputVariable as string) ?? "task_result"}
           onChange={(e) => update("outputVariable", e.target.value)}
           placeholder="task_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Guardrails ────────────────────────────────────────────────────────────
+
+const GUARDRAIL_CHECK_OPTIONS = [
+  { value: "content_moderation", label: "Content Moderation" },
+  { value: "pii_detection", label: "PII Detection" },
+  { value: "injection_detection", label: "Injection Detection" },
+  { value: "custom_policy", label: "Custom Policy" },
+  { value: "eu_audit", label: "EU Audit Trail" },
+];
+
+function GuardrailsProperties({ data, update, variables = [] }: SubPanelProps) {
+  const checks = Array.isArray(data.checks) ? (data.checks as string[]) : [];
+
+  const toggleCheck = (value: string) => {
+    const next = checks.includes(value)
+      ? checks.filter((c) => c !== value)
+      : [...checks, value];
+    update("checks", next);
+  };
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Input Variable</Label>
+        <VariableInput
+          value={(data.inputVariable as string) ?? ""}
+          onChange={(val) => update("inputVariable", val)}
+          variables={variables}
+          placeholder="user_message"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Safety Checks</Label>
+        {GUARDRAIL_CHECK_OPTIONS.map((opt) => (
+          <label key={opt.value} className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={checks.includes(opt.value)}
+              onChange={() => toggleCheck(opt.value)}
+              className="rounded"
+            />
+            {opt.label}
+          </label>
+        ))}
+      </div>
+
+      {checks.includes("custom_policy") && (
+        <div className="space-y-2">
+          <Label>Custom Policy</Label>
+          <Textarea
+            value={(data.customPolicy as string) ?? ""}
+            onChange={(e) => update("customPolicy", e.target.value)}
+            rows={3}
+            className="text-xs"
+            placeholder="Describe the policy to enforce..."
+          />
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>On Fail</Label>
+        <Select
+          value={(data.onFail as string) ?? "route_to_handle"}
+          onValueChange={(val) => update("onFail", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="stop_flow">Stop Flow</SelectItem>
+            <SelectItem value="continue_with_warning">Continue with Warning</SelectItem>
+            <SelectItem value="route_to_handle">Route to Fail Handle</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "guardrails_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="guardrails_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Code Interpreter ──────────────────────────────────────────────────────
+
+function CodeInterpreterProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Language</Label>
+        <Select
+          value={(data.language as string) ?? "python"}
+          onValueChange={(val) => update("language", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="python">Python</SelectItem>
+            <SelectItem value="javascript">JavaScript</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Code</Label>
+        <Textarea
+          value={(data.code as string) ?? ""}
+          onChange={(e) => update("code", e.target.value)}
+          rows={10}
+          className="font-mono text-xs"
+          placeholder={(data.language as string) === "javascript"
+            ? "console.log('Hello');"
+            : "print('Hello')"}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Timeout (seconds)</Label>
+        <Input
+          type="number"
+          value={(data.timeout as number) ?? 30}
+          onChange={(e) => update("timeout", Number(e.target.value))}
+          min={1}
+          max={120}
+        />
+      </div>
+
+      {(data.language as string) === "python" && (
+        <div className="space-y-2">
+          <Label>Packages</Label>
+          <Input
+            value={(data.packages as string) ?? ""}
+            onChange={(e) => update("packages", e.target.value)}
+            placeholder="numpy, pandas, json"
+          />
+          <p className="text-xs text-muted-foreground">Comma-separated list</p>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "code_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="code_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Trajectory Evaluator ──────────────────────────────────────────────────
+
+function TrajectoryEvaluatorProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Execution Trace Variable</Label>
+        <VariableInput
+          value={(data.executionTraceVariable as string) ?? ""}
+          onChange={(val) => update("executionTraceVariable", val)}
+          variables={variables}
+          placeholder="execution_trace"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Ideal Step Count</Label>
+        <Input
+          type="number"
+          value={(data.idealStepCount as number) ?? 0}
+          onChange={(e) => update("idealStepCount", Number(e.target.value))}
+          min={0}
+          max={100}
+        />
+        <p className="text-xs text-muted-foreground">0 = no efficiency penalty</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Model</Label>
+        <Select
+          value={(data.model as string) ?? "deepseek-chat"}
+          onValueChange={(val) => update("model", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {ALL_MODELS.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "trajectory_score"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="trajectory_score"
         />
       </div>
     </>

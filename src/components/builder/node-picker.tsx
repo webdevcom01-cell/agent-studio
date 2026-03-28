@@ -53,6 +53,8 @@ import {
   Volume2,
   FolderOpen,
   PlayCircle,
+  ShieldCheck,
+  Terminal,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -1033,6 +1035,67 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       maxDurationMs: 3600000,
       retryOnFailure: true,
       outputVariable: "task_result",
+    },
+  },
+
+  // ── Sprint 6: New Nodes ─────────────────────────────────────────────────
+  {
+    type: "guardrails",
+    label: "Guardrails",
+    description: "EU AI Act safety checkpoint with multi-output routing",
+    usageExample:
+      "Content moderation, PII detection, prompt injection blocking, compliance audit",
+    icon: ShieldCheck,
+    color: "red",
+    category: "utilities",
+    defaultData: {
+      label: "Guardrails",
+      inputVariable: "",
+      checks: ["content_moderation", "pii_detection", "injection_detection"],
+      customPolicy: "",
+      onFail: "route_to_handle",
+      auditLog: true,
+      explainability: true,
+      outputVariable: "guardrails_result",
+    },
+  },
+  {
+    type: "code_interpreter",
+    label: "Code Interpreter",
+    description: "Secure Python/JavaScript sandbox execution",
+    usageExample:
+      "Run data analysis, generate charts, compute metrics, or transform data",
+    icon: Terminal,
+    color: "yellow",
+    category: "logic",
+    defaultData: {
+      label: "Code Interpreter",
+      language: "python",
+      code: "",
+      timeout: 30,
+      packages: "",
+      captureOutput: true,
+      outputVariable: "code_result",
+    },
+  },
+  {
+    type: "trajectory_evaluator",
+    label: "Trajectory Eval",
+    description: "Evaluate execution path quality (Amazon framework)",
+    usageExample:
+      "Score agent trajectories for efficiency, detect redundant steps and backtracking",
+    icon: Route,
+    color: "fuchsia",
+    category: "utilities",
+    defaultData: {
+      label: "Trajectory Eval",
+      executionTraceVariable: "",
+      criteria: [{ name: "quality", description: "Overall step quality", weight: 1 }],
+      idealStepCount: 0,
+      penalizeBacktracking: true,
+      penalizeRedundantCalls: true,
+      model: "deepseek-chat",
+      outputVariable: "trajectory_score",
     },
   },
 ];
