@@ -223,17 +223,40 @@ export async function mockWebhooksAPI(
     });
   });
 
-  // GET detail / PATCH update / DELETE / POST rotate
-  // Use ** (not *) so the rotate sub-path (/webhooks/[id]/rotate) is also matched —
-  // Playwright's * glob stops at slashes, ** crosses them.
+  // GET detail / PATCH update / DELETE / POST rotate / GET executions
+  // All sub-paths under /webhooks/** are handled here with URL-based dispatch.
+  // This avoids Playwright route-ordering ambiguity between glob patterns like
+  // **/executions* and **/webhooks/** — we use url.includes() instead.
   const detailBase = options?.agentId
     ? `**/api/agents/${options.agentId}/webhooks/**`
     : "**/api/agents/*/webhooks/**";
 
+  // Use custom webhook's executions if provided, otherwise fall back to MOCK_WEBHOOK.executions
+  const executions = ((webhooks[0]?.executions ?? MOCK_WEBHOOK.executions) as Record<string, unknown>[]) ?? [];
+
   await page.route(detailBase, (route) => {
     const method = route.request().method();
+    const url = route.request().url();
 
-    if (route.request().url().includes("/rotate")) {
+    // /webhooks/[id]/executions?... — list executions (no sub-path after "executions")
+    // Exclude /executions/ sub-paths like /executions/[execId]/replay and /executions/export
+    if (url.includes("/executions") && !url.includes("/executions/")) {
+      if (method !== "GET") { void route.fallback(); return; }
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: executions,
+          nextCursor: null,
+          total: executions.length,
+          hasMore: false,
+        }),
+      });
+    }
+
+    // /webhooks/[id]/rotate
+    if (url.includes("/rotate")) {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -244,6 +267,7 @@ export async function mockWebhooksAPI(
       });
     }
 
+    // GET /webhooks/[id] — detail
     if (method === "GET") {
       return route.fulfill({
         status: 200,
@@ -252,6 +276,7 @@ export async function mockWebhooksAPI(
       });
     }
 
+    // PATCH /webhooks/[id] — update
     if (method === "PATCH") {
       return route.fulfill({
         status: 200,
@@ -260,6 +285,7 @@ export async function mockWebhooksAPI(
       });
     }
 
+    // DELETE /webhooks/[id]
     if (method === "DELETE") {
       return route.fulfill({
         status: 200,

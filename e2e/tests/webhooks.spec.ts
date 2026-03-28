@@ -717,7 +717,7 @@ test.describe("Webhooks API — CRUD", () => {
     expect(wh?.eventFilters).toEqual(["push", "pull_request"]);
   });
 
-  test("GET detail — returns secret and executions array", async ({ request }) => {
+  test("GET detail — secret is hidden, executions array returned", async ({ request }) => {
     if (!apiAgentId || !webhookId) { test.skip(); return; }
 
     const res = await request.get(`/api/agents/${apiAgentId}/webhooks/${webhookId}`);
@@ -726,7 +726,8 @@ test.describe("Webhooks API — CRUD", () => {
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.data.id).toBe(webhookId);
-    expect(body.data.secret).toBeTruthy();
+    // GET detail intentionally strips the secret for security (only exposed on create/rotate)
+    expect(body.data.secret).toBeUndefined();
     expect(Array.isArray(body.data.executions)).toBe(true);
   });
 
@@ -1090,12 +1091,13 @@ test.describe("Webhooks UI — Execution Replay", () => {
     await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // Click the Replay button (visible in the row header — no expand needed)
+    // Click the Replay button (visible in the row header)
     const replayBtn = page.getByRole("button", { name: /^replay$/i }).first();
     await replayBtn.waitFor({ state: "visible", timeout: 8_000 });
     await replayBtn.click();
 
-    // Wait for success feedback
+    // The row auto-expands on success (setExpanded(true) in handleReplay success branch).
+    // Wait for the inline success banner inside the expanded section.
     await expect(
       page.getByText(/replayed — new execution id/i)
     ).toBeVisible({ timeout: 8_000 });
@@ -1108,11 +1110,12 @@ test.describe("Webhooks UI — Execution Replay", () => {
     if (!sharedAgentId) { test.skip(); return; }
     await mockWebhooksAPI(page, { agentId: sharedAgentId });
 
-    // Use a delayed route to catch the in-flight state
+    // Use a delayed route to catch the in-flight state.
+    // Use Node.js setTimeout (not page.waitForTimeout) to avoid deadlock in route handlers.
     await page.route(
       `**/api/agents/${sharedAgentId}/webhooks/**/executions/**/replay`,
       async (route) => {
-        await page.waitForTimeout(300);
+        await new Promise<void>((resolve) => setTimeout(resolve, 300));
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -1131,12 +1134,14 @@ test.describe("Webhooks UI — Execution Replay", () => {
     await replayBtn.waitFor({ state: "visible", timeout: 8_000 });
     await replayBtn.click();
 
-    // "Replaying…" text appears during the in-flight state
+    // "Replaying…" text appears during the in-flight state on the Replay button itself.
+    // Use exact:true to avoid matching the outer row button whose accessible name
+    // also contains "Replaying…" as a child text (strict mode would fail on 2 matches).
     await expect(
-      page.getByRole("button", { name: /replaying…/i })
+      page.getByRole("button", { name: "Replaying…", exact: true })
     ).toBeVisible({ timeout: 3_000 });
 
-    // Eventually resolves to success
+    // Eventually resolves to success; the row auto-expands (setExpanded(true) in success handler).
     await expect(
       page.getByText(/replayed — new execution id/i)
     ).toBeVisible({ timeout: 5_000 });
@@ -1278,8 +1283,9 @@ test.describe("Webhooks UI — replay chain", () => {
     await webhooksPage.goto(sharedAgentId);
     await page.waitForLoadState("networkidle");
 
-    // Expand the execution row to see its detail
-    await page.getByText(/completed/i).first().click();
+    // Expand the execution row by clicking the "push" eventType badge (a <span> unique to the row,
+    // not a filter pill or button — the click bubbles up to the outer row button's onClick).
+    await page.getByText(/^push$/i).first().click();
 
     // "Replayed from" label and the original execution ID should both be visible
     await expect(
@@ -1349,6 +1355,7 @@ test.describe("Webhooks UI — replay chain", () => {
     await replayBtn.waitFor({ state: "visible", timeout: 8_000 });
     await replayBtn.click();
 
+    // The row auto-expands on success (setExpanded(true) in handleReplay success branch).
     // The inline success banner in the expanded row should mention the new execution ID
     await expect(
       page.getByText(NEW_EXEC_ID, { exact: false }).first()

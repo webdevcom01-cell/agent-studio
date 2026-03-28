@@ -60,11 +60,12 @@ test.describe("Flow Editor", () => {
     await flowBuilderPage.goto(agentId);
     await flowBuilderPage.nodePicker.click();
 
-    // Should show actual node categories (Content, AI, Logic, etc.)
-    // Use data-slot="dropdown-menu-label" to avoid matching node descriptions
-    const labels = page.locator('[data-slot="dropdown-menu-label"]');
-    await expect(labels.filter({ hasText: "Content" })).toBeVisible();
-    await expect(labels.filter({ hasText: "AI" })).toBeVisible();
+    // The node picker uses a nav with category buttons (e.g. "Triggers 2", "AI 11")
+    // Use navigation buttons visible inside the dialog
+    const nav = page.getByRole("navigation", { name: /node categories/i });
+    await expect(nav).toBeVisible({ timeout: 5_000 });
+    await expect(nav.getByRole("button", { name: /Triggers/i })).toBeVisible();
+    await expect(nav.getByRole("button", { name: /^AI/i })).toBeVisible();
   });
 
   test("flow has initial nodes after creation", async ({

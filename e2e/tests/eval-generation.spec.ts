@@ -20,20 +20,21 @@ test.describe("Standards Browser — /evals/standards", () => {
   }) => {
     await page.goto("/evals/standards");
 
-    // Page title visible in header
-    await expect(page.getByText("Eval Standards")).toBeVisible({ timeout: 10_000 });
+    // Page title visible in header (use heading role to avoid matching breadcrumb nav)
+    await expect(page.getByRole("heading", { name: "Eval Standards" })).toBeVisible({ timeout: 10_000 });
 
     // Layer legend section present
-    await expect(page.getByText("Evaluation layers", { exact: false })).toBeVisible();
-    await expect(page.getByText("Deterministic")).toBeVisible();
-    await expect(page.getByText("LLM-Judge")).toBeVisible();
+    await expect(page.getByText("Evaluation layers", { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("Deterministic").first()).toBeVisible();
+    await expect(page.getByText("LLM-Judge").first()).toBeVisible();
 
-    // Global assertions section
-    await expect(page.getByText("Global Assertions")).toBeVisible();
+    // Global assertions section (use heading role to avoid matching partial-text elements)
+    await expect(page.getByRole("heading", { name: "Global Assertions" })).toBeVisible();
 
-    // Both global assertions rendered
-    await expect(page.getByText("latency", { exact: true })).toBeVisible();
-    await expect(page.getByText("relevance", { exact: true })).first().toBeVisible();
+    // Both global assertions rendered — use .first() since "latency" / "relevance"
+    // appear as assertion-type labels in each of the 19 category cards too.
+    await expect(page.getByText("latency", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("relevance", { exact: true }).first()).toBeVisible();
   });
 
   test("renders all 19 category cards", async ({ page }) => {
@@ -98,9 +99,15 @@ test.describe("Generate Eval Suite dialog", () => {
     await dashboardPage.createAgentButton.click();
     await page.getByRole("button", { name: /start blank/i }).click();
     await page.getByPlaceholder("My Agent").fill("Eval Gen E2E Agent");
+    // Wizard step 2 → step 3 (Configure → Review)
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: /^create$/i })
+      .getByRole("button", { name: /^review$/i })
+      .click();
+    // Step 3 (Review) → Create
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^create agent$/i })
       .click();
     await expect(page).toHaveURL(/\/builder\//, { timeout: 15_000 });
 
@@ -125,9 +132,15 @@ test.describe("Generate Eval Suite dialog", () => {
     await dashboardPage.createAgentButton.click();
     await page.getByRole("button", { name: /start blank/i }).click();
     await page.getByPlaceholder("My Agent").fill("Dialog Test Agent");
+    // Wizard step 2 → step 3 (Configure → Review)
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: /^create$/i })
+      .getByRole("button", { name: /^review$/i })
+      .click();
+    // Step 3 (Review) → Create
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^create agent$/i })
       .click();
     await expect(page).toHaveURL(/\/builder\//, { timeout: 15_000 });
 

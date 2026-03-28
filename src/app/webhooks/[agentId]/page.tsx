@@ -886,6 +886,7 @@ function ExecutionRow({
         toast.error(json.error ?? "Replay failed");
       } else {
         setReplay({ status: "success", executionId: json.data?.executionId });
+        setExpanded(true);
         toast.success("Execution replayed successfully");
         onReplayed?.();
       }
@@ -1039,10 +1040,10 @@ function WebhookDetailPanel({
   const execCursorRef = useRef<string | null>(null);
   const execStatusRef = useRef<ExecStatus>("ALL");
 
-  async function fetchExecutions(reset: boolean) {
+  async function fetchExecutions(reset: boolean, silent = false) {
     if (reset) {
       execCursorRef.current = null;
-      setLoadingExecs(true);
+      if (!silent) setLoadingExecs(true);
     } else {
       setLoadingMore(true);
     }
@@ -1460,7 +1461,7 @@ function WebhookDetailPanel({
                       exec={exec}
                       agentId={agentId}
                       webhookId={webhookId}
-                      onReplayed={() => void fetchExecutions(true)}
+                      onReplayed={() => void fetchExecutions(true, true)}
                     />
                   ))}
                 </div>

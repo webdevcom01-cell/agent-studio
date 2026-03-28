@@ -23,10 +23,17 @@ test.describe("Dashboard — Agent Management", () => {
       .getByPlaceholder(/what does this agent/i)
       .fill("Created by Playwright E2E");
 
-    // Submit — the button text is "Create"
+    // Wizard has 3 steps: Choose → Configure → Review
+    // Step 2 (Configure) shows "Review" button to advance to step 3
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: /^create$/i })
+      .getByRole("button", { name: /^review$/i })
+      .click();
+
+    // Step 3 (Review) shows "Create Agent" button to submit
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^create agent$/i })
       .click();
 
     // Should navigate to builder
