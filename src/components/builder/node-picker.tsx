@@ -49,6 +49,8 @@ import {
   DollarSign,
   Combine,
   ImageIcon,
+  ImagePlus,
+  Volume2,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -923,6 +925,50 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       outputFormat: "description",
       maxImageSize: 2048,
       outputVariable: "vision_result",
+    },
+  },
+
+  // ── Sprint 4: New Nodes ─────────────────────────────────────────────────
+  {
+    type: "image_generation",
+    label: "Image Generation",
+    description: "Generate images from text prompts via DALL-E 3 or Flux",
+    usageExample:
+      "Create product mockups, marketing visuals, or illustrative content",
+    icon: ImagePlus,
+    color: "rose",
+    category: "ai",
+    defaultData: {
+      label: "Image Generation",
+      prompt: "",
+      negativePrompt: "",
+      provider: "dall-e-3",
+      size: "1024x1024",
+      quality: "standard",
+      style: "vivid",
+      outputVariable: "generated_image",
+    },
+  },
+  {
+    type: "speech_audio",
+    label: "Speech / Audio",
+    description: "Text-to-Speech and Speech-to-Text dual-mode node",
+    usageExample:
+      "Convert agent responses to audio, or transcribe user voice messages",
+    icon: Volume2,
+    color: "teal",
+    category: "ai",
+    defaultData: {
+      label: "Text to Speech",
+      mode: "tts",
+      text: "",
+      audioVariable: "",
+      ttsProvider: "openai",
+      sttProvider: "whisper",
+      voice: "alloy",
+      model: "tts-1",
+      outputFormat: "mp3",
+      outputVariable: "audio_result",
     },
   },
 ];

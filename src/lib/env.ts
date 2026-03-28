@@ -43,6 +43,10 @@ const envSchema = z.object({
   OTEL_SERVICE_NAME: optionalStr,
   TAVILY_API_KEY: optionalStr,
   BRAVE_SEARCH_API_KEY: optionalStr,
+  FAL_API_KEY: optionalStr,
+  STABILITY_API_KEY: optionalStr,
+  ELEVENLABS_API_KEY: optionalStr,
+  DEEPGRAM_API_KEY: optionalStr,
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),

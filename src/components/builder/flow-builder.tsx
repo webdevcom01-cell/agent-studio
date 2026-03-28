@@ -71,6 +71,8 @@ import { CostMonitorNode } from "./nodes/cost-monitor-node";
 import { AggregateNode } from "./nodes/aggregate-node";
 import { WebSearchNode } from "./nodes/web-search-node";
 import { MultimodalInputNode } from "./nodes/multimodal-input-node";
+import { ImageGenerationNode } from "./nodes/image-generation-node";
+import { SpeechAudioNode } from "./nodes/speech-audio-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -134,6 +136,8 @@ const NODE_TYPES: NodeTypes = {
   aggregate: AggregateNode,
   web_search: WebSearchNode,
   multimodal_input: MultimodalInputNode,
+  image_generation: ImageGenerationNode,
+  speech_audio: SpeechAudioNode,
 };
 
 // Debug-wrapped versions of all node types (stable reference, created once)

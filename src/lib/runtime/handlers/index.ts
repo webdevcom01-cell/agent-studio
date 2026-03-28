@@ -44,6 +44,8 @@ import { costMonitorHandler } from "./cost-monitor-handler";
 import { aggregateHandler } from "./aggregate-handler";
 import { webSearchHandler } from "./web-search-handler";
 import { multimodalInputHandler } from "./multimodal-input-handler";
+import { imageGenerationHandler } from "./image-generation-handler";
+import { speechAudioHandler } from "./speech-audio-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -91,6 +93,8 @@ const handlers: Record<string, NodeHandler> = {
   aggregate: aggregateHandler,
   web_search: webSearchHandler,
   multimodal_input: multimodalInputHandler,
+  image_generation: imageGenerationHandler,
+  speech_audio: speechAudioHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

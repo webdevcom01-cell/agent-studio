@@ -70,4 +70,6 @@ export type NodeType =
   | "cost_monitor"
   | "aggregate"
   | "web_search"
-  | "multimodal_input";
+  | "multimodal_input"
+  | "image_generation"
+  | "speech_audio";

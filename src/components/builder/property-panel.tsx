@@ -678,6 +678,12 @@ export function PropertyPanel({
         {node.type === "multimodal_input" && (
           <MultimodalInputProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "image_generation" && (
+          <ImageGenerationProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "speech_audio" && (
+          <SpeechAudioProperties data={data} update={update} variables={variables} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -4597,6 +4603,234 @@ function MultimodalInputProperties({ data, update, variables = [] }: SubPanelPro
           value={(data.outputVariable as string) ?? "vision_result"}
           onChange={(e) => update("outputVariable", e.target.value)}
           placeholder="vision_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Image Generation ──────────────────────────────────────────────────────
+
+function ImageGenerationProperties({ data, update, variables = [] }: SubPanelProps) {
+  const provider = (data.provider as string) ?? "dall-e-3";
+  const isDallE = provider === "dall-e-3";
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Prompt</Label>
+        <VariableTextarea
+          value={(data.prompt as string) ?? ""}
+          onChange={(val) => update("prompt", val)}
+          variables={variables}
+          rows={3}
+          placeholder="A serene mountain landscape at sunset"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Negative Prompt</Label>
+        <VariableTextarea
+          value={(data.negativePrompt as string) ?? ""}
+          onChange={(val) => update("negativePrompt", val)}
+          variables={variables}
+          rows={2}
+          placeholder="blurry, low quality, text"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Provider</Label>
+        <Select value={provider} onValueChange={(val) => update("provider", val)}>
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="dall-e-3">DALL-E 3 (OpenAI)</SelectItem>
+            <SelectItem value="flux-pro">Flux Pro (fal.ai)</SelectItem>
+            <SelectItem value="flux-dev">Flux Dev (fal.ai)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Size</Label>
+        <Select
+          value={(data.size as string) ?? "1024x1024"}
+          onValueChange={(val) => update("size", val)}
+        >
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1024x1024">1024x1024 (square)</SelectItem>
+            <SelectItem value="1792x1024">1792x1024 (landscape)</SelectItem>
+            <SelectItem value="1024x1792">1024x1792 (portrait)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isDallE && (
+        <>
+          <div className="space-y-2">
+            <Label>Quality</Label>
+            <Select
+              value={(data.quality as string) ?? "standard"}
+              onValueChange={(val) => update("quality", val)}
+            >
+              <SelectTrigger className="w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="standard">Standard</SelectItem>
+                <SelectItem value="hd">HD</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Style</Label>
+            <Select
+              value={(data.style as string) ?? "vivid"}
+              onValueChange={(val) => update("style", val)}
+            >
+              <SelectTrigger className="w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="vivid">Vivid</SelectItem>
+                <SelectItem value="natural">Natural</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "generated_image"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="generated_image"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Speech / Audio ────────────────────────────────────────────────────────
+
+function SpeechAudioProperties({ data, update, variables = [] }: SubPanelProps) {
+  const mode = (data.mode as string) ?? "tts";
+  const isTTS = mode === "tts";
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Mode</Label>
+        <Select value={mode} onValueChange={(val) => update("mode", val)}>
+          <SelectTrigger className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="tts">Text to Speech</SelectItem>
+            <SelectItem value="stt">Speech to Text</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isTTS ? (
+        <>
+          <div className="space-y-2">
+            <Label>Text</Label>
+            <VariableTextarea
+              value={(data.text as string) ?? ""}
+              onChange={(val) => update("text", val)}
+              variables={variables}
+              rows={3}
+              placeholder="Text to convert to speech"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Provider</Label>
+            <Select
+              value={(data.ttsProvider as string) ?? "openai"}
+              onValueChange={(val) => update("ttsProvider", val)}
+            >
+              <SelectTrigger className="w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="openai">OpenAI TTS</SelectItem>
+                <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                <SelectItem value="deepgram">Deepgram</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Voice</Label>
+            <Input
+              value={(data.voice as string) ?? "alloy"}
+              onChange={(e) => update("voice", e.target.value)}
+              placeholder="alloy, echo, fable, onyx, nova, shimmer"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Output Format</Label>
+            <Select
+              value={(data.outputFormat as string) ?? "mp3"}
+              onValueChange={(val) => update("outputFormat", val)}
+            >
+              <SelectTrigger className="w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mp3">MP3</SelectItem>
+                <SelectItem value="wav">WAV</SelectItem>
+                <SelectItem value="opus">Opus</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="space-y-2">
+            <Label>Audio Variable</Label>
+            <VariableInput
+              value={(data.audioVariable as string) ?? ""}
+              onChange={(val) => update("audioVariable", val)}
+              variables={variables}
+              placeholder="Variable with audio base64"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>STT Provider</Label>
+            <Select
+              value={(data.sttProvider as string) ?? "whisper"}
+              onValueChange={(val) => update("sttProvider", val)}
+            >
+              <SelectTrigger className="w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="whisper">Whisper (OpenAI)</SelectItem>
+                <SelectItem value="deepgram">Deepgram Nova-2</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "audio_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="audio_result"
         />
       </div>
     </>
