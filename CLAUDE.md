@@ -5,8 +5,8 @@
 Visual AI agent builder with multi-agent orchestration and continuous learning. Build AI agents
 via a flow editor (XyFlow), manage knowledge bases with RAG (chunking + embeddings + hybrid
 search), enable agent-to-agent communication (A2A protocol), and chat with agents. Features
-include: agent marketplace/discovery with faceted search, 216 agent templates across 19
-categories (including 25 ECC Developer Agents), agent-as-tool orchestration (AI dynamically
+include: agent marketplace/discovery with faceted search, 221 agent templates across 19
+categories (including 29 ECC Developer Agents), agent-as-tool orchestration (AI dynamically
 calls sibling agents), web browsing capabilities (fetch + browser actions via MCP), an
 embeddable chat widget, a CLI Generator that automatically produces a full MCP server bridge
 from any CLI application (6-phase AI pipeline: analyze → design → implement → test → document →
@@ -43,7 +43,9 @@ knowledge evolution. OAuth login (GitHub + Google). Simplified extraction from t
 - **Markdown:** react-markdown
 - **Toasts:** Sonner
 - **Unit tests:** Vitest + @vitest/coverage-v8
-- **E2E tests:** Playwright (9 spec files — auth, dashboard, flow editor, KB, chat, import/export, API, webhooks, eval-generation)
+- **E2E tests:** Playwright (10 spec files — auth, dashboard, flow editor, KB, chat, import/export, agents-api, health-api, webhooks, eval-generation)
+- **Image generation:** `@fal-ai/client` — Fal.ai image generation provider (SDXL, Flux models)
+- **Browser automation:** `@playwright/mcp` — MCP server for Playwright browser control (browser_action node)
 - **Redis:** ioredis v5 — cross-replica shared state (rate limiting, cache, session, MCP pool coordination). Dynamic import, graceful fallback to in-memory when unavailable
 - **Utilities:** class-variance-authority (cva), clsx, tailwind-merge
 
@@ -53,7 +55,7 @@ knowledge evolution. OAuth login (GitHub + Google). Simplified extraction from t
 
 ```
 prisma/
-  schema.prisma         ← DB schema (26 models, pgvector, versioning, A2A, CLIGeneration, Evals)
+  schema.prisma         ← DB schema (36 models, pgvector, versioning, A2A, CLIGeneration, Evals, Schedules, Traces, ECC)
   migrations/           ← auto-generated — never edit manually
 
 railway.toml            ← Railway deploy config (Nixpacks, healthcheck, 2 replicas)
@@ -63,11 +65,23 @@ nixpacks.toml           ← Nixpacks install phase override (--no-frozen-lockfil
 public/
   embed.js              ← Embeddable widget script (bubble + iframe)
   test-embed.html       ← Test page for embed widget
+  pyodide-worker.js     ← Browser WebWorker for Pyodide Python execution (used by python_code nodes in browser context)
+
+services/
+  ecc-skills-mcp/       ← Separate Railway service — Python FastMCP exposing ECC skills via MCP (port 8000)
+    main.py, requirements.txt, railway.toml, Dockerfile
+  notebooklm-mcp/       ← NotebookLM MCP bridge (TypeScript) — exposes NotebookLM as MCP server
 
 e2e/
-  tests/                ← Playwright E2E specs (auth, dashboard, flow, KB, chat, API, webhooks, eval-generation)
+  tests/                ← Playwright E2E specs (10 spec files)
+    auth.spec.ts, dashboard.spec.ts, flow-editor.spec.ts, knowledge-base.spec.ts
+    chat-streaming.spec.ts, agent-import-export.spec.ts, webhooks.spec.ts, eval-generation.spec.ts
+    api/agents-api.spec.ts, api/health-api.spec.ts
+  pages/                ← Page Object Models (chat, dashboard, flow-builder, knowledge, login, webhooks)
   mocks/                ← Shared route mocks (handlers.ts — mockWebhooksAPI, mockWebhookReplay, mockAIProviders, …)
   fixtures/             ← Playwright fixtures (base.ts — webhooksPage, authenticated page)
+  global.setup.ts       ← Global Playwright setup (auth session bootstrap)
+  scripts/generate-ci-session.ts ← Generate pre-authenticated session for CI
 
 src/
   instrumentation.ts    ← Startup env validation (critical vars check)
@@ -80,7 +94,7 @@ src/
     login/page.tsx                    ← Login page (GitHub + Google OAuth)
     analytics/page.tsx                ← Analytics dashboard (charts, response times, KB stats)
     discover/page.tsx                 ← Agent Discovery Marketplace (faceted search, categories, tags)
-    templates/page.tsx                ← Agent Templates Gallery (216 templates, 19 categories)
+    templates/page.tsx                ← Agent Templates Gallery (221 templates, 19 categories)
     templates/templates-client.tsx    ← Templates client component (search + filter)
     builder/[agentId]/page.tsx        ← Flow editor page
     builder/[agentId]/error.tsx       ← Error boundary (Flow Editor Error)
@@ -92,6 +106,10 @@ src/
     knowledge/[agentId]/error.tsx     ← Error boundary (Knowledge Base Error)
     cli-generator/page.tsx            ← CLI Generator — 6-phase pipeline UI (stuck detection, resume, progress)
     evals/[agentId]/page.tsx          ← Agent Evals — suite sidebar, test case editor, results view, trend chart
+    evals/standards/page.tsx          ← Eval Standards catalog (pre-built assertion templates by category)
+    webhooks/[agentId]/page.tsx       ← Webhook management (two-panel: list + detail with Executions/Config/Test tabs)
+    skills/page.tsx                   ← ECC Skills Browser (search, faceted filter by language/category/agent)
+    devsecops/page.tsx                ← DevSecOps Pipeline Setup guide (interactive checklist + architecture diagram)
     api/
       auth/[...nextauth]/route.ts              ← NextAuth API route (GET, POST)
       health/route.ts                          ← Health check endpoint (DB connectivity + uptime)
@@ -157,6 +175,10 @@ src/
       agent-call-monitor.tsx  ← Agent-to-agent call monitoring UI
     templates/
       template-gallery.tsx    ← Agent template gallery (search + category filter)
+    dashboard/
+      agent-wizard.tsx        ← Multi-step agent creation wizard (name → template → config → deploy)
+    webhooks/
+      json-path-tester.tsx    ← Interactive JSONPath expression tester (live preview against sample payload)
     cli-generator/            ← CLI Generator UI components (pipeline progress, file preview, stuck alert)
     evals/
       eval-suite-editor.tsx   ← Suite editor: test case list, assertion builder (12 types, 3 layers)
@@ -173,7 +195,10 @@ src/
     theme-provider.tsx    ← Dark mode theme provider
 
   data/
-    agent-templates.json  ← 216 agent templates across 19 categories
+    agent-templates.json      ← 221 agent templates across 19 categories
+    ecc-agent-templates.json  ← 29 ECC Developer Agent templates (separate from the 221)
+    starter-flows.ts          ← Pre-populated FlowContent for selected templates (3-5 nodes, loaded on agent creation)
+    devsecops-kb/             ← Static KB content for DevSecOps agents (OWASP, code quality, testing patterns)
 
   lib/
     ai.ts             ← AI model routing (DeepSeek/OpenAI/Anthropic/Gemini/Groq/Mistral/Kimi)
@@ -209,6 +234,9 @@ src/
       pool.ts           ← Connection pool (in-memory, 5min TTL, auto-cleanup, dead connection detection)
     schemas/
       agent-export.ts  ← Zod schema + AgentExportData type for agent export/import
+      kb-config.ts     ← Zod schemas for KB RAG config (ChunkingStrategySchema, kbConfigUpdateSchema)
+    types/
+      flow-trace.ts    ← Local type bridge for FlowTrace Prisma model (NodeDebugState, EdgeDebugState)
     utils/
       url-validation.ts ← validateExternalUrlWithDNS() — SSRF protection, private IP blocklist
     image/
@@ -243,6 +271,28 @@ src/
       rbac.ts           ← Role-based access control (AgentSkillPermission enforcement)
       prompt-guard.ts   ← Prompt injection + jailbreak defense
       audit.ts          ← Security audit log integration
+    webhooks/
+      verify.ts    ← HMAC-SHA256 signature verification (timingSafeEqual, multi-signature rotation)
+      execute.ts   ← Inbound webhook execution (body mapping, event filtering, JSONPath resolution)
+      sync.ts      ← Auto-sync webhook_trigger nodes → WebhookConfig DB records on deploy
+      presets.ts   ← Provider presets (GitHub, Stripe, Slack, Generic)
+      json-path.ts ← JSONPath + dot-notation + bracket-notation resolver for body/header mapping
+    scheduler/
+      cron-validator.ts   ← Validate/parse cron expressions (5-field, IANA timezone)
+      execution-engine.ts ← Run scheduled flows via runtime engine
+      failure-notify.ts   ← Multi-channel notifications on schedule failure
+      sync.ts             ← Sync schedule_trigger nodes → FlowSchedule DB records on deploy
+      schemas.ts          ← Zod schemas for schedule CRUD
+    observability/
+      index.ts    ← OpenTelemetry SDK init + exporters (OTLP push)
+      tracer.ts   ← Distributed tracing (createSpan, gen_ai.* semantic conventions)
+      metrics.ts  ← Metrics collection (counters, histograms)
+      types.ts    ← OpenTelemetry type helpers
+    google-workspace/
+      token.ts  ← GoogleOAuthToken CRUD (store/refresh access tokens)
+      tools.ts  ← MCP tools for Google Workspace (Sheets, Docs, Drive, Calendar, Gmail)
+    auth-adapter.ts  ← Custom NextAuth PrismaAdapter extension
+    crypto.ts        ← Cryptographic utilities (AES-256-GCM encryption, HMAC, random bytes)
     runtime/
       engine.ts            ← Synchronous execution loop (MAX_ITERATIONS=50, MAX_HISTORY=100)
       engine-streaming.ts  ← Streaming execution loop (NDJSON ReadableStream output)
@@ -250,6 +300,11 @@ src/
       context.ts           ← Load/save conversation context from DB
       template.ts          ← {{variable}} interpolation
       types.ts             ← RuntimeContext, ExecutionResult, NodeHandler, StreamChunk, StreamWriter
+      debug-controller.ts  ← Debug session state machine (breakpoints, step, resume, inspect)
+      python-executor.ts   ← Python code execution via Pyodide worker (sandboxed WASM)
+      python-types.ts      ← Types for Python execution (PythonResult, PyodideWorkerMsg)
+      workers/
+        pyodide-node-worker.js ← Node.js Worker thread running Pyodide WASM for python_code nodes
       handlers/
         index.ts           ← Handler registry (53 handlers + 2 streaming variants)
         ai-response-handler.ts          ← Non-streaming AI (generateText + MCP + agent tools)
@@ -357,8 +412,13 @@ User
         ├── AgentCallLog[] (1:N, cascade delete — agent-to-agent call tracing)
         ├── HumanApprovalRequest[] (1:N — human-in-the-loop workflow)
         ├── AnalyticsEvent[] (1:N, cascade delete — response times, KB_SEARCH events)
+        ├── FlowSchedule[] (1:N, cascade delete — scheduled execution configs)
+        ├── FlowTrace[] (1:N, cascade delete — debug execution snapshots)
         └── Conversation[] (1:N, cascade delete, optional flowVersionId for audit)
               └── Message[] (1:N, cascade delete)
+
+User
+  └── GoogleOAuthToken[] (1:N, cascade delete — Google Workspace OAuth tokens)
 
 VerificationToken — NextAuth email verification (standalone, no relations)
 
@@ -432,9 +492,44 @@ EvalResult — One test case result within a run
   ├── agentOutput @db.Text?, assertions Json (AssertionResult[])
   ├── score Float?, latencyMs?, tokensUsed Json?
   └── Indexes: [runId], [testCaseId]
+
+FlowSchedule — Scheduled flow execution config (per-agent)
+  ├── agentId (required, cascade delete)
+  ├── scheduleType (CRON|INTERVAL|MANUAL)
+  ├── cronExpression String? — standard 5-field cron (e.g. "0 9 * * 1")
+  ├── intervalMinutes Int? — 1–10080 (1 week) when scheduleType=INTERVAL
+  ├── timezone String @default("UTC") — IANA timezone
+  ├── enabled Boolean, label String?
+  ├── nextRunAt DateTime? — computed after each execution
+  ├── executions ScheduledExecution[]
+  └── Indexes: [agentId], [enabled, nextRunAt]
+
+ScheduledExecution — One run of a FlowSchedule
+  ├── flowScheduleId (required, cascade delete)
+  ├── status (ScheduledExecutionStatus)
+  ├── triggeredAt, completedAt?, durationMs?
+  ├── errorMessage? @db.Text
+  └── tokenUsage Json? — { inputTokens, outputTokens, totalTokens }
+
+GoogleOAuthToken — Google Workspace OAuth token per user
+  ├── userId (required, cascade delete)
+  ├── email String — the Google account email
+  ├── accessToken @db.Text, refreshToken? @db.Text
+  ├── expiresAt DateTime?, scopes @db.Text
+  └── @@unique([userId, email])
+
+FlowTrace — Full execution trace snapshot for debugging
+  ├── agentId (required, cascade delete)
+  ├── conversationId?, testInput? @db.Text
+  ├── status TraceStatus @default(RUNNING)
+  ├── totalDurationMs?, nodesExecuted?, nodesFailed?
+  ├── executionPath String[] — ordered list of node IDs visited
+  ├── nodeTraces Json — Map<nodeId, NodeDebugState>
+  ├── edgeTraces Json — Map<edgeKey, EdgeDebugState>
+  └── Indexes: [agentId], [agentId, createdAt]
 ```
 
-**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE|KB_SEARCH), MCPTransport (STREAMABLE_HTTP|SSE), FlowVersionStatus (DRAFT|PUBLISHED|ARCHIVED), A2ATaskStatus (SUBMITTED|WORKING|INPUT_REQUIRED|COMPLETED|FAILED), CLIGenerationStatus (PENDING|ANALYZING|DESIGNING|IMPLEMENTING|TESTING|DOCUMENTING|PUBLISHING|COMPLETED|FAILED), **EvalRunStatus (PENDING|RUNNING|COMPLETED|FAILED|CANCELLED)**, **EvalResultStatus (PENDING|PASSED|FAILED|ERROR|SKIPPED)**
+**Enums:** KBSourceType (FILE|URL|SITEMAP|TEXT), KBSourceStatus (PENDING|PROCESSING|READY|FAILED), ConversationStatus (ACTIVE|COMPLETED|ABANDONED), MessageRole (USER|ASSISTANT|SYSTEM), AnalyticsEventType (CHAT_RESPONSE|KB_SEARCH), MCPTransport (STREAMABLE_HTTP|SSE), FlowVersionStatus (DRAFT|PUBLISHED|ARCHIVED), A2ATaskStatus (SUBMITTED|WORKING|INPUT_REQUIRED|COMPLETED|FAILED), CLIGenerationStatus (PENDING|ANALYZING|DESIGNING|IMPLEMENTING|TESTING|DOCUMENTING|PUBLISHING|COMPLETED|FAILED), **EvalRunStatus (PENDING|RUNNING|COMPLETED|FAILED|CANCELLED)**, **EvalResultStatus (PENDING|PASSED|FAILED|ERROR|SKIPPED)**, **ScheduleType (CRON|INTERVAL|MANUAL)**, **ScheduledExecutionStatus (PENDING|RUNNING|SUCCESS|FAILED|SKIPPED)**, **ExecutionStatus (PENDING|RUNNING|SUCCESS|FAILED|TIMEOUT)**, **AccessLevel (READ|EXECUTE|ADMIN)**, **TraceStatus (RUNNING|COMPLETED|FAILED|TIMEOUT)**, **WebhookExecutionStatus (PENDING|SUCCESS|FAILED|SKIPPED)**
 
 **Key details:**
 - Agent model has: `category String?`, `tags String[]`, `isPublic Boolean` — marketplace fields
@@ -508,6 +603,44 @@ EvalResult — One test case result within a run
 | `/api/agents/[agentId]/evals/[suiteId]/export` | GET | Download all completed runs as bulk CSV (`?limit=` 1–100, default 50) |
 | `/api/agents/[agentId]/evals/[suiteId]/compare` | POST | Run head-to-head A/B comparison between two flow versions or two models; returns `CompareResult` with `ComparisonDelta` |
 | `/api/evals/scheduled` | POST | CRON_SECRET-protected trigger for Railway Cron — finds due suites and fires `triggerScheduledEvals()` |
+| `/api/evals/backfill` | POST | Backfill historical eval run scores (admin utility) |
+| `/api/evals/standards` | GET, POST | List/create eval standards catalog (pre-built assertion templates by category) |
+| `/api/evals/standards/[category]` | GET | Get standards by category |
+| `/api/agents/[agentId]/evals/generate` | POST | Auto-generate test cases from agent system prompt + sample conversations (LLM) |
+| `/api/agents/[agentId]/schedules` | GET, POST | List/create flow schedules (CRON/INTERVAL/MANUAL) |
+| `/api/agents/[agentId]/schedules/[scheduleId]` | GET, PATCH, DELETE | Get/update/delete a single schedule |
+| `/api/agents/[agentId]/schedules/[scheduleId]/executions` | GET | Execution history for a schedule (paginated) |
+| `/api/agents/[agentId]/schedules/stats` | GET | Schedule statistics (total runs, success rate, avg duration) |
+| `/api/schedules/preview` | GET | Preview next N cron/interval run times given an expression + timezone |
+| `/api/agents/[agentId]/traces` | GET | List flow execution traces for debugging |
+| `/api/agents/[agentId]/traces/[traceId]` | GET | Get full trace detail (nodeTraces, edgeTraces, executionPath) |
+| `/api/agents/[agentId]/debug/[sessionId]/control` | POST | Control debug session (step, resume, set breakpoint, pause) |
+| `/api/agents/[agentId]/debug/[sessionId]/variables` | GET, POST | Inspect/set variable values during a debug session |
+| `/api/agents/[agentId]/conversations` | GET, POST | List/create conversations for an agent |
+| `/api/agents/[agentId]/conversations/[conversationId]` | GET | Get single conversation with messages |
+| `/api/agents/[agentId]/card.json` | GET | Serve agent A2A card as JSON-LD (public endpoint) |
+| `/api/agents/[agentId]/knowledge/sources/[sourceId]/retry` | POST | Retry failed KB source ingestion |
+| `/api/agents/[agentId]/webhooks` | GET, POST | List/create webhook configs for agent |
+| `/api/agents/[agentId]/webhooks/[webhookId]` | GET, PATCH, DELETE | Get/update/delete webhook config |
+| `/api/agents/[agentId]/webhooks/[webhookId]/rotate` | POST | Rotate webhook secret (generates new HMAC key) |
+| `/api/agents/[agentId]/webhooks/[webhookId]/executions` | GET | List webhook execution history (paginated, status filter) |
+| `/api/agents/[agentId]/webhooks/[webhookId]/executions/[executionId]/replay` | POST | Replay a webhook execution with original payload |
+| `/api/agents/[agentId]/webhooks/[webhookId]/executions/export` | GET | Export execution history as CSV |
+| `/api/agents/[agentId]/trigger/[webhookId]` | POST | **Public** inbound webhook trigger (HMAC-verified, no session auth) |
+| `/api/agent-calls/circuits` | GET | Circuit breaker state for all agent-to-agent connections |
+| `/api/skills` | GET, POST | List/create ECC skills |
+| `/api/skills/evolve` | POST | Evolve high-confidence instincts into reusable skills (CRON_SECRET protected) |
+| `/api/integrations/obsidian` | GET, POST | Obsidian vault integration (read/write vault notes via Git) |
+| `/api/mcp/proxy/google-workspace/[tokenId]` | ALL | MCP proxy for Google Workspace tools (routes to google-workspace lib) |
+| `/api/auth/oauth/google-workspace` | GET | Initiate Google Workspace OAuth 2.1 + PKCE flow |
+| `/api/auth/oauth/google-workspace/callback` | GET | Handle Google Workspace OAuth callback + store tokens |
+| `/api/auth/oauth/notion` | GET | Initiate Notion OAuth flow |
+| `/api/auth/oauth/notion/callback` | GET | Handle Notion OAuth callback |
+| `/api/cron/trigger-scheduled-flows` | POST | Railway Cron — find due FlowSchedules and trigger executions (CRON_SECRET) |
+| `/api/cron/evolve` | POST | Railway Cron — daily instinct → skill evolution at 3AM (CRON_SECRET) |
+| `/api/cron/cleanup` | POST | Railway Cron — dead chunk cleanup, stale session purge (CRON_SECRET) |
+| `/api/cron/migrate-oauth-tokens` | POST | One-time migration for OAuth token schema changes (CRON_SECRET) |
+| `/api/cron/migrate-webhook-secrets` | POST | One-time migration for webhook secret format (CRON_SECRET) |
 | `/api/auth/*` | GET, POST | NextAuth authentication endpoints |
 | `/api/health` | GET | Health check (DB connectivity + uptime + version) |
 | `/api/analytics` | GET | Analytics dashboard data (response times, KB stats, conversations) |
@@ -691,7 +824,7 @@ Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and mainte
 - Searchable agent selector in flow builder property panel (replaces basic HTML select)
 
 ### Agent Templates
-- 216 templates in `src/data/agent-templates.json` across 19 categories (all at minimum 🟢 Dobro coverage)
+- 221 templates in `src/data/agent-templates.json` across 19 categories (all at minimum 🟢 Dobro coverage)
 - `/templates` page with server component + client-side search and category filter tabs
 - Dashboard "New Agent" dialog includes "Browse Templates" tab — selecting pre-fills name, description, systemPrompt
 - Template gallery component: `src/components/templates/template-gallery.tsx`
@@ -840,6 +973,64 @@ Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and mainte
 - **Execution Replay UI** (`ExecutionRow` in `src/app/webhooks/[agentId]/page.tsx`): each execution row is collapsible; Replay button visible when `rawPayload != null`; `handleReplay` calls `POST .../executions/[id]/replay`, on success calls `setExpanded(true)` (auto-reveals inline success banner) then `onReplayed()` which triggers a **silent** re-fetch (`fetchExecutions(true, true)`) — `silent=true` skips `setLoadingExecs(true)` to prevent the loading spinner from unmounting `ExecutionRow` and losing its local state (expanded + replay status). Inline success banner shows new execution ID; inline error banner shown on failure.
 - **API routes**: `GET/POST /api/agents/[agentId]/webhooks`, `GET/PATCH/DELETE /api/agents/[agentId]/webhooks/[webhookId]`, `POST /api/agents/[agentId]/webhooks/[webhookId]/rotate`, `GET /api/agents/[agentId]/webhooks/[webhookId]/executions`, `POST /api/agents/[agentId]/webhooks/[webhookId]/executions/[executionId]/replay`
 
+### Scheduled Flow Execution
+- **FlowSchedule model**: per-agent, supports CRON (5-field expression), INTERVAL (every N minutes), or MANUAL
+- **IANA timezone support**: cron evaluated in agent's configured timezone (default UTC)
+- **Scheduler lib** (`src/lib/scheduler/`): `cron-validator.ts` validates/previews expressions; `execution-engine.ts` runs the flow via `executeFlow()`; `sync.ts` syncs `schedule_trigger` nodes → FlowSchedule DB records on every deploy
+- **Execution history**: `ScheduledExecution` model stores per-run status, durationMs, tokenUsage, errorMessage
+- **Failure notifications**: `failure-notify.ts` — sends multi-channel alerts (in-app + webhook) on consecutive failures
+- **Railway Cron**: `POST /api/cron/trigger-scheduled-flows` protected by `CRON_SECRET` Bearer — runs every 5 min, finds due schedules via `nextRunAt`, fires sequentially
+- **API**: `GET/POST /api/agents/[agentId]/schedules`, `GET/PATCH/DELETE /api/agents/[agentId]/schedules/[scheduleId]`, `GET /api/schedules/preview` (preview next N run times)
+- **Stats**: `GET /api/agents/[agentId]/schedules/stats` returns total runs, success rate, avg duration
+
+### Flow Execution Debugger
+- **`debug-controller.ts`** in `src/lib/runtime/` — manages debug session state machine (breakpoints, step-through, variable inspection)
+- **`FlowTrace` model**: stores full execution snapshot — ordered `executionPath` (node IDs), `nodeTraces` JSON (per-node input/output/timing), `edgeTraces` JSON (which edges were traversed)
+- **API**: `GET /api/agents/[agentId]/traces` (list), `GET /api/agents/[agentId]/traces/[traceId]` (full detail)
+- **Debug session API**: `POST /api/agents/[agentId]/debug/[sessionId]/control` (step/resume/pause/breakpoint), `GET/POST /api/agents/[agentId]/debug/[sessionId]/variables` (inspect/set live variables)
+- Traces auto-created during sandbox test (`/flow/versions/[versionId]/test`) and optionally in production runs
+
+### Google Workspace OAuth Integration
+- **OAuth 2.1 + PKCE flow**: `/api/auth/oauth/google-workspace` → callback → stores `GoogleOAuthToken` per user+email
+- **`GoogleOAuthToken` model**: stores `accessToken`, `refreshToken`, `expiresAt`, `scopes` per user+email; @@unique([userId, email])
+- **`src/lib/google-workspace/token.ts`**: `getToken()`, `refreshToken()`, `storeToken()` — handles auto-refresh before expiry
+- **`src/lib/google-workspace/tools.ts`**: MCP tool definitions for Google Workspace APIs (Sheets read/write, Docs, Drive, Calendar, Gmail)
+- **MCP proxy**: `GET /api/mcp/proxy/google-workspace/[tokenId]` — routes tool calls through token-aware proxy
+
+### Notion OAuth Integration
+- **OAuth flow**: `/api/auth/oauth/notion` → callback — stores Notion access token
+- Enables Notion pages/databases as knowledge base sources or agent output targets
+
+### Eval Test Case Generator
+- **`src/lib/evals/generator.ts`**: `generateTestCases(agentId, options)` — LLM reads agent system prompt + sample conversations → generates realistic test case inputs and expected outputs
+- **`generator-prompts.ts`**: structured system/user prompts optimized for test case diversity
+- **`generator-schemas.ts`**: Zod schemas for `GeneratedTestCase`, `GenerateOptions`
+- **API**: `POST /api/agents/[agentId]/evals/generate` — returns up to N test cases per call; user reviews + bulk-inserts into suite
+
+### Eval Standards Catalog
+- **`src/lib/evals/standards.ts`**: pre-built assertion template library organized by category (accuracy, safety, format, performance, etc.)
+- **API**: `GET /api/evals/standards` (all standards), `GET /api/evals/standards/[category]` (by category)
+- **UI**: `/evals/standards` page — browse and clone standard assertion templates into any suite
+
+### Knowledge Module — Additional Utilities
+- **`agentic-retrieval.ts`**: dynamic context expansion — fetches broader document context around high-scoring chunks
+- **`contextual-enrichment.ts`**: enriches chunks with surrounding context before embedding (improves recall)
+- **`grounding-check.ts`**: post-generation hallucination detection — checks AI output claims against retrieved chunks
+- **`query-reformulation.ts`**: alternative query phrasing strategies (expansion, decomposition, clarification)
+- **`query-router.ts`**: auto-routes query to semantic/keyword/hybrid based on query characteristics
+- **`rag-inject.ts`**: formats retrieved context for injection into `ai_response` node system prompt
+
+### Evals Module — Additional Utilities
+- **`compare-utils.ts`**: helper functions for A/B comparison result diffing and delta calculation
+- **`rag-assertions.ts`**: RAG-specific assertion types (grounding, faithfulness, citation accuracy)
+- **`trajectory-scorer.ts`**: scores multi-step agent reasoning trajectories (coherence, efficiency, goal attainment)
+
+### Observability (OpenTelemetry)
+- **`src/lib/observability/index.ts`**: SDK init, OTLP push exporter (not Prometheus pull — Railway doesn't support scrape)
+- **`tracer.ts`**: `createSpan(name, attributes)` — wraps AI calls and KB searches with gen_ai.* semantic conventions
+- **`metrics.ts`**: counters/histograms for request rates, token usage, KB search latency
+- Configured via env vars: `OTEL_EXPORTER_OTLP_ENDPOINT` (Grafana Cloud), `OTEL_SERVICE_NAME=agent-studio`
+
 ### Redis — Cross-Replica Shared State
 - `src/lib/redis.ts` — singleton client using `ioredis` via dynamic `await import("ioredis")`
 - Graceful fallback: if `REDIS_URL` not set or connection fails, returns `null` — all callers fall back to in-memory
@@ -875,6 +1066,13 @@ cp .env.example .env.local
 #   AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET  — Google OAuth client
 # Optional (add keys to enable additional features):
 #   REDIS_URL                      — Redis connection URL (enables cross-replica rate limiting, caching, session sharing)
+#   CRON_SECRET                    — Bearer token for Railway Cron endpoints (/api/cron/*, /api/evals/scheduled, /api/skills/evolve)
+#   GOOGLE_WORKSPACE_CLIENT_ID / GOOGLE_WORKSPACE_CLIENT_SECRET  — Google Workspace OAuth 2.1
+#   NOTION_CLIENT_ID / NOTION_CLIENT_SECRET                      — Notion OAuth
+#   OTEL_EXPORTER_OTLP_ENDPOINT    — OTLP gateway (e.g. Grafana Cloud) for traces + metrics
+#   OTEL_SERVICE_NAME              — Service name tag (default: "agent-studio")
+#   ECC_ENABLED                    — Set to "true" to enable ECC integration (default: false)
+#   ECC_MCP_URL                    — Internal URL of ECC Skills MCP service (Railway private networking)
 # Optional (add keys to enable additional models):
 #   ANTHROPIC_API_KEY              — console.anthropic.com — Claude Haiku/Sonnet/Opus
 #   GOOGLE_GENERATIVE_AI_API_KEY   — aistudio.google.com — Gemini 2.5 Flash/Pro (free tier)
@@ -956,7 +1154,7 @@ All 4 checks must show PASS before pushing. Workflow: **code → precheck → co
 
 ### Testing
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
-- E2E tests: Playwright, `e2e/tests/` folder, `.spec.ts` extension (9 spec files)
+- E2E tests: Playwright, `e2e/tests/` folder, `.spec.ts` extension (10 spec files); `e2e/pages/` Page Object Models for reusable selectors/actions
 - Run: `pnpm test` (unit), `pnpm test:e2e` (E2E)
 - 2154 unit tests across 170 test files
 - E2E coverage: auth flows, dashboard CRUD, flow editor, chat streaming, knowledge base, agent import/export, API routes, health check, webhooks UI (create/list/detail/config/test/executions/replay/status-filter/export), eval generation pipeline
@@ -988,7 +1186,7 @@ NOT as a separate project or fork. Agent-studio already has 80%+ of the needed i
 
 | ECC Component          | Studio Equivalent                    | Integration Action                    |
 |------------------------|--------------------------------------|---------------------------------------|
-| 25 Agent definitions   | Agent Templates (216 existing)       | Import as new "Developer Agents" category |
+| 25 Agent definitions   | Agent Templates (221 existing)       | Import as new "Developer Agents" category |
 | 108+ SKILL.md files    | Knowledge Base (RAG pipeline)        | Ingest into shared KB + new Skill model |
 | 57 slash commands      | CLI Generator / Flow Templates       | Map to flow triggers + API routes     |
 | Hook system (15+ types)| Webhook system (existing)            | Extend webhook events + new hook middleware |
@@ -996,14 +1194,14 @@ NOT as a separate project or fork. Agent-studio already has 80%+ of the needed i
 | Instinct system        | NEW — continuous learning            | New Instinct model + Learn node + /evolve API |
 | .clauderc config       | Agent settings JSON                  | Map to agent metadata fields          |
 
-### 9.3 ECC Agent Roster (25 agents)
+### 9.3 ECC Agent Roster (29 agents)
 
 Model routing per ECC spec:
 - **Opus** (complex reasoning): planner, architect, chief-of-staff, meta-orchestrator
 - **Sonnet** (balanced): code-reviewer, tdd-guide, security-reviewer, debugger, refactor-planner, api-designer, performance-optimizer
 - **Haiku** (fast): doc-updater, refactor-cleaner, test-writer, commit-message-writer, changelog-generator
 
-All 25 agents get imported as Studio templates in `src/data/ecc-agent-templates.json` with:
+All 29 agents get imported as Studio templates in `src/data/ecc-agent-templates.json` with:
 - YAML frontmatter → JSON config (name, description, model, tools, skills)
 - Agent Card endpoint: `GET /api/agents/[agentId]/card.json` (Google A2A v0.3 spec)
 - Linked to shared ECC Skills KB automatically
@@ -1039,15 +1237,16 @@ for RAG retrieval. The ECC Skills MCP server exposes them via MCP protocol.
 ```
 src/lib/ecc/                          # ← ECC module root
   ├── index.ts                        # Barrel exports, feature flag check
+  ├── feature-flag.ts                 # isECCEnabled() + isECCEnabledForAgent() — ECC_ENABLED env killswitch
   ├── skill-parser.ts                 # Parse SKILL.md YAML frontmatter
-  ├── agent-importer.ts               # Convert ECC agent .md → Studio template
+  ├── skill-ingest.ts                 # Ingest ECC skills into Skill model + KB vectorization
   ├── meta-orchestrator.ts            # Autonomous agent routing
   ├── instinct-engine.ts              # Pattern extraction + confidence scoring
   ├── obsidian-adapter.ts             # Stub for future Obsidian integration
   └── types.ts                        # ECC-specific TypeScript interfaces
 
 src/data/
-  └── ecc-agent-templates.json        # 25 ECC agent templates (separate from existing 216)
+  └── ecc-agent-templates.json        # 29 ECC agent templates (separate from existing 221)
 
 src/app/skills/
   └── page.tsx                        # Skill Browser UI (search, filter, cards)
@@ -1197,9 +1396,9 @@ eccEnabled         Boolean  @default(false)
 
 Applied via: `pnpm db:push`
 
-### Phase 1: Import 25 ECC Agents as Templates (COMPLETED)
+### Phase 1: Import 29 ECC Agents as Templates (COMPLETED)
 - New category "Developer Agents" in `src/lib/constants/agent-categories.ts`
-- `src/data/ecc-agent-templates.json` — 25 templates, separate from existing 216
+- `src/data/ecc-agent-templates.json` — 29 templates, separate from existing 221
 - Import script: `scripts/import-ecc-agents.mjs` — parses YAML frontmatter from ECC .md files
 - Agent Card endpoint: `GET /api/agents/[agentId]/card.json` (A2A v0.3 JSON-LD)
 - Tests: schema validation for all 25, snapshot tests
