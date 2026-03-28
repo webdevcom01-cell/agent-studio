@@ -43,7 +43,7 @@ knowledge evolution. OAuth login (GitHub + Google). Simplified extraction from t
 - **Markdown:** react-markdown
 - **Toasts:** Sonner
 - **Unit tests:** Vitest + @vitest/coverage-v8
-- **E2E tests:** Playwright (7 spec files — auth, dashboard, flow editor, KB, chat, import/export, API)
+- **E2E tests:** Playwright (9 spec files — auth, dashboard, flow editor, KB, chat, import/export, API, webhooks, eval-generation)
 - **Redis:** ioredis v5 — cross-replica shared state (rate limiting, cache, session, MCP pool coordination). Dynamic import, graceful fallback to in-memory when unavailable
 - **Utilities:** class-variance-authority (cva), clsx, tailwind-merge
 
@@ -65,7 +65,9 @@ public/
   test-embed.html       ← Test page for embed widget
 
 e2e/
-  tests/                ← Playwright E2E specs (auth, dashboard, flow, KB, chat, API)
+  tests/                ← Playwright E2E specs (auth, dashboard, flow, KB, chat, API, webhooks, eval-generation)
+  mocks/                ← Shared route mocks (handlers.ts — mockWebhooksAPI, mockWebhookReplay, mockAIProviders, …)
+  fixtures/             ← Playwright fixtures (base.ts — webhooksPage, authenticated page)
 
 src/
   instrumentation.ts    ← Startup env validation (critical vars check)
@@ -778,7 +780,8 @@ Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and mainte
 - **Event filtering**: `eventFilters String[]` on `WebhookConfig` — empty = accept all; non-empty = only trigger if resolved event type matches one value. Resolved event type: header-first (`x-github-event`, `x-slack-event`, `x-event-type`, `x-webhook-event`, etc.) falling back to body (`$.event.type` for Slack, `$.type` for Stripe/generic). Filtered events return `{ success: true, status: 200, skipped: true }` and do NOT create a `WebhookExecution` record.
 - **Provider presets**: `src/lib/webhooks/presets.ts` — GitHub, Stripe, Slack, Generic presets with pre-configured body/header mappings, event filters, and `commonEvents` suggestion lists for the filter editor
 - **Webhooks management UI**: `/webhooks/[agentId]` — two-panel (list + detail), three tabs per webhook (Executions / Configuration / Test). Configuration tab: preset picker grid, event filter tag editor with autocomplete, body/header mapping editors with row-level CRUD. Create dialog includes inline preset picker.
-- **API routes**: `GET/POST /api/agents/[agentId]/webhooks`, `GET/PATCH/DELETE /api/agents/[agentId]/webhooks/[webhookId]`, `POST /api/agents/[agentId]/webhooks/[webhookId]/rotate`
+- **Execution Replay UI** (`ExecutionRow` in `src/app/webhooks/[agentId]/page.tsx`): each execution row is collapsible; Replay button visible when `rawPayload != null`; `handleReplay` calls `POST .../executions/[id]/replay`, on success calls `setExpanded(true)` (auto-reveals inline success banner) then `onReplayed()` which triggers a **silent** re-fetch (`fetchExecutions(true, true)`) — `silent=true` skips `setLoadingExecs(true)` to prevent the loading spinner from unmounting `ExecutionRow` and losing its local state (expanded + replay status). Inline success banner shows new execution ID; inline error banner shown on failure.
+- **API routes**: `GET/POST /api/agents/[agentId]/webhooks`, `GET/PATCH/DELETE /api/agents/[agentId]/webhooks/[webhookId]`, `POST /api/agents/[agentId]/webhooks/[webhookId]/rotate`, `GET /api/agents/[agentId]/webhooks/[webhookId]/executions`, `POST /api/agents/[agentId]/webhooks/[webhookId]/executions/[executionId]/replay`
 
 ### Redis — Cross-Replica Shared State
 - `src/lib/redis.ts` — singleton client using `ioredis` via dynamic `await import("ioredis")`
@@ -896,11 +899,11 @@ All 4 checks must show PASS before pushing. Workflow: **code → precheck → co
 
 ### Testing
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
-- E2E tests: Playwright, `e2e/tests/` folder, `.spec.ts` extension (8 spec files)
+- E2E tests: Playwright, `e2e/tests/` folder, `.spec.ts` extension (9 spec files)
 - Run: `pnpm test` (unit), `pnpm test:e2e` (E2E)
-- 1394 unit tests across 114 test files
-- E2E coverage: auth flows, dashboard CRUD, flow editor, chat streaming, knowledge base, agent import/export, API routes, health check
-- Unit test coverage: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, web fetch handler, webhook handler, set variable handler, wait handler, URL validation, engine integration tests (multi-node flows), CLI generator (prompts, pipeline phases, Zod schemas, MCP registration, stuck detection, resume endpoint), **eval assertions (all 12 types, 3 layers)**, **eval semantic similarity (cosine math + embed mocks)**, **eval LLM-as-Judge (rubric/faithfulness/relevance)**, **eval runner (suite orchestration, progress updates, error handling)**, **eval deploy hook (fire-and-forget, suite filtering, error isolation)**, **eval API routes (CRUD, 409 conflict, 422 limits)**, **inbound webhooks: verify (21 tests), execute (23 tests — incl. event filter + body event type extraction), webhook-trigger handler (11 tests), sync (22 tests)**
+- 2154 unit tests across 170 test files
+- E2E coverage: auth flows, dashboard CRUD, flow editor, chat streaming, knowledge base, agent import/export, API routes, health check, webhooks UI (create/list/detail/config/test/executions/replay/status-filter/export), eval generation pipeline
+- Unit test coverage: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, web fetch handler, webhook handler, set variable handler, wait handler, URL validation, engine integration tests (multi-node flows), CLI generator (prompts, pipeline phases, Zod schemas, MCP registration, stuck detection, resume endpoint), **eval assertions (all 12 types, 3 layers)**, **eval semantic similarity (cosine math + embed mocks)**, **eval LLM-as-Judge (rubric/faithfulness/relevance)**, **eval runner (suite orchestration, progress updates, error handling)**, **eval deploy hook (fire-and-forget, suite filtering, error isolation)**, **eval API routes (CRUD, 409 conflict, 422 limits)**, **inbound webhooks: verify (21 tests), execute (23 tests — incl. event filter + body event type extraction), webhook-trigger handler (11 tests), sync (22 tests)**; **E2E webhooks suite (99 tests — UI navigation, config tab, test tab, detail actions, API CRUD, trigger endpoint, flow builder integration, execution replay, replay chain, status filtering, CSV export)**
 - Test behavior, not implementation details
 
 ### AI Model Config
