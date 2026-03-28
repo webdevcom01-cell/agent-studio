@@ -1,2 +1,5 @@
+[phases.setup]
+nixPkgs = ["python3"]
+
 [phases.install]
-cmds = []
+cmds = ["pnpm install --no-frozen-lockfile"]
