@@ -164,12 +164,12 @@ src/
     builder/
       flow-builder.tsx    ← Main ReactFlow editor (+ MCP panel, version history, deploy status)
       flow-error-boundary.tsx ← Error boundary for flow editor
-      node-picker.tsx     ← Node type selector dropdown (32 node types)
+      node-picker.tsx     ← Node type selector dropdown (53 node types)
       property-panel.tsx  ← Right sidebar for editing node properties (searchable agent selector)
       version-panel.tsx   ← Version history sidebar (SWR, rollback, compare, deploy)
       deploy-dialog.tsx   ← Deploy confirmation dialog with sandbox test
       diff-view.tsx       ← Version diff viewer (added/removed/modified nodes)
-      nodes/              ← 33 node display components (base + 32 node types)
+      nodes/              ← 54 node display components (base + 53 node types)
     theme-provider.tsx    ← Dark mode theme provider
 
   data/
@@ -211,6 +211,38 @@ src/
       agent-export.ts  ← Zod schema + AgentExportData type for agent export/import
     utils/
       url-validation.ts ← validateExternalUrlWithDNS() — SSRF protection, private IP blocklist
+    image/
+      providers.ts      ← Image generation providers (DALL-E, Stable Diffusion)
+      preprocessor.ts   ← Image preprocessing utilities
+    audio/
+      tts-providers.ts  ← Text-to-speech providers
+      stt-providers.ts  ← Speech-to-text providers
+    safety/
+      content-moderator.ts  ← Content moderation pipeline
+      pii-detector.ts       ← PII detection and redaction
+      injection-detector.ts ← Prompt injection defense
+      audit-logger.ts       ← Safety audit event logging
+    sandbox/
+      js-sandbox.ts     ← JavaScript vm2 sandbox for code-interpreter node
+      python-sandbox.ts ← Python subprocess sandbox for python-code node
+    database/
+      query-executor.ts ← Database query execution (SQL/NoSQL adapter)
+      connection-pool.ts ← Database connection pool management
+    cache/
+      index.ts          ← Cache abstraction (in-memory + Redis backends)
+      memory-cache.ts   ← In-memory LRU cache implementation
+    cost/
+      budget-tracker.ts ← Token usage + spend tracking per agent
+      token-pricing.ts  ← Model pricing table (input/output tokens per provider)
+    storage/
+      storage-provider.ts ← Storage abstraction interface
+      s3-provider.ts    ← AWS S3 storage provider
+      gdrive-provider.ts ← Google Drive storage provider
+    security/
+      index.ts          ← Security middleware exports
+      rbac.ts           ← Role-based access control (AgentSkillPermission enforcement)
+      prompt-guard.ts   ← Prompt injection + jailbreak defense
+      audit.ts          ← Security audit log integration
     runtime/
       engine.ts            ← Synchronous execution loop (MAX_ITERATIONS=50, MAX_HISTORY=100)
       engine-streaming.ts  ← Streaming execution loop (NDJSON ReadableStream output)
@@ -219,7 +251,7 @@ src/
       template.ts          ← {{variable}} interpolation
       types.ts             ← RuntimeContext, ExecutionResult, NodeHandler, StreamChunk, StreamWriter
       handlers/
-        index.ts           ← Handler registry (31 handlers)
+        index.ts           ← Handler registry (53 handlers + 2 streaming variants)
         ai-response-handler.ts          ← Non-streaming AI (generateText + MCP + agent tools)
         ai-response-streaming-handler.ts ← Streaming AI (streamText → NDJSON + MCP + agent tools)
         mcp-tool-handler.ts             ← Deterministic MCP tool call node
@@ -238,7 +270,32 @@ src/
         web-fetch-handler.ts            ← HTTP fetch operations with URL validation
         browser-action-handler.ts       ← Browser automation actions (via MCP)
         human-approval-handler.ts       ← Human-in-the-loop approval requests
-        message-handler.ts, condition-handler.ts, button-handler.ts, ...
+        desktop-app-handler.ts          ← Desktop application integration (window management, automation)
+        learn-handler.ts                ← ECC pattern extraction from AgentExecution history
+        python-code-handler.ts          ← Python code execution via sandbox (pysandbox)
+        structured-output-handler.ts    ← Typed JSON output with Zod schema validation
+        cache-handler.ts                ← In-memory + Redis caching with TTL
+        embeddings-handler.ts           ← Generate and store vector embeddings (OpenAI)
+        retry-handler.ts                ← Retry sub-flow with exponential backoff
+        ab-test-handler.ts              ← A/B traffic splitting with weighted routing
+        semantic-router-handler.ts      ← Route messages by semantic similarity to intent labels
+        cost-monitor-handler.ts         ← Token budget tracking and spend alerts
+        aggregate-handler.ts            ← Collect + merge outputs from parallel branches
+        web-search-handler.ts           ← Web search via provider APIs (Google, Bing, Brave)
+        multimodal-input-handler.ts     ← Accept image/audio/file inputs from user
+        image-generation-handler.ts     ← Generate images via provider APIs (DALL-E, Stable Diffusion)
+        speech-audio-handler.ts         ← Text-to-speech and speech-to-text (TTS/STT)
+        database-query-handler.ts       ← Execute SQL/NoSQL queries against connected databases
+        file-operations-handler.ts      ← Read/write files in agent workspace (S3, GDrive, local)
+        mcp-task-runner-handler.ts      ← Long-running MCP task execution with progress tracking
+        guardrails-handler.ts           ← Content moderation, PII detection, prompt injection defense
+        code-interpreter-handler.ts     ← Safe JS code execution via vm2 sandbox
+        trajectory-evaluator-handler.ts ← Evaluate agent reasoning trajectory (step-by-step scoring)
+        message-handler.ts, condition-handler.ts, button-handler.ts, capture-handler.ts,
+        set-variable-handler.ts, end-handler.ts, goto-handler.ts, wait-handler.ts,
+        ai-classify-handler.ts, ai-extract-handler.ts, ai-summarize-handler.ts,
+        api-call-handler.ts, function-handler.ts, kb-search-handler.ts,
+        webhook-handler.ts, webhook-trigger-handler.ts
     knowledge/
       index.ts        ← Main search entry point
       chunker.ts      ← Text chunking (400 tokens, 20% overlap)
@@ -269,7 +326,7 @@ src/
       __tests__/      ← Unit tests: assertions (40), runner (15), semantic (15), llm-judge (20), deploy-hook (10)
 
   types/
-    index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType (33 types)
+    index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType (53 types)
     pdf-parse.d.ts    ← Type declaration for pdf-parse
     mammoth.d.ts      ← Type declaration for mammoth
 
@@ -462,8 +519,8 @@ EvalResult — One test case result within a run
 ## 6. KEY CONVENTIONS & PATTERNS
 
 ### Runtime Engine
-- 32 node handlers registered in `src/lib/runtime/handlers/index.ts`
-- Node types (32): message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, webhook_trigger, email_send, notification, format_transform, switch, web_fetch, browser_action
+- 53 node handlers registered in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants: ai-response-streaming, parallel-streaming)
+- Node types (53): message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, webhook_trigger, email_send, notification, format_transform, switch, web_fetch, browser_action, desktop_app, learn, python_code, structured_output, cache, embeddings, retry, ab_test, semantic_router, cost_monitor, aggregate, web_search, multimodal_input, image_generation, speech_audio, database_query, file_operations, mcp_task_runner, guardrails, code_interpreter, trajectory_evaluator
 - Safety limits: MAX_ITERATIONS=50, MAX_HISTORY=100
 - Handlers return `ExecutionResult` with messages, nextNodeId, waitForInput, updatedVariables
 - Handlers never throw — always return graceful fallback
