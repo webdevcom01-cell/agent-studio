@@ -1,0 +1,67 @@
+name: Feature Request
+description: Suggest a new feature or improvement for Agent Studio
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: A clear description of the problem this feature would solve.
+      placeholder: "I'm always frustrated when [...]"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the solution you would like. Be as specific as possible.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Agent Studio does this relate to?
+      options:
+        - Flow Editor
+        - Chat / Streaming
+        - Knowledge Base / RAG
+        - Agent Discovery / Marketplace
+        - Agent Templates
+        - CLI Generator
+        - Evals / Testing
+        - Webhooks
+        - MCP Integration
+        - A2A Communication
+        - Authentication
+        - Analytics
+        - ECC / Skills
+        - API
+        - New Area
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority for you
+      options:
+        - Nice to have
+        - Important
+        - Critical for my use case
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe any alternative solutions or features you have considered.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Any mockups, references, or related issues.

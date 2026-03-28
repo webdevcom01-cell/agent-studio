@@ -82,3 +82,7 @@ packages/cli/dist
 !public/*.html
 .~lock.*
 _tmp_*
+
+# Scratch/temp files
+top_story_*.md
+github-professional-cleanup-plan.md

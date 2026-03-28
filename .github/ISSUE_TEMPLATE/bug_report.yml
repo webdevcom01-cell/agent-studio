@@ -1,0 +1,90 @@
+name: Bug Report
+description: Report a bug to help us improve Agent Studio
+labels: ["bug", "triage"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear description of what the bug is.
+      placeholder: What happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: A clear description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Critical (app crash, data loss)
+        - High (feature broken, no workaround)
+        - Medium (feature degraded, workaround exists)
+        - Low (cosmetic, minor inconvenience)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of Agent Studio is affected?
+      options:
+        - Flow Editor
+        - Chat / Streaming
+        - Knowledge Base / RAG
+        - Agent Discovery / Marketplace
+        - Agent Templates
+        - CLI Generator
+        - Evals / Testing
+        - Webhooks
+        - MCP Integration
+        - A2A Communication
+        - Authentication
+        - Analytics
+        - ECC / Skills
+        - API
+        - Other
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit hash
+      placeholder: e.g. v0.2.0 or abc1234
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Your environment details.
+      placeholder: |
+        OS: macOS 15 / Ubuntu 24.04 / Windows 11
+        Node.js: 20.x
+        Browser: Chrome 130
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, logs, error messages, or anything else.

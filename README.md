@@ -10,6 +10,9 @@
   <a href="https://github.com/webdevcom01-cell/agent-studio/actions/workflows/docker.yml">
     <img src="https://github.com/webdevcom01-cell/agent-studio/actions/workflows/docker.yml/badge.svg" alt="Docker Build">
   </a>
+  <a href="https://github.com/webdevcom01-cell/agent-studio/actions/workflows/codeql.yml">
+    <img src="https://github.com/webdevcom01-cell/agent-studio/actions/workflows/codeql.yml/badge.svg" alt="CodeQL">
+  </a>
   <a href="https://github.com/webdevcom01-cell/agent-studio/pkgs/container/agent-studio">
     <img src="https://img.shields.io/badge/docker-ghcr.io-2496ED?logo=docker&logoColor=white" alt="Docker Image">
   </a>
@@ -23,7 +26,9 @@
   <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Next.js-15.5-000?logo=next.js" alt="Next.js">
   <img src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white" alt="Node">
-  <img src="https://img.shields.io/badge/Tests-1700%2B-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-2154%2B-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Node_Types-53-orange" alt="53 Node Types">
+  <img src="https://img.shields.io/badge/Templates-221-purple" alt="221 Templates">
   <img src="https://img.shields.io/badge/MCP-Ready-8B5CF6?logo=anthropic&logoColor=white" alt="MCP Ready">
   <img src="https://img.shields.io/badge/A2A-v0.3-4285F4?logo=google&logoColor=white" alt="A2A v0.3">
 </p>

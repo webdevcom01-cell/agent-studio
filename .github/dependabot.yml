@@ -1,0 +1,50 @@
+version: 2
+
+updates:
+  # npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+      production-dependencies:
+        dependency-type: "production"
+    labels:
+      - "dependencies"
+    reviewers:
+      - "webdevcom01-cell"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "ci"
+    reviewers:
+      - "webdevcom01-cell"
+
+  # Docker
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "docker"
+    reviewers:
+      - "webdevcom01-cell"
+
+  # ECC Skills MCP service
+  - package-ecosystem: "pip"
+    directory: "/services/ecc-skills-mcp"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ecc"
+    reviewers:
+      - "webdevcom01-cell"

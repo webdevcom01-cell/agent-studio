@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/webdevcom01-cell/agent-studio/discussions
+    about: Ask questions and discuss ideas in GitHub Discussions
+  - name: Documentation
+    url: https://agent-studio-production-c43e.up.railway.app
+    about: Check the live app and docs before opening an issue
