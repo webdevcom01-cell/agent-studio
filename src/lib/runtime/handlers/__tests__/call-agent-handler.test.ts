@@ -27,6 +27,35 @@ vi.mock("../../engine", () => ({
   executeFlow: mockExecuteFlow,
 }));
 
+const MockA2ACircuitError = vi.hoisted(() => {
+  return class extends Error {
+    code: string;
+    constructor(code: string, message: string) {
+      super(message);
+      this.name = "A2ACircuitError";
+      this.code = code;
+    }
+  };
+});
+
+vi.mock("@/lib/a2a/circuit-breaker", () => ({
+  checkCircuit: vi.fn(),
+  recordSuccess: vi.fn(),
+  recordFailure: vi.fn(),
+  checkDepthLimit: vi.fn((depth: number) => {
+    if (depth >= 3) throw new MockA2ACircuitError("DEPTH_LIMIT", "Max agent call depth exceeded");
+  }),
+  checkCycleDetection: vi.fn((targetId: string, callStack: string[]) => {
+    if (callStack.includes(targetId)) throw new MockA2ACircuitError("CYCLE_DETECTED", "Circular agent call detected");
+  }),
+  A2ACircuitError: MockA2ACircuitError,
+  MAX_AGENT_DEPTH: 3,
+}));
+
+vi.mock("@/lib/a2a/rate-limiter", () => ({
+  checkRateLimit: vi.fn(),
+}));
+
 import { callAgentHandler } from "../call-agent-handler";
 import type { FlowNode } from "@/types";
 import type { RuntimeContext } from "../../types";
@@ -450,6 +479,152 @@ describe("callAgentHandler", () => {
       expect(subVars.x).toBe("hello");
       expect(subVars.secret_key).toBeUndefined();
       expect(subVars.parent_data).toBeUndefined();
+    });
+  });
+
+  // ── Built-in retry (F-01) ────────────────────────────────────────────────
+
+  describe("retry with exponential backoff (F-01)", () => {
+    function makeAgentAvailable() {
+      mockPrisma.agent.findFirst.mockResolvedValue({
+        id: "agent-target",
+        name: "Target",
+        flow: { content: { nodes: [], edges: [], variables: [] } },
+      });
+    }
+
+    it("executes once without retryConfig (backward compat)", async () => {
+      makeAgentAvailable();
+      mockExecuteFlow.mockResolvedValue({
+        messages: [{ role: "assistant", content: "ok" }],
+        waitingForInput: false,
+      });
+
+      const result = await callAgentHandler(
+        makeNode({ targetAgentId: "agent-target" }),
+        makeContext(),
+      );
+
+      expect(result.messages[0].content).toBe("ok");
+      expect(mockExecuteFlow).toHaveBeenCalledTimes(1);
+    });
+
+    it("executes once with maxRetries: 0", async () => {
+      makeAgentAvailable();
+      mockExecuteFlow.mockResolvedValue({
+        messages: [{ role: "assistant", content: "ok" }],
+        waitingForInput: false,
+      });
+
+      const result = await callAgentHandler(
+        makeNode({
+          targetAgentId: "agent-target",
+          retryConfig: { maxRetries: 0 },
+        }),
+        makeContext(),
+      );
+
+      expect(result.messages[0].content).toBe("ok");
+      expect(mockExecuteFlow).toHaveBeenCalledTimes(1);
+    });
+
+    it("retries on failure and succeeds on 2nd attempt", async () => {
+      makeAgentAvailable();
+      mockExecuteFlow
+        .mockRejectedValueOnce(new Error("timeout"))
+        .mockResolvedValueOnce({
+          messages: [{ role: "assistant", content: "ok" }],
+          waitingForInput: false,
+        });
+
+      const result = await callAgentHandler(
+        makeNode({
+          targetAgentId: "agent-target",
+          retryConfig: { maxRetries: 3, initialDelayMs: 10, jitter: false },
+        }),
+        makeContext(),
+      );
+
+      expect(result.messages[0].content).toBe("ok");
+    });
+
+    it("logs each retry attempt", async () => {
+      const { logger } = await import("@/lib/logger");
+      makeAgentAvailable();
+      mockExecuteFlow
+        .mockRejectedValueOnce(new Error("timeout"))
+        .mockResolvedValueOnce({
+          messages: [{ role: "assistant", content: "ok" }],
+          waitingForInput: false,
+        });
+
+      await callAgentHandler(
+        makeNode({
+          targetAgentId: "agent-target",
+          retryConfig: { maxRetries: 3, initialDelayMs: 10, jitter: false },
+        }),
+        makeContext(),
+      );
+
+      expect(logger.info).toHaveBeenCalledWith(
+        "call_agent retry",
+        expect.objectContaining({ attempt: 1 }),
+      );
+    });
+
+    it("returns error after all retries exhausted", async () => {
+      makeAgentAvailable();
+      mockExecuteFlow.mockRejectedValue(new Error("timeout"));
+
+      const result = await callAgentHandler(
+        makeNode({
+          targetAgentId: "agent-target",
+          retryConfig: { maxRetries: 2, initialDelayMs: 10, jitter: false },
+          onError: "continue",
+        }),
+        makeContext(),
+      );
+
+      expect(result.messages[0].content).toContain("failed");
+    });
+
+    it("does not retry non-retryable errors", async () => {
+      makeAgentAvailable();
+      mockExecuteFlow.mockRejectedValueOnce(new Error("Agent not found"));
+
+      const result = await callAgentHandler(
+        makeNode({
+          targetAgentId: "agent-target",
+          retryConfig: { maxRetries: 3, initialDelayMs: 10 },
+          onError: "continue",
+        }),
+        makeContext(),
+      );
+
+      // Should not retry — "not found" is not in retryable patterns
+      expect(result.messages[0].content).toContain("failed");
+      // Only 1 call to executeFlow (the initial attempt)
+      expect(mockPrisma.agentCallLog.create).toHaveBeenCalledTimes(1);
+    });
+
+    it("caps maxRetries at 5", async () => {
+      const { logger } = await import("@/lib/logger");
+      makeAgentAvailable();
+      mockExecuteFlow.mockRejectedValue(new Error("timeout"));
+
+      await callAgentHandler(
+        makeNode({
+          targetAgentId: "agent-target",
+          retryConfig: { maxRetries: 10, initialDelayMs: 10, jitter: false },
+          onError: "continue",
+        }),
+        makeContext(),
+      );
+
+      // maxRetries capped at 5 — verify via retry log count (attempts 1-5)
+      const retryCalls = (logger.info as ReturnType<typeof vi.fn>).mock.calls
+        .filter((c) => c[0] === "call_agent retry");
+      expect(retryCalls).toHaveLength(5);
     });
   });
 });

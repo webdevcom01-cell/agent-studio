@@ -1577,6 +1577,80 @@ function CallAgentProperties({ data, update, variables = [], currentAgentId }: C
           <option value="stop">Stop flow</option>
         </select>
       </div>
+
+      <PropertySection title="Retry Configuration" defaultOpen={false}>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">Enable Retry</Label>
+            <input
+              type="checkbox"
+              checked={((data.retryConfig as Record<string, unknown>)?.maxRetries as number ?? 0) > 0}
+              onChange={(e) => {
+                const current = (data.retryConfig as Record<string, unknown>) ?? {};
+                update("retryConfig", {
+                  ...current,
+                  maxRetries: e.target.checked ? 3 : 0,
+                  initialDelayMs: current.initialDelayMs ?? 1000,
+                  backoffMultiplier: current.backoffMultiplier ?? 2,
+                  jitter: current.jitter ?? true,
+                });
+              }}
+              className="rounded"
+            />
+          </div>
+          {((data.retryConfig as Record<string, unknown>)?.maxRetries as number ?? 0) > 0 && (
+            <>
+              <div className="space-y-1">
+                <Label className="text-xs">Max Retries (1-5)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={(data.retryConfig as Record<string, unknown>)?.maxRetries as number ?? 3}
+                  onChange={(e) => {
+                    const current = (data.retryConfig as Record<string, unknown>) ?? {};
+                    update("retryConfig", { ...current, maxRetries: Number(e.target.value) });
+                  }}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Initial Delay (ms)</Label>
+                <Input
+                  type="number"
+                  min={100}
+                  max={10000}
+                  step={100}
+                  value={(data.retryConfig as Record<string, unknown>)?.initialDelayMs as number ?? 1000}
+                  onChange={(e) => {
+                    const current = (data.retryConfig as Record<string, unknown>) ?? {};
+                    update("retryConfig", { ...current, initialDelayMs: Number(e.target.value) });
+                  }}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Backoff Multiplier (1-4)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={4}
+                  step={0.5}
+                  value={(data.retryConfig as Record<string, unknown>)?.backoffMultiplier as number ?? 2}
+                  onChange={(e) => {
+                    const current = (data.retryConfig as Record<string, unknown>) ?? {};
+                    update("retryConfig", { ...current, backoffMultiplier: Number(e.target.value) });
+                  }}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Retries on timeout, rate limit, and network errors with exponential backoff.
+              </p>
+            </>
+          )}
+        </div>
+      </PropertySection>
     </>
   );
 }

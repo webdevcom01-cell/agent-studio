@@ -21,6 +21,47 @@ import {
 } from "@/lib/agents/agent-workspace";
 
 const DEFAULT_TIMEOUT_SECONDS = 30;
+const MAX_RETRY_LIMIT = 5;
+
+const RETRYABLE_PATTERNS = [
+  "timeout", "timed out", "rate limit", "429", "500", "502", "503", "504",
+  "ECONNREFUSED", "ETIMEDOUT", "fetch failed", "network",
+];
+
+interface RetryConfig {
+  maxRetries: number;
+  initialDelayMs: number;
+  backoffMultiplier: number;
+  jitter: boolean;
+  retryOnErrors: string[];
+}
+
+function parseRetryConfig(raw: unknown): RetryConfig {
+  if (!raw || typeof raw !== "object") {
+    return { maxRetries: 0, initialDelayMs: 1000, backoffMultiplier: 2, jitter: true, retryOnErrors: RETRYABLE_PATTERNS };
+  }
+  const cfg = raw as Record<string, unknown>;
+  return {
+    maxRetries: Math.min(MAX_RETRY_LIMIT, Math.max(0, Number(cfg.maxRetries) || 0)),
+    initialDelayMs: Math.max(100, Number(cfg.initialDelayMs) || 1000),
+    backoffMultiplier: Math.min(4, Math.max(1, Number(cfg.backoffMultiplier) || 2)),
+    jitter: cfg.jitter !== false,
+    retryOnErrors: Array.isArray(cfg.retryOnErrors) ? cfg.retryOnErrors as string[] : RETRYABLE_PATTERNS,
+  };
+}
+
+function isRetryableError(error: unknown, patterns: string[]): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  const lower = msg.toLowerCase();
+  return patterns.some((p) => lower.includes(p.toLowerCase()));
+}
+
+function computeDelay(attempt: number, config: RetryConfig): number {
+  const base = config.initialDelayMs * Math.pow(config.backoffMultiplier, attempt);
+  if (!config.jitter) return base;
+  const jitter = base * (Math.random() * 0.5 - 0.25);
+  return Math.round(base + jitter);
+}
 
 interface ParallelTarget {
   agentId: string;
@@ -144,6 +185,68 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
     resolvedInput[key] = resolveTemplate(value, context.variables);
   }
 
+  const retryConfig = parseRetryConfig(node.data.retryConfig);
+
+  // Retry loop: attempt 0 is the first try, then up to maxRetries additional attempts
+  for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
+    if (attempt > 0) {
+      const delay = computeDelay(attempt - 1, retryConfig);
+      logger.info("call_agent retry", {
+        nodeId: node.id,
+        targetAgentId,
+        attempt,
+        maxRetries: retryConfig.maxRetries,
+        delayMs: delay,
+      });
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+
+    const attemptResult = await executeCallAttempt(
+      node, context, mode, targetAgentId, externalCardUrl,
+      resolvedInput, outputVariable, timeoutSeconds, onError,
+      depth, callStack, traceId,
+    );
+
+    if (attemptResult.success) {
+      return attemptResult.result;
+    }
+
+    // Check if error is retryable
+    if (attempt < retryConfig.maxRetries && isRetryableError(attemptResult.error, retryConfig.retryOnErrors)) {
+      continue;
+    }
+
+    // Final attempt failed or non-retryable error
+    return attemptResult.result;
+  }
+
+  // Should never reach here
+  return {
+    messages: [{ role: "assistant" as const, content: "Sub-agent call failed after all retries." }],
+    nextNodeId: null,
+    waitForInput: false,
+    updatedVariables: { [outputVariable]: null },
+  };
+};
+
+/**
+ * Single attempt of the call_agent execution.
+ * Returns { success, result, error } to let the retry loop decide.
+ */
+async function executeCallAttempt(
+  node: { id: string; data: Record<string, unknown> },
+  context: RuntimeContextWithDepth,
+  mode: string,
+  targetAgentId: string | undefined,
+  externalCardUrl: string | undefined,
+  resolvedInput: Record<string, string>,
+  outputVariable: string,
+  timeoutSeconds: number,
+  onError: string,
+  depth: number,
+  callStack: string[],
+  traceId: string,
+): Promise<{ success: boolean; result: import("../types").ExecutionResult; error?: unknown }> {
   const spanId = generateSpanId();
   const taskId = generateSpanId();
 
@@ -233,18 +336,21 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
     }
 
     return {
-      messages: [
-        {
-          role: "assistant",
-          content:
-            typeof output === "string"
-              ? output
-              : JSON.stringify(output),
-        },
-      ],
-      nextNodeId: null,
-      waitForInput: false,
-      updatedVariables: updatedVars,
+      success: true,
+      result: {
+        messages: [
+          {
+            role: "assistant" as const,
+            content:
+              typeof output === "string"
+                ? output
+                : JSON.stringify(output),
+          },
+        ],
+        nextNodeId: null,
+        waitForInput: false,
+        updatedVariables: updatedVars,
+      },
     };
   } catch (err) {
     const durationMs = Date.now() - startTime;
@@ -260,7 +366,7 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
           completedAt: new Date(),
         },
       })
-      .catch((err) => logger.warn("Call log update failed", err));
+      .catch((updateErr) => logger.warn("Call log update failed", updateErr));
 
     recordFailure(context.agentId, calleeId);
 
@@ -269,32 +375,22 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
       targetAgentId: targetAgentId ?? externalCardUrl,
     });
 
-    if (onError === "stop") {
-      return {
-        messages: [
-          {
-            role: "assistant",
-            content: `Sub-agent call failed: ${errorMsg}`,
-          },
-        ],
-        nextNodeId: null,
-        waitForInput: false,
-      };
-    }
+    const failResult = onError === "stop"
+      ? {
+          messages: [{ role: "assistant" as const, content: `Sub-agent call failed: ${errorMsg}` }],
+          nextNodeId: null,
+          waitForInput: false as const,
+        }
+      : {
+          messages: [{ role: "assistant" as const, content: "Sub-agent call failed. Continuing flow." }],
+          nextNodeId: null,
+          waitForInput: false as const,
+          updatedVariables: { [outputVariable]: null },
+        };
 
-    return {
-      messages: [
-        {
-          role: "assistant",
-          content: "Sub-agent call failed. Continuing flow.",
-        },
-      ],
-      nextNodeId: null,
-      waitForInput: false,
-      updatedVariables: { [outputVariable]: null },
-    };
+    return { success: false, result: failResult, error: err };
   }
-};
+}
 
 interface ParallelExecParams {
   node: { data: Record<string, unknown> };
