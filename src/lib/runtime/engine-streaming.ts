@@ -8,7 +8,7 @@ import {
 } from "./types";
 import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
-import { findNextNode, findStartNode } from "./engine";
+import { findNextNode, findStartNode, SELF_ROUTING_NODES } from "./engine";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
 import { parallelStreamingHandler } from "./handlers/parallel-streaming-handler";
@@ -249,7 +249,7 @@ export function executeFlowStreaming(
               };
               allMessages.push(msg);
               writer.write({ type: "error", content: msg.content });
-              context.currentNodeId = findNextNode(context, node.id);
+              context.currentNodeId = null; // parallel manages its own routing — stop on error
               continue;
             }
           // ── Codepath 3: all other handlers ───────────────────────────────
@@ -310,7 +310,9 @@ export function executeFlowStreaming(
                 role: msg.role,
                 content: msg.content,
               });
-              context.currentNodeId = findNextNode(context, node.id);
+              context.currentNodeId = SELF_ROUTING_NODES.has(node.type)
+                ? null
+                : findNextNode(context, node.id);
               continue;
             }
 
@@ -368,6 +370,8 @@ export function executeFlowStreaming(
             nextNodeId = result.nextNodeId;
           } else if (result.nextNodeId) {
             nextNodeId = findNextNode(context, node.id, result.nextNodeId);
+          } else if (SELF_ROUTING_NODES.has(node.type)) {
+            nextNodeId = null;
           } else {
             nextNodeId = findNextNode(context, node.id);
           }

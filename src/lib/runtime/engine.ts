@@ -5,6 +5,25 @@ import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import type { FlowNode } from "@/types";
 
+/**
+ * Nodes that manage their own output routing via sourceHandles.
+ * When these return nextNodeId: null, the engine should NOT follow
+ * default edges — null means "stop" not "continue to default".
+ */
+/**
+ * These node types return sourceHandle strings (not node IDs) as nextNodeId.
+ * When they return null, it means no matching handle/edge — engine should stop,
+ * NOT fall through to a default edge (which would cause double execution).
+ * Note: parallel is NOT here — it resolves edges internally and returns node IDs.
+ */
+export const SELF_ROUTING_NODES = new Set([
+  "switch",
+  "guardrails",
+  "ab_test",
+  "semantic_router",
+  "cache",
+]);
+
 export function findNextNode(
   context: RuntimeContext,
   sourceNodeId: string,
@@ -107,12 +126,16 @@ export async function executeFlow(
     try {
       result = await handler(node, context);
     } catch (error) {
-      logger.error("Node handler error", error, { agentId: context.agentId, nodeType: node.type });
+      logger.error("Node handler error", error, { agentId: context.agentId, nodeType: node.type, nodeId: node.id });
       allMessages.push({
         role: "assistant",
         content: "Something went wrong. Let me try to continue.",
       });
-      context.currentNodeId = findNextNode(context, node.id);
+      // Self-routing nodes manage their own edges — don't follow default edge
+      // on error (prevents double execution of downstream nodes)
+      context.currentNodeId = SELF_ROUTING_NODES.has(node.type)
+        ? null
+        : findNextNode(context, node.id);
       continue;
     }
 
@@ -145,6 +168,10 @@ export async function executeFlow(
     } else if (result.nextNodeId) {
       // Treat as sourceHandle (e.g., switch "case_0", evaluator "passed"/"failed")
       context.currentNodeId = findNextNode(context, node.id, result.nextNodeId);
+    } else if (SELF_ROUTING_NODES.has(node.type)) {
+      // Multi-output nodes manage their own routing — null means "stop here",
+      // don't fall through to default edge (prevents double execution P-06)
+      context.currentNodeId = null;
     } else {
       // Default: follow the first unfiltered edge
       context.currentNodeId = findNextNode(context, node.id);

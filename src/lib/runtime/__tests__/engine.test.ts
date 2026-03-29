@@ -441,4 +441,147 @@ describe("executeFlow", () => {
     await executeFlow(ctx);
     expect(ctx.messageHistory).toContainEqual({ role: "assistant", content: "Hello!" });
   });
+
+  // ── Self-routing node double execution prevention (P-06) ────────────────
+
+  describe("self-routing node execution (P-06)", () => {
+    it("switch node returning null stops flow (no default fallthrough)", async () => {
+      const execLog: string[] = [];
+      const ctx = createContext({
+        flowContent: {
+          nodes: [
+            { id: "sw1", type: "switch" as NodeType, position: { x: 0, y: 0 }, data: {} },
+            { id: "after", type: "message", position: { x: 0, y: 100 }, data: {} },
+          ],
+          edges: [
+            { id: "e-default", source: "sw1", target: "after" },
+          ],
+          variables: [],
+        },
+      });
+
+      mockedGetHandler.mockImplementation((type) => {
+        if (type === "switch") {
+          return async () => ({
+            messages: [],
+            nextNodeId: null,
+            waitForInput: false,
+          });
+        }
+        return async (node) => {
+          execLog.push(node.id);
+          return {
+            messages: [{ role: "assistant" as const, content: node.id }],
+            nextNodeId: null,
+            waitForInput: false,
+          };
+        };
+      });
+
+      await executeFlow(ctx);
+
+      expect(execLog).not.toContain("after");
+    });
+
+    it("guardrails node returning null stops flow (no default fallthrough)", async () => {
+      const execLog: string[] = [];
+      const ctx = createContext({
+        flowContent: {
+          nodes: [
+            { id: "g1", type: "guardrails" as NodeType, position: { x: 0, y: 0 }, data: {} },
+            { id: "after", type: "message", position: { x: 0, y: 100 }, data: {} },
+          ],
+          edges: [
+            { id: "e-default", source: "g1", target: "after" },
+          ],
+          variables: [],
+        },
+      });
+
+      mockedGetHandler.mockImplementation((type) => {
+        if (type === "guardrails") {
+          return async () => ({
+            messages: [{ role: "assistant" as const, content: "Check failed" }],
+            nextNodeId: null,
+            waitForInput: false,
+          });
+        }
+        return async (node) => {
+          execLog.push(node.id);
+          return {
+            messages: [{ role: "assistant" as const, content: node.id }],
+            nextNodeId: null,
+            waitForInput: false,
+          };
+        };
+      });
+
+      await executeFlow(ctx);
+
+      expect(execLog).not.toContain("after");
+    });
+
+    it("self-routing handler throw stops flow (no default edge after error)", async () => {
+      const execLog: string[] = [];
+      const ctx = createContext({
+        flowContent: {
+          nodes: [
+            { id: "sw1", type: "switch" as NodeType, position: { x: 0, y: 0 }, data: {} },
+            { id: "after", type: "message", position: { x: 0, y: 100 }, data: {} },
+          ],
+          edges: [
+            { id: "e-default", source: "sw1", target: "after" },
+          ],
+          variables: [],
+        },
+      });
+
+      mockedGetHandler.mockImplementation((type) => {
+        if (type === "switch") {
+          return async () => { throw new Error("handler crashed"); };
+        }
+        return async (node) => {
+          execLog.push(node.id);
+          return {
+            messages: [{ role: "assistant" as const, content: node.id }],
+            nextNodeId: null,
+            waitForInput: false,
+          };
+        };
+      });
+
+      await executeFlow(ctx);
+
+      expect(execLog).not.toContain("after");
+    });
+
+    it("regular nodes still follow default edges when nextNodeId is null", async () => {
+      const execLog: string[] = [];
+      const ctx = createContext({
+        flowContent: {
+          nodes: [
+            { id: "m1", type: "message", position: { x: 0, y: 0 }, data: {} },
+            { id: "m2", type: "message", position: { x: 0, y: 100 }, data: {} },
+          ],
+          edges: [
+            { id: "e1", source: "m1", target: "m2" },
+          ],
+          variables: [],
+        },
+      });
+
+      mockedGetHandler.mockReturnValue(async (node) => {
+        execLog.push(node.id);
+        return {
+          messages: [{ role: "assistant" as const, content: node.id }],
+          nextNodeId: null,
+          waitForInput: false,
+        };
+      });
+
+      await executeFlow(ctx);
+
+      expect(execLog).toEqual(["m1", "m2"]);
+    });
+  });
 });
