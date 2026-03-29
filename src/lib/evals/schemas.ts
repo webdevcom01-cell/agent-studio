@@ -93,6 +93,19 @@ const RAGAnswerRelevancySchema = z.object({
   threshold: z.number().min(0).max(1).default(0.7),
 });
 
+// ─── Webhook Assertions ──────────────────────────────────────────────────────
+
+const WebhookResponseValidSchema = z.object({
+  type: z.literal("webhook_response_valid"),
+  description: z.string().optional(),
+});
+
+const WebhookPayloadEchoedSchema = z.object({
+  type: z.literal("webhook_payload_echoed"),
+  field: z.string(),
+  description: z.string().optional(),
+});
+
 // ─── Combined Assertion Schema ────────────────────────────────────────────────
 
 export const EvalAssertionSchema = z.discriminatedUnion("type", [
@@ -111,6 +124,8 @@ export const EvalAssertionSchema = z.discriminatedUnion("type", [
   RAGFaithfulnessSchema,
   RAGContextPrecisionSchema,
   RAGAnswerRelevancySchema,
+  WebhookResponseValidSchema,
+  WebhookPayloadEchoedSchema,
 ]);
 
 export type EvalAssertion = z.infer<typeof EvalAssertionSchema>;
@@ -225,6 +240,8 @@ export interface AssertionContext {
   latencyMs: number;
   /** Retrieved KB context snippets (for kb_faithfulness assertions) */
   kbContext?: string;
+  /** Webhook payload sent to the agent (for webhook assertions) */
+  webhookPayload?: Record<string, unknown>;
 }
 
 // ─── Layer type helpers ───────────────────────────────────────────────────────

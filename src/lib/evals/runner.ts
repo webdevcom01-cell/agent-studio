@@ -659,12 +659,26 @@ async function runSingleTestCase(
       kbContext = await fetchKBContext(agentId, testCase.input, baseUrl, authHeader);
     }
 
+    // Parse webhook payload from test case input (for webhook assertions)
+    let webhookPayload: Record<string, unknown> | undefined;
+    if (triggerMode === "webhook") {
+      try {
+        const parsed: unknown = JSON.parse(testCase.input);
+        if (typeof parsed === "object" && parsed !== null) {
+          webhookPayload = parsed as Record<string, unknown>;
+        }
+      } catch {
+        webhookPayload = { message: testCase.input };
+      }
+    }
+
     // Build assertion context
     const ctx: AssertionContext = {
       input: testCase.input,
       output: agentOutput,
       latencyMs,
       ...(kbContext ? { kbContext } : {}),
+      ...(webhookPayload ? { webhookPayload } : {}),
     };
 
     // Evaluate assertions — wrap with per-assertion timeout for Layer 3 (LLM-as-Judge)

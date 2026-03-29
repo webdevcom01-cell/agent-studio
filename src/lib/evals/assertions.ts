@@ -237,6 +237,12 @@ export async function evaluateAssertion(
       case "rag_answer_relevancy":
         return evaluateRAGAnswerRelevancy(ctx.input, ctx.output, assertion.threshold);
 
+      case "webhook_response_valid":
+        return evaluateWebhookResponseValid(ctx.output);
+
+      case "webhook_payload_echoed":
+        return evaluateWebhookPayloadEchoed(ctx.output, assertion.field, ctx.webhookPayload);
+
       default: {
         // TypeScript exhaustiveness guard
         const _exhaustive: never = assertion;
@@ -258,6 +264,73 @@ export async function evaluateAssertion(
       details: { error: message },
     };
   }
+}
+
+// ─── Webhook Assertion Evaluators ────────────────────────────────────────────
+
+function evaluateWebhookResponseValid(output: string): AssertionResult {
+  const isError =
+    !output ||
+    output.startsWith("Error:") ||
+    output.startsWith("[Error:") ||
+    output.trim().length === 0;
+
+  return {
+    type: "webhook_response_valid",
+    passed: !isError,
+    score: isError ? 0 : 1,
+    message: isError
+      ? `Webhook response invalid: ${output ? output.slice(0, 120) : "(empty)"}`
+      : "Webhook response is valid (non-empty, non-error)",
+  };
+}
+
+function evaluateWebhookPayloadEchoed(
+  output: string,
+  field: string,
+  webhookPayload?: Record<string, unknown>,
+): AssertionResult {
+  if (!webhookPayload) {
+    return {
+      type: "webhook_payload_echoed",
+      passed: false,
+      score: 0,
+      message: `Skipped: no webhookPayload in test case (needed for field "${field}")`,
+    };
+  }
+
+  const fieldValue = resolveFieldPath(webhookPayload, field);
+
+  if (fieldValue === undefined) {
+    return {
+      type: "webhook_payload_echoed",
+      passed: false,
+      score: 0,
+      message: `Field "${field}" not found in webhookPayload`,
+    };
+  }
+
+  const needle = typeof fieldValue === "string" ? fieldValue : JSON.stringify(fieldValue);
+  const found = output.includes(needle);
+
+  return {
+    type: "webhook_payload_echoed",
+    passed: found,
+    score: found ? 1 : 0,
+    message: found
+      ? `Output contains payload field "${field}" value`
+      : `Output does not contain "${field}" value "${needle.slice(0, 80)}"`,
+  };
+}
+
+function resolveFieldPath(obj: Record<string, unknown>, path: string): unknown {
+  const parts = path.replace(/\[/g, ".").replace(/\]/g, "").split(".").filter(Boolean);
+  let current: unknown = obj;
+  for (const part of parts) {
+    if (current === null || current === undefined || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
 }
 
 /**
