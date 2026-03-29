@@ -85,4 +85,6 @@ _tmp_*
 
 # Scratch/temp files
 top_story_*.md
-github-professional-cleanup-plan.md
+/github-professional-cleanup-plan.md
+test-*.ts
+!src/**/test-*.ts

@@ -26,7 +26,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Next.js-15.5-000?logo=next.js" alt="Next.js">
   <img src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white" alt="Node">
-  <img src="https://img.shields.io/badge/Tests-2154%2B-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-2502%2B-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/Node_Types-53-orange" alt="53 Node Types">
   <img src="https://img.shields.io/badge/Templates-221-purple" alt="221 Templates">
   <img src="https://img.shields.io/badge/MCP-Ready-8B5CF6?logo=anthropic&logoColor=white" alt="MCP Ready">
