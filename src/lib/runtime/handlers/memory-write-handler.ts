@@ -55,6 +55,26 @@ export const memoryWriteHandler: NodeHandler = async (node, context) => {
       }
     }
 
+    // Apply merge strategy
+    const mergeStrategy = (node.data.mergeStrategy as string) ?? "replace";
+    const maxLength = (node.data.maxLength as number) ?? 0;
+
+    if (mergeStrategy !== "replace") {
+      const existing = await prisma.agentMemory.findUnique({
+        where: { agentId_key: { agentId: context.agentId, key } },
+        select: { value: true },
+      });
+
+      const existingValue = existing?.value as unknown;
+      storedValue = applyMerge(mergeStrategy, existingValue, storedValue, maxLength);
+
+      logger.info("Memory merge applied", {
+        agentId: context.agentId,
+        key,
+        strategy: mergeStrategy,
+      });
+    }
+
     // Generate embedding if requested
     let embeddingData: number[] | undefined;
     if (generateEmbedding) {
@@ -162,3 +182,71 @@ export const memoryWriteHandler: NodeHandler = async (node, context) => {
     };
   }
 };
+
+function applyMerge(
+  strategy: string,
+  existing: unknown,
+  incoming: unknown,
+  maxLength: number,
+): unknown {
+  switch (strategy) {
+    case "merge_object": {
+      if (isPlainObject(existing) && isPlainObject(incoming)) {
+        return { ...(existing as Record<string, unknown>), ...(incoming as Record<string, unknown>) };
+      }
+      return incoming;
+    }
+
+    case "deep_merge": {
+      if (isPlainObject(existing) && isPlainObject(incoming)) {
+        return deepMerge(existing as Record<string, unknown>, incoming as Record<string, unknown>);
+      }
+      return incoming;
+    }
+
+    case "append_array": {
+      const existingArr = Array.isArray(existing)
+        ? existing
+        : existing != null
+          ? [existing]
+          : [];
+      const incomingArr = Array.isArray(incoming) ? incoming : [incoming];
+      const merged = [...existingArr, ...incomingArr];
+      if (maxLength > 0 && merged.length > maxLength) {
+        return merged.slice(-maxLength);
+      }
+      return merged;
+    }
+
+    case "increment": {
+      const existingNum = typeof existing === "number" ? existing : 0;
+      const incomingNum = typeof incoming === "number" ? incoming : Number(incoming) || 0;
+      return existingNum + incomingNum;
+    }
+
+    default:
+      return incoming;
+  }
+}
+
+function isPlainObject(val: unknown): boolean {
+  return typeof val === "object" && val !== null && !Array.isArray(val);
+}
+
+function deepMerge(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...target };
+  for (const key of Object.keys(source)) {
+    if (isPlainObject(target[key]) && isPlainObject(source[key])) {
+      result[key] = deepMerge(
+        target[key] as Record<string, unknown>,
+        source[key] as Record<string, unknown>,
+      );
+    } else {
+      result[key] = source[key];
+    }
+  }
+  return result;
+}

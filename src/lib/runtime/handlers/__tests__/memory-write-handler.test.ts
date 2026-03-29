@@ -6,6 +6,7 @@ import type { FlowNode } from "@/types";
 // Mock prisma
 const mockCount = vi.fn();
 const mockFindFirst = vi.fn();
+const mockFindUnique = vi.fn();
 const mockDelete = vi.fn();
 const mockUpsert = vi.fn();
 const mockExecuteRawUnsafe = vi.fn();
@@ -15,6 +16,7 @@ vi.mock("@/lib/prisma", () => ({
     agentMemory: {
       count: (...args: unknown[]) => mockCount(...args),
       findFirst: (...args: unknown[]) => mockFindFirst(...args),
+      findUnique: (...args: unknown[]) => mockFindUnique(...args),
       delete: (...args: unknown[]) => mockDelete(...args),
       upsert: (...args: unknown[]) => mockUpsert(...args),
     },
@@ -230,5 +232,175 @@ describe("memoryWriteHandler", () => {
     // But if category is explicitly "", it stays "" since ?? only catches null/undefined
     // Let's verify the actual behavior
     expect(mockUpsert).toHaveBeenCalled();
+  });
+
+  // ── Merge strategies (P-13) ────────────────────────────────────────────
+
+  describe("merge strategies (P-13)", () => {
+    it("replace is backward compatible (default)", async () => {
+      const node = makeNode({ value: '"new_value"' });
+      await memoryWriteHandler(node, makeContext());
+
+      // Should NOT call findUnique for replace
+      expect(mockFindUnique).not.toHaveBeenCalled();
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ value: "new_value" }),
+        }),
+      );
+    });
+
+    it("merge_object merges into existing object", async () => {
+      mockFindUnique.mockResolvedValueOnce({
+        value: { name: "Alice", age: 30 },
+      });
+
+      const node = makeNode({
+        mergeStrategy: "merge_object",
+        value: '{"age": 31, "email": "alice@test.com"}',
+      });
+      await memoryWriteHandler(node, makeContext());
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({
+            value: { name: "Alice", age: 31, email: "alice@test.com" },
+          }),
+        }),
+      );
+    });
+
+    it("merge_object falls back to replace when existing is not object", async () => {
+      mockFindUnique.mockResolvedValueOnce({ value: "just a string" });
+
+      const node = makeNode({
+        mergeStrategy: "merge_object",
+        value: '{"x": 1}',
+      });
+      await memoryWriteHandler(node, makeContext());
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ value: { x: 1 } }),
+        }),
+      );
+    });
+
+    it("deep_merge recursively merges nested objects", async () => {
+      mockFindUnique.mockResolvedValueOnce({
+        value: { config: { theme: "dark", lang: "en" }, name: "App" },
+      });
+
+      const node = makeNode({
+        mergeStrategy: "deep_merge",
+        value: '{"config": {"lang": "fr", "font": "mono"}}',
+      });
+      await memoryWriteHandler(node, makeContext());
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({
+            value: { config: { theme: "dark", lang: "fr", font: "mono" }, name: "App" },
+          }),
+        }),
+      );
+    });
+
+    it("append_array appends to existing array", async () => {
+      mockFindUnique.mockResolvedValueOnce({ value: ["a", "b"] });
+
+      const node = makeNode({
+        mergeStrategy: "append_array",
+        value: '["c", "d"]',
+      });
+      await memoryWriteHandler(node, makeContext());
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ value: ["a", "b", "c", "d"] }),
+        }),
+      );
+    });
+
+    it("append_array wraps non-array existing in array", async () => {
+      mockFindUnique.mockResolvedValueOnce({ value: "existing" });
+
+      const node = makeNode({
+        mergeStrategy: "append_array",
+        value: '"new_item"',
+      });
+      await memoryWriteHandler(node, makeContext());
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ value: ["existing", "new_item"] }),
+        }),
+      );
+    });
+
+    it("append_array respects maxLength", async () => {
+      mockFindUnique.mockResolvedValueOnce({ value: [1, 2, 3, 4, 5] });
+
+      const node = makeNode({
+        mergeStrategy: "append_array",
+        value: "[6, 7]",
+        maxLength: 5,
+      });
+      await memoryWriteHandler(node, makeContext());
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ value: [3, 4, 5, 6, 7] }),
+        }),
+      );
+    });
+
+    it("increment adds to existing number", async () => {
+      mockFindUnique.mockResolvedValueOnce({ value: 10 });
+
+      const node = makeNode({
+        mergeStrategy: "increment",
+        value: "5",
+      });
+      await memoryWriteHandler(node, makeContext());
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ value: 15 }),
+        }),
+      );
+    });
+
+    it("increment starts from 0 when existing is not a number", async () => {
+      mockFindUnique.mockResolvedValueOnce({ value: "not a number" });
+
+      const node = makeNode({
+        mergeStrategy: "increment",
+        value: "3",
+      });
+      await memoryWriteHandler(node, makeContext());
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ value: 3 }),
+        }),
+      );
+    });
+
+    it("creates new entry when key does not exist (any strategy)", async () => {
+      mockFindUnique.mockResolvedValueOnce(null);
+
+      const node = makeNode({
+        mergeStrategy: "append_array",
+        value: '["first"]',
+      });
+      await memoryWriteHandler(node, makeContext());
+
+      expect(mockUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ value: ["first"] }),
+        }),
+      );
+    });
   });
 });
