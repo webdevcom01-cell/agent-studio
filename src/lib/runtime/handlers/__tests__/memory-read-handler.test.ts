@@ -281,4 +281,36 @@ describe("memoryReadHandler", () => {
       });
     });
   });
+
+  // ── searchQuery / query backward compat (P-03) ─────────────────────────
+
+  describe("searchQuery field naming (P-03)", () => {
+    it("reads searchQuery field in search mode", async () => {
+      mockFindMany.mockResolvedValue([]);
+
+      const node = makeNode({ mode: "search", searchQuery: "find me" });
+      const result = await memoryReadHandler(node, makeContext());
+
+      // Should attempt search (not fail with "no search query")
+      const meta = result.updatedVariables?.__last_memory_read as Record<string, unknown> | undefined;
+      expect(meta?.query).toBe("find me");
+    });
+
+    it("falls back to query field for legacy flows", async () => {
+      mockFindMany.mockResolvedValue([]);
+
+      const node = makeNode({ mode: "search", searchQuery: "", query: "legacy search" });
+      const result = await memoryReadHandler(node, makeContext());
+
+      const meta = result.updatedVariables?.__last_memory_read as Record<string, unknown> | undefined;
+      expect(meta?.query).toBe("legacy search");
+    });
+
+    it("returns error when neither searchQuery nor query is set", async () => {
+      const node = makeNode({ mode: "search", searchQuery: "", query: "" });
+      const result = await memoryReadHandler(node, makeContext());
+
+      expect(result.messages[0].content).toContain("no search query");
+    });
+  });
 });

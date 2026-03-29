@@ -9,7 +9,9 @@ export const memoryReadHandler: NodeHandler = async (node, context) => {
   const mode = (node.data.mode as string) ?? "key"; // key | category | search
   const keyTemplate = (node.data.key as string) ?? "";
   const category = (node.data.category as string) ?? "";
-  const searchQuery = (node.data.searchQuery as string) ?? "";
+  const searchQuery = (node.data.searchQuery as string | undefined)
+    || (node.data.query as string | undefined)
+    || "";
   const outputVariable = (node.data.outputVariable as string) ?? "memory_result";
   const topK = Math.min(MAX_RESULTS, Math.max(1, Number(node.data.topK) || 5));
 
