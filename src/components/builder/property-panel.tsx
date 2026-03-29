@@ -1510,22 +1510,25 @@ function CallAgentProperties({ data, update, variables = [], currentAgentId }: C
             <Plus className="mr-1 size-3" /> Add
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Pass variables to the sub-agent
-        </p>
+        {inputMapping.length === 0 && (
+          <p className="text-xs text-amber-500">
+            No input mapping configured. Sub-agent will receive empty context.
+            Add mappings to pass variables to the sub-agent.
+          </p>
+        )}
         {inputMapping.map((mapping, i) => (
           <div key={i} className="flex gap-1">
             <Input
               value={mapping.key}
               onChange={(e) => updateMapping(i, "key", e.target.value)}
-              placeholder="param"
+              placeholder="variable_name"
               className="flex-1"
             />
             <VariableInput
               value={mapping.value}
               onChange={(val) => updateMapping(i, "value", val)}
               variables={variables}
-              placeholder="{{variable}}"
+              placeholder="{{variable}} or static value"
               className="flex-1"
             />
             <Button

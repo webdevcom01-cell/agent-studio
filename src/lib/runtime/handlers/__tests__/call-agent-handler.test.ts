@@ -281,4 +281,175 @@ describe("callAgentHandler", () => {
       }),
     );
   });
+
+  // ── Input mapping validation (P-09) ──────────────────────────────────
+
+  describe("inputMapping validation", () => {
+    it("warns when inputMapping is undefined", async () => {
+      const { logger } = await import("@/lib/logger");
+      mockPrisma.agent.findFirst.mockResolvedValue({
+        id: "agent-target",
+        name: "Target",
+        flow: { content: { nodes: [], edges: [], variables: [] } },
+      });
+      mockExecuteFlow.mockResolvedValue({
+        messages: [{ role: "assistant", content: "ok" }],
+        waitingForInput: false,
+      });
+
+      await callAgentHandler(
+        makeNode({ targetAgentId: "agent-target" }),
+        makeContext(),
+      );
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("no inputMapping"),
+        expect.objectContaining({ targetAgentId: "agent-target" }),
+      );
+    });
+
+    it("warns when inputMapping is empty array", async () => {
+      const { logger } = await import("@/lib/logger");
+      mockPrisma.agent.findFirst.mockResolvedValue({
+        id: "agent-target",
+        name: "Target",
+        flow: { content: { nodes: [], edges: [], variables: [] } },
+      });
+      mockExecuteFlow.mockResolvedValue({
+        messages: [{ role: "assistant", content: "ok" }],
+        waitingForInput: false,
+      });
+
+      await callAgentHandler(
+        makeNode({ targetAgentId: "agent-target", inputMapping: [] }),
+        makeContext(),
+      );
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("no inputMapping"),
+        expect.anything(),
+      );
+    });
+
+    it("logs mapped keys when inputMapping is provided", async () => {
+      const { logger } = await import("@/lib/logger");
+      mockPrisma.agent.findFirst.mockResolvedValue({
+        id: "agent-target",
+        name: "Target",
+        flow: { content: { nodes: [], edges: [], variables: [] } },
+      });
+      mockExecuteFlow.mockResolvedValue({
+        messages: [{ role: "assistant", content: "ok" }],
+        waitingForInput: false,
+      });
+
+      await callAgentHandler(
+        makeNode({
+          targetAgentId: "agent-target",
+          inputMapping: [
+            { key: "pr_diff", value: "{{diff}}" },
+            { key: "context", value: "static_value" },
+          ],
+        }),
+        makeContext({ variables: { diff: "file changes here" } }),
+      );
+
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining("passing variables"),
+        expect.objectContaining({ mappedKeys: ["pr_diff", "context"] }),
+      );
+    });
+
+    it("resolves template variables in inputMapping values", async () => {
+      mockPrisma.agent.findFirst.mockResolvedValue({
+        id: "agent-target",
+        name: "Target",
+        flow: { content: { nodes: [], edges: [], variables: [] } },
+      });
+      mockExecuteFlow.mockResolvedValue({
+        messages: [{ role: "assistant", content: "analyzed" }],
+        waitingForInput: false,
+      });
+
+      await callAgentHandler(
+        makeNode({
+          targetAgentId: "agent-target",
+          inputMapping: [
+            { key: "code", value: "{{pr_diff}}" },
+          ],
+        }),
+        makeContext({ variables: { pr_diff: "diff content" } }),
+      );
+
+      // Sub-agent context should receive the resolved value
+      expect(mockExecuteFlow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variables: expect.objectContaining({ code: "diff content" }),
+        }),
+      );
+    });
+
+    it("resolves nested JSON template via P-02 fallback", async () => {
+      mockPrisma.agent.findFirst.mockResolvedValue({
+        id: "agent-target",
+        name: "Target",
+        flow: { content: { nodes: [], edges: [], variables: [] } },
+      });
+      mockExecuteFlow.mockResolvedValue({
+        messages: [{ role: "assistant", content: "done" }],
+        waitingForInput: false,
+      });
+
+      await callAgentHandler(
+        makeNode({
+          targetAgentId: "agent-target",
+          inputMapping: [
+            { key: "decision", value: "{{assessment.verdict}}" },
+          ],
+        }),
+        makeContext({
+          variables: {
+            assessment: '{"verdict":"APPROVE","score":90}',
+          },
+        }),
+      );
+
+      expect(mockExecuteFlow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          variables: expect.objectContaining({ decision: "APPROVE" }),
+        }),
+      );
+    });
+
+    it("sub-agent receives ONLY inputMapping variables, not parent context", async () => {
+      mockPrisma.agent.findFirst.mockResolvedValue({
+        id: "agent-target",
+        name: "Target",
+        flow: { content: { nodes: [], edges: [], variables: [] } },
+      });
+      mockExecuteFlow.mockResolvedValue({
+        messages: [{ role: "assistant", content: "ok" }],
+        waitingForInput: false,
+      });
+
+      await callAgentHandler(
+        makeNode({
+          targetAgentId: "agent-target",
+          inputMapping: [{ key: "x", value: "hello" }],
+        }),
+        makeContext({
+          variables: {
+            secret_key: "should_not_leak",
+            parent_data: "parent_only",
+          },
+        }),
+      );
+
+      const subContext = mockExecuteFlow.mock.calls[0][0] as Record<string, unknown>;
+      const subVars = subContext.variables as Record<string, unknown>;
+      expect(subVars.x).toBe("hello");
+      expect(subVars.secret_key).toBeUndefined();
+      expect(subVars.parent_data).toBeUndefined();
+    });
+  });
 });

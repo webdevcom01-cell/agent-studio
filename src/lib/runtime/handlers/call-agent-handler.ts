@@ -124,6 +124,21 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
   }
 
   const inputMapping = normalizeInputMapping(inputMappingRaw);
+
+  if (inputMapping.length === 0) {
+    logger.warn("call_agent node has no inputMapping — sub-agent will run with empty context", {
+      nodeId: node.id,
+      targetAgentId,
+      agentId: context.agentId,
+    });
+  } else {
+    logger.info("call_agent passing variables to sub-agent", {
+      nodeId: node.id,
+      targetAgentId,
+      mappedKeys: inputMapping.map((m) => m.key),
+    });
+  }
+
   const resolvedInput: Record<string, string> = {};
   for (const { key, value } of inputMapping) {
     resolvedInput[key] = resolveTemplate(value, context.variables);
