@@ -648,6 +648,9 @@ export function PropertyPanel({
         {node.type === "learn" && (
           <LearnProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "parallel" && (
+          <ParallelBranchesProperties data={data} update={update} />
+        )}
         {node.type === "structured_output" && (
           <StructuredOutputProperties data={data} update={update} variables={variables} />
         )}
@@ -5492,6 +5495,111 @@ function ReflexiveLoopProperties({ data, update, variables = [] }: SubPanelProps
           value={(data.outputVariable as string) ?? "reflexive_result"}
           onChange={(e) => update("outputVariable", e.target.value)}
           placeholder="reflexive_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Parallel Branches ─────────────────────────────────────────────────────
+
+interface ParallelBranch {
+  branchId: string;
+  label: string;
+  outputVariable: string;
+}
+
+function ParallelBranchesProperties({ data, update }: Omit<SubPanelProps, "variables">) {
+  const branches: ParallelBranch[] = Array.isArray(data.branches)
+    ? (data.branches as ParallelBranch[])
+    : [];
+
+  const updateBranch = (index: number, field: keyof ParallelBranch, value: string) => {
+    const next = branches.map((b, i) =>
+      i === index ? { ...b, [field]: value } : b,
+    );
+    update("branches", next);
+  };
+
+  const addBranch = () => {
+    const nextNum = branches.length + 1;
+    update("branches", [
+      ...branches,
+      { branchId: `branch-${nextNum}`, label: `Branch ${nextNum}`, outputVariable: `result_${nextNum}` },
+    ]);
+  };
+
+  const removeBranch = (index: number) => {
+    update("branches", branches.filter((_, i) => i !== index));
+  };
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Branches</Label>
+        {branches.length === 0 && (
+          <p className="text-xs text-amber-500">
+            No branches configured. Add at least one branch for parallel execution.
+          </p>
+        )}
+        {branches.map((b, i) => (
+          <div key={i} className="space-y-1 rounded border p-2">
+            <div className="flex items-center gap-2">
+              <Input
+                value={b.branchId}
+                onChange={(e) => updateBranch(i, "branchId", e.target.value)}
+                className="w-28 text-xs font-mono"
+                placeholder="branch-id"
+              />
+              <Input
+                value={b.label}
+                onChange={(e) => updateBranch(i, "label", e.target.value)}
+                className="flex-1 text-xs"
+                placeholder="Label"
+              />
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => removeBranch(i)}>
+                <X className="size-3" />
+              </Button>
+            </div>
+            <Input
+              value={b.outputVariable}
+              onChange={(e) => updateBranch(i, "outputVariable", e.target.value)}
+              className="text-xs"
+              placeholder="output_variable"
+            />
+          </div>
+        ))}
+        <Button variant="outline" size="sm" onClick={addBranch} className="w-full">
+          <Plus className="mr-1.5 size-3" />
+          Add Branch
+        </Button>
+        <p className="text-[11px] text-muted-foreground">
+          Each branchId must match the sourceHandle of an outgoing edge from this node.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Merge Strategy</Label>
+        <Select
+          value={(data.mergeStrategy as string) ?? "all"}
+          onValueChange={(val) => update("mergeStrategy", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All must succeed</SelectItem>
+            <SelectItem value="any">Any can succeed</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Timeout (seconds)</Label>
+        <Input
+          type="number"
+          value={(data.timeoutSeconds as number) ?? 30}
+          onChange={(e) => update("timeoutSeconds", Number(e.target.value))}
+          min={1}
+          max={120}
         />
       </div>
     </>

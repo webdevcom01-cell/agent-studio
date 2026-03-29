@@ -123,17 +123,51 @@ describe("parallel-handler", () => {
   });
 
   describe("empty/misconfigured branches", () => {
-    it("should handle no branches configured", async () => {
+    it("should return error when branches is undefined", async () => {
+      const ctx = makeContext();
+      const node = makeParallelNode({ branches: undefined });
+
+      const result = await parallelHandler(node, ctx);
+
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].content).toContain("requires branches configuration");
+      expect(result.nextNodeId).toBeNull();
+    });
+
+    it("should return error when branches is empty array", async () => {
       const ctx = makeContext();
       const node = makeParallelNode({ branches: [] });
 
       const result = await parallelHandler(node, ctx);
 
       expect(result.messages).toHaveLength(1);
-      expect(result.messages[0].content).toContain("no branches");
+      expect(result.messages[0].content).toContain("requires branches configuration");
     });
 
-    it("should handle branches with no connected edges", async () => {
+    it("should return error when branch is missing branchId", async () => {
+      const ctx = makeContext();
+      const node = makeParallelNode({
+        branches: [{ branchId: "", label: "Bad", outputVariable: "res" }],
+      });
+
+      const result = await parallelHandler(node, ctx);
+
+      expect(result.messages[0].content).toContain("invalid branches");
+    });
+
+    it("should return error when branch is missing outputVariable", async () => {
+      const ctx = makeContext();
+      const node = makeParallelNode({
+        branches: [{ branchId: "b-1", label: "Bad", outputVariable: "" }],
+      });
+
+      const result = await parallelHandler(node, ctx);
+
+      expect(result.messages[0].content).toContain("invalid branches");
+    });
+
+    it("should warn when branches have no matching edges", async () => {
+      const { logger } = await import("@/lib/logger");
       const ctx = makeContext({
         flowContent: {
           nodes: [
@@ -147,6 +181,12 @@ describe("parallel-handler", () => {
 
       const result = await parallelHandler(node, ctx);
 
+      expect(logger.warn).toHaveBeenCalledWith(
+        "Parallel branches have no matching edges",
+        expect.objectContaining({
+          unmatchedBranchIds: ["branch-a", "branch-b"],
+        }),
+      );
       expect(result.messages[0].content).toContain("No branches are connected");
     });
   });

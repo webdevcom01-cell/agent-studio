@@ -132,17 +132,35 @@ export const parallelHandler: NodeHandler = async (node, context) => {
   const timeoutSeconds = (node.data.timeoutSeconds as number) ?? 30;
   const timeoutMs = Math.min(timeoutSeconds * 1000, 120000); // Max 2 minutes
 
-  if (branches.length === 0) {
+  if (!Array.isArray(branches) || branches.length === 0) {
     return {
       messages: [
         {
           role: "assistant",
-          content: "Parallel node has no branches configured.",
+          content:
+            "Parallel node requires branches configuration. Add branches in the property panel.",
         },
       ],
       nextNodeId: null,
       waitForInput: false,
     };
+  }
+
+  // Validate branch shape
+  for (const branch of branches) {
+    if (!branch.branchId || !branch.outputVariable) {
+      return {
+        messages: [
+          {
+            role: "assistant",
+            content:
+              "Parallel node has invalid branches — each branch needs a branchId and outputVariable.",
+          },
+        ],
+        nextNodeId: null,
+        waitForInput: false,
+      };
+    }
   }
 
   if (branches.length > MAX_BRANCHES) {
@@ -165,6 +183,15 @@ export const parallelHandler: NodeHandler = async (node, context) => {
       startNodeId: edge?.target ?? null,
     };
   });
+
+  // Warn about branches with no matching edge
+  const unmatchedBranches = branchStarts.filter((b) => b.startNodeId === null);
+  if (unmatchedBranches.length > 0) {
+    logger.warn("Parallel branches have no matching edges", {
+      nodeId: node.id,
+      unmatchedBranchIds: unmatchedBranches.map((b) => b.branchId),
+    });
+  }
 
   // Filter out branches with no connected start node
   const runnableBranches = branchStarts.filter((b) => b.startNodeId !== null);

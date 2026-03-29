@@ -112,6 +112,63 @@ export function validateFlowContent(
   };
 }
 
+/**
+ * Additional semantic validation beyond Zod schema — checks cross-node/edge constraints.
+ * Returns array of human-readable warnings (non-blocking).
+ */
+export function validateFlowSemantics(content: ValidatedFlowContent): string[] {
+  const warnings: string[] = [];
+
+  for (const node of content.nodes) {
+    if (node.type !== "parallel") continue;
+
+    const branches = node.data.branches as
+      | { branchId?: string; outputVariable?: string }[]
+      | undefined;
+
+    if (!Array.isArray(branches) || branches.length === 0) {
+      warnings.push(
+        `Node "${node.id}" (parallel): branches[] is empty — add branches in the property panel.`,
+      );
+      continue;
+    }
+
+    for (let i = 0; i < branches.length; i++) {
+      const b = branches[i];
+      if (!b.branchId || typeof b.branchId !== "string") {
+        warnings.push(
+          `Node "${node.id}" (parallel): branch[${i}] is missing branchId.`,
+        );
+      }
+      if (!b.outputVariable || typeof b.outputVariable !== "string") {
+        warnings.push(
+          `Node "${node.id}" (parallel): branch[${i}] is missing outputVariable.`,
+        );
+      }
+    }
+
+    const branchIds = branches
+      .map((b) => b.branchId)
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+    const outgoingHandles = new Set(
+      content.edges
+        .filter((e) => e.source === node.id && e.sourceHandle)
+        .map((e) => e.sourceHandle),
+    );
+
+    for (const bid of branchIds) {
+      if (!outgoingHandles.has(bid)) {
+        warnings.push(
+          `Node "${node.id}" (parallel): branch "${bid}" has no matching outgoing edge (sourceHandle).`,
+        );
+      }
+    }
+  }
+
+  return warnings;
+}
+
 const EMPTY_FLOW: FlowContent = { nodes: [], edges: [], variables: [] };
 
 export function parseFlowContent(json: unknown): FlowContent {
