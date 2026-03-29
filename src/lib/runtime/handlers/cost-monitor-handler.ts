@@ -36,6 +36,20 @@ function parseTiers(raw: unknown): AdaptiveTiers {
 export const costMonitorHandler: NodeHandler = async (node, context) => {
   const mode = (node.data.mode as string) ?? "monitor";
   const budgetUsd = (node.data.budgetUsd as number) ?? DEFAULT_BUDGET_USD;
+
+  if (mode !== "monitor" && (!budgetUsd || budgetUsd <= 0)) {
+    return {
+      messages: [
+        {
+          role: "assistant",
+          content: "Cost monitor requires a positive budgetUsd value. Set budgetUsd in the property panel.",
+        },
+      ],
+      nextNodeId: null,
+      waitForInput: false,
+    };
+  }
+
   const alertThreshold =
     (node.data.alertThreshold as number) ?? DEFAULT_ALERT_THRESHOLD;
   const onExceeded =

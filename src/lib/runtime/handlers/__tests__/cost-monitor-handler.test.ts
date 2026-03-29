@@ -239,3 +239,31 @@ describe("enforce mode (F-03)", () => {
     expect(result.updatedVariables?.__model_tier_override).toBeUndefined();
   });
 });
+
+describe("budgetUsd validation (F-03)", () => {
+  it("returns error when budgetUsd is 0 in non-monitor mode", async () => {
+    const result = await costMonitorHandler(
+      makeNode({ mode: "adaptive", budgetUsd: 0 }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("positive budgetUsd");
+    expect(result.nextNodeId).toBeNull();
+  });
+
+  it("returns error when budgetUsd is negative", async () => {
+    const result = await costMonitorHandler(
+      makeNode({ mode: "enforce", budgetUsd: -5 }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("positive budgetUsd");
+  });
+
+  it("allows undefined budgetUsd in monitor mode (uses default)", async () => {
+    const result = await costMonitorHandler(
+      makeNode({ mode: "monitor", budgetUsd: undefined }),
+      makeContext(),
+    );
+    expect(result.messages).toHaveLength(0);
+    expect(result.updatedVariables?.cost_status).toBeDefined();
+  });
+});
