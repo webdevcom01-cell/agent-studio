@@ -9,6 +9,7 @@ import { injectRAGContext } from "@/lib/knowledge/rag-inject";
 import { reformulateWithHistory } from "@/lib/knowledge/query-reformulation";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
+import { checkInputSafety, checkOutputSafety } from "@/lib/safety/engine-safety-middleware";
 
 const MAX_TOOL_STEPS = 20;
 
@@ -105,6 +106,24 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     }
     // ──────────────────────────────────────────────────────────────────────────
 
+    // ── Safety: check user input for injection ────────────────────────────
+    if (latestUserMsg) {
+      const inputCheck = await checkInputSafety(latestUserMsg, context.agentId, node.id);
+      if (!inputCheck.safe) {
+        return {
+          messages: [
+            { role: "assistant", content: "I'm unable to process that request due to safety guidelines." },
+          ],
+          nextNodeId: null,
+          waitForInput: true,
+          updatedVariables: outputVariable
+            ? { ...context.variables, [outputVariable]: `[Safety blocked: ${inputCheck.reason}]` }
+            : undefined,
+        };
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     const systemMessages = effectiveSystemPrompt
       ? [{ role: "system" as const, content: effectiveSystemPrompt }]
       : [];
@@ -171,7 +190,14 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
       recordTokenUsage(context.agentId, modelId, inputTokens, outputTokens);
     }
 
-    const responseText = result.text || "I couldn't generate a response.";
+    let responseText = result.text || "I couldn't generate a response.";
+
+    // ── Safety: check AI output for PII ──────────────────────────────────
+    const outputCheck = await checkOutputSafety(responseText, context.agentId, node.id);
+    if (outputCheck.piiRedacted) {
+      responseText = outputCheck.sanitized;
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     return {
       messages: [{ role: "assistant", content: responseText }],

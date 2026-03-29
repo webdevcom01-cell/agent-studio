@@ -11,6 +11,7 @@ import type { ExecutionResult, RuntimeContext, StreamWriter } from "../types";
 import { debugEmit } from "../types";
 import type { FlowNode } from "@/types";
 import { resolveTemplate } from "../template";
+import { checkInputSafety, checkOutputSafety } from "@/lib/safety/engine-safety-middleware";
 
 const MAX_TOOL_STEPS = 20;
 
@@ -110,6 +111,26 @@ export async function aiResponseStreamingHandler(
       }
     }
     // ──────────────────────────────────────────────────────────────────────────
+
+    // ── Safety: check user input for injection ────────────────────────────
+    if (latestUserMsg) {
+      const inputCheck = await checkInputSafety(latestUserMsg, context.agentId, node.id);
+      if (!inputCheck.safe) {
+        writer.write({
+          type: "message",
+          role: "assistant",
+          content: "I'm unable to process that request due to safety guidelines.",
+        });
+        return {
+          messages: [
+            { role: "assistant", content: "I'm unable to process that request due to safety guidelines." },
+          ],
+          nextNodeId: null,
+          waitForInput: true,
+        };
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     const systemMessages = effectiveSystemPrompt
       ? [{ role: "system" as const, content: effectiveSystemPrompt }]
@@ -216,6 +237,13 @@ export async function aiResponseStreamingHandler(
     }
 
     if (!fullText) fullText = "I couldn't generate a response.";
+
+    // ── Safety: check AI output for PII ──────────────────────────────────
+    const outputCheck = await checkOutputSafety(fullText, context.agentId, node.id);
+    if (outputCheck.piiRedacted) {
+      fullText = outputCheck.sanitized;
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     writer.write({ type: "stream_end", content: fullText });
 
