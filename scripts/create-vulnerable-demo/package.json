@@ -1,0 +1,27 @@
+{
+  "name": "vulnerable-demo",
+  "version": "1.0.0",
+  "description": "Intentionally vulnerable Node.js/TypeScript app for DevOps Swarm demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo 'No tests yet'",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "express": "4.18.2",
+    "lodash": "4.17.20",
+    "axios": "0.21.1",
+    "node-fetch": "2.6.7",
+    "jsonwebtoken": "8.5.1",
+    "multer": "1.4.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
