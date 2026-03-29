@@ -8,7 +8,7 @@ import {
 } from "./types";
 import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
-import { findNextNode, findStartNode, SELF_ROUTING_NODES } from "./engine";
+import { findNextNode, findStartNode, SELF_ROUTING_NODES, resolveNextNodeId } from "./engine";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
 import { parallelStreamingHandler } from "./handlers/parallel-streaming-handler";
@@ -229,7 +229,10 @@ export function executeFlowStreaming(
               };
               allMessages.push(msg);
               writer.write({ type: "error", content: msg.content });
-              context.currentNodeId = findNextNode(context, node.id);
+              context.currentNodeId = resolveNextNodeId(
+                { nextNodeId: null }, node.id, node.type,
+                context.flowContent.edges, nodeMap,
+              );
               continue;
             }
           // ── Codepath 2: parallel ─────────────────────────────────────────
@@ -267,7 +270,10 @@ export function executeFlowStreaming(
                 content: msg.content,
               });
               debugEmitNodeEnd(writer, context, node.id, "skipped", Date.now() - nodeStartMs);
-              context.currentNodeId = findNextNode(context, node.id);
+              context.currentNodeId = resolveNextNodeId(
+                { nextNodeId: null }, node.id, node.type,
+                context.flowContent.edges, nodeMap,
+              );
               continue;
             }
 
@@ -310,9 +316,10 @@ export function executeFlowStreaming(
                 role: msg.role,
                 content: msg.content,
               });
-              context.currentNodeId = SELF_ROUTING_NODES.has(node.type)
-                ? null
-                : findNextNode(context, node.id);
+              context.currentNodeId = resolveNextNodeId(
+                { nextNodeId: null }, node.id, node.type,
+                context.flowContent.edges, nodeMap,
+              );
               continue;
             }
 
@@ -365,16 +372,10 @@ export function executeFlowStreaming(
           }
 
           // ── Resolve next node + emit edge taken ──────────────────────────
-          let nextNodeId: string | null;
-          if (result.nextNodeId && nodeMap.has(result.nextNodeId)) {
-            nextNodeId = result.nextNodeId;
-          } else if (result.nextNodeId) {
-            nextNodeId = findNextNode(context, node.id, result.nextNodeId);
-          } else if (SELF_ROUTING_NODES.has(node.type)) {
-            nextNodeId = null;
-          } else {
-            nextNodeId = findNextNode(context, node.id);
-          }
+          const nextNodeId = resolveNextNodeId(
+            result, node.id, node.type,
+            context.flowContent.edges, nodeMap,
+          );
 
           if (nextNodeId) {
             debugEmitEdge(writer, context, node.id, nextNodeId);

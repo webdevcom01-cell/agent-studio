@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { executeFlow } from "../engine";
+import { executeFlow, resolveNextNodeId } from "../engine";
 import type { RuntimeContext } from "../types";
-import type { NodeType } from "@/types";
+import type { NodeType, FlowEdge } from "@/types";
 
 vi.mock("../handlers", () => ({
   getHandler: vi.fn(),
@@ -678,5 +678,82 @@ describe("executeFlow", () => {
       // merge should execute exactly once
       expect(execLog.filter((id) => id === "merge")).toHaveLength(1);
     });
+  });
+});
+
+// ── resolveNextNodeId unit tests (P-16) ─────────────────────────────────────
+
+describe("resolveNextNodeId", () => {
+  const edges: FlowEdge[] = [
+    { id: "e1", source: "sw1", target: "case-a", sourceHandle: "case_0" },
+    { id: "e2", source: "sw1", target: "case-b", sourceHandle: "case_1" },
+    { id: "e3", source: "sw1", target: "default-node", sourceHandle: "default" },
+    { id: "e4", source: "msg1", target: "msg2" },
+    { id: "e5", source: "cond1", target: "true-node", sourceHandle: "true" },
+    { id: "e6", source: "cond1", target: "false-node", sourceHandle: "false" },
+  ];
+  const nodeMap = new Map([
+    ["sw1", {}], ["case-a", {}], ["case-b", {}], ["default-node", {}],
+    ["msg1", {}], ["msg2", {}], ["cond1", {}], ["true-node", {}], ["false-node", {}],
+    ["goto-target", {}],
+  ]);
+
+  it("direct node ID routing (goto/loop)", () => {
+    const result = resolveNextNodeId(
+      { nextNodeId: "goto-target" }, "msg1", "goto", edges, nodeMap,
+    );
+    expect(result).toBe("goto-target");
+  });
+
+  it("switch sourceHandle routing to matching edge", () => {
+    const result = resolveNextNodeId(
+      { nextNodeId: "case_0" }, "sw1", "switch", edges, nodeMap,
+    );
+    expect(result).toBe("case-a");
+  });
+
+  it("switch sourceHandle with no matching edge → null", () => {
+    const result = resolveNextNodeId(
+      { nextNodeId: "nonexistent_case" }, "sw1", "switch", edges, nodeMap,
+    );
+    expect(result).toBeNull();
+  });
+
+  it("self-routing node returning null → stop", () => {
+    const result = resolveNextNodeId(
+      { nextNodeId: null }, "sw1", "switch", edges, nodeMap,
+    );
+    expect(result).toBeNull();
+  });
+
+  it("regular node returning null → follows default edge", () => {
+    const result = resolveNextNodeId(
+      { nextNodeId: null }, "msg1", "message", edges, nodeMap,
+    );
+    expect(result).toBe("msg2");
+  });
+
+  it("condition true branch via direct node ID", () => {
+    // condition handler resolves edges internally and returns node IDs
+    const result = resolveNextNodeId(
+      { nextNodeId: "true-node" }, "cond1", "condition", edges, nodeMap,
+    );
+    expect(result).toBe("true-node");
+  });
+
+  it("parallel node is NOT self-routing — follows default edge on null", () => {
+    const parallelEdges: FlowEdge[] = [
+      { id: "ep1", source: "p1", target: "merge", sourceHandle: "done" },
+      { id: "ep2", source: "p1", target: "merge-default" },
+    ];
+    const pNodeMap = new Map([["p1", {}], ["merge", {}], ["merge-default", {}]]);
+
+    // Parallel returns node IDs (resolved internally), not sourceHandles.
+    // If it returns null, it means no done/default edge was found by the handler.
+    // Since "parallel" is NOT in SELF_ROUTING_NODES, it follows default edge.
+    const result = resolveNextNodeId(
+      { nextNodeId: null }, "p1", "parallel", parallelEdges, pNodeMap,
+    );
+    expect(result).toBe("merge-default");
   });
 });

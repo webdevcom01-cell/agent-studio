@@ -16,6 +16,11 @@ import type { FlowNode } from "@/types";
  * NOT fall through to a default edge (which would cause double execution).
  * Note: parallel is NOT here — it resolves edges internally and returns node IDs.
  */
+/**
+ * Multi-output nodes that return sourceHandle strings (not node IDs) as nextNodeId.
+ * When they return null, engine stops — null means "no route matched".
+ * Note: parallel and condition are NOT here — they resolve edges internally.
+ */
 export const SELF_ROUTING_NODES = new Set([
   "switch",
   "guardrails",
@@ -24,6 +29,9 @@ export const SELF_ROUTING_NODES = new Set([
   "cache",
 ]);
 
+/**
+ * Legacy helper — finds the next node ID given a source node and optional handle.
+ */
 export function findNextNode(
   context: RuntimeContext,
   sourceNodeId: string,
@@ -35,6 +43,49 @@ export function findNextNode(
       (sourceHandle ? e.sourceHandle === sourceHandle : true)
   );
   return edge?.target ?? null;
+}
+
+/**
+ * Resolves the next node ID from a handler result using explicit routing rules:
+ *  1. Handler returned a known node ID → direct routing (goto, loop, condition)
+ *  2. Handler returned a sourceHandle string → find edge by sourceHandle
+ *  3. Self-routing node returned null → stop (no default fallthrough)
+ *  4. Regular node returned null → follow first default edge
+ */
+export function resolveNextNodeId(
+  result: { nextNodeId: string | null },
+  currentNodeId: string,
+  nodeType: string,
+  edges: import("@/types").FlowEdge[],
+  nodeMap: Map<string, unknown>,
+): string | null {
+  const { nextNodeId } = result;
+
+  if (nextNodeId && nodeMap.has(nextNodeId)) {
+    return nextNodeId;
+  }
+
+  if (nextNodeId) {
+    const edge = edges.find(
+      (e) => e.source === currentNodeId && e.sourceHandle === nextNodeId,
+    );
+    if (edge) return edge.target;
+    logger.warn("No edge found for sourceHandle", {
+      nodeId: currentNodeId,
+      nodeType,
+      sourceHandle: nextNodeId,
+    });
+    return null;
+  }
+
+  if (SELF_ROUTING_NODES.has(nodeType)) {
+    return null;
+  }
+
+  const defaultEdge = edges.find(
+    (e) => e.source === currentNodeId && !e.sourceHandle,
+  );
+  return defaultEdge?.target ?? null;
 }
 
 export function findStartNode(context: RuntimeContext): FlowNode | null {
@@ -131,11 +182,10 @@ export async function executeFlow(
         role: "assistant",
         content: "Something went wrong. Let me try to continue.",
       });
-      // Self-routing nodes manage their own edges — don't follow default edge
-      // on error (prevents double execution of downstream nodes)
-      context.currentNodeId = SELF_ROUTING_NODES.has(node.type)
-        ? null
-        : findNextNode(context, node.id);
+      context.currentNodeId = resolveNextNodeId(
+        { nextNodeId: null }, node.id, node.type,
+        context.flowContent.edges, nodeMap,
+      );
       continue;
     }
 
@@ -162,20 +212,10 @@ export async function executeFlow(
       return { messages: allMessages, waitingForInput: true };
     }
 
-    if (result.nextNodeId && nodeMap.has(result.nextNodeId)) {
-      // Direct node ID (e.g., goto, loop back)
-      context.currentNodeId = result.nextNodeId;
-    } else if (result.nextNodeId) {
-      // Treat as sourceHandle (e.g., switch "case_0", evaluator "passed"/"failed")
-      context.currentNodeId = findNextNode(context, node.id, result.nextNodeId);
-    } else if (SELF_ROUTING_NODES.has(node.type)) {
-      // Multi-output nodes manage their own routing — null means "stop here",
-      // don't fall through to default edge (prevents double execution P-06)
-      context.currentNodeId = null;
-    } else {
-      // Default: follow the first unfiltered edge
-      context.currentNodeId = findNextNode(context, node.id);
-    }
+    context.currentNodeId = resolveNextNodeId(
+      result, node.id, node.type,
+      context.flowContent.edges, nodeMap,
+    );
   }
 
   if (iterations >= MAX_ITERATIONS && context.currentNodeId) {
