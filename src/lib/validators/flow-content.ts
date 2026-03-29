@@ -166,6 +166,19 @@ export function validateFlowSemantics(content: ValidatedFlowContent): string[] {
     }
   }
 
+  // ── Aggregate node checks ───────────────────────────────────────────────
+  for (const node of content.nodes) {
+    if (node.type !== "aggregate") continue;
+
+    const branchVars = node.data.branchVariables as string[] | undefined;
+
+    if (!Array.isArray(branchVars) || branchVars.length === 0) {
+      warnings.push(
+        `Node "${node.id}" (aggregate): branchVariables[] is empty — add output variable names from parallel branches.`,
+      );
+    }
+  }
+
   return warnings;
 }
 

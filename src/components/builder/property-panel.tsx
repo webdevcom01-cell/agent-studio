@@ -4414,13 +4414,18 @@ function AggregateProperties({ data, update }: Omit<SubPanelProps, "variables">)
 
       <div className="space-y-2">
         <Label>Branch Variables</Label>
+        {branchVars.length === 0 && (
+          <p className="text-xs text-amber-500">
+            No branch variables configured. Add the outputVariable names from your parallel node branches.
+          </p>
+        )}
         {branchVars.map((v, i) => (
           <div key={i} className="flex items-center gap-2">
             <Input
               value={v}
               onChange={(e) => updateBranchVar(i, e.target.value)}
               className="flex-1 text-xs"
-              placeholder="branch_result_variable"
+              placeholder="e.g. security_report"
             />
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => removeBranchVar(i)}>
               <X className="size-3" />
@@ -4431,6 +4436,9 @@ function AggregateProperties({ data, update }: Omit<SubPanelProps, "variables">)
           <Plus className="mr-1.5 size-3" />
           Add Branch Variable
         </Button>
+        <p className="text-[11px] text-muted-foreground">
+          Enter the outputVariable values from your parallel node branches.
+        </p>
       </div>
 
       <div className="space-y-2">

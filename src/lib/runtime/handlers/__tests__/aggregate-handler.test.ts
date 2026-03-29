@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const mockLogger = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+vi.mock("@/lib/logger", () => ({ logger: mockLogger }));
+
 import { aggregateHandler } from "../aggregate-handler";
 import type { RuntimeContext } from "../../types";
 import type { FlowNode, FlowContent } from "@/types";
@@ -42,13 +50,50 @@ beforeEach(() => {
 });
 
 describe("aggregateHandler", () => {
-  it("returns error when no branch inputs found", async () => {
+  // ── Early validation ───────────────────────────────────────────────────
+
+  it("returns error when branchVariables is undefined", async () => {
+    const result = await aggregateHandler(
+      makeNode({ branchVariables: undefined }),
+      makeContext(),
+    );
+    expect(result.messages[0].content).toContain("requires branchVariables");
+  });
+
+  it("returns error when branchVariables is empty array", async () => {
     const result = await aggregateHandler(
       makeNode({ branchVariables: [] }),
       makeContext(),
     );
-    expect(result.messages[0].content).toContain("no branch inputs");
+    expect(result.messages[0].content).toContain("requires branchVariables");
   });
+
+  it("returns error when ALL configured variables are missing from context", async () => {
+    const result = await aggregateHandler(
+      makeNode({ branchVariables: ["missing_x", "missing_y"] }),
+      makeContext({ variables: {} }),
+    );
+    expect(result.messages[0].content).toContain("none of the configured");
+    expect(result.messages[0].content).toContain("missing_x");
+  });
+
+  it("warns when some variables are missing but continues with available ones", async () => {
+    const result = await aggregateHandler(
+      makeNode({ branchVariables: ["branch_a", "nonexistent"] }),
+      makeContext(),
+    );
+
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      "Aggregate: some branch variables not found in context",
+      expect.objectContaining({
+        missing: ["nonexistent"],
+        available: ["branch_a"],
+      }),
+    );
+    expect(result.updatedVariables?.aggregate_result_count).toBe(1);
+  });
+
+  // ── Merge strategies ───────────────────────────────────────────────────
 
   it("wait_all collects all branches", async () => {
     const result = await aggregateHandler(makeNode(), makeContext());
@@ -73,6 +118,8 @@ describe("aggregateHandler", () => {
     );
     expect(result.updatedVariables?.aggregate_result_count).toBeGreaterThanOrEqual(1);
   });
+
+  // ── Merge modes ────────────────────────────────────────────────────────
 
   it("merge mode 'first' returns first branch value", async () => {
     const result = await aggregateHandler(
@@ -99,6 +146,32 @@ describe("aggregateHandler", () => {
     expect(merged.branch_a).toBe("Result from A");
     expect(merged.branch_b).toBe("Result from B");
   });
+
+  it("merges string values with concat (newline separated)", async () => {
+    const result = await aggregateHandler(
+      makeNode({ mergeMode: "concat" }),
+      makeContext(),
+    );
+    const output = result.updatedVariables?.aggregate_result as string;
+    expect(output).toBe("Result from A\nResult from B");
+  });
+
+  it("merges object values by JSON.stringify in concat mode", async () => {
+    const result = await aggregateHandler(
+      makeNode({ mergeMode: "concat" }),
+      makeContext({
+        variables: {
+          branch_a: { score: 85, verdict: "PASS" },
+          branch_b: { score: 42, verdict: "FAIL" },
+        },
+      }),
+    );
+    const output = result.updatedVariables?.aggregate_result as string;
+    expect(output).toContain('"score":85');
+    expect(output).toContain('"score":42');
+  });
+
+  // ── Error handling ─────────────────────────────────────────────────────
 
   it("handles partial failure (one branch has error)", async () => {
     const result = await aggregateHandler(

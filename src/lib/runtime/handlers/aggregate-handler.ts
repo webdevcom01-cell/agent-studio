@@ -1,4 +1,5 @@
 import type { NodeHandler, ExecutionResult } from "../types";
+import { logger } from "@/lib/logger";
 
 const DEFAULT_OUTPUT_VARIABLE = "aggregate_result";
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -21,7 +22,34 @@ export const aggregateHandler: NodeHandler = async (node, context) => {
   const outputVariable =
     (node.data.outputVariable as string) || DEFAULT_OUTPUT_VARIABLE;
 
-  // Collect branch inputs from context variables
+  // Early validation: branchVariables must be configured
+  const branchVars = (node.data.branchVariables as string[]) ?? [];
+
+  if (!Array.isArray(node.data.branchVariables) || branchVars.length === 0) {
+    return {
+      messages: [
+        {
+          role: "assistant",
+          content:
+            "Aggregate node requires branchVariables configuration. " +
+            "Add the output variable names from your parallel node branches.",
+        },
+      ],
+      nextNodeId: null,
+      waitForInput: false,
+    };
+  }
+
+  // Warn about missing variables, collect the ones that exist
+  const missingVars = branchVars.filter((name) => !(name in context.variables));
+  if (missingVars.length > 0) {
+    logger.warn("Aggregate: some branch variables not found in context", {
+      nodeId: node.id,
+      missing: missingVars,
+      available: branchVars.filter((name) => name in context.variables),
+    });
+  }
+
   const branchInputs = collectBranchInputs(node.data, context.variables);
 
   if (branchInputs.length === 0) {
@@ -29,7 +57,9 @@ export const aggregateHandler: NodeHandler = async (node, context) => {
       messages: [
         {
           role: "assistant",
-          content: "Aggregate: no branch inputs found.",
+          content:
+            "Aggregate: none of the configured branchVariables exist in context. " +
+            `Missing: ${branchVars.join(", ")}`,
         },
       ],
       nextNodeId: null,
