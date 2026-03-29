@@ -50,11 +50,20 @@ e2e/.auth/
 .vercel
 
 # Local dev scripts and external services
-scripts/
+scripts/*
+!scripts/setup-devops-swarm.mjs
+!scripts/create-vulnerable-demo
+!scripts/create-vulnerable-demo/**
+!scripts/pre-push-check.sh
 services/*
 !services/ecc-skills-mcp
 !services/ecc-skills-mcp/**
+!services/security-scanner-mcp
+!services/security-scanner-mcp/**
+!services/gh-bridge-mcp
+!services/gh-bridge-mcp/**
 *.mjs
+!scripts/setup-devops-swarm.mjs
 
 # Vercel env secrets
 .env.vercel
