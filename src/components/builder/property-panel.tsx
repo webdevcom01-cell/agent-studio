@@ -5187,6 +5187,55 @@ function GuardrailsProperties({ data, update, variables = [] }: SubPanelProps) {
         ))}
       </div>
 
+      {checks.includes("injection_detection") && (
+        <div className="space-y-1">
+          <Label className="text-xs">Injection Action</Label>
+          <Select
+            value={(data.injectionAction as string) ?? "block"}
+            onValueChange={(val) => update("injectionAction", val)}
+          >
+            <SelectTrigger className="w-full text-xs h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="block">Block (stop flow)</SelectItem>
+              <SelectItem value="warn">Warn (log and continue)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {checks.includes("content_moderation") && (
+        <div className="space-y-1">
+          <Label className="text-xs">Moderation Action</Label>
+          <Select
+            value={(data.moderationAction as string) ?? "block"}
+            onValueChange={(val) => update("moderationAction", val)}
+          >
+            <SelectTrigger className="w-full text-xs h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="block">Block (stop flow)</SelectItem>
+              <SelectItem value="warn">Warn (log and continue)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {checks.includes("pii_detection") && (
+        <div className="space-y-1">
+          <Label className="text-xs">PII Action</Label>
+          <Select
+            value={(data.piiAction as string) ?? "redact"}
+            onValueChange={(val) => update("piiAction", val)}
+          >
+            <SelectTrigger className="w-full text-xs h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="redact">Redact (replace with [EMAIL], [PHONE], etc.)</SelectItem>
+              <SelectItem value="block">Block (stop flow)</SelectItem>
+              <SelectItem value="warn">Warn (log and continue)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {checks.includes("custom_policy") && (
         <div className="space-y-2">
           <Label>Custom Policy</Label>

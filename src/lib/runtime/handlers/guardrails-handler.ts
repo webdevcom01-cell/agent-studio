@@ -1,11 +1,14 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
-import { detectPII, type PIIMatch } from "@/lib/safety/pii-detector";
+import { detectPII, redactPII, type PIIMatch } from "@/lib/safety/pii-detector";
 import { detectInjection } from "@/lib/safety/injection-detector";
 import { moderateContent } from "@/lib/safety/content-moderator";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
+import { logger } from "@/lib/logger";
 
 const DEFAULT_OUTPUT_VARIABLE = "guardrails_result";
+
+type ActionMode = "block" | "warn" | "redact";
 
 interface CheckResult {
   name: string;
@@ -28,6 +31,11 @@ export const guardrailsHandler: NodeHandler = async (node, context) => {
   const outputVariable =
     (node.data.outputVariable as string) || DEFAULT_OUTPUT_VARIABLE;
 
+  // Per-module action configuration
+  const injectionAction = (node.data.injectionAction as ActionMode) ?? "block";
+  const moderationAction = (node.data.moderationAction as ActionMode) ?? "block";
+  const piiAction = (node.data.piiAction as ActionMode) ?? "redact";
+
   const inputText = inputVariable
     ? String(context.variables[inputVariable] ?? "")
     : "";
@@ -44,68 +52,118 @@ export const guardrailsHandler: NodeHandler = async (node, context) => {
 
   const results: CheckResult[] = [];
   let piiFound: PIIMatch[] = [];
+  let cleanedText = inputText;
+  let blocked = false;
+  let blockReason = "";
 
-  for (const check of checks) {
-    switch (check) {
-      case "content_moderation": {
-        const modResult = await moderateContent(inputText);
-        results.push({
-          name: "content_moderation",
-          passed: !modResult.flagged,
-          reason: modResult.reasoning,
-          severity: modResult.severity,
+  // ── 1. Injection detection (first — most critical) ──────────────────────
+  if (checks.includes("injection_detection")) {
+    const injResult = detectInjection(inputText);
+    const injPassed = !injResult.detected || injectionAction === "warn";
+    results.push({
+      name: "injection_detection",
+      passed: injPassed,
+      reason: injResult.detected
+        ? `Injection patterns: ${injResult.patterns.join(", ")} (action: ${injectionAction})`
+        : "No injection detected",
+      severity: injResult.severity,
+    });
+
+    if (injResult.detected) {
+      if (injectionAction === "block") {
+        blocked = true;
+        blockReason = "Input blocked: prompt injection detected";
+      } else {
+        logger.warn("Guardrails injection warning (non-blocking)", {
+          agentId: context.agentId,
+          patterns: injResult.patterns,
         });
-        break;
-      }
-
-      case "pii_detection": {
-        piiFound = detectPII(inputText);
-        results.push({
-          name: "pii_detection",
-          passed: piiFound.length === 0,
-          reason: piiFound.length > 0
-            ? `Found ${piiFound.length} PII items: ${piiFound.map((p) => p.type).join(", ")}`
-            : "No PII detected",
-          severity: piiFound.length > 0 ? "medium" : "none",
-        });
-        break;
-      }
-
-      case "injection_detection": {
-        const injResult = detectInjection(inputText);
-        results.push({
-          name: "injection_detection",
-          passed: !injResult.detected,
-          reason: injResult.detected
-            ? `Injection patterns: ${injResult.patterns.join(", ")}`
-            : "No injection detected",
-          severity: injResult.severity,
-        });
-        break;
-      }
-
-      case "custom_policy": {
-        if (customPolicy) {
-          const policyResult = await evaluateCustomPolicy(inputText, customPolicy);
-          results.push(policyResult);
-        }
-        break;
-      }
-
-      case "eu_audit": {
-        results.push({
-          name: "eu_audit",
-          passed: true,
-          reason: "Audit trail recorded",
-          severity: "none",
-        });
-        break;
       }
     }
   }
 
-  const allPassed = results.every((r) => r.passed);
+  // ── 2. Content moderation ───────────────────────────────────────────────
+  if (!blocked && checks.includes("content_moderation")) {
+    const modResult = await moderateContent(inputText);
+    const modPassed = !modResult.flagged || moderationAction === "warn";
+    results.push({
+      name: "content_moderation",
+      passed: modPassed,
+      reason: modResult.reasoning,
+      severity: modResult.severity,
+    });
 
+    if (modResult.flagged) {
+      if (moderationAction === "block") {
+        blocked = true;
+        blockReason = "Input blocked: content policy violation";
+      } else {
+        logger.warn("Guardrails moderation warning (non-blocking)", {
+          agentId: context.agentId,
+          categories: modResult.categories,
+        });
+      }
+    }
+  }
+
+  // ── 3. PII detection ────────────────────────────────────────────────────
+  if (!blocked && checks.includes("pii_detection")) {
+    piiFound = detectPII(inputText);
+    const hasPII = piiFound.length > 0;
+    // PII check "passes" when no PII found, OR when PII is redacted/warned (handled)
+    const piiPassed = !hasPII || piiAction === "redact" || piiAction === "warn";
+    results.push({
+      name: "pii_detection",
+      passed: piiPassed,
+      reason: hasPII
+        ? `Found ${piiFound.length} PII items: ${piiFound.map((p) => p.type).join(", ")} (action: ${piiAction})`
+        : "No PII detected",
+      severity: hasPII ? "medium" : "none",
+    });
+
+    if (hasPII) {
+      if (piiAction === "block") {
+        blocked = true;
+        blockReason = "Input blocked: PII detected";
+      } else if (piiAction === "redact") {
+        cleanedText = redactPII(inputText, piiFound);
+        logger.info("Guardrails PII redacted", {
+          agentId: context.agentId,
+          piiCount: piiFound.length,
+          types: piiFound.map((p) => p.type),
+        });
+      } else {
+        logger.warn("Guardrails PII warning (non-blocking)", {
+          agentId: context.agentId,
+          piiCount: piiFound.length,
+        });
+      }
+    }
+  }
+
+  // ── 4. Custom policy ────────────────────────────────────────────────────
+  if (!blocked && checks.includes("custom_policy") && customPolicy) {
+    const policyResult = await evaluateCustomPolicy(inputText, customPolicy);
+    results.push(policyResult);
+    if (!policyResult.passed) {
+      blocked = true;
+      blockReason = `Custom policy violation: ${policyResult.reason}`;
+    }
+  }
+
+  // ── 5. EU audit trail ───────────────────────────────────────────────────
+  if (checks.includes("eu_audit")) {
+    results.push({
+      name: "eu_audit",
+      passed: true,
+      reason: "Audit trail recorded",
+      severity: "none",
+    });
+  }
+
+  const allPassed = !blocked && results.every((r) => r.passed);
+
+  // ── 6. Audit log ────────────────────────────────────────────────────────
   let auditId: string | null = null;
   if (auditLog) {
     auditId = await writeAuditLog({
@@ -115,8 +173,10 @@ export const guardrailsHandler: NodeHandler = async (node, context) => {
       resourceId: context.agentId,
       after: {
         passed: allPassed,
+        blocked,
         checks: results,
         inputLength: inputText.length,
+        piiRedacted: cleanedText !== inputText,
       },
     });
   }
@@ -127,19 +187,21 @@ export const guardrailsHandler: NodeHandler = async (node, context) => {
 
   const output = {
     passed: allPassed,
+    blocked,
     checks: results,
     piiFound: piiFound.map((p) => ({ type: p.type, start: p.start, end: p.end })),
+    cleanedText: cleanedText !== inputText ? cleanedText : undefined,
     auditId,
     explanation,
   };
 
-  if (!allPassed) {
+  if (blocked || !allPassed) {
     if (onFail === "stop_flow") {
       return {
         messages: [
           {
             role: "assistant",
-            content: `Guardrails check failed: ${results.filter((r) => !r.passed).map((r) => r.name).join(", ")}`,
+            content: blockReason || `Guardrails check failed: ${results.filter((r) => !r.passed).map((r) => r.name).join(", ")}`,
           },
         ],
         nextNodeId: null,
@@ -156,11 +218,18 @@ export const guardrailsHandler: NodeHandler = async (node, context) => {
     };
   }
 
+  // Pass — store cleaned text (redacted if PII was found) for downstream nodes
   return {
     messages: [],
     nextNodeId: "pass",
     waitForInput: false,
-    updatedVariables: { ...context.variables, [outputVariable]: output },
+    updatedVariables: {
+      ...context.variables,
+      [outputVariable]: output,
+      ...(cleanedText !== inputText && inputVariable
+        ? { [inputVariable]: cleanedText }
+        : {}),
+    },
   };
 };
 
