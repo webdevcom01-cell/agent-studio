@@ -4378,6 +4378,7 @@ function CostMonitorProperties({ data, update }: Omit<SubPanelProps, "variables"
             <SelectItem value="budget">Budget (enforce limit)</SelectItem>
             <SelectItem value="alert">Alert (warn at threshold)</SelectItem>
             <SelectItem value="adaptive">Adaptive (auto-downgrade tier)</SelectItem>
+            <SelectItem value="enforce">Enforce (adaptive + hard block)</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -4429,6 +4430,58 @@ function CostMonitorProperties({ data, update }: Omit<SubPanelProps, "variables"
                   <SelectItem value="route_to_handle">Route to Handle</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {(mode === "adaptive" || mode === "enforce") && (
+            <div className="space-y-2 rounded border p-2">
+              <Label className="text-xs font-medium">Adaptive Tiers (%)</Label>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={((data.adaptiveTiers as Record<string, unknown>)?.tier1 as number) ?? 60}
+                    onChange={(e) => {
+                      const t = (data.adaptiveTiers as Record<string, unknown>) ?? {};
+                      update("adaptiveTiers", { ...t, tier1: Number(e.target.value) });
+                    }}
+                    className="h-7 w-16 text-xs"
+                  />
+                  <span className="text-xs text-muted-foreground">Balanced tier</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={((data.adaptiveTiers as Record<string, unknown>)?.tier2 as number) ?? 80}
+                    onChange={(e) => {
+                      const t = (data.adaptiveTiers as Record<string, unknown>) ?? {};
+                      update("adaptiveTiers", { ...t, tier2: Number(e.target.value) });
+                    }}
+                    className="h-7 w-16 text-xs"
+                  />
+                  <span className="text-xs text-muted-foreground">Fast tier</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={((data.adaptiveTiers as Record<string, unknown>)?.tier3 as number) ?? 95}
+                    onChange={(e) => {
+                      const t = (data.adaptiveTiers as Record<string, unknown>) ?? {};
+                      update("adaptiveTiers", { ...t, tier3: Number(e.target.value) });
+                    }}
+                    className="h-7 w-16 text-xs"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {mode === "enforce" ? "Block" : "Warning + fast"}
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </>

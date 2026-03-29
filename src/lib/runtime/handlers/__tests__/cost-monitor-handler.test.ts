@@ -148,3 +148,94 @@ describe("budget tracker", () => {
     expect(after.isExceeded).toBe(true);
   });
 });
+
+// ── Adaptive & enforce modes (F-03) ─────────────────────────────────────────
+
+describe("adaptive mode (F-03)", () => {
+  it("no tier override when below tier1", async () => {
+    const result = await costMonitorHandler(
+      makeNode({ mode: "adaptive", budgetUsd: 1.0, adaptiveTiers: { tier1: 60, tier2: 80, tier3: 95 } }),
+      contextWithUsage(0.3, 1.0),
+    );
+    expect(result.updatedVariables?.__model_tier_override).toBeUndefined();
+    expect(result.messages).toHaveLength(0);
+  });
+
+  it("sets balanced tier when above tier1", async () => {
+    const result = await costMonitorHandler(
+      makeNode({ mode: "adaptive", budgetUsd: 1.0, adaptiveTiers: { tier1: 60, tier2: 80, tier3: 95 } }),
+      contextWithUsage(0.65, 1.0),
+    );
+    expect(result.updatedVariables?.__model_tier_override).toBe("balanced");
+  });
+
+  it("sets fast tier when above tier2", async () => {
+    const result = await costMonitorHandler(
+      makeNode({ mode: "adaptive", budgetUsd: 1.0, adaptiveTiers: { tier1: 60, tier2: 80, tier3: 95 } }),
+      contextWithUsage(0.85, 1.0),
+    );
+    expect(result.updatedVariables?.__model_tier_override).toBe("fast");
+  });
+
+  it("sets fast tier + warning when above tier3", async () => {
+    const result = await costMonitorHandler(
+      makeNode({ mode: "adaptive", budgetUsd: 1.0, adaptiveTiers: { tier1: 60, tier2: 80, tier3: 95 } }),
+      contextWithUsage(0.96, 1.0),
+    );
+    expect(result.updatedVariables?.__model_tier_override).toBe("fast");
+    expect(result.messages[0].content).toContain("non-critical");
+  });
+
+  it("uses default tiers when adaptiveTiers not configured", async () => {
+    const result = await costMonitorHandler(
+      makeNode({ mode: "adaptive", budgetUsd: 1.0 }),
+      contextWithUsage(0.65, 1.0),
+    );
+    expect(result.updatedVariables?.__model_tier_override).toBe("balanced");
+  });
+
+  it("logs tier change", async () => {
+    const { logger } = await import("@/lib/logger");
+
+    await costMonitorHandler(
+      makeNode({ mode: "adaptive", budgetUsd: 1.0 }),
+      contextWithUsage(0.85, 1.0),
+    );
+
+    expect(logger.info).toHaveBeenCalledWith(
+      "Adaptive cost monitor",
+      expect.objectContaining({ tierOverride: "fast" }),
+    );
+  });
+});
+
+describe("enforce mode (F-03)", () => {
+  it("blocks flow when above tier3", async () => {
+    const result = await costMonitorHandler(
+      makeNode({ mode: "enforce", budgetUsd: 1.0, adaptiveTiers: { tier1: 60, tier2: 80, tier3: 95 } }),
+      contextWithUsage(0.96, 1.0),
+    );
+    expect(result.messages[0].content).toContain("blocked");
+    expect(result.nextNodeId).toBeNull();
+    const output = result.updatedVariables?.cost_status as Record<string, unknown>;
+    expect(output.blocked).toBe(true);
+  });
+
+  it("downgrades to balanced below tier3 but above tier1", async () => {
+    const result = await costMonitorHandler(
+      makeNode({ mode: "enforce", budgetUsd: 1.0, adaptiveTiers: { tier1: 60, tier2: 80, tier3: 95 } }),
+      contextWithUsage(0.65, 1.0),
+    );
+    expect(result.updatedVariables?.__model_tier_override).toBe("balanced");
+    expect(result.messages[0].content).not.toContain("blocked");
+  });
+
+  it("does not block at 0% budget", async () => {
+    const result = await costMonitorHandler(
+      makeNode({ mode: "enforce", budgetUsd: 1.0 }),
+      makeContext(),
+    );
+    expect(result.messages).toHaveLength(0);
+    expect(result.updatedVariables?.__model_tier_override).toBeUndefined();
+  });
+});

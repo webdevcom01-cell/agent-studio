@@ -11,6 +11,24 @@ const DEFAULT_ALERT_THRESHOLD = 0.8;
 const DEFAULT_TRACKING_VARIABLE = "cost_tracking";
 const DEFAULT_OUTPUT_VARIABLE = "cost_status";
 
+interface AdaptiveTiers {
+  tier1: number; // % → switch to balanced
+  tier2: number; // % → switch to fast
+  tier3: number; // % → stop non-critical / enforce block
+}
+
+const DEFAULT_TIERS: AdaptiveTiers = { tier1: 60, tier2: 80, tier3: 95 };
+
+function parseTiers(raw: unknown): AdaptiveTiers {
+  if (!raw || typeof raw !== "object") return DEFAULT_TIERS;
+  const obj = raw as Record<string, unknown>;
+  return {
+    tier1: Math.max(0, Math.min(100, Number(obj.tier1) || DEFAULT_TIERS.tier1)),
+    tier2: Math.max(0, Math.min(100, Number(obj.tier2) || DEFAULT_TIERS.tier2)),
+    tier3: Math.max(0, Math.min(100, Number(obj.tier3) || DEFAULT_TIERS.tier3)),
+  };
+}
+
 /**
  * cost_monitor — Real-time token/cost tracking with budget enforcement.
  * Modes: monitor (log only), budget (stop flow), alert (notify).
@@ -97,55 +115,63 @@ export const costMonitorHandler: NodeHandler = async (node, context) => {
     };
   }
 
-  // Adaptive mode: dynamically downgrade model tier based on budget usage
-  if (mode === "adaptive") {
+  // Adaptive / enforce mode: dynamically downgrade model tier based on budget usage
+  if (mode === "adaptive" || mode === "enforce") {
+    const tiers = parseTiers(node.data.adaptiveTiers);
+    const pct = state.budgetPercent * 100;
     let tierOverride: string | undefined;
+    let tierWarning = "";
 
-    if (state.budgetPercent > 0.95) {
-      // >95% budget: stop flow (same as budget mode)
-      return {
-        messages: [
-          {
-            role: "assistant",
-            content: `Adaptive budget limit reached: $${state.totalCostUsd.toFixed(4)} / $${budgetUsd.toFixed(2)} (${(state.budgetPercent * 100).toFixed(0)}%). Flow stopped.`,
+    if (pct >= tiers.tier3) {
+      if (mode === "enforce") {
+        return {
+          messages: [
+            {
+              role: "assistant",
+              content: `Budget enforced: $${state.totalCostUsd.toFixed(4)} / $${budgetUsd.toFixed(2)} (${pct.toFixed(0)}% >= ${tiers.tier3}% limit). Flow blocked.`,
+            },
+          ],
+          nextNodeId: null,
+          waitForInput: false,
+          updatedVariables: {
+            ...context.variables,
+            [getTrackingVariable(trackingVariable)]: state,
+            [outputVariable]: { ...output, blocked: true, tier: "blocked" },
           },
-        ],
-        nextNodeId: null,
-        waitForInput: false,
-        updatedVariables: {
-          ...context.variables,
-          [getTrackingVariable(trackingVariable)]: state,
-          [outputVariable]: output,
-        },
-      };
-    } else if (state.budgetPercent > 0.8) {
+        };
+      }
       tierOverride = "fast";
-    } else if (state.budgetPercent > 0.6) {
+      tierWarning = `Budget at ${pct.toFixed(0)}%, non-critical operations may be skipped`;
+    } else if (pct >= tiers.tier2) {
+      tierOverride = "fast";
+    } else if (pct >= tiers.tier1) {
       tierOverride = "balanced";
     }
-    // ≤60%: no override, use original tier
 
     logger.info("Adaptive cost monitor", {
       agentId: context.agentId,
-      budgetPercent: (state.budgetPercent * 100).toFixed(0) + "%",
+      budgetPercent: pct.toFixed(0) + "%",
       tierOverride: tierOverride ?? "none",
+      tiers,
     });
 
+    const messages = tierOverride
+      ? [
+          {
+            role: "assistant" as const,
+            content: tierWarning || `Cost adaptive: ${pct.toFixed(0)}% budget used. Model tier downgraded to "${tierOverride}".`,
+          },
+        ]
+      : [];
+
     return {
-      messages: tierOverride
-        ? [
-            {
-              role: "assistant",
-              content: `Cost adaptive: ${(state.budgetPercent * 100).toFixed(0)}% budget used. Model tier downgraded to "${tierOverride}".`,
-            },
-          ]
-        : [],
+      messages,
       nextNodeId: null,
       waitForInput: false,
       updatedVariables: {
         ...context.variables,
         [getTrackingVariable(trackingVariable)]: state,
-        [outputVariable]: output,
+        [outputVariable]: { ...output, tier: tierOverride ?? "original" },
         ...(tierOverride ? { __model_tier_override: tierOverride } : {}),
       },
     };
