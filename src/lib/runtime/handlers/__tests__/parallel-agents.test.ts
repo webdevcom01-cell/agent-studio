@@ -208,4 +208,36 @@ describe("Parallel agent calls", () => {
     expect(createCalls[0][0].data.isParallel).toBe(true);
     expect(createCalls[1][0].data.isParallel).toBe(true);
   });
+
+  it("warns when parallel target has no inputMapping", async () => {
+    const { logger } = await import("@/lib/logger");
+
+    mockPrisma.agent.findFirst.mockResolvedValue(makeAgentResponse());
+    mockExecuteFlow.mockResolvedValue({
+      messages: [{ role: "assistant", content: "ok" }],
+      waitingForInput: false,
+    });
+
+    await callAgentHandler(
+      makeNode({
+        allowParallel: true,
+        parallelTargets: [
+          { agentId: "a1", agentName: "Agent One", outputVariable: "res1", inputMapping: [] },
+          { agentId: "a2", agentName: "Agent Two", outputVariable: "res2", inputMapping: [{ key: "x", value: "y" }] },
+        ],
+      }),
+      makeContext(),
+    );
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("Agent One"),
+      expect.objectContaining({ targetAgentId: "a1" }),
+    );
+    // Agent Two has inputMapping — should NOT warn
+    const warnCalls = (logger.warn as ReturnType<typeof vi.fn>).mock.calls;
+    const agentTwoWarns = warnCalls.filter(
+      (call) => typeof call[0] === "string" && call[0].includes("Agent Two"),
+    );
+    expect(agentTwoWarns).toHaveLength(0);
+  });
 });

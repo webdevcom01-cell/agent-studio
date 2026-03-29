@@ -332,6 +332,16 @@ async function executeParallel(
   const userId = getOwnerUserId(context as RuntimeContextWithDepth);
   const { executeFlow: execFlowFn } = await import("../engine");
 
+  // Warn about parallel targets with empty inputMapping
+  for (const target of parallelTargets) {
+    if (target.inputMapping.length === 0) {
+      logger.warn(
+        `call_agent parallel target '${target.agentName || target.agentId}' has no inputMapping — sub-agent will run with empty context`,
+        { targetAgentId: target.agentId, agentId: context.agentId },
+      );
+    }
+  }
+
   const results = await Promise.allSettled(
     parallelTargets.map(async (target) => {
       const resolvedInput: Record<string, string> = {};
