@@ -583,5 +583,100 @@ describe("executeFlow", () => {
 
       expect(execLog).toEqual(["m1", "m2"]);
     });
+
+    it("loop node executes body multiple times without being blocked", async () => {
+      let loopCount = 0;
+      const bodyExecCount: number[] = [];
+      const ctx = createContext({
+        flowContent: {
+          nodes: [
+            { id: "loop-1", type: "loop" as NodeType, position: { x: 0, y: 0 }, data: {} },
+            { id: "body-1", type: "message", position: { x: 0, y: 100 }, data: {} },
+            { id: "after", type: "message", position: { x: 0, y: 200 }, data: {} },
+          ],
+          edges: [
+            { id: "e-body", source: "loop-1", target: "body-1", sourceHandle: "loop_body" },
+            { id: "e-done", source: "loop-1", target: "after", sourceHandle: "loop_done" },
+            { id: "e-back", source: "body-1", target: "loop-1" },
+          ],
+          variables: [],
+        },
+      });
+
+      mockedGetHandler.mockImplementation((type) => {
+        if (type === "loop") {
+          return async () => {
+            loopCount++;
+            if (loopCount > 3) {
+              return {
+                messages: [],
+                nextNodeId: "loop_done",
+                waitForInput: false,
+              };
+            }
+            return {
+              messages: [],
+              nextNodeId: "loop_body",
+              waitForInput: false,
+            };
+          };
+        }
+        return async (node) => {
+          if (node.id === "body-1") bodyExecCount.push(1);
+          return {
+            messages: [{ role: "assistant" as const, content: node.id }],
+            nextNodeId: null,
+            waitForInput: false,
+          };
+        };
+      });
+
+      await executeFlow(ctx);
+
+      // Loop ran 3 iterations + 1 exit check = 4 calls to loop handler
+      expect(loopCount).toBe(4);
+      // Body executed 3 times (once per loop iteration)
+      expect(bodyExecCount).toHaveLength(3);
+    });
+
+    it("parallel merge node executes exactly once despite multiple incoming edges", async () => {
+      const execLog: string[] = [];
+      const ctx = createContext({
+        flowContent: {
+          nodes: [
+            { id: "p1", type: "parallel" as NodeType, position: { x: 0, y: 0 }, data: {} },
+            { id: "merge", type: "message", position: { x: 0, y: 100 }, data: {} },
+          ],
+          edges: [
+            { id: "e-done", source: "p1", target: "merge", sourceHandle: "done" },
+          ],
+          variables: [],
+        },
+      });
+
+      mockedGetHandler.mockImplementation((type) => {
+        if (type === "parallel") {
+          // Real parallel handler resolves done edge internally
+          return async () => ({
+            messages: [{ role: "assistant" as const, content: "branches done" }],
+            nextNodeId: "merge",
+            waitForInput: false,
+          });
+        }
+        return async (node) => {
+          execLog.push(node.id);
+          return {
+            messages: [{ role: "assistant" as const, content: node.id }],
+            nextNodeId: null,
+            waitForInput: false,
+          };
+        };
+      });
+
+      await executeFlow(ctx);
+
+      // merge should execute exactly once
+      expect(execLog.filter((id) => id === "merge")).toHaveLength(1);
+    });
   });
 });
