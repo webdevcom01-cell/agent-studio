@@ -143,9 +143,20 @@ function createSandboxContext(variables: Record<string, unknown>): vm.Context {
   return ctx;
 }
 
+const FALLBACK_OUTPUT_VARIABLE = "__function_result";
+
 export const functionHandler: NodeHandler = async (node, context) => {
   const code = (node.data.code as string) ?? "";
-  const outputVariable = (node.data.outputVariable as string) ?? "";
+  const rawOutputVar = (node.data.outputVariable as string) ?? "";
+  const outputVariable = rawOutputVar.trim() || FALLBACK_OUTPUT_VARIABLE;
+
+  if (!rawOutputVar.trim()) {
+    logger.warn("Function node has no outputVariable configured — using fallback", {
+      nodeId: node.id,
+      agentId: context.agentId,
+      fallback: FALLBACK_OUTPUT_VARIABLE,
+    });
+  }
 
   if (!code.trim()) {
     return { messages: [], nextNodeId: null, waitForInput: false };
@@ -174,7 +185,7 @@ export const functionHandler: NodeHandler = async (node, context) => {
       messages: [],
       nextNodeId: null,
       waitForInput: false,
-      updatedVariables: outputVariable ? { [outputVariable]: result } : undefined,
+      updatedVariables: { [outputVariable]: result },
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);

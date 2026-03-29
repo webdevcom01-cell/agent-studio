@@ -482,8 +482,11 @@ export function PropertyPanel({
               <Input
                 value={(data.outputVariable as string) ?? ""}
                 onChange={(e) => update("outputVariable", e.target.value)}
-                placeholder="e.g. result"
+                placeholder="function_result"
               />
+              <p className="text-[11px] text-muted-foreground">
+                Variable where the function return value will be stored
+              </p>
               <FieldHint error={validateVarName((data.outputVariable as string) ?? "")} />
             </div>
           </>

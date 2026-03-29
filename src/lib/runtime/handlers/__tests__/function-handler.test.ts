@@ -113,12 +113,12 @@ describe("functionHandler (vm sandbox)", () => {
     expect(result.updatedVariables).toEqual({ result: 3 });
   });
 
-  it("does not set updatedVariables when outputVariable is empty", async () => {
+  it("uses __function_result fallback when outputVariable is empty", async () => {
     const result = await functionHandler(
       makeNode({ code: "return 42;", outputVariable: "" }),
       makeContext(),
     );
-    expect(result.updatedVariables).toBeUndefined();
+    expect(result.updatedVariables).toEqual({ __function_result: 42 });
   });
 
   it("blocks code with process keyword", async () => {
@@ -217,4 +217,63 @@ describe("functionHandler (vm sandbox)", () => {
     );
     expect(result.messages[0].content).toBe("Function execution timed out.");
   }, 10_000);
+
+  // ── outputVariable handling (P-14) ──────────────────────────────────────
+
+  describe("outputVariable handling (P-14)", () => {
+    it("warns when outputVariable is not configured", async () => {
+      const { logger } = await import("@/lib/logger");
+
+      await functionHandler(
+        makeNode({ code: "return 1;", outputVariable: undefined }),
+        makeContext(),
+      );
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("no outputVariable"),
+        expect.objectContaining({ fallback: "__function_result" }),
+      );
+    });
+
+    it("warns when outputVariable is empty string", async () => {
+      const { logger } = await import("@/lib/logger");
+
+      await functionHandler(
+        makeNode({ code: "return 1;", outputVariable: "" }),
+        makeContext(),
+      );
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("no outputVariable"),
+        expect.anything(),
+      );
+    });
+
+    it("stores result in named outputVariable", async () => {
+      const result = await functionHandler(
+        makeNode({ code: "return 'hello';", outputVariable: "greeting" }),
+        makeContext(),
+      );
+
+      expect(result.updatedVariables).toEqual({ greeting: "hello" });
+    });
+
+    it("stores string return value as string", async () => {
+      const result = await functionHandler(
+        makeNode({ code: "return 'test string';" }),
+        makeContext(),
+      );
+
+      expect(result.updatedVariables?.result).toBe("test string");
+    });
+
+    it("stores object return value as object", async () => {
+      const result = await functionHandler(
+        makeNode({ code: "return { a: 1, b: 2 };" }),
+        makeContext(),
+      );
+
+      expect(result.updatedVariables?.result).toEqual({ a: 1, b: 2 });
+    });
+  });
 });
