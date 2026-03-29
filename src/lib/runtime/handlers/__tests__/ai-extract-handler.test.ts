@@ -47,10 +47,10 @@ function makeContext(overrides: Partial<RuntimeContext> = {}): RuntimeContext {
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe("aiExtractHandler", () => {
-  it("returns early when fields are empty", async () => {
+  it("returns error when fields are empty", async () => {
     const result = await aiExtractHandler(makeNode({ fields: [] }), makeContext());
     expect(mockGenerateText).not.toHaveBeenCalled();
-    expect(result.nextNodeId).toBeNull();
+    expect(result.messages[0].content).toContain("at least one field");
   });
 
   it("returns early when conversation history is empty", async () => {
@@ -122,5 +122,105 @@ describe("aiExtractHandler", () => {
     const prompt = callArgs.messages[0].content;
     expect(prompt).toContain("Message 5");
     expect(prompt).not.toContain("Message 4");
+  });
+
+  // ── Fields normalization (P-15) ──────────────────────────────────────────
+
+  describe("fields normalization (P-15)", () => {
+    it("returns error when fields is undefined", async () => {
+      const result = await aiExtractHandler(
+        makeNode({ fields: undefined }),
+        makeContext(),
+      );
+      expect(result.messages[0].content).toContain("at least one field");
+    });
+
+    it("returns error when fields is empty array", async () => {
+      const result = await aiExtractHandler(
+        makeNode({ fields: [] }),
+        makeContext(),
+      );
+      expect(result.messages[0].content).toContain("at least one field");
+    });
+
+    it("converts simple schema object to fields array", async () => {
+      const { logger } = await import("@/lib/logger");
+      mockGenerateText.mockResolvedValue({
+        text: '{"name": "Alice", "age": 30}',
+      });
+
+      const result = await aiExtractHandler(
+        makeNode({ fields: { name: "string", age: "number" } }),
+        makeContext(),
+      );
+
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining("converted schema object"),
+        expect.anything(),
+      );
+      expect(result.updatedVariables?.name).toBe("Alice");
+      expect(result.updatedVariables?.age).toBe(30);
+    });
+
+    it("converts JSON Schema properties format to fields array", async () => {
+      mockGenerateText.mockResolvedValue({
+        text: '{"email": "test@test.com"}',
+      });
+
+      const result = await aiExtractHandler(
+        makeNode({
+          fields: {
+            properties: {
+              email: { type: "string", description: "User email" },
+            },
+          },
+        }),
+        makeContext(),
+      );
+
+      expect(result.updatedVariables?.email).toBe("test@test.com");
+    });
+
+    it("skips fields without name property and logs warning", async () => {
+      const { logger } = await import("@/lib/logger");
+      mockGenerateText.mockResolvedValue({ text: '{"valid_field": "ok"}' });
+
+      const result = await aiExtractHandler(
+        makeNode({
+          fields: [
+            { name: "valid_field", description: "test", type: "string" },
+            { description: "no name", type: "string" },
+          ],
+        }),
+        makeContext(),
+      );
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("skipping field without name"),
+        expect.anything(),
+      );
+      expect(result.updatedVariables?.valid_field).toBe("ok");
+    });
+
+    it("defaults unknown type to string", async () => {
+      mockGenerateText.mockResolvedValue({ text: '{"x": "val"}' });
+
+      await aiExtractHandler(
+        makeNode({
+          fields: [{ name: "x", description: "", type: "unknown_type" }],
+        }),
+        makeContext(),
+      );
+
+      expect(mockGenerateText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              content: expect.stringContaining("x (string)"),
+            }),
+          ]),
+        }),
+      );
+    });
   });
 });

@@ -1684,13 +1684,18 @@ function AIExtractProperties({ data, update }: SubPanelProps) {
             <Plus className="mr-1 size-3" /> Add
           </Button>
         </div>
+        {fields.length === 0 && (
+          <p className="text-xs text-amber-500">
+            At least one field is required for extraction.
+          </p>
+        )}
         {fields.map((field, i) => (
           <div key={i} className="space-y-1 rounded border p-2">
             <div className="flex gap-1">
               <Input
                 value={field.name}
                 onChange={(e) => updateField(i, "name", e.target.value)}
-                placeholder="Field name"
+                placeholder="field_name"
                 className="flex-1"
               />
               <select
@@ -1714,7 +1719,7 @@ function AIExtractProperties({ data, update }: SubPanelProps) {
             <Input
               value={field.description}
               onChange={(e) => updateField(i, "description", e.target.value)}
-              placeholder="Description"
+              placeholder="What to extract (e.g. User email address)"
             />
           </div>
         ))}
