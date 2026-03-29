@@ -43,6 +43,8 @@ export interface RunEvalOptions {
   modelOverride?: string;
   /** Paired comparison run ID for A/B linking */
   comparisonRunId?: string;
+  /** How to trigger the agent: "chat" sends a message, "webhook" calls /execute with payload */
+  triggerMode?: "chat" | "webhook";
 }
 
 export interface EvalRunSummary {
@@ -96,6 +98,9 @@ export function parseAssertionsForTest(raw: unknown): EvalAssertion[] {
 
 /** @internal Exported for unit testing only — not part of public API. */
 export const callAgentChatForTest = callAgentChat;
+
+/** @internal Exported for unit testing only — not part of public API. */
+export const callAgentExecuteForTest = callAgentExecute;
 
 /** @internal Exported for unit testing only — not part of public API. */
 export const evaluateAssertionsWithTimeoutForTest = evaluateAllAssertionsWithTimeout;
@@ -339,6 +344,94 @@ async function callAgentChat(
   throw lastError ?? new Error("Chat API failed after retries");
 }
 
+// ─── Execute API caller (webhook-triggered flows) ────────────────────────────
+
+/** Timeout for webhook-triggered execute calls (longer than chat). */
+const EVAL_EXECUTE_TIMEOUT_MS = 120_000;
+
+/**
+ * Trigger a flow execution via the /execute endpoint instead of /chat.
+ * Used for webhook-triggered flows that don't accept chat messages.
+ */
+async function callAgentExecute(
+  agentId: string,
+  input: string,
+  baseUrl: string,
+  authHeader?: string,
+): Promise<ChatResponse> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (authHeader) {
+    headers["Cookie"] = authHeader;
+  }
+
+  let webhookPayload: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(input);
+    if (typeof parsed === "object" && parsed !== null) {
+      webhookPayload = parsed as Record<string, unknown>;
+    }
+  } catch {
+    webhookPayload = { message: input };
+  }
+
+  const body = {
+    input: {
+      ...webhookPayload,
+      __webhook_payload: webhookPayload,
+      __webhook_event_type: "eval.test",
+      __trigger_type: "webhook_eval",
+    },
+  };
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), EVAL_EXECUTE_TIMEOUT_MS);
+
+  const start = Date.now();
+  try {
+    const response = await fetch(`${baseUrl}/api/agents/${agentId}/execute`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    const latencyMs = Date.now() - start;
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Execute API returned ${response.status}: ${text.slice(0, 200)}`);
+    }
+
+    const data = (await response.json()) as {
+      success: boolean;
+      data?: { output?: string };
+      error?: string;
+    };
+
+    if (!data.success) {
+      throw new Error(data.error ?? "Execute API returned success: false");
+    }
+
+    return {
+      output: data.data?.output ?? "",
+      latencyMs,
+      retryCount: 0,
+    };
+  } catch (err) {
+    clearTimeout(timeoutId);
+
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(
+        `Execute API timed out after ${EVAL_EXECUTE_TIMEOUT_MS / 1000}s — webhook flow did not complete in time`,
+      );
+    }
+    throw err;
+  }
+}
+
 // ─── KB Context fetcher (for kb_faithfulness assertions) ─────────────────────
 
 /**
@@ -457,6 +550,7 @@ export async function runEvalSuite(
       options.authHeader,
       flowVersionId,
       modelOverride,
+      options.triggerMode,
     );
 
     caseResults.push(caseResult);
@@ -525,6 +619,7 @@ async function runSingleTestCase(
   authHeader?: string,
   flowVersionId?: string,
   modelOverride?: string,
+  triggerMode?: "chat" | "webhook",
 ): Promise<CaseRunResult> {
   const assertions = parseAssertions(testCase.assertions);
 
@@ -537,15 +632,22 @@ async function runSingleTestCase(
   let status: "PASSED" | "FAILED" | "ERROR" = "ERROR";
 
   try {
-    // Call the agent (with optional version/model override for head-to-head compare)
-    const chat = await callAgentChat(
-      agentId,
-      testCase.input,
-      baseUrl,
-      authHeader,
-      flowVersionId,
-      modelOverride,
-    );
+    let chat: ChatResponse;
+
+    if (triggerMode === "webhook") {
+      // Webhook mode: call /execute with payload instead of /chat
+      chat = await callAgentExecute(agentId, testCase.input, baseUrl, authHeader);
+    } else {
+      // Default chat mode
+      chat = await callAgentChat(
+        agentId,
+        testCase.input,
+        baseUrl,
+        authHeader,
+        flowVersionId,
+        modelOverride,
+      );
+    }
 
     agentOutput = chat.output;
     latencyMs = chat.latencyMs;

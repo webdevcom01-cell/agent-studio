@@ -337,3 +337,93 @@ describe("evaluateAssertionsWithTimeoutForTest — L1 fast assertions", () => {
     expect(result.results).toHaveLength(2);
   });
 });
+
+// ─── callAgentExecute (webhook trigger mode, P-05) ────────────────────────────
+
+import { callAgentExecuteForTest } from "../runner";
+
+describe("callAgentExecuteForTest (webhook trigger mode)", () => {
+  it("calls /execute endpoint with webhook payload", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true,
+        data: { output: "webhook flow completed" },
+      }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const result = await callAgentExecuteForTest(
+      "agent-1",
+      '{"action":"deploy","repo":"my-app"}',
+      "http://localhost:3000",
+    );
+
+    expect(result.output).toBe("webhook flow completed");
+    expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:3000/api/agents/agent-1/execute",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("__webhook_payload"),
+      }),
+    );
+
+    vi.unstubAllGlobals();
+  });
+
+  it("sends plain string as message in payload when not JSON", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true,
+        data: { output: "ok" },
+      }),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    await callAgentExecuteForTest("agent-1", "plain text input", "http://localhost:3000");
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+    expect(body.input.message).toBe("plain text input");
+    expect(body.input.__webhook_event_type).toBe("eval.test");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("handles execute API error gracefully", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: () => Promise.resolve("Internal Server Error"),
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    await expect(
+      callAgentExecuteForTest("agent-1", "{}", "http://localhost:3000"),
+    ).rejects.toThrow("Execute API returned 500");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("throws on AbortError (simulated timeout)", async () => {
+    const abortError = new Error("The operation was aborted");
+    abortError.name = "AbortError";
+
+    const mockFetch = vi.fn().mockRejectedValue(abortError);
+    vi.stubGlobal("fetch", mockFetch);
+
+    await expect(
+      callAgentExecuteForTest("agent-1", "{}", "http://localhost:3000"),
+    ).rejects.toThrow("timed out");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("default triggerMode is 'chat' (backward compatible)", () => {
+    // This is a type-level check — RunEvalOptions.triggerMode defaults to undefined
+    // which runSingleTestCase interprets as "chat" mode
+    const opts: import("../runner").RunEvalOptions = {};
+    expect(opts.triggerMode).toBeUndefined();
+  });
+});
