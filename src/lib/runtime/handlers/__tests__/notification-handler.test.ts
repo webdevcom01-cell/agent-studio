@@ -175,4 +175,103 @@ describe("notificationHandler", () => {
       expect(result.messages[0].content).toContain("could not be sent");
     });
   });
+
+  // ── Webhook URL resolution priority (P-11) ─────────────────────────────
+
+  describe("webhook URL resolution priority (P-11)", () => {
+    it("uses runtime variable first", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+
+      const node = makeNode({
+        channel: "webhook",
+        webhookUrl: "https://config-url.com/hook",
+        webhookUrlVariable: "dynamic_url",
+      });
+      const ctx = makeContext({
+        variables: { dynamic_url: "https://runtime-url.com/hook" },
+      });
+
+      await notificationHandler(node, ctx);
+
+      expect(fetch).toHaveBeenCalledWith(
+        "https://runtime-url.com/hook",
+        expect.anything(),
+      );
+
+      vi.unstubAllGlobals();
+    });
+
+    it("falls back to node config when runtime variable is empty", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+
+      const node = makeNode({
+        channel: "webhook",
+        webhookUrl: "https://config-url.com/hook",
+        webhookUrlVariable: "dynamic_url",
+      });
+      const ctx = makeContext({ variables: { dynamic_url: "" } });
+
+      await notificationHandler(node, ctx);
+
+      expect(fetch).toHaveBeenCalledWith(
+        "https://config-url.com/hook",
+        expect.anything(),
+      );
+
+      vi.unstubAllGlobals();
+    });
+
+    it("falls back to env variable when both runtime and config are empty", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+      vi.stubEnv("NOTIFICATION_WEBHOOK_URL", "https://env-url.com/hook");
+
+      const node = makeNode({
+        channel: "webhook",
+        webhookUrl: "",
+      });
+
+      await notificationHandler(node, makeContext());
+
+      expect(fetch).toHaveBeenCalledWith(
+        "https://env-url.com/hook",
+        expect.anything(),
+      );
+
+      vi.unstubAllGlobals();
+    });
+
+    it("returns error when no URL available at any level", async () => {
+      vi.stubEnv("NOTIFICATION_WEBHOOK_URL", "");
+
+      const node = makeNode({
+        channel: "webhook",
+        webhookUrl: "",
+      });
+
+      const result = await notificationHandler(node, makeContext());
+
+      expect(result.messages[0].content).toContain("no webhook URL");
+      const output = result.updatedVariables?.notification_result as Record<string, unknown>;
+      expect(output.success).toBe(false);
+    });
+
+    it("logs URL source for debugging", async () => {
+      const { logger: log } = await import("@/lib/logger");
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+
+      const node = makeNode({
+        channel: "webhook",
+        webhookUrl: "https://config-url.com/hook",
+      });
+
+      await notificationHandler(node, makeContext());
+
+      expect(log.info).toHaveBeenCalledWith(
+        "Notification webhook URL resolved",
+        expect.objectContaining({ source: "node_config" }),
+      );
+
+      vi.unstubAllGlobals();
+    });
+  });
 });

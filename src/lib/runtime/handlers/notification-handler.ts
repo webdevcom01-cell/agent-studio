@@ -96,12 +96,24 @@ export const notificationHandler: NodeHandler = async (node, context) => {
     }
 
     if (channel === "webhook") {
-      if (!webhookUrl.trim()) {
+      // URL resolution priority: runtime variable > node config > env fallback
+      const webhookUrlVariable = (node.data.webhookUrlVariable as string) ?? "";
+      const runtimeUrl = webhookUrlVariable
+        ? String(context.variables[webhookUrlVariable] ?? "")
+        : "";
+      const configUrl = webhookUrl.trim()
+        ? resolveTemplate(webhookUrl, context.variables)
+        : "";
+      const envUrl = process.env.NOTIFICATION_WEBHOOK_URL ?? "";
+
+      const resolvedUrl = runtimeUrl || configUrl || envUrl;
+
+      if (!resolvedUrl) {
         return {
           messages: [
             {
               role: "assistant",
-              content: "Notification failed: no webhook URL configured.",
+              content: "Notification failed: no webhook URL configured. Set webhookUrlVariable, webhookUrl, or NOTIFICATION_WEBHOOK_URL env var.",
             },
           ],
           nextNodeId: null,
@@ -112,7 +124,10 @@ export const notificationHandler: NodeHandler = async (node, context) => {
         };
       }
 
-      const resolvedUrl = resolveTemplate(webhookUrl, context.variables);
+      logger.info("Notification webhook URL resolved", {
+        agentId: context.agentId,
+        source: runtimeUrl ? "runtime_variable" : configUrl ? "node_config" : "env_fallback",
+      });
 
       // Format for common webhook platforms (Slack/Discord/Teams compatible)
       const payload = {
