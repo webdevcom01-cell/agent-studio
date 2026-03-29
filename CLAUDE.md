@@ -186,12 +186,12 @@ src/
     builder/
       flow-builder.tsx    ← Main ReactFlow editor (+ MCP panel, version history, deploy status)
       flow-error-boundary.tsx ← Error boundary for flow editor
-      node-picker.tsx     ← Node type selector dropdown (53 node types)
+      node-picker.tsx     ← Node type selector dropdown (55 node types)
       property-panel.tsx  ← Right sidebar for editing node properties (searchable agent selector)
       version-panel.tsx   ← Version history sidebar (SWR, rollback, compare, deploy)
       deploy-dialog.tsx   ← Deploy confirmation dialog with sandbox test
       diff-view.tsx       ← Version diff viewer (added/removed/modified nodes)
-      nodes/              ← 54 node display components (base + 53 node types)
+      nodes/              ← 56 node display components (base + 55 node types)
     theme-provider.tsx    ← Dark mode theme provider
 
   data/
@@ -306,7 +306,7 @@ src/
       workers/
         pyodide-node-worker.js ← Node.js Worker thread running Pyodide WASM for python_code nodes
       handlers/
-        index.ts           ← Handler registry (53 handlers + 2 streaming variants)
+        index.ts           ← Handler registry (55 handlers + 2 streaming variants)
         ai-response-handler.ts          ← Non-streaming AI (generateText + MCP + agent tools)
         ai-response-streaming-handler.ts ← Streaming AI (streamText → NDJSON + MCP + agent tools)
         mcp-tool-handler.ts             ← Deterministic MCP tool call node
@@ -381,7 +381,7 @@ src/
       __tests__/      ← Unit tests: assertions (40), runner (15), semantic (15), llm-judge (20), deploy-hook (10)
 
   types/
-    index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType (53 types)
+    index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType (55 types)
     pdf-parse.d.ts    ← Type declaration for pdf-parse
     mammoth.d.ts      ← Type declaration for mammoth
 
@@ -1205,7 +1205,7 @@ All 4 checks must show PASS before pushing. Workflow: **code → precheck → co
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - E2E tests: Playwright, `e2e/tests/` folder, `.spec.ts` extension (10 spec files); `e2e/pages/` Page Object Models for reusable selectors/actions
 - Run: `pnpm test` (unit), `pnpm test:e2e` (E2E)
-- 2154 unit tests across 170 test files
+- 2502 unit tests across 170 test files
 - E2E coverage: auth flows, dashboard CRUD, flow editor, chat streaming, knowledge base, agent import/export, API routes, health check, webhooks UI (create/list/detail/config/test/executions/replay/status-filter/export), eval generation pipeline
 - Unit test coverage: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, web fetch handler, webhook handler, set variable handler, wait handler, URL validation, engine integration tests (multi-node flows), CLI generator (prompts, pipeline phases, Zod schemas, MCP registration, stuck detection, resume endpoint), **eval assertions (all 12 types, 3 layers)**, **eval semantic similarity (cosine math + embed mocks)**, **eval LLM-as-Judge (rubric/faithfulness/relevance)**, **eval runner (suite orchestration, progress updates, error handling)**, **eval deploy hook (fire-and-forget, suite filtering, error isolation)**, **eval API routes (CRUD, 409 conflict, 422 limits)**, **inbound webhooks: verify (21 tests), execute (23 tests — incl. event filter + body event type extraction), webhook-trigger handler (11 tests), sync (22 tests)**; **E2E webhooks suite (99 tests — UI navigation, config tab, test tab, detail actions, API CRUD, trigger endpoint, flow builder integration, execution replay, replay chain, status filtering, CSV export)**
 - Test behavior, not implementation details

@@ -1,4 +1,4 @@
-# Node Reference — All 34 Node Types
+# Node Reference — All 55 Node Types
 
 This document covers every node type in Agent Studio with all configurable fields. Open the Properties panel by clicking any node in the Builder.
 
@@ -526,3 +526,323 @@ AI Classify categorizes the input; connect edges labeled with each category name
                      → [rejected branch] → Message
 ```
 The flow pauses until a human responds via the Approvals dashboard. Use it before irreversible actions.
+
+---
+
+## Advanced AI Nodes
+
+---
+
+### python_code — Python Code
+
+Executes Python code in a sandboxed environment (Pyodide WASM in browser, Node.js subprocess on server).
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Code | ✅ | — | Python code to execute. Access flow variables via `inputs` dict. |
+| Input Variables | — | — | Variables passed into the sandbox as `inputs`. |
+| Output Variable | — | `python_result` | Variable to store the return value. |
+| Timeout (ms) | — | `5000` | Max execution time before the node fails. |
+
+**Example:** `return inputs["items"].count(lambda x: x > 0)`
+
+---
+
+### structured_output — Structured Output
+
+Generates typed JSON output using an AI model with Zod schema validation. Guarantees the output matches the defined schema.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Schema | ✅ | — | JSON Schema definition for the expected output shape. |
+| Prompt | ✅ | — | Instructions for the AI to generate structured data. |
+| Model | — | default | AI model to use for generation. |
+| Output Variable | — | `structured_result` | Variable to store the validated JSON object. |
+
+---
+
+### plan_and_execute — Plan and Execute
+
+Decomposes complex tasks using a powerful model, then routes sub-tasks to cheaper models based on complexity tier. Achieves 40-60% cost savings on multi-step workflows.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Task | ✅ | — | High-level task description or `{{variable}}`. |
+| Planner Model | — | powerful tier | Model used for task decomposition. |
+| Max Steps | — | `10` | Maximum sub-tasks to generate. |
+| Output Variable | — | `plan_result` | Variable with final aggregated output. |
+
+**Routes:** `completed` → next node, `failed` → error branch.
+
+---
+
+### reflexive_loop — Reflexive Loop
+
+Generates output, evaluates it against criteria, and retries with feedback until quality passes. Combines generation + evaluation + retry in one node.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Prompt | ✅ | — | Generation instruction. |
+| Evaluation Criteria | ✅ | — | Quality criteria for the evaluator model. |
+| Passing Score | — | `7` | Minimum score (0-10) to exit the loop. |
+| Max Iterations | — | `5` | Hard cap on retry attempts. |
+| Executor Model | — | default | Model for generation. |
+| Evaluator Model | — | default | Separate model for scoring (avoids self-bias). |
+| Output Variable | — | `loop_result` | Variable with final passing output. |
+
+**Routes:** `passed` → success branch, `failed` → failure branch.
+
+---
+
+### trajectory_evaluator — Trajectory Evaluator
+
+Evaluates multi-step agent reasoning trajectories for coherence, efficiency, and goal attainment. Used after complex agent workflows to score decision quality.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Trajectory Variable | ✅ | — | Variable containing the step-by-step execution trace. |
+| Evaluation Criteria | — | — | Custom scoring criteria. |
+| Output Variable | — | `trajectory_score` | Variable with score and reasoning. |
+
+---
+
+## Control & Routing Nodes
+
+---
+
+### switch — Switch
+
+Multi-way branching with case matching. More powerful than Condition for routing across 3+ paths.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Input Variable | ✅ | — | Variable to evaluate. |
+| Cases | ✅ | — | List of case values and their output handles. |
+| Default Handle | — | `default` | Route taken when no case matches. |
+| Operator | — | `equals` | Comparison operator: `equals`, `contains`, `startsWith`, `regex`. |
+
+---
+
+### ab_test — A/B Test
+
+Splits traffic between two variants (A and B) for controlled experiments. Supports weighted routing and sticky assignment by conversation ID.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Weight A (%) | — | `50` | Percentage of traffic routed to variant A. |
+| Weight B (%) | — | `50` | Percentage of traffic routed to variant B. |
+| Sticky | — | `false` | When true, same conversation ID always gets same variant. |
+
+**Routes:** `A` or `B` output handles.
+
+---
+
+### semantic_router — Semantic Router
+
+Routes messages to different branches based on semantic similarity to intent labels. More flexible than keyword matching; uses embedding cosine similarity.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Input Variable | ✅ | — | Variable containing the text to classify. |
+| Routes | ✅ | — | List of intent labels; each becomes an output handle. |
+| Threshold | — | `0.7` | Minimum similarity score to match a route. |
+| Default Handle | — | `default` | Route taken when no intent exceeds the threshold. |
+
+---
+
+### retry — Retry
+
+Wraps a sub-flow segment and retries it on failure with exponential backoff.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Max Attempts | — | `3` | Maximum retry count. |
+| Base Delay (ms) | — | `1000` | Initial delay before first retry. |
+| Backoff Multiplier | — | `2` | Delay multiplier per attempt (exponential). |
+| On Final Failure | — | `fail` | Route when all retries exhausted: `fail` or `continue`. |
+
+---
+
+### aggregate — Aggregate
+
+Collects and merges outputs from multiple parallel branches. Waits for all branches to complete before proceeding.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Input Variables | ✅ | — | Variables from each branch to collect. |
+| Merge Strategy | — | `array` | `array` (list), `object` (keyed map), `concat` (string join). |
+| Output Variable | — | `aggregated` | Variable with merged results. |
+
+---
+
+## Data & Search Nodes
+
+---
+
+### web_search — Web Search
+
+Searches the web using configured provider APIs (Google, Bing, Brave) and returns structured results.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Query | ✅ | — | Search query string or `{{variable}}`. |
+| Provider | — | `brave` | Search provider: `google`, `bing`, `brave`. |
+| Result Count | — | `5` | Number of results to return. |
+| Output Variable | — | `search_results` | Variable with array of `{title, url, snippet}` objects. |
+
+---
+
+### embeddings — Embeddings
+
+Generates and optionally stores vector embeddings for text. Used for semantic search pipelines and similarity computations.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Input Variable | ✅ | — | Variable containing text to embed. |
+| Model | — | `text-embedding-3-small` | Embedding model to use. |
+| Store in KB | — | `false` | Whether to persist the embedding to the agent's knowledge base. |
+| Output Variable | — | `embedding_result` | Variable with the embedding vector. |
+
+---
+
+### cache — Cache
+
+Stores and retrieves values from in-memory or Redis cache with configurable TTL. Reduces repeated API calls and speeds up repeated queries.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Operation | ✅ | `get` | `get` — read from cache, `set` — write to cache, `delete` — remove. |
+| Cache Key | ✅ | — | Unique key string or `{{variable}}`. |
+| Value Variable | — | — | Variable to store (for `set`), or variable to write result into (for `get`). |
+| TTL (seconds) | — | `300` | Time-to-live for cached values (set operations). |
+
+---
+
+### database_query — Database Query
+
+Executes SQL or NoSQL queries against connected databases.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Query | ✅ | — | SQL query or NoSQL operation. Supports `{{variable}}` interpolation. |
+| Connection | ✅ | — | Database connection identifier configured in agent settings. |
+| Output Variable | — | `query_result` | Variable with query results as an array of objects. |
+
+---
+
+### file_operations — File Operations
+
+Reads and writes files in the agent's workspace (S3, Google Drive, or local storage).
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Operation | ✅ | `read` | `read`, `write`, `delete`, `list`. |
+| Path | ✅ | — | File path or `{{variable}}`. |
+| Content Variable | — | — | Variable with content to write (write operations). |
+| Output Variable | — | `file_result` | Variable with file contents or operation result. |
+
+---
+
+## Multimodal Nodes
+
+---
+
+### multimodal_input — Multimodal Input
+
+Accepts image, audio, or file inputs from the user and makes them available as variables for downstream nodes.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Input Types | ✅ | — | Accepted types: `image`, `audio`, `file`. |
+| Max Size (MB) | — | `10` | Maximum file size. |
+| Output Variable | — | `media_input` | Variable with the uploaded content (base64 or URL). |
+
+---
+
+### image_generation — Image Generation
+
+Generates images via provider APIs (DALL-E, Stable Diffusion/Flux via Fal.ai).
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Prompt | ✅ | — | Image description. Supports `{{variables}}`. |
+| Provider | — | `dall-e` | `dall-e` (OpenAI) or `fal-ai` (Stable Diffusion, Flux). |
+| Size | — | `1024x1024` | Output image dimensions. |
+| Output Variable | — | `image_url` | Variable with the generated image URL. |
+
+---
+
+### speech_audio — Speech / Audio
+
+Converts text to speech (TTS) or speech to text (STT).
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Mode | ✅ | `tts` | `tts` — text to speech, `stt` — speech to text. |
+| Input Variable | ✅ | — | Variable with text (TTS) or audio data (STT). |
+| Voice | — | `alloy` | Voice preset (TTS only). |
+| Output Variable | — | `audio_result` | Variable with audio URL (TTS) or transcribed text (STT). |
+
+---
+
+## Safety & Observability Nodes
+
+---
+
+### guardrails — Guardrails
+
+Applies content moderation, PII detection, and prompt injection defense to any input or output in the flow.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Input Variable | ✅ | — | Variable to inspect. |
+| Check Content | — | `true` | Enable content moderation (hate speech, violence, etc.). |
+| Check PII | — | `true` | Enable PII detection and optional redaction. |
+| Check Injection | — | `true` | Enable prompt injection detection. |
+| On Violation | — | `block` | `block` — stop flow, `redact` — sanitize and continue. |
+| Output Variable | — | `guardrails_result` | Variable with sanitized content and violation report. |
+
+**Routes:** `safe` → continue, `blocked` → violation branch.
+
+---
+
+### cost_monitor — Cost Monitor
+
+Tracks token usage and spend per agent. Triggers alerts or adaptive model downgrade when budget thresholds are reached.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Budget (USD) | — | — | Total spend limit to enforce. |
+| Alert at (%) | — | `80` | Percentage of budget that triggers an alert. |
+| Mode | — | `monitor` | `monitor` — alert only, `adaptive` — auto-downgrade model tier at 60%/80%/95%. |
+| Output Variable | — | `cost_data` | Variable with `{inputTokens, outputTokens, spend}`. |
+
+---
+
+### mcp_task_runner — MCP Task Runner
+
+Executes long-running MCP tasks with progress tracking. Unlike the MCP Tool node (synchronous), this node supports streaming progress updates.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| MCP Server | ✅ | — | Linked MCP server to invoke. |
+| Tool Name | ✅ | — | Tool to call on the MCP server. |
+| Input Mapping | — | — | Map flow variables to tool input parameters. |
+| Output Variable | — | `task_result` | Variable with the final tool output. |
+| Timeout (ms) | — | `30000` | Maximum wait time for task completion. |
+
+---
+
+### learn — Learn (ECC)
+
+Extracts reusable patterns from `AgentExecution` history and stores them as Instincts. High-confidence instincts (≥0.85) are promoted to skills automatically.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Source Variable | — | — | Variable with execution data to analyze. |
+| Pattern Category | — | `general` | Category tag for extracted instincts. |
+| Min Confidence | — | `0.7` | Minimum confidence threshold to store an instinct. |
+
+> **Note:** Requires `ECC_ENABLED=true` in environment variables.
+
+---
