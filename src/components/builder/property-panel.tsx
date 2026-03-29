@@ -3953,12 +3953,41 @@ function StructuredOutputProperties({ data, update, variables = [] }: SubPanelPr
         </Select>
       </div>
       <div className="space-y-2">
+        <Label>Output Format</Label>
+        <Select
+          value={(data.outputFormat as string) ?? "object"}
+          onValueChange={(val) => update("outputFormat", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="object">Object (nested access via {"{{var.field}}"})</SelectItem>
+            <SelectItem value="string">JSON String (for text-based nodes)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">
+          Use &quot;string&quot; if the next node expects text, &quot;object&quot; for nested field access
+        </p>
+      </div>
+
+      <div className="space-y-2">
         <Label>Output Variable</Label>
         <Input
           value={(data.outputVariable as string) ?? "structured_result"}
           onChange={(e) => update("outputVariable", e.target.value)}
           placeholder="structured_result"
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Secondary Output Variable <span className="text-muted-foreground">(optional)</span></Label>
+        <Input
+          value={(data.secondaryOutputVariable as string) ?? ""}
+          onChange={(e) => update("secondaryOutputVariable", e.target.value)}
+          placeholder="Leave empty to skip"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Stores the alternate format (string if primary is object, object if primary is string)
+        </p>
       </div>
     </>
   );

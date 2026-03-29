@@ -109,4 +109,79 @@ describe("structuredOutputHandler", () => {
 
     expect(result.updatedVariables?.result).toContain("[Error: API rate limit]");
   });
+
+  // ── Output format and secondary variable (P-10) ─────────────────────────
+
+  describe("output format (P-10)", () => {
+    const mockResult = {
+      object: { name: "Alice", score: 95 },
+      finishReason: "stop",
+      usage: { promptTokens: 10, completionTokens: 20 },
+      toJsonResponse: () => new Response(),
+    };
+
+    it("stores as object by default (backward compat)", async () => {
+      mockGenerateObject.mockResolvedValueOnce(mockResult as ReturnType<typeof generateObject> extends Promise<infer T> ? T : never);
+
+      const result = await structuredOutputHandler(makeNode(), makeContext());
+      expect(result.updatedVariables?.result).toEqual({ name: "Alice", score: 95 });
+      expect(typeof result.updatedVariables?.result).toBe("object");
+    });
+
+    it("stores as JSON string when outputFormat is 'string'", async () => {
+      mockGenerateObject.mockResolvedValueOnce(mockResult as ReturnType<typeof generateObject> extends Promise<infer T> ? T : never);
+
+      const result = await structuredOutputHandler(
+        makeNode({ outputFormat: "string" }),
+        makeContext(),
+      );
+      const val = result.updatedVariables?.result;
+      expect(typeof val).toBe("string");
+      expect(JSON.parse(val as string)).toEqual({ name: "Alice", score: 95 });
+    });
+
+    it("populates secondaryOutputVariable with alternate format", async () => {
+      mockGenerateObject.mockResolvedValueOnce(mockResult as ReturnType<typeof generateObject> extends Promise<infer T> ? T : never);
+
+      const result = await structuredOutputHandler(
+        makeNode({ outputFormat: "object", secondaryOutputVariable: "result_str" }),
+        makeContext(),
+      );
+
+      // Primary: object
+      expect(typeof result.updatedVariables?.result).toBe("object");
+      // Secondary: string
+      const secondary = result.updatedVariables?.result_str;
+      expect(typeof secondary).toBe("string");
+      expect(JSON.parse(secondary as string)).toEqual({ name: "Alice", score: 95 });
+    });
+
+    it("secondary is object when primary is string", async () => {
+      mockGenerateObject.mockResolvedValueOnce(mockResult as ReturnType<typeof generateObject> extends Promise<infer T> ? T : never);
+
+      const result = await structuredOutputHandler(
+        makeNode({ outputFormat: "string", secondaryOutputVariable: "result_obj" }),
+        makeContext(),
+      );
+
+      expect(typeof result.updatedVariables?.result).toBe("string");
+      expect(result.updatedVariables?.result_obj).toEqual({ name: "Alice", score: 95 });
+    });
+
+    it("template {{var.field}} works with object output", async () => {
+      const { resolveTemplate } = await import("../../template");
+      const resolved = resolveTemplate("Name: {{result.name}}", {
+        result: { name: "Alice", score: 95 },
+      });
+      expect(resolved).toBe("Name: Alice");
+    });
+
+    it("template {{var.field}} works with JSON string output (P-02)", async () => {
+      const { resolveTemplate } = await import("../../template");
+      const resolved = resolveTemplate("Name: {{result.name}}", {
+        result: '{"name":"Alice","score":95}',
+      });
+      expect(resolved).toBe("Name: Alice");
+    });
+  });
 });

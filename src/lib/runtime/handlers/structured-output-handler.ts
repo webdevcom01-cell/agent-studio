@@ -16,6 +16,9 @@ export const structuredOutputHandler: NodeHandler = async (node, context) => {
   const schemaText = (node.data.jsonSchema as string) ?? "{}";
   const outputVariable =
     (node.data.outputVariable as string) || "structured_result";
+  const outputFormat = (node.data.outputFormat as string) ?? "object";
+  const secondaryOutputVariable =
+    (node.data.secondaryOutputVariable as string) || "";
   const modelId = (node.data.model as string) || "deepseek-chat";
 
   if (!prompt) {
@@ -55,14 +58,26 @@ export const structuredOutputHandler: NodeHandler = async (node, context) => {
       prompt,
     });
 
+    const primaryValue = outputFormat === "string"
+      ? JSON.stringify(object, null, 2)
+      : object;
+
+    const vars: Record<string, unknown> = {
+      ...context.variables,
+      [outputVariable]: primaryValue,
+    };
+
+    if (secondaryOutputVariable) {
+      vars[secondaryOutputVariable] = outputFormat === "string"
+        ? object
+        : JSON.stringify(object, null, 2);
+    }
+
     return {
       messages: [],
       nextNodeId: null,
       waitForInput: false,
-      updatedVariables: {
-        ...context.variables,
-        [outputVariable]: object,
-      },
+      updatedVariables: vars,
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
