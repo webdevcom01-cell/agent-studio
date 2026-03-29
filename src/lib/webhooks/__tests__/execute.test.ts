@@ -1097,4 +1097,196 @@ describe("executeWebhookTrigger", () => {
       expect((statusCall![0].data as Record<string, unknown>).status).toBe("COMPLETED");
     });
   });
+
+  // ── Body/header mapping miss warnings (P-12) ─────────────────────────────
+
+  describe("mapping miss warnings (P-12)", () => {
+    function setupFullMocks(bodyMappings: unknown[], headerMappings: unknown[] = [], strictMode = false) {
+      const ts = makeTimestamp();
+      const body = JSON.stringify({ action: "push", repo: "my-app" });
+      const sig = makeSignature(MSG_ID, ts, body, SECRET);
+
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue({
+        id: WEBHOOK_ID,
+        enabled: true,
+        secret: SECRET,
+        secretEncrypted: false,
+        bodyMappings,
+        headerMappings,
+        eventFilters: [],
+        strictMode,
+      } as ReturnType<typeof prisma.webhookConfig.findFirst> extends Promise<infer T> ? T : never);
+
+      vi.mocked(prisma.webhookExecution.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.webhookExecution.create).mockResolvedValue({ id: "exec-1" } as ReturnType<typeof prisma.webhookExecution.create> extends Promise<infer T> ? T : never);
+      vi.mocked(prisma.webhookExecution.update).mockResolvedValue({} as ReturnType<typeof prisma.webhookExecution.update> extends Promise<infer T> ? T : never);
+      vi.mocked(prisma.webhookConfig.update).mockResolvedValue({} as ReturnType<typeof prisma.webhookConfig.update> extends Promise<infer T> ? T : never);
+
+      return {
+        body,
+        headers: {
+          "x-webhook-id": MSG_ID,
+          "x-webhook-timestamp": ts,
+          "x-webhook-signature": sig,
+        },
+      };
+    }
+
+    it("no warning when JSONPath finds value", async () => {
+      const { logger } = await import("@/lib/logger");
+      const { body, headers } = setupFullMocks([
+        { jsonPath: "$.action", variableName: "event_action" },
+      ]);
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: body,
+        headers,
+      });
+
+      const warnCalls = (logger.warn as ReturnType<typeof vi.fn>).mock.calls;
+      const mappingWarns = warnCalls.filter(
+        (c) => typeof c[0] === "string" && c[0].includes("mapping miss"),
+      );
+      expect(mappingWarns).toHaveLength(0);
+    });
+
+    it("warns when JSONPath does not find value", async () => {
+      const { logger } = await import("@/lib/logger");
+      const { body, headers } = setupFullMocks([
+        { jsonPath: "$.nonexistent.deep", variableName: "missing_var" },
+      ]);
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: body,
+        headers,
+      });
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("mapping miss"),
+        expect.objectContaining({
+          variableName: "missing_var",
+          jsonPath: "$.nonexistent.deep",
+        }),
+      );
+    });
+
+    it("warns when JSONPath resolves to null", async () => {
+      const { logger } = await import("@/lib/logger");
+      const ts = makeTimestamp();
+      const body = JSON.stringify({ data: null });
+      const sig = makeSignature(MSG_ID, ts, body, SECRET);
+
+      vi.mocked(prisma.webhookConfig.findFirst).mockResolvedValue({
+        id: WEBHOOK_ID,
+        enabled: true,
+        secret: SECRET,
+        secretEncrypted: false,
+        bodyMappings: [{ jsonPath: "$.data", variableName: "result" }],
+        headerMappings: [],
+        eventFilters: [],
+      } as ReturnType<typeof prisma.webhookConfig.findFirst> extends Promise<infer T> ? T : never);
+
+      vi.mocked(prisma.webhookExecution.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.webhookExecution.create).mockResolvedValue({ id: "exec-2" } as ReturnType<typeof prisma.webhookExecution.create> extends Promise<infer T> ? T : never);
+      vi.mocked(prisma.webhookExecution.update).mockResolvedValue({} as ReturnType<typeof prisma.webhookExecution.update> extends Promise<infer T> ? T : never);
+      vi.mocked(prisma.webhookConfig.update).mockResolvedValue({} as ReturnType<typeof prisma.webhookConfig.update> extends Promise<infer T> ? T : never);
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: body,
+        headers: {
+          "x-webhook-id": MSG_ID,
+          "x-webhook-timestamp": ts,
+          "x-webhook-signature": sig,
+        },
+      });
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("resolved to null"),
+        expect.objectContaining({ variableName: "result" }),
+      );
+    });
+
+    it("continues flow on miss when strictMode is false", async () => {
+      const { body, headers } = setupFullMocks([
+        { jsonPath: "$.missing", variableName: "x" },
+      ], [], false);
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: body,
+        headers,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.status).toBe(200);
+    });
+
+    it("returns 422 on miss when strictMode is true", async () => {
+      const { body, headers } = setupFullMocks([
+        { jsonPath: "$.missing", variableName: "x" },
+      ], [], true);
+
+      const result = await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: body,
+        headers,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.status).toBe(422);
+      expect(result.error).toContain("x");
+    });
+
+    it("warns on header mapping miss", async () => {
+      const { logger } = await import("@/lib/logger");
+      const { body, headers } = setupFullMocks([], [
+        { headerName: "x-nonexistent-header", variableName: "header_val" },
+      ]);
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: body,
+        headers,
+      });
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("header mapping miss"),
+        expect.objectContaining({
+          variableName: "header_val",
+          headerName: "x-nonexistent-header",
+        }),
+      );
+    });
+
+    it("includes payload preview (max 200 chars) in body mapping warning", async () => {
+      const { logger } = await import("@/lib/logger");
+      const { body, headers } = setupFullMocks([
+        { jsonPath: "$.nope", variableName: "v" },
+      ]);
+
+      await executeWebhookTrigger({
+        agentId: AGENT_ID,
+        webhookId: WEBHOOK_ID,
+        rawBody: body,
+        headers,
+      });
+
+      const warnCalls = (logger.warn as ReturnType<typeof vi.fn>).mock.calls;
+      const miss = warnCalls.find(
+        (c) => typeof c[0] === "string" && c[0].includes("mapping miss"),
+      );
+      expect(miss).toBeDefined();
+      expect(miss![1].payloadPreview).toBeDefined();
+      expect(miss![1].payloadPreview.length).toBeLessThanOrEqual(200);
+    });
+  });
 });

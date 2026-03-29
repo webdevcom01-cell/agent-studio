@@ -19,7 +19,7 @@ import { logger } from "@/lib/logger";
 import { loadContext, saveContext, saveMessages } from "@/lib/runtime/context";
 import { executeFlow } from "@/lib/runtime/engine";
 import { verifyWebhookSignature, decryptWebhookSecret } from "./verify";
-import { resolveJsonPath } from "./json-path";
+import { resolveJsonPathTyped } from "./json-path";
 
 /** Per-webhook rate limit: 60 requests per minute. */
 const WEBHOOK_RATE_LIMIT = 60;
@@ -278,12 +278,35 @@ export async function executeWebhookTrigger(
     variableName: string;
     type?: string;
   }>;
+  const strictMode = (webhookConfig as Record<string, unknown>).strictMode === true;
+  const payloadPreview = rawBody.slice(0, 200);
+  const mappingMisses: string[] = [];
+
   if (Array.isArray(bodyMappings)) {
     for (const mapping of bodyMappings) {
       if (!mapping.jsonPath || !mapping.variableName) continue;
-      const extracted = resolveJsonPath(parsedBody, mapping.jsonPath);
-      if (extracted !== undefined) {
-        webhookVariables[mapping.variableName] = extracted;
+      const result = resolveJsonPathTyped(parsedBody, mapping.jsonPath);
+
+      if (result.found) {
+        if (result.value === null) {
+          logger.warn("Webhook body mapping resolved to null", {
+            webhookId,
+            variableName: mapping.variableName,
+            jsonPath: mapping.jsonPath,
+            payloadPreview,
+          });
+          mappingMisses.push(mapping.variableName);
+        }
+        webhookVariables[mapping.variableName] = result.value;
+      } else {
+        logger.warn("Webhook body mapping miss: JSONPath returned undefined", {
+          webhookId,
+          variableName: mapping.variableName,
+          jsonPath: mapping.jsonPath,
+          reason: result.reason,
+          payloadPreview,
+        });
+        mappingMisses.push(mapping.variableName);
       }
     }
   }
@@ -302,8 +325,24 @@ export async function executeWebhookTrigger(
       const val = normalisedHeaders[mapping.headerName.toLowerCase()];
       if (val !== undefined) {
         webhookVariables[mapping.variableName] = Array.isArray(val) ? val[0] : val;
+      } else {
+        logger.warn("Webhook header mapping miss", {
+          webhookId,
+          variableName: mapping.variableName,
+          headerName: mapping.headerName,
+        });
+        mappingMisses.push(mapping.variableName);
       }
     }
+  }
+
+  // Strict mode: reject if any mapping missed
+  if (strictMode && mappingMisses.length > 0) {
+    return {
+      success: false,
+      status: 422,
+      error: `Strict mode: ${mappingMisses.length} mapping(s) unresolved: ${mappingMisses.join(", ")}`,
+    };
   }
 
   // ── 6. Create execution record (PENDING) ──────────────────────────────────

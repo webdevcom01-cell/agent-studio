@@ -18,6 +18,53 @@
 /** Dangerous property names that could pollute the prototype chain. */
 const BLOCKED_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
 
+export type JSONPathResult =
+  | { found: true; value: unknown }
+  | { found: false; reason: string };
+
+/**
+ * Resolves a JSONPath expression and returns a typed result distinguishing
+ * "not found" from "found but null".
+ */
+export function resolveJsonPathTyped(obj: unknown, path: string): JSONPathResult {
+  if (obj === null || obj === undefined) {
+    return { found: false, reason: "root object is null/undefined" };
+  }
+  if (typeof path !== "string" || path.length === 0) {
+    return { found: false, reason: "path is empty" };
+  }
+
+  if (path === "$") return { found: true, value: obj };
+
+  const normalised = path.startsWith("$.") ? path.slice(2) : path.startsWith("$") ? path.slice(1) : path;
+  if (normalised.length === 0) return { found: true, value: obj };
+
+  const parts = normalised.split(/[.[\]]/).filter((p) => p.length > 0);
+
+  for (const part of parts) {
+    if (BLOCKED_SEGMENTS.has(part)) {
+      return { found: false, reason: `blocked segment: ${part}` };
+    }
+  }
+
+  let current: unknown = obj;
+  for (const part of parts) {
+    if (current === null || current === undefined) {
+      return { found: false, reason: `path segment '${part}' hit null/undefined` };
+    }
+    if (typeof current !== "object") {
+      return { found: false, reason: `path segment '${part}' accessed non-object (${typeof current})` };
+    }
+    const next = (current as Record<string, unknown>)[part];
+    if (next === undefined && !(part in (current as Record<string, unknown>))) {
+      return { found: false, reason: `key '${part}' does not exist` };
+    }
+    current = next;
+  }
+
+  return { found: true, value: current };
+}
+
 /**
  * Resolves a simple JSONPath expression against an object.
  *
