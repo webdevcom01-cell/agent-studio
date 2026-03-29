@@ -49,19 +49,34 @@ interface EvalSuiteEditorProps {
 
 // ─── Assertion type config ────────────────────────────────────────────────────
 
-const ASSERTION_TYPES = [
-  { value: "contains",           label: "Contains",            layer: 1, hasValue: true,     hasThreshold: false, hasRubric: false },
-  { value: "not_contains",       label: "Not Contains",        layer: 1, hasValue: true,     hasThreshold: false, hasRubric: false },
-  { value: "exact_match",        label: "Exact Match",         layer: 1, hasValue: true,     hasThreshold: false, hasRubric: false },
-  { value: "icontains",          label: "Contains (case-ins.)",layer: 1, hasValue: true,     hasThreshold: false, hasRubric: false },
-  { value: "starts_with",        label: "Starts With",         layer: 1, hasValue: true,     hasThreshold: false, hasRubric: false },
-  { value: "regex",              label: "Regex Match",         layer: 1, hasValue: true,     hasThreshold: false, hasRubric: false },
-  { value: "json_valid",         label: "JSON Valid",          layer: 1, hasValue: false,    hasThreshold: false, hasRubric: false },
-  { value: "latency",            label: "Latency (ms)",        layer: 1, hasValue: false,    hasThreshold: true,  hasRubric: false },
-  { value: "semantic_similarity",label: "Semantic Similarity", layer: 2, hasValue: true,     hasThreshold: true,  hasRubric: false },
-  { value: "llm_rubric",         label: "LLM Rubric",          layer: 3, hasValue: false,    hasThreshold: true,  hasRubric: true  },
-  { value: "kb_faithfulness",    label: "KB Faithfulness",     layer: 3, hasValue: false,    hasThreshold: true,  hasRubric: false },
-  { value: "relevance",          label: "Relevance",           layer: 3, hasValue: false,    hasThreshold: true,  hasRubric: false },
+interface AssertionTypeConfig {
+  value: string;
+  label: string;
+  layer: number;
+  hasValue: boolean;
+  hasThreshold: boolean;
+  hasRubric: boolean;
+  valueLabel?: string;
+  valuePlaceholder?: string;
+  thresholdLabel?: string;
+  rubricLabel?: string;
+  helper?: string;
+  jsonExample?: string;
+}
+
+const ASSERTION_TYPES: AssertionTypeConfig[] = [
+  { value: "contains",           label: "Contains",            layer: 1, hasValue: true,  hasThreshold: false, hasRubric: false, valueLabel: "Value", valuePlaceholder: "expected text in response", jsonExample: '{ "type": "contains", "value": "Paris" }' },
+  { value: "not_contains",       label: "Not Contains",        layer: 1, hasValue: true,  hasThreshold: false, hasRubric: false, valueLabel: "Value", valuePlaceholder: "text that should NOT appear", jsonExample: '{ "type": "not_contains", "value": "error" }' },
+  { value: "exact_match",        label: "Exact Match",         layer: 1, hasValue: true,  hasThreshold: false, hasRubric: false, valueLabel: "Value", valuePlaceholder: "exact expected output", jsonExample: '{ "type": "exact_match", "value": "42" }' },
+  { value: "icontains",          label: "Contains (case-ins.)",layer: 1, hasValue: true,  hasThreshold: false, hasRubric: false, valueLabel: "Value", valuePlaceholder: "case-insensitive text", helper: "Use this instead of 'contains' with caseSensitive:false", jsonExample: '{ "type": "icontains", "value": "hello" }' },
+  { value: "starts_with",        label: "Starts With",         layer: 1, hasValue: true,  hasThreshold: false, hasRubric: false, valueLabel: "Value", valuePlaceholder: "expected prefix", jsonExample: '{ "type": "starts_with", "value": "Hello" }' },
+  { value: "regex",              label: "Regex Match",         layer: 1, hasValue: true,  hasThreshold: false, hasRubric: false, valueLabel: "Regex Pattern", valuePlaceholder: "^\\d{4}-\\d{2}-\\d{2}$", helper: "Field is 'value', not 'pattern'", jsonExample: '{ "type": "regex", "value": "^\\\\d+" }' },
+  { value: "json_valid",         label: "JSON Valid",          layer: 1, hasValue: false, hasThreshold: false, hasRubric: false, jsonExample: '{ "type": "json_valid" }' },
+  { value: "latency",            label: "Latency (ms)",        layer: 1, hasValue: false, hasThreshold: true,  hasRubric: false, thresholdLabel: "Max ms", helper: "Field is 'threshold', not 'maxMs'", jsonExample: '{ "type": "latency", "threshold": 2000 }' },
+  { value: "semantic_similarity",label: "Semantic Similarity", layer: 2, hasValue: true,  hasThreshold: true,  hasRubric: false, valueLabel: "Expected Output", valuePlaceholder: "reference answer for comparison", thresholdLabel: "Min similarity (0-1)", helper: "Field is 'value', not 'expectedOutput'", jsonExample: '{ "type": "semantic_similarity", "value": "...", "threshold": 0.8 }' },
+  { value: "llm_rubric",         label: "LLM Rubric",          layer: 3, hasValue: false, hasThreshold: true,  hasRubric: true,  rubricLabel: "Evaluation Criteria", thresholdLabel: "Min score (0-1)", helper: "Field is 'rubric', not 'criteria'", jsonExample: '{ "type": "llm_rubric", "rubric": "...", "threshold": 0.7 }' },
+  { value: "kb_faithfulness",    label: "KB Faithfulness",     layer: 3, hasValue: false, hasThreshold: true,  hasRubric: false, thresholdLabel: "Min score (0-1)", jsonExample: '{ "type": "kb_faithfulness", "threshold": 0.7 }' },
+  { value: "relevance",          label: "Relevance",           layer: 3, hasValue: false, hasThreshold: true,  hasRubric: false, thresholdLabel: "Min score (0-1)", jsonExample: '{ "type": "relevance", "threshold": 0.7 }' },
 ];
 
 const LAYER_COLORS: Record<number, string> = {
@@ -98,6 +113,15 @@ interface TestCaseDialogProps {
 
 function emptyAssertion(): EvalAssertion {
   return { type: "contains", value: "" };
+}
+
+/** Build a compact JSON string preview of an assertion for the editor. */
+function buildAssertionJson(assertion: EvalAssertion): string {
+  const obj: Record<string, unknown> = { type: assertion.type };
+  if (assertion.value !== undefined && assertion.value !== "") obj.value = assertion.value;
+  if (assertion.rubric !== undefined && assertion.rubric !== "") obj.rubric = assertion.rubric;
+  if (assertion.threshold !== undefined) obj.threshold = assertion.threshold;
+  return JSON.stringify(obj);
 }
 
 function TestCaseDialog({ open, onClose, onSave, initial, isSaving }: TestCaseDialogProps) {
@@ -180,71 +204,109 @@ function TestCaseDialog({ open, onClose, onSave, initial, isSaving }: TestCaseDi
               </Button>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2" data-testid="assertions-list">
               {assertions.map((assertion, idx) => {
                 const cfg = ASSERTION_TYPES.find((a) => a.value === assertion.type);
+                const jsonPreview = buildAssertionJson(assertion);
                 return (
-                  <div key={idx} className="flex gap-2 items-start p-3 bg-zinc-800 rounded-lg border border-zinc-700">
-                    {/* Type selector */}
-                    <div className="w-44 shrink-0">
-                      <select
-                        value={assertion.type}
-                        onChange={(e) => handleTypeChange(idx, e.target.value)}
-                        className="w-full h-8 text-xs rounded-md bg-zinc-700 border border-zinc-600 text-white px-2"
+                  <div key={idx} className="p-3 bg-zinc-800 rounded-lg border border-zinc-700 space-y-2">
+                    <div className="flex gap-2 items-start">
+                      {/* Type selector */}
+                      <div className="w-44 shrink-0">
+                        <select
+                          value={assertion.type}
+                          onChange={(e) => handleTypeChange(idx, e.target.value)}
+                          className="w-full h-8 text-xs rounded-md bg-zinc-700 border border-zinc-600 text-white px-2"
+                          data-testid={`assertion-type-${idx}`}
+                        >
+                          {[1, 2, 3].map((layer) => (
+                            <optgroup key={layer} label={`Layer ${layer} — ${LAYER_LABELS[layer]}`}>
+                              {ASSERTION_TYPES.filter((a) => a.layer === layer).map((a) => (
+                                <option key={a.value} value={a.value}>{a.label}</option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Value field */}
+                      {cfg?.hasValue && (
+                        <div className="flex-1 space-y-1">
+                          <Input
+                            value={assertion.value ?? ""}
+                            onChange={(e) => updateAssertion(idx, { value: e.target.value })}
+                            placeholder={cfg.valuePlaceholder ?? "expected text"}
+                            className="h-8 text-xs bg-zinc-700 border-zinc-600 text-white"
+                            data-testid={`assertion-value-${idx}`}
+                          />
+                          {cfg.valueLabel && cfg.valueLabel !== "Value" && (
+                            <p className="text-[10px] text-zinc-500">{cfg.valueLabel}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Rubric field */}
+                      {cfg?.hasRubric && (
+                        <div className="flex-1 space-y-1">
+                          <Textarea
+                            value={assertion.rubric ?? ""}
+                            onChange={(e) => updateAssertion(idx, { rubric: e.target.value })}
+                            placeholder="Describe what to evaluate..."
+                            rows={2}
+                            className="text-xs bg-zinc-700 border-zinc-600 text-white resize-none"
+                            data-testid={`assertion-rubric-${idx}`}
+                          />
+                          {cfg.rubricLabel && (
+                            <p className="text-[10px] text-zinc-500">{cfg.rubricLabel}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Threshold field */}
+                      {cfg?.hasThreshold && (
+                        <div className="space-y-1">
+                          <Input
+                            type="number"
+                            value={assertion.threshold ?? (assertion.type === "latency" ? 2000 : 0.8)}
+                            onChange={(e) => updateAssertion(idx, { threshold: Number(e.target.value) })}
+                            step={assertion.type === "latency" ? 100 : 0.1}
+                            min={0}
+                            max={assertion.type === "latency" ? 60000 : 1}
+                            className="w-24 h-8 text-xs bg-zinc-700 border-zinc-600 text-white"
+                            data-testid={`assertion-threshold-${idx}`}
+                          />
+                          {cfg.thresholdLabel && (
+                            <p className="text-[10px] text-zinc-500">{cfg.thresholdLabel}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Delete */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0 shrink-0 text-zinc-500 hover:text-red-400 hover:bg-transparent"
+                        onClick={() => setAssertions((prev) => prev.filter((_, i) => i !== idx))}
                       >
-                        {[1, 2, 3].map((layer) => (
-                          <optgroup key={layer} label={`Layer ${layer} — ${LAYER_LABELS[layer]}`}>
-                            {ASSERTION_TYPES.filter((a) => a.layer === layer).map((a) => (
-                              <option key={a.value} value={a.value}>{a.label}</option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
 
-                    {/* Value */}
-                    {cfg?.hasValue && (
-                      <Input
-                        value={assertion.value ?? ""}
-                        onChange={(e) => updateAssertion(idx, { value: e.target.value })}
-                        placeholder={assertion.type === "regex" ? "pattern" : "expected text"}
-                        className="h-8 text-xs bg-zinc-700 border-zinc-600 text-white"
-                      />
-                    )}
-
-                    {/* Rubric */}
-                    {cfg?.hasRubric && (
-                      <Textarea
-                        value={assertion.rubric ?? ""}
-                        onChange={(e) => updateAssertion(idx, { rubric: e.target.value })}
-                        placeholder="Evaluation criteria..."
-                        rows={2}
-                        className="text-xs bg-zinc-700 border-zinc-600 text-white resize-none"
-                      />
-                    )}
-
-                    {/* Threshold */}
-                    {cfg?.hasThreshold && (
-                      <Input
-                        type="number"
-                        value={assertion.threshold ?? (assertion.type === "latency" ? 2000 : 0.8)}
-                        onChange={(e) => updateAssertion(idx, { threshold: Number(e.target.value) })}
-                        step={assertion.type === "latency" ? 100 : 0.1}
-                        min={0}
-                        max={assertion.type === "latency" ? 60000 : 1}
-                        className="w-20 h-8 text-xs bg-zinc-700 border-zinc-600 text-white"
-                      />
-                    )}
-
-                    {/* Delete */}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 p-0 shrink-0 text-zinc-500 hover:text-red-400 hover:bg-transparent"
-                      onClick={() => setAssertions((prev) => prev.filter((_, i) => i !== idx))}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    {/* Helper text and JSON preview */}
+                    <div className="flex items-start justify-between gap-2">
+                      {cfg?.helper && (
+                        <p className="text-[10px] text-amber-400/70" data-testid={`assertion-helper-${idx}`}>
+                          {cfg.helper}
+                        </p>
+                      )}
+                      <pre
+                        className="text-[10px] text-zinc-500 font-mono ml-auto max-w-[50%] truncate"
+                        data-testid={`assertion-json-${idx}`}
+                        title={jsonPreview}
+                      >
+                        {jsonPreview}
+                      </pre>
+                    </div>
                   </div>
                 );
               })}
