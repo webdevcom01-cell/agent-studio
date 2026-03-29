@@ -9,14 +9,27 @@ interface EvalCriterion {
 }
 
 export const evaluatorHandler: NodeHandler = async (node, context) => {
-  const inputVariable = (node.data.inputVariable as string) ?? "";
+  let inputVariable = ((node.data.inputVariable as string) ?? "").trim();
   const outputVariable = (node.data.outputVariable as string) ?? "eval_result";
   const modelId = (node.data.model as string) ?? "";
-  const criteria = (node.data.criteria as EvalCriterion[]) ?? [];
   const passingScore = Math.min(10, Math.max(0, Number(node.data.passingScore) || 7));
 
+  // Auto-strip template syntax: "{{risk_assessment}}" → "risk_assessment"
+  if (inputVariable.startsWith("{{") && inputVariable.endsWith("}}")) {
+    const extracted = inputVariable.slice(2, -2).trim();
+    logger.info("inputVariable contained template syntax — extracted variable name", {
+      nodeId: node.id,
+      original: inputVariable,
+      extracted,
+    });
+    inputVariable = extracted;
+  }
+
+  // Normalize criteria: accept string[] (legacy) or EvalCriterion[]
+  const criteria = normalizeCriteria(node.data.criteria, node.id);
+
   // Get the input value to evaluate
-  const inputTemplate = inputVariable.trim()
+  const inputTemplate = inputVariable
     ? resolveTemplate(`{{${inputVariable}}}`, context.variables)
     : "";
 
@@ -38,7 +51,8 @@ export const evaluatorHandler: NodeHandler = async (node, context) => {
       messages: [
         {
           role: "assistant",
-          content: "Evaluation skipped: no criteria defined.",
+          content:
+            "Evaluator node requires at least one criterion. Add criteria in the property panel.",
         },
       ],
       nextNodeId: null,
@@ -156,3 +170,31 @@ Respond in valid JSON only, no markdown. Format:
     };
   }
 };
+
+/**
+ * Normalizes criteria input — accepts EvalCriterion[] or string[] (legacy).
+ * Converts string[] to EvalCriterion[] with default weight 1.
+ */
+function normalizeCriteria(
+  raw: unknown,
+  nodeId: string,
+): EvalCriterion[] {
+  if (!Array.isArray(raw)) return [];
+  if (raw.length === 0) return [];
+
+  // Check if it's a string array (legacy format)
+  if (typeof raw[0] === "string") {
+    logger.warn("Evaluator criteria are strings — auto-converting to structured format", {
+      nodeId,
+      count: raw.length,
+    });
+    return (raw as string[]).map((s) => ({
+      name: s,
+      description: s,
+      weight: 1,
+    }));
+  }
+
+  // Already EvalCriterion[]
+  return raw as EvalCriterion[];
+}

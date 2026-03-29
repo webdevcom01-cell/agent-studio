@@ -2134,8 +2134,11 @@ function EvaluatorProperties({ data, update }: SubPanelProps) {
         <Input
           value={(data.inputVariable as string) ?? ""}
           onChange={(e) => update("inputVariable", e.target.value)}
-          placeholder="e.g. ai_response"
+          placeholder="variable_name (without {{ }})"
         />
+        <p className="text-[11px] text-muted-foreground">
+          Enter the variable name, not a template. Example: ai_response
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -2154,6 +2157,11 @@ function EvaluatorProperties({ data, update }: SubPanelProps) {
             <Plus className="mr-1 size-3" /> Add
           </Button>
         </div>
+        {criteria.length === 0 && (
+          <p className="text-xs text-amber-500">
+            At least one criterion is required for evaluation.
+          </p>
+        )}
         {criteria.map((c, i) => (
           <div key={i} className="space-y-1 rounded border p-2">
             <div className="flex gap-1">

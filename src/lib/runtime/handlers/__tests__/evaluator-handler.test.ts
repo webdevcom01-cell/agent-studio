@@ -121,7 +121,7 @@ describe("evaluatorHandler", () => {
     const node = makeNode({ criteria: [] });
     const result = await evaluatorHandler(node, makeContext());
 
-    expect(result.messages[0].content).toContain("no criteria defined");
+    expect(result.messages[0].content).toContain("at least one criterion");
   });
 
   it("handles JSON wrapped in markdown code fences", async () => {
@@ -199,5 +199,138 @@ describe("evaluatorHandler", () => {
         prompt: expect.stringContaining("Clarity"),
       })
     );
+  });
+
+  // ── Input variable and criteria normalization (P-04) ────────────────────
+
+  describe("inputVariable template stripping (P-04)", () => {
+    it("works with plain variable name", async () => {
+      mockGenerateText.mockResolvedValue({
+        text: JSON.stringify({
+          scores: [{ name: "Q", score: 8, reasoning: "ok" }],
+          overallScore: 8,
+          summary: "Good.",
+        }),
+      });
+
+      const result = await evaluatorHandler(
+        makeNode({ inputVariable: "content" }),
+        makeContext(),
+      );
+
+      expect(result.nextNodeId).toBe("passed");
+    });
+
+    it("auto-strips {{ }} from inputVariable", async () => {
+      const { logger } = await import("@/lib/logger");
+
+      mockGenerateText.mockResolvedValue({
+        text: JSON.stringify({
+          scores: [{ name: "Q", score: 9, reasoning: "ok" }],
+          overallScore: 9,
+          summary: "Great.",
+        }),
+      });
+
+      const result = await evaluatorHandler(
+        makeNode({ inputVariable: "{{content}}" }),
+        makeContext(),
+      );
+
+      expect(result.nextNodeId).toBe("passed");
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining("template syntax"),
+        expect.objectContaining({ extracted: "content" }),
+      );
+    });
+
+    it("strips {{ }} with whitespace", async () => {
+      mockGenerateText.mockResolvedValue({
+        text: JSON.stringify({
+          scores: [{ name: "Q", score: 7, reasoning: "ok" }],
+          overallScore: 7,
+          summary: "OK.",
+        }),
+      });
+
+      const result = await evaluatorHandler(
+        makeNode({ inputVariable: "{{ content }}" }),
+        makeContext(),
+      );
+
+      expect(result.nextNodeId).toBe("passed");
+    });
+  });
+
+  describe("criteria normalization (P-04)", () => {
+    it("works with structured criteria objects", async () => {
+      mockGenerateText.mockResolvedValue({
+        text: JSON.stringify({
+          scores: [{ name: "Quality", score: 8, reasoning: "ok" }],
+          overallScore: 8,
+          summary: "Good.",
+        }),
+      });
+
+      const result = await evaluatorHandler(
+        makeNode({
+          criteria: [{ name: "Quality", description: "Overall quality", weight: 1 }],
+        }),
+        makeContext(),
+      );
+
+      expect(result.nextNodeId).toBe("passed");
+    });
+
+    it("auto-converts string[] criteria to structured format", async () => {
+      const { logger } = await import("@/lib/logger");
+
+      mockGenerateText.mockResolvedValue({
+        text: JSON.stringify({
+          scores: [
+            { name: "clarity", score: 8, reasoning: "ok" },
+            { name: "accuracy", score: 7, reasoning: "ok" },
+          ],
+          overallScore: 7.5,
+          summary: "Good.",
+        }),
+      });
+
+      const result = await evaluatorHandler(
+        makeNode({ criteria: ["clarity", "accuracy"] }),
+        makeContext(),
+      );
+
+      expect(result.nextNodeId).toBe("passed");
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("auto-converting"),
+        expect.objectContaining({ count: 2 }),
+      );
+    });
+
+    it("returns error for empty criteria array", async () => {
+      const result = await evaluatorHandler(
+        makeNode({ criteria: [] }),
+        makeContext(),
+      );
+
+      expect(result.messages[0].content).toContain("at least one criterion");
+    });
+
+    it("clamps passingScore to 0-10 range", async () => {
+      mockGenerateText.mockResolvedValue({
+        text: JSON.stringify({
+          scores: [{ name: "Q", score: 5, reasoning: "ok" }],
+          overallScore: 5,
+          summary: "Average.",
+        }),
+      });
+
+      const negativeNode = makeNode({ passingScore: -5 });
+      const result = await evaluatorHandler(negativeNode, makeContext());
+      expect(result.updatedVariables?.__last_eval).toEqual(
+        expect.objectContaining({ passingScore: 0 }),
+      );
+    });
   });
 });
