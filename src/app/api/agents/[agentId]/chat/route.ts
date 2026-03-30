@@ -9,6 +9,7 @@ import { parseBodyWithLimit, BodyTooLargeError } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
+import { auth } from "@/lib/auth";
 
 const MAX_MESSAGE_LENGTH = 10_000;
 
@@ -112,6 +113,13 @@ export async function POST(
   try {
     const startTime = Date.now();
     const context = await loadContext(agentId, conversationId);
+
+    // Optionally inject userId from session — needed for human_approval node
+    // Chat endpoint is public (for embed), so we use auth() non-blocking here
+    const session = await auth().catch(() => null);
+    if (session?.user?.id) {
+      context.userId = session.user.id;
+    }
 
     // Inject debug flag + breakpoints into context
     if (isDebug) {
