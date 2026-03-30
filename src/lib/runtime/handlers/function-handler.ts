@@ -90,6 +90,12 @@ function createSandboxContext(variables: Record<string, unknown>): vm.Context {
     // Safe encoding utilities (no Buffer, no Node.js internals)
     btoa: (str: string): string => Buffer.from(String(str), "binary").toString("base64"),
     atob: (str: string): string => Buffer.from(String(str), "base64").toString("binary"),
+    encodeURIComponent,
+    decodeURIComponent,
+    encodeURI,
+    decodeURI,
+    escape,
+    unescape,
     NaN,
     Infinity,
     RegExp,
