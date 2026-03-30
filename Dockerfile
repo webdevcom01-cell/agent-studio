@@ -12,6 +12,7 @@ RUN pnpm install --no-frozen-lockfile
 # ── Stage 2: Build the application ───────────────────────────────────────────
 FROM node:20-alpine AS builder
 
+RUN apk add --no-cache git
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
@@ -22,9 +23,10 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-# Create .git marker so Tailwind v4 Rust scanner can find project root
-# (.git is excluded from Docker context via .dockerignore for image size)
-RUN mkdir -p /app/.git && pnpm build
+# Initialize git repo so Tailwind v4 Oxide scanner can find project root
+# and correctly apply .gitignore rules during source file detection.
+# Without this, Tailwind produces empty @layer utilities in Docker builds.
+RUN git init && pnpm build
 
 # ── Stage 3: Production runner ───────────────────────────────────────────────
 FROM node:20-alpine AS runner
