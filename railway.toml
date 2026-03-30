@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "pnpm install --no-frozen-lockfile && pnpm run build"
+buildCommand = "mkdir -p .git && pnpm install --no-frozen-lockfile && pnpm run build"
 
 [deploy]
 startCommand = "node server.js"
