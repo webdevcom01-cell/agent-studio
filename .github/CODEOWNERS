@@ -1,29 +1,10 @@
-# Default owner for everything
+# Code owners for security-critical files
 * @webdevcom01-cell
 
-# CI/CD and GitHub config
-.github/ @webdevcom01-cell
+# Security configuration files
+/.github/SECURITY.md @webdevcom01-cell
+/.github/workflows/security-scan.yml @webdevcom01-cell
+/.env.example @webdevcom01-cell
 
-# Database schema — changes require careful review
-prisma/ @webdevcom01-cell
-
-# Core runtime engine
-src/lib/runtime/ @webdevcom01-cell
-
-# Security-sensitive code
-src/lib/security/ @webdevcom01-cell
-src/lib/safety/ @webdevcom01-cell
-src/lib/webhooks/verify.ts @webdevcom01-cell
-src/middleware.ts @webdevcom01-cell
-src/lib/api/auth-guard.ts @webdevcom01-cell
-
-# AI and model configuration
-src/lib/ai.ts @webdevcom01-cell
-src/lib/models.ts @webdevcom01-cell
-
-# Knowledge base / RAG pipeline
-src/lib/knowledge/ @webdevcom01-cell
-
-# ECC integration
-src/lib/ecc/ @webdevcom01-cell
-services/ecc-skills-mcp/ @webdevcom01-cell
+# Documentation
+/README.md @webdevcom01-cell
