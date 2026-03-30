@@ -21,17 +21,51 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
 
   const userId = context.userId;
 
+  // ── Conversational fallback (no authenticated user) ────────────────────
+  // When there is no userId (public embed, pipeline without session), fall
+  // back to a simple capture-style interaction: ask for "approve" / "reject"
+  // directly in the chat instead of creating a DB HumanApprovalRequest.
   if (!userId) {
+    const isWaiting = context.variables["_approval_waiting"] as boolean | undefined;
+
+    if (isWaiting) {
+      // Resume — read what the user typed
+      const lastMessage = (context.variables["last_message"] as string ?? "").toLowerCase().trim();
+      const approved =
+        lastMessage === "yes" ||
+        lastMessage === "approve" ||
+        lastMessage === "approved" ||
+        lastMessage.startsWith("yes,") ||
+        lastMessage.startsWith("approve ");
+
+      const responseText = approved ? "approved" : "rejected";
+      return {
+        messages: [
+          {
+            role: "assistant",
+            content: `Human review ${responseText}.`,
+          },
+        ],
+        nextNodeId: null,
+        waitForInput: false,
+        updatedVariables: {
+          [outputVariable]: responseText,
+          _approval_waiting: null,
+        },
+      };
+    }
+
+    // First visit — ask for decision
     return {
       messages: [
         {
           role: "assistant",
-          content: "Human approval requires an authenticated user.",
+          content: `👤 **Human Review Required**\n\n${resolvedPrompt}\n\nType **"approve"** to proceed with PR creation, or **"reject"** to cancel.`,
         },
       ],
-      nextNodeId: null,
-      waitForInput: false,
-      updatedVariables: { [outputVariable]: null },
+      nextNodeId: node.id,
+      waitForInput: true,
+      updatedVariables: { _approval_waiting: true },
     };
   }
 
