@@ -1,5 +1,6 @@
-@import "tailwindcss";
-@source "../**/*.{ts,tsx,js,jsx}";
+@import "tailwindcss" source(none);
+@source "../../src/**/*.{ts,tsx,js,jsx}";
+@source "../../node_modules/@xyflow/**/*.{js,mjs}";
 
 @custom-variant dark (&:is(.dark *));
 
