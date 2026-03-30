@@ -87,6 +87,15 @@ function createSandboxContext(variables: Record<string, unknown>): vm.Context {
     isNaN,
     isFinite,
     undefined,
+    // Safe encoding utilities (no Buffer, no Node.js internals)
+    btoa: (str: string): string => Buffer.from(String(str), "binary").toString("base64"),
+    atob: (str: string): string => Buffer.from(String(str), "base64").toString("binary"),
+    encodeURIComponent,
+    decodeURIComponent,
+    encodeURI,
+    decodeURI,
+    escape,
+    unescape,
     NaN,
     Infinity,
     RegExp,
@@ -181,11 +190,27 @@ export const functionHandler: NodeHandler = async (node, context) => {
       timeout: VM_TIMEOUT_MS,
     });
 
+    // Auto-unwrap: if the function returns a plain object whose only key
+    // matches outputVariable, store just the inner value (not the wrapper).
+    // e.g. `return { repo_path: "owner/repo" }` with outputVariable="repo_path"
+    // → stored as string "owner/repo" rather than the object.
+    let finalResult: unknown = result;
+    if (
+      typeof result === "object" &&
+      result !== null &&
+      !Array.isArray(result)
+    ) {
+      const keys = Object.keys(result as Record<string, unknown>);
+      if (keys.length === 1 && keys[0] === outputVariable) {
+        finalResult = (result as Record<string, unknown>)[outputVariable];
+      }
+    }
+
     return {
       messages: [],
       nextNodeId: null,
       waitForInput: false,
-      updatedVariables: { [outputVariable]: result },
+      updatedVariables: { [outputVariable]: finalResult },
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);

@@ -417,7 +417,7 @@ model HumanApprovalRequest {
   id          String    @id @default(cuid())
   executionId String
   agentId     String
-  userId      String
+  userId      String?
   prompt      String    @db.Text
   contextData Json?
   status      String    @default("pending")
