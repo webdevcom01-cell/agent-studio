@@ -1,2 +1,4 @@
 mcp[cli]>=1.0.0
 semgrep>=1.60.0
+starlette>=0.40.0
+uvicorn>=0.30.0

@@ -18,14 +18,15 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+import uvicorn
 
 # ─── Server Init ─────────────────────────────────────────────────────────────
 
-mcp = FastMCP(
-    "security-scanner",
-    description="Autonomous security scanning: dependency audit (npm audit) + static code analysis (semgrep). Pre-processes all outputs to stay within MCP 10K character limit.",
-    version="1.0.0",
-)
+mcp = FastMCP("security-scanner")
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -461,8 +462,39 @@ def health() -> str:
     }, indent=2)
 
 
+# ─── HTTP Health endpoint (required by Railway healthcheck) ───────────────────
+
+async def http_health(request: Request) -> JSONResponse:
+    """Standalone HTTP GET /health for Railway healthcheck."""
+    npm_ok = False
+    semgrep_ok = False
+    try:
+        r = subprocess.run(["npm", "--version"], capture_output=True, text=True, timeout=5)
+        npm_ok = r.returncode == 0
+    except Exception:
+        pass
+    try:
+        r = subprocess.run(["semgrep", "--version"], capture_output=True, text=True, timeout=10)
+        semgrep_ok = r.returncode == 0
+    except Exception:
+        pass
+
+    status = "healthy" if npm_ok else "degraded"
+    return JSONResponse(
+        {"status": status, "service": "security-scanner-mcp", "npm": npm_ok, "semgrep": semgrep_ok},
+        status_code=200,
+    )
+
+
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8001"))
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=port, path="/mcp")
+
+    # Build combined Starlette app: /health (HTTP) + /mcp (FastMCP)
+    mcp_app = mcp.streamable_http_app()
+    routes = [Route("/health", http_health)]
+    app = Starlette(routes=routes)
+    app.mount("/mcp", mcp_app)
+
+    uvicorn.run(app, host="0.0.0.0", port=port)

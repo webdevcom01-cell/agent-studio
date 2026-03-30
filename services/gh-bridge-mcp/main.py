@@ -20,14 +20,15 @@ from pathlib import Path
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+import uvicorn
 
 # ─── Server Init ─────────────────────────────────────────────────────────────
 
-mcp = FastMCP(
-    "gh-bridge",
-    description="GitHub CLI bridge for the Autonomous DevOps Swarm. Provides repo cloning, file operations, branch management, and PR creation via the gh CLI. Requires GITHUB_TOKEN.",
-    version="1.0.0",
-)
+mcp = FastMCP("gh-bridge")
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -610,8 +611,28 @@ def health() -> str:
     }, indent=2)
 
 
+# ─── HTTP Health endpoint (required by Railway healthcheck) ───────────────────
+
+async def http_health(request: Request) -> JSONResponse:
+    """Standalone HTTP GET /health for Railway healthcheck."""
+    gh_ok = shutil.which("gh") is not None
+    token = os.environ.get("GITHUB_TOKEN", "")
+    status = "healthy" if gh_ok and token else "degraded"
+    return JSONResponse(
+        {"status": status, "service": "gh-bridge-mcp", "gh_cli": gh_ok, "token_configured": bool(token)},
+        status_code=200,
+    )
+
+
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8002"))
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=port, path="/mcp")
+
+    # Build combined Starlette app: /health (HTTP) + /mcp (FastMCP)
+    mcp_app = mcp.streamable_http_app()
+    routes = [Route("/health", http_health)]
+    app = Starlette(routes=routes)
+    app.mount("/mcp", mcp_app)
+
+    uvicorn.run(app, host="0.0.0.0", port=port)
