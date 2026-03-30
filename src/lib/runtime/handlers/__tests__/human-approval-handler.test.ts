@@ -194,7 +194,7 @@ describe("humanApprovalHandler", () => {
     expect(result.nextNodeId).toBeNull();
   });
 
-  it("returns error when no userId in context", async () => {
+  it("prompts for conversational approval when no userId in context (first visit)", async () => {
     const result = await humanApprovalHandler(
       makeNode({
         prompt: "Approve?",
@@ -203,8 +203,40 @@ describe("humanApprovalHandler", () => {
       makeContext({ userId: undefined }),
     );
 
-    expect(result.messages[0].content).toContain("authenticated user");
-    expect(result.updatedVariables?.result).toBeNull();
+    // New behaviour: ask for "approve" / "reject" in chat instead of hard-failing
+    expect(result.messages[0].content).toContain("approve");
+    expect(result.waitForInput).toBe(true);
+    expect(result.nextNodeId).toBeTruthy();
+    expect(result.updatedVariables?._approval_waiting).toBe(true);
+  });
+
+  it("resolves approval when user types 'approve' (no userId resume)", async () => {
+    const result = await humanApprovalHandler(
+      makeNode({ prompt: "Approve?", outputVariable: "result" }),
+      makeContext({
+        userId: undefined,
+        variables: { _approval_waiting: true, last_message: "approve" },
+      }),
+    );
+
+    expect(result.messages[0].content).toContain("approved");
+    expect(result.waitForInput).toBe(false);
+    expect(result.updatedVariables?.result).toBe("approved");
+    expect(result.updatedVariables?._approval_waiting).toBeNull();
+  });
+
+  it("resolves rejection when user types anything other than approve (no userId resume)", async () => {
+    const result = await humanApprovalHandler(
+      makeNode({ prompt: "Approve?", outputVariable: "result" }),
+      makeContext({
+        userId: undefined,
+        variables: { _approval_waiting: true, last_message: "no" },
+      }),
+    );
+
+    expect(result.messages[0].content).toContain("rejected");
+    expect(result.waitForInput).toBe(false);
+    expect(result.updatedVariables?.result).toBe("rejected");
   });
 
   it("handles missing request on resume", async () => {
