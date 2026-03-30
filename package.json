@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "prisma generate && (test -f .git/HEAD || (mkdir -p .git && echo 'ref: refs/heads/main' > .git/HEAD)) && next build && echo '=== CSS FILE SIZE ===' && find .next -name '*.css' -exec wc -c {} + && echo '=== CSS GRID CHECK ===' && grep -l 'display:grid\\|display: grid' .next/static/css/*.css 2>/dev/null || echo 'NO GRID FOUND IN CSS'",
+    "build": "prisma generate && (test -f .git/HEAD || (mkdir -p .git && echo \"ref: refs/heads/main\" > .git/HEAD)) && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
