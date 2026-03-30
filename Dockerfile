@@ -22,7 +22,8 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-# pnpm build script creates .git marker for Tailwind v4 Oxide scanner
+# Cache bust: change this value to force Docker to re-run pnpm build
+ARG CACHE_BUST=2
 RUN pnpm build
 
 # ── Stage 3: Production runner ───────────────────────────────────────────────
