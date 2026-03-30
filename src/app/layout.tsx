@@ -23,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className={`${dmSans.variable} font-[family-name:var(--font-sans)] min-h-screen antialiased`}>
         <SessionProvider>
           <ThemeProvider>
