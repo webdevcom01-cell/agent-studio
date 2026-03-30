@@ -7,11 +7,13 @@ type Theme = "light" | "dark";
 const ThemeContext = createContext<{
   theme: Theme;
   toggleTheme: () => void;
-}>({ theme: "light", toggleTheme: () => {} });
+}>({ theme: "dark", toggleTheme: () => {} });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("light");
-  const [mounted, setMounted] = useState(false);
+  // Default to "dark" — matches the app's dark-first design.
+  // No longer returns null while un-mounted; children render immediately
+  // so layout classes work on both SSR and first client paint.
+  const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
     const stored = localStorage.getItem("theme") as Theme | null;
@@ -19,7 +21,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const resolved = stored ?? (systemDark ? "dark" : "light");
     setTheme(resolved);
     document.documentElement.classList.toggle("dark", resolved === "dark");
-    setMounted(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function toggleTheme() {
@@ -30,9 +32,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }
-
-  // Prevent flash of wrong theme
-  if (!mounted) return null;
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
