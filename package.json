@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "prisma generate && mkdir -p .git && next build",
+    "build": "prisma generate && (test -f .git/HEAD || (mkdir -p .git && echo 'ref: refs/heads/main' > .git/HEAD)) && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
