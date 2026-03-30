@@ -72,6 +72,38 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
   const pendingRequestId = context.variables["_approval_request_id"] as string | undefined;
 
   if (pendingRequestId) {
+    // Also accept typed "approve" / "reject" in chat (same as no-auth path)
+    const lastMessage = (context.variables["last_message"] as string ?? "").toLowerCase().trim();
+    const approvedByText =
+      lastMessage === "yes" ||
+      lastMessage === "approve" ||
+      lastMessage === "approved" ||
+      lastMessage.startsWith("yes,") ||
+      lastMessage.startsWith("approve ");
+    const rejectedByText =
+      lastMessage === "no" ||
+      lastMessage === "reject" ||
+      lastMessage === "rejected";
+
+    if (approvedByText || rejectedByText) {
+      const responseText = approvedByText ? "approved" : "rejected";
+      await prisma.humanApprovalRequest
+        .update({
+          where: { id: pendingRequestId },
+          data: { status: responseText, resolvedAt: new Date(), response: responseText },
+        })
+        .catch(() => {});
+      return {
+        messages: [{ role: "assistant", content: `Human review ${responseText}.` }],
+        nextNodeId: null,
+        waitForInput: false,
+        updatedVariables: {
+          [outputVariable]: responseText,
+          _approval_request_id: null,
+        },
+      };
+    }
+
     const updated = await prisma.humanApprovalRequest.findUnique({
       where: { id: pendingRequestId },
     });
