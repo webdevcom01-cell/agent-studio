@@ -19,6 +19,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Create .git marker so Tailwind v4 Rust scanner can find project root
+# (.git is excluded from Docker context via .dockerignore for image size)
+RUN mkdir -p .git
+
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
