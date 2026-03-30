@@ -42,6 +42,10 @@ vi.mock("@/lib/api/auth-guard", () => ({
   isAuthError: vi.fn().mockReturnValue(false),
   requireAuth: vi.fn().mockResolvedValue({ userId: "test-user" }),
 }));
+// auth() is called non-blocking in the chat route to inject userId for human_approval nodes
+vi.mock("@/lib/auth", () => ({
+  auth: vi.fn().mockResolvedValue(null),
+}));
 
 import { POST } from "../route";
 
