@@ -164,10 +164,11 @@ export async function POST(
       const innerStream = executeFlowStreaming(context, message);
       const timeToFirstTokenMs = Date.now() - startTime;
 
-      // Wrap stream to track total duration after completion
+      // Wrap stream to track total duration after completion.
+      // reader is declared outside start() so cancel() can propagate to innerStream.
+      const reader = innerStream.getReader();
       const trackingStream = new ReadableStream({
         async start(controller) {
-          const reader = innerStream.getReader();
           try {
             // eslint-disable-next-line no-constant-condition
             while (true) {
@@ -190,6 +191,11 @@ export async function POST(
               model: agentModel,
             }).catch((err) => logger.warn("Analytics tracking failed", err));
           }
+        },
+        cancel() {
+          // Propagate client disconnect to the inner engine stream so sub-agents
+          // stop executing and stop consuming tokens.
+          reader.cancel().catch(() => { /* ignore */ });
         },
       });
 

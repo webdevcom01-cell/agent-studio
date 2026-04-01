@@ -116,11 +116,11 @@ export async function aiResponseStreamingHandler(
     if (latestUserMsg) {
       const inputCheck = await checkInputSafety(latestUserMsg, context.agentId, node.id);
       if (!inputCheck.safe) {
-        writer.write({
+        try { writer.write({
           type: "message",
           role: "assistant",
           content: "I'm unable to process that request due to safety guidelines.",
-        });
+        }); } catch { /* stream closed by client */ }
         return {
           messages: [
             { role: "assistant", content: "I'm unable to process that request due to safety guidelines." },
@@ -177,7 +177,7 @@ export async function aiResponseStreamingHandler(
     const startMs = Date.now();
     const result = streamText(streamOptions);
 
-    writer.write({ type: "stream_start" });
+    try { writer.write({ type: "stream_start" }); } catch { /* stream closed by client */ }
 
     // Track active tool call timings for debug
     const toolStartTimes = new Map<string, number>();
@@ -185,7 +185,7 @@ export async function aiResponseStreamingHandler(
     let fullText = "";
     for await (const delta of result.textStream) {
       fullText += delta;
-      writer.write({ type: "stream_delta", content: delta });
+      try { writer.write({ type: "stream_delta", content: delta }); } catch { /* stream closed by client */ }
     }
 
     if (heartbeatTimer) clearInterval(heartbeatTimer);
@@ -245,7 +245,7 @@ export async function aiResponseStreamingHandler(
     }
     // ─────────────────────────────────────────────────────────────────────
 
-    writer.write({ type: "stream_end", content: fullText });
+    try { writer.write({ type: "stream_end", content: fullText }); } catch { /* stream closed by client */ }
 
     return {
       messages: [{ role: "assistant", content: fullText }],
@@ -259,7 +259,7 @@ export async function aiResponseStreamingHandler(
     logger.error("AI streaming response failed", err instanceof Error ? err : new Error(String(err)), { agentId: context.agentId });
     const errorMsg =
       "I'm having trouble generating a response right now. Let me continue.";
-    writer.write({ type: "error", content: errorMsg });
+    try { writer.write({ type: "error", content: errorMsg }); } catch { /* stream closed by client */ }
     return {
       messages: [{ role: "assistant", content: errorMsg }],
       nextNodeId: null,

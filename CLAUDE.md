@@ -676,8 +676,10 @@ FlowTrace — Full execution trace snapshot for debugging
 - Context and messages are always saved in `finally` block, even on client disconnect
 - Each save operation (saveMessages, saveContext, writer.close) is in its own try/catch to prevent cascading failures
 - User messages are persisted to DB via `prisma.message.create` in both engine.ts and engine-streaming.ts
-- AbortController with 180s timeout on the client side (matches server maxDuration)
+- AbortController with 1800s (30 min) timeout on the client side for long multi-agent pipelines; server maxDuration=900s (Vercel hint, ignored on Railway)
 - Heartbeat interval during tool calls to prevent stream disconnects
+- All `writer.write()` calls in both `engine-streaming.ts` and `ai-response-streaming-handler.ts` are wrapped in try/catch to prevent cancelled stream from losing accumulated results
+- `trackingStream` in chat route propagates `cancel()` to `innerStream` so engine receives abort signal on client disconnect
 
 ### Knowledge/RAG Pipeline
 - Ingest: scrape URL / parse file / accept text → chunk (400 tokens, 20% overlap) → embed (OpenAI text-embedding-3-small) → store in pgvector
@@ -868,7 +870,7 @@ Per-KB configurable RAG pipeline with advanced retrieval, evaluation, and mainte
 - `web_fetch` node — HTTP fetch with URL validation and SSRF protection
 - `browser_action` node — browser automation actions via MCP (Playwright)
 - AI response handlers support MAX_TOOL_STEPS=20 for multi-page web navigation
-- Server maxDuration=180s, client stream timeout=180s for long-running MCP tool chains
+- Server maxDuration=900s, client stream timeout=1800s (30 min) for long-running MCP tool chains and multi-agent pipelines
 - Heartbeat interval during tool calls to prevent stream disconnects
 
 ### Agent Discovery Marketplace
