@@ -18,6 +18,8 @@ export interface RuntimeContext {
   breakpoints?: Set<string>;
   // Debug session ID used to coordinate pause/resume via Redis
   debugSessionId?: string;
+  // AbortSignal from the stream — propagated to sub-agent calls for early cancellation
+  abortSignal?: AbortSignal;
 }
 
 export interface ExecutionResult {

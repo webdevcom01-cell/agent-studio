@@ -53,6 +53,9 @@ export function executeFlowStreaming(
       // Step mode: when true, pause at the NEXT node regardless of breakpoints
       let stepMode = false;
 
+      // Propagate abort signal so sub-agent tool calls can be cancelled on Stop
+      context.abortSignal = streamAbortController.signal;
+
       try {
         // Init debug session in Redis if breakpoints are configured
         if (context.debugMode && context.debugSessionId && (context.breakpoints?.size ?? 0) > 0) {

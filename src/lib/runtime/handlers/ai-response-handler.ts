@@ -41,6 +41,7 @@ async function loadAgentTools(
       callStack: extended._a2aCallStack as string[] | undefined,
       traceId: extended._a2aTraceId as string | undefined,
       conversationId: context.conversationId,
+      abortSignal: context.abortSignal,
     };
 
     const tools = await getAgentToolsForAgent(agentId, ctx);

@@ -68,6 +68,8 @@ export interface AgentToolContext {
   traceId?: string;
   /** Conversation ID for audit logging */
   conversationId?: string;
+  /** AbortSignal from the parent stream — cancels sub-agent execution when user hits Stop */
+  abortSignal?: AbortSignal;
 }
 
 /**
@@ -163,7 +165,13 @@ async function executeAgentTool(
     callStack = [callerAgentId],
     traceId = generateSpanId(),
     conversationId,
+    abortSignal,
   } = ctx;
+
+  // Bail out immediately if already aborted (user hit Stop before this tool call)
+  if (abortSignal?.aborted) {
+    return `[Agent "${agent.name}" was cancelled]`;
+  }
 
   // Depth limit and circular call detection
   try {
@@ -242,6 +250,7 @@ async function executeAgentTool(
       callStack: [...callStack, agent.id],
       traceId,
       timeoutSeconds: DEFAULT_TIMEOUT_SECONDS,
+      abortSignal,
     });
 
     recordSuccess(callerAgentId, agent.id);
@@ -274,26 +283,40 @@ async function executeAgentTool(
   } catch (err) {
     const durationMs = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : String(err);
+    const isCancelled =
+      errorMsg.includes("cancelled: parent stream") || abortSignal?.aborted === true;
 
-    recordFailure(callerAgentId, agent.id);
+    // Don't penalise circuit breaker for user-initiated cancellation
+    if (!isCancelled) {
+      recordFailure(callerAgentId, agent.id);
+    }
 
-    // Update audit log with failure
+    // Update audit log with failure/cancellation
     if (callLogId) {
       await prisma.agentCallLog
         .update({
           where: { id: callLogId },
           data: {
             status: "FAILED",
-            errorMessage: errorMsg,
+            errorMessage: isCancelled ? "cancelled by user" : errorMsg,
             durationMs,
             completedAt: new Date(),
           },
         })
-        .catch((err) =>
+        .catch((updateErr) =>
           logger.warn("Agent tool: audit log update failed", {
-            error: err instanceof Error ? err.message : String(err),
+            error: updateErr instanceof Error ? updateErr.message : String(updateErr),
           })
         );
+    }
+
+    if (isCancelled) {
+      logger.info("Agent tool cancelled by user", {
+        callerAgentId,
+        calleeAgentId: agent.id,
+        durationMs,
+      });
+      return `[Agent "${agent.name}" was cancelled]`;
     }
 
     logger.error("Agent tool execution failed", err instanceof Error ? err : new Error(errorMsg), {
@@ -476,6 +499,7 @@ interface SubAgentParams {
   callStack: string[];
   traceId: string;
   timeoutSeconds: number;
+  abortSignal?: AbortSignal;
 }
 
 interface SubAgentResult {
@@ -493,6 +517,7 @@ async function executeSubAgentInternal(
     callStack,
     traceId,
     timeoutSeconds,
+    abortSignal,
   } = params;
 
   const whereClause = callerUserId
@@ -548,11 +573,29 @@ async function executeSubAgentInternal(
     );
   });
 
+  // Abort promise: rejects immediately if signal fires (user hit Stop)
+  const abortPromise = abortSignal
+    ? new Promise<never>((_, reject) => {
+        if (abortSignal.aborted) {
+          reject(new Error("Sub-agent cancelled: parent stream was stopped"));
+          return;
+        }
+        abortSignal.addEventListener(
+          "abort",
+          () => reject(new Error("Sub-agent cancelled: parent stream was stopped")),
+          { once: true }
+        );
+      })
+    : null;
+
   const executionPromise = executeFlow(subContext, input.message);
 
   let result: Awaited<typeof executionPromise>;
+  const races: Promise<unknown>[] = [executionPromise, timeoutPromise];
+  if (abortPromise) races.push(abortPromise);
+
   try {
-    result = await Promise.race([executionPromise, timeoutPromise]);
+    result = await Promise.race(races) as Awaited<typeof executionPromise>;
   } finally {
     clearTimeout(timeoutRef!);
   }
