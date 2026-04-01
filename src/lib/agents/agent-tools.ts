@@ -542,7 +542,7 @@ async function executeSubAgentInternal(
     );
   });
 
-  const executionPromise = executeFlow(subContext);
+  const executionPromise = executeFlow(subContext, input.message);
 
   let result: Awaited<typeof executionPromise>;
   try {
