@@ -209,6 +209,9 @@ export function executeFlowStreaming(
           let result: ExecutionResult;
 
           // ── Codepath 1: ai_response ──────────────────────────────────────
+          // NOTE: all writer.write() calls are wrapped in try/catch so a cancelled
+          // stream (client disconnect) never prevents allMessages from being populated
+          // and saved to the DB in the finally block.
           if (node.type === "ai_response") {
             try {
               result = await aiResponseStreamingHandler(
@@ -216,19 +219,23 @@ export function executeFlowStreaming(
                 context,
                 writer
               );
-              debugEmitNodeEnd(writer, context, node.id, "success", Date.now() - nodeStartMs,
-                result.messages[0]?.content);
+              try {
+                debugEmitNodeEnd(writer, context, node.id, "success", Date.now() - nodeStartMs,
+                  result.messages[0]?.content);
+              } catch { /* stream closed by client */ }
             } catch (error) {
               logger.error("AI streaming handler error", error, { agentId: context.agentId, nodeId: node.id });
               nodesFailed++;
-              debugEmitNodeEnd(writer, context, node.id, "error", Date.now() - nodeStartMs,
-                undefined, error instanceof Error ? error.message : String(error));
+              try {
+                debugEmitNodeEnd(writer, context, node.id, "error", Date.now() - nodeStartMs,
+                  undefined, error instanceof Error ? error.message : String(error));
+              } catch { /* stream closed by client */ }
               const msg: OutputMessage = {
                 role: "assistant",
                 content: "Something went wrong. Let me try to continue.",
               };
               allMessages.push(msg);
-              writer.write({ type: "error", content: msg.content });
+              try { writer.write({ type: "error", content: msg.content }); } catch { /* stream closed */ }
               context.currentNodeId = resolveNextNodeId(
                 { nextNodeId: null }, node.id, node.type,
                 context.flowContent.edges, nodeMap,
@@ -238,20 +245,24 @@ export function executeFlowStreaming(
           // ── Codepath 2: parallel ─────────────────────────────────────────
           } else if (node.type === "parallel") {
             try {
-              writer.write({ type: "heartbeat" });
+              try { writer.write({ type: "heartbeat" }); } catch { /* stream closed */ }
               result = await parallelStreamingHandler(node, context, writer);
-              debugEmitNodeEnd(writer, context, node.id, "success", Date.now() - nodeStartMs);
+              try {
+                debugEmitNodeEnd(writer, context, node.id, "success", Date.now() - nodeStartMs);
+              } catch { /* stream closed by client */ }
             } catch (error) {
               logger.error("Parallel streaming handler error", error, { agentId: context.agentId, nodeId: node.id });
               nodesFailed++;
-              debugEmitNodeEnd(writer, context, node.id, "error", Date.now() - nodeStartMs,
-                undefined, error instanceof Error ? error.message : String(error));
+              try {
+                debugEmitNodeEnd(writer, context, node.id, "error", Date.now() - nodeStartMs,
+                  undefined, error instanceof Error ? error.message : String(error));
+              } catch { /* stream closed by client */ }
               const msg: OutputMessage = {
                 role: "assistant",
                 content: "Something went wrong. Let me try to continue.",
               };
               allMessages.push(msg);
-              writer.write({ type: "error", content: msg.content });
+              try { writer.write({ type: "error", content: msg.content }); } catch { /* stream closed */ }
               context.currentNodeId = null; // parallel manages its own routing — stop on error
               continue;
             }
@@ -324,12 +335,16 @@ export function executeFlowStreaming(
             }
 
             for (const msg of result.messages) {
-              writer.write({
-                type: "message",
-                role: msg.role,
-                content: msg.content,
-                ...(msg.metadata ? { metadata: msg.metadata } : {}),
-              });
+              try {
+                writer.write({
+                  type: "message",
+                  role: msg.role,
+                  content: msg.content,
+                  ...(msg.metadata ? { metadata: msg.metadata } : {}),
+                });
+              } catch {
+                // stream closed by client — messages still pushed to allMessages below
+              }
             }
           }
 
@@ -391,25 +406,29 @@ export function executeFlowStreaming(
             content: "This conversation has reached its processing limit. Please start a new conversation.",
           };
           allMessages.push(msg);
-          writer.write({ type: "message", role: msg.role, content: msg.content });
+          try { writer.write({ type: "message", role: msg.role, content: msg.content }); } catch { /* stream closed */ }
           context.currentNodeId = null;
         }
 
         // ── Debug: flow summary ────────────────────────────────────────────
-        debugEmit(writer, context, {
-          type: "debug_flow_summary",
-          totalDurationMs: Date.now() - flowStartMs,
-          nodesExecuted: executionPath.length,
-          nodesFailed,
-          executionPath,
-          otelTraceId: context.otelTraceId,
-        });
+        try {
+          debugEmit(writer, context, {
+            type: "debug_flow_summary",
+            totalDurationMs: Date.now() - flowStartMs,
+            nodesExecuted: executionPath.length,
+            nodesFailed,
+            executionPath,
+            otelTraceId: context.otelTraceId,
+          });
+        } catch { /* stream closed by client */ }
 
-        writer.write({
-          type: "done",
-          conversationId: context.conversationId,
-          waitForInput: waitingForInput,
-        });
+        try {
+          writer.write({
+            type: "done",
+            conversationId: context.conversationId,
+            waitForInput: waitingForInput,
+          });
+        } catch { /* stream closed by client */ }
       } finally {
         // Cleanup debug session in Redis (fire-and-forget)
         if (context.debugSessionId) {

@@ -13,8 +13,9 @@ import { auth } from "@/lib/auth";
 
 const MAX_MESSAGE_LENGTH = 10_000;
 
-// MCP tool calls (e.g. Playwright browser, web search) can take 2-3 minutes for multi-step browsing
-export const maxDuration = 180;
+// Multi-agent pipelines (10-20 sequential sub-agents) can take 20+ minutes on Railway
+// maxDuration is a Vercel hint (ignored on Railway); client timeout in useStreamingChat is the real limit
+export const maxDuration = 900;
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;

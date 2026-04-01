@@ -62,7 +62,8 @@ export function useStreamingChat({
 
     const controller = new AbortController();
     abortRef.current = controller;
-    const timeout = setTimeout(() => controller.abort(), 180_000);
+    // 30 min timeout — multi-agent SDLC pipelines with 10-20 sub-agents can take 20+ min
+    const timeout = setTimeout(() => controller.abort(), 1_800_000);
     let readerRef: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
     try {
