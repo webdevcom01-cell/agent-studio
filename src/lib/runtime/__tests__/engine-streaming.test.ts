@@ -337,7 +337,7 @@ describe("executeFlowStreaming", () => {
     const messageChunks = chunks.filter((c) => c.type === "message");
     expect(
       messageChunks.some(
-        (c) => c.type === "message" && c.content.includes("went wrong")
+        (c) => c.type === "message" && c.content.includes("There was an issue with")
       )
     ).toBe(true);
   });

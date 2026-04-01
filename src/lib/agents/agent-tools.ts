@@ -299,9 +299,14 @@ async function executeAgentTool(
     logger.error("Agent tool execution failed", err instanceof Error ? err : new Error(errorMsg), {
       callerAgentId,
       calleeAgentId: agent.id,
+      durationMs,
     });
 
-    return `[Agent "${agent.name}" failed: ${errorMsg}]`;
+    const isTimeout = errorMsg.toLowerCase().includes("timeout") || errorMsg.toLowerCase().includes("timed out");
+    const reason = isTimeout
+      ? `timed out after ${Math.round(durationMs / 1000)}s`
+      : errorMsg;
+    return `[Agent "${agent.name}" failed: ${reason}]`;
   }
 }
 

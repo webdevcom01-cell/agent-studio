@@ -230,9 +230,14 @@ export function executeFlowStreaming(
                 debugEmitNodeEnd(writer, context, node.id, "error", Date.now() - nodeStartMs,
                   undefined, error instanceof Error ? error.message : String(error));
               } catch { /* stream closed by client */ }
+              const nodeLabel = nodeName ? `"${nodeName}"` : `node [${node.type}]`;
+              const isTimeout = error instanceof Error && error.message.toLowerCase().includes("timeout");
+              const errorDetail = isTimeout
+                ? `${nodeLabel} timed out after ${Math.round((Date.now() - nodeStartMs) / 1000)}s`
+                : nodeLabel;
               const msg: OutputMessage = {
                 role: "assistant",
-                content: "Something went wrong. Let me try to continue.",
+                content: `There was an issue with ${errorDetail}. Continuing with the remaining steps.`,
               };
               allMessages.push(msg);
               try { writer.write({ type: "error", content: msg.content }); } catch { /* stream closed */ }
@@ -259,7 +264,7 @@ export function executeFlowStreaming(
               } catch { /* stream closed by client */ }
               const msg: OutputMessage = {
                 role: "assistant",
-                content: "Something went wrong. Let me try to continue.",
+                content: `There was an issue with the parallel step${nodeName ? ` "${nodeName}"` : ""}. Continuing with remaining steps.`,
               };
               allMessages.push(msg);
               try { writer.write({ type: "error", content: msg.content }); } catch { /* stream closed */ }
@@ -317,9 +322,10 @@ export function executeFlowStreaming(
               nodesFailed++;
               debugEmitNodeEnd(writer, context, node.id, "error", Date.now() - nodeStartMs,
                 undefined, error instanceof Error ? error.message : String(error));
+              const nodeLabel = nodeName ? `"${nodeName}"` : `a [${node.type}] step`;
               const msg: OutputMessage = {
                 role: "assistant",
-                content: "Something went wrong. Let me try to continue.",
+                content: `There was an issue with ${nodeLabel}. Continuing with remaining steps.`,
               };
               allMessages.push(msg);
               writer.write({

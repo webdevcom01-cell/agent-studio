@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useStreamingChat, type ChatMessage } from "@/components/chat/use-streaming-chat";
+import { PipelineProgress } from "@/components/chat/pipeline-progress";
 
 interface ConversationSummary {
   id: string;
@@ -285,6 +286,13 @@ export default function ChatPage({
               </div>
             )}
           </div>
+
+          {/* Pipeline progress — visible during multi-agent pipeline execution */}
+          <PipelineProgress
+            agentId={agentId}
+            conversationId={conversationId}
+            isLoading={isLoading}
+          />
 
           {/* Input bar */}
           <div className="border-t p-4 shrink-0">
