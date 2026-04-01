@@ -13,6 +13,7 @@
 import { z } from "zod";
 import { dynamicTool, zodSchema, type ToolSet } from "ai";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
 import {
   checkCircuit,
@@ -27,6 +28,84 @@ import { checkRateLimit } from "@/lib/a2a/rate-limiter";
 import { parseFlowContent } from "@/lib/validators/flow-content";
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
+
+/**
+ * Task 3.2 — Per-Agent Timeout Profiles
+ *
+ * Pattern-based timeout map for well-known agent types. Used when an agent has
+ * no explicit `expectedDurationSeconds` set in its DB record.
+ * Checked in order — first match wins.
+ *
+ * Rationale for values:
+ *   - "fast"      30s  — simple validation, fact-checking, quick lookups
+ *   - "standard"  60s  — research, product discovery, summarisation
+ *   - "slow"      90s  — architecture decisions, planning, design specs
+ *   - "very-slow" 120s — code generation, full implementation, QA testing
+ */
+const AGENT_TIMEOUT_PROFILES: ReadonlyArray<{
+  pattern: RegExp;
+  timeoutSeconds: number;
+  label: string;
+}> = [
+  // Fast agents — validation, fact-checking, quick analysis
+  {
+    pattern: /reality.?checker|fact.?check|quick|validator|linter|critic|sanity/i,
+    timeoutSeconds: 30,
+    label: "fast",
+  },
+  // Standard agents — research, discovery, review, summarisation
+  {
+    pattern: /research|discovery|product|market|analy|summar|review|audit/i,
+    timeoutSeconds: 60,
+    label: "standard",
+  },
+  // Slow agents — architecture, planning, design decisions
+  {
+    pattern: /architect|design|plan|strategic|decision|spec|blueprint/i,
+    timeoutSeconds: 90,
+    label: "slow",
+  },
+  // Very-slow agents — code generation, implementation, test generation
+  {
+    pattern: /code|generat|implement|build|develop|engineer|test|quality|qa/i,
+    timeoutSeconds: 120,
+    label: "very-slow",
+  },
+];
+
+/**
+ * Resolve the execution timeout for a sub-agent call (agent-as-tool path).
+ *
+ * Priority:
+ *   1. Explicit `expectedDurationSeconds` stored on the Agent record (DB value,
+ *      set by the user via the flow builder or PATCH /api/agents/[id]).
+ *   2. Pattern matching against the agent's name using AGENT_TIMEOUT_PROFILES.
+ *   3. Flat DEFAULT_TIMEOUT_SECONDS (120s) if no pattern matches.
+ *
+ * Exported so it can be unit-tested independently.
+ */
+export function getTimeoutForAgent(
+  agent: { name: string; expectedDurationSeconds?: number | null }
+): number {
+  // 1. Explicit DB value — highest priority
+  if (
+    agent.expectedDurationSeconds !== null &&
+    agent.expectedDurationSeconds !== undefined &&
+    agent.expectedDurationSeconds > 0
+  ) {
+    return agent.expectedDurationSeconds;
+  }
+
+  // 2. Name-pattern matching
+  for (const profile of AGENT_TIMEOUT_PROFILES) {
+    if (profile.pattern.test(agent.name)) {
+      return profile.timeoutSeconds;
+    }
+  }
+
+  // 3. Conservative flat default
+  return DEFAULT_TIMEOUT_SECONDS;
+}
 
 /**
  * Desktop capability metadata extracted from agent flows.
@@ -46,6 +125,12 @@ interface AgentInfo {
   id: string;
   name: string;
   description: string | null;
+  /**
+   * Explicit timeout override set by the user (seconds). null/undefined = use
+   * pattern matching or DEFAULT_TIMEOUT_SECONDS. Loaded via $queryRaw so it
+   * degrades gracefully before the DB column is applied (pnpm db:push).
+   */
+  expectedDurationSeconds?: number | null;
 }
 
 interface AgentInfoWithFlow extends AgentInfo {
@@ -66,8 +151,16 @@ export interface AgentToolContext {
   callStack?: string[];
   /** Distributed trace ID for audit logging */
   traceId?: string;
-  /** Conversation ID for audit logging */
+  /** Conversation ID for audit logging + pipeline resume */
   conversationId?: string;
+  /** AbortSignal from the parent stream — cancels sub-agent execution when user hits Stop */
+  abortSignal?: AbortSignal;
+  /**
+   * The current user input (first 200 chars) — used as pipeline resume fingerprint.
+   * When set, Task 3.1 resume logic can skip already-completed sub-agents whose
+   * cached result fingerprint matches this value.
+   */
+  currentInput?: string;
 }
 
 /**
@@ -106,12 +199,36 @@ export async function getAgentToolsForAgent(
 
     if (agents.length === 0) return {};
 
+    // ── Task 3.1: Pipeline Resume ────────────────────────────────────────────
+    // Load any partial results saved by previous runs of this pipeline. If the
+    // fingerprint (first 200 chars of user input) matches, we can skip agents
+    // that already completed successfully — saving time and API cost.
+    const fingerprint = ctx.currentInput?.slice(0, 200) ?? "";
+    const cachedResults =
+      ctx.conversationId && fingerprint
+        ? await loadPartialResults(ctx.conversationId, fingerprint)
+        : {};
+
+    const resumedAgents = Object.entries(cachedResults)
+      .filter(([, r]) => r.status === "COMPLETED")
+      .map(([k]) => k);
+
+    if (resumedAgents.length > 0) {
+      logger.info("Pipeline resume: will skip already-completed sub-agents", {
+        callerAgentId,
+        conversationId: ctx.conversationId,
+        resumedAgents,
+      });
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const tools: ToolSet = {};
 
     for (const agent of agents) {
       const toolName = sanitizeToolName(agent.name, agent.id);
       const capturedAgent = agent;
       const capturedCtx = ctx;
+      const capturedCache = cachedResults[toolName] ?? null;
       const metadata = extractDesktopMetadata(agent);
 
       const inputSchema = z.object({
@@ -127,7 +244,7 @@ export async function getAgentToolsForAgent(
         inputSchema: zodSchema(inputSchema),
         execute: async (args: unknown) => {
           const { input } = args as { input: string };
-          return executeAgentTool(capturedAgent, input, capturedCtx);
+          return executeAgentTool(capturedAgent, input, capturedCtx, capturedCache);
         },
       });
     }
@@ -150,11 +267,15 @@ export async function getAgentToolsForAgent(
 
 /**
  * Execute a single agent tool call with full protection stack.
+ *
+ * @param cachedResult - If supplied and status=COMPLETED, returns the cached
+ *   output immediately without re-running the sub-agent (Task 3.1 resume).
  */
 async function executeAgentTool(
   agent: AgentInfo,
   input: string,
-  ctx: AgentToolContext
+  ctx: AgentToolContext,
+  cachedResult?: PartialResultEntry | null
 ): Promise<string> {
   const {
     callerAgentId,
@@ -163,7 +284,26 @@ async function executeAgentTool(
     callStack = [callerAgentId],
     traceId = generateSpanId(),
     conversationId,
+    abortSignal,
+    currentInput,
   } = ctx;
+
+  // ── Task 3.1: Pipeline Resume — return cached output without re-running ──
+  if (cachedResult?.status === "COMPLETED" && cachedResult.output) {
+    logger.info("Pipeline resume: returning cached sub-agent result", {
+      callerAgentId,
+      calleeAgentName: agent.name,
+      cachedDurationMs: cachedResult.durationMs,
+      cachedAt: cachedResult.completedAt,
+    });
+    return cachedResult.output;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Bail out immediately if already aborted (user hit Stop before this tool call)
+  if (abortSignal?.aborted) {
+    return `[Agent "${agent.name}" was cancelled]`;
+  }
 
   // Depth limit and circular call detection
   try {
@@ -232,6 +372,21 @@ async function executeAgentTool(
     });
   }
 
+  // Task 3.2: resolve per-agent timeout from DB value → pattern → default
+  const resolvedTimeout = getTimeoutForAgent(agent);
+  logger.info("Agent tool: resolved timeout", {
+    callerAgentId,
+    calleeAgentId: agent.id,
+    calleeAgentName: agent.name,
+    resolvedTimeoutSeconds: resolvedTimeout,
+    source:
+      agent.expectedDurationSeconds !== null && agent.expectedDurationSeconds !== undefined && agent.expectedDurationSeconds > 0
+        ? "db"
+        : AGENT_TIMEOUT_PROFILES.some((p) => p.pattern.test(agent.name))
+        ? "pattern"
+        : "default",
+  });
+
   try {
     const result = await executeSubAgentInternal({
       targetAgentId: agent.id,
@@ -240,7 +395,8 @@ async function executeAgentTool(
       depth: depth + 1,
       callStack: [...callStack, agent.id],
       traceId,
-      timeoutSeconds: DEFAULT_TIMEOUT_SECONDS,
+      timeoutSeconds: resolvedTimeout,
+      abortSignal,
     });
 
     recordSuccess(callerAgentId, agent.id);
@@ -269,38 +425,237 @@ async function executeAgentTool(
         );
     }
 
+    // Fire-and-forget: persist partial result so pipeline resume (Task 3.1) can
+    // skip this agent if the orchestrator restarts mid-pipeline.
+    // Fingerprint ensures cached results are only reused for the same user input.
+    const myToolName = sanitizeToolName(agent.name, agent.id);
+    void savePartialResult(
+      conversationId,
+      myToolName,
+      {
+        status: "COMPLETED",
+        output: outputText.length > 2000 ? `${outputText.slice(0, 2000)}…` : outputText,
+        durationMs,
+        completedAt: new Date().toISOString(),
+      },
+      currentInput?.slice(0, 200)
+    );
+
     return outputText || "[Agent returned no output]";
   } catch (err) {
     const durationMs = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : String(err);
+    const isCancelled =
+      errorMsg.includes("cancelled: parent stream") || abortSignal?.aborted === true;
 
-    recordFailure(callerAgentId, agent.id);
+    // Don't penalise circuit breaker for user-initiated cancellation
+    if (!isCancelled) {
+      recordFailure(callerAgentId, agent.id);
+    }
 
-    // Update audit log with failure
+    // Update audit log with failure/cancellation
     if (callLogId) {
       await prisma.agentCallLog
         .update({
           where: { id: callLogId },
           data: {
             status: "FAILED",
-            errorMessage: errorMsg,
+            errorMessage: isCancelled ? "cancelled by user" : errorMsg,
             durationMs,
             completedAt: new Date(),
           },
         })
-        .catch((err) =>
+        .catch((updateErr) =>
           logger.warn("Agent tool: audit log update failed", {
-            error: err instanceof Error ? err.message : String(err),
+            error: updateErr instanceof Error ? updateErr.message : String(updateErr),
           })
         );
     }
 
+    if (isCancelled) {
+      logger.info("Agent tool cancelled by user", {
+        callerAgentId,
+        calleeAgentId: agent.id,
+        durationMs,
+      });
+      return `[Agent "${agent.name}" was cancelled]`;
+    }
+
+    // Fire-and-forget: persist failure so resume can surface which agents failed
+    void savePartialResult(
+      conversationId,
+      sanitizeToolName(agent.name, agent.id),
+      {
+        status: "FAILED",
+        error: errorMsg.length > 500 ? `${errorMsg.slice(0, 500)}…` : errorMsg,
+        durationMs,
+        completedAt: new Date().toISOString(),
+      },
+      currentInput?.slice(0, 200)
+    );
+
     logger.error("Agent tool execution failed", err instanceof Error ? err : new Error(errorMsg), {
       callerAgentId,
       calleeAgentId: agent.id,
+      durationMs,
     });
 
-    return `[Agent "${agent.name}" failed: ${errorMsg}]`;
+    const isTimeout = errorMsg.toLowerCase().includes("timeout") || errorMsg.toLowerCase().includes("timed out");
+    const reason = isTimeout
+      ? `timed out after ${Math.round(durationMs / 1000)}s`
+      : errorMsg;
+    return `[Agent "${agent.name}" failed: ${reason}]`;
+  }
+}
+
+// ─── Partial result persistence + pipeline resume ────────────────────────────
+
+interface PartialResultEntry {
+  status: "COMPLETED" | "FAILED";
+  output?: string;
+  error?: string;
+  durationMs: number;
+  completedAt: string;
+}
+
+/**
+ * Task 3.1 — Pipeline Resume
+ *
+ * Load previously-saved partial results for this conversation from the DB and
+ * validate them against the current request fingerprint.
+ *
+ * The fingerprint is the first 200 chars of the user's current message. It is
+ * written alongside each partial result by savePartialResult(). If the stored
+ * fingerprint matches the current one, the results belong to the same request
+ * and can be safely reused to skip already-completed sub-agents.
+ *
+ * Returns an empty map when:
+ *   - No partial results exist in the DB
+ *   - The fingerprint doesn't match (different user message → fresh run)
+ *   - Any DB/parse error (fail-open: run agents normally)
+ */
+async function loadPartialResults(
+  conversationId: string,
+  fingerprint: string
+): Promise<Record<string, PartialResultEntry>> {
+  try {
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { variables: true },
+    });
+
+    const vars = conv?.variables as Record<string, unknown> | null;
+    const stored = vars?.__partial_results as Record<string, unknown> | null;
+    if (!stored) return {};
+
+    // Validate fingerprint to avoid returning stale results from a previous question
+    const storedFp = stored._fp as string | undefined;
+    if (storedFp !== fingerprint) {
+      logger.info("Pipeline resume: fingerprint mismatch, starting fresh", {
+        conversationId,
+        storedFp: storedFp?.slice(0, 60),
+        currentFp: fingerprint.slice(0, 60),
+      });
+      return {};
+    }
+
+    // Extract valid PartialResultEntry records (skip the internal _fp key)
+    const results: Record<string, PartialResultEntry> = {};
+    for (const [key, val] of Object.entries(stored)) {
+      if (key === "_fp") continue;
+      if (
+        val !== null &&
+        typeof val === "object" &&
+        "status" in val &&
+        "durationMs" in val
+      ) {
+        results[key] = val as PartialResultEntry;
+      }
+    }
+
+    const completedCount = Object.values(results).filter(
+      (r) => r.status === "COMPLETED"
+    ).length;
+    if (completedCount > 0) {
+      logger.info("Pipeline resume: loaded cached sub-agent results", {
+        conversationId,
+        completedCount,
+        cachedAgents: Object.entries(results)
+          .filter(([, r]) => r.status === "COMPLETED")
+          .map(([k]) => k),
+      });
+    }
+
+    return results;
+  } catch (err) {
+    logger.warn("Failed to load partial results for pipeline resume — running fresh", {
+      conversationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return {};
+  }
+}
+
+/**
+ * Atomically merge one sub-agent result into Conversation.variables.__partial_results.
+ * Uses PostgreSQL jsonb_set so parallel agents can write to different keys simultaneously
+ * without losing each other's data. Fire-and-forget — never throws.
+ *
+ * Key: toolName (e.g. "agent_research_assistant")
+ * Location: Conversation.variables.__partial_results[toolName]
+ *
+ * When fingerprint is supplied, also writes __partial_results._fp (the first 200 chars
+ * of the user's input). This allows Task 3.1 resume logic to verify that cached results
+ * belong to the same request before returning them.
+ */
+async function savePartialResult(
+  conversationId: string | undefined,
+  toolName: string,
+  entry: PartialResultEntry,
+  fingerprint?: string
+): Promise<void> {
+  if (!conversationId) return;
+  try {
+    const resultPath = `{__partial_results,${toolName}}`;
+
+    if (fingerprint !== undefined) {
+      // Nested jsonb_set: write fingerprint + result atomically in a single UPDATE.
+      // Inner call writes _fp; outer call writes the agent result.
+      const fpPath = `{__partial_results,_fp}`;
+      await prisma.$executeRaw`
+        UPDATE "Conversation"
+        SET variables = jsonb_set(
+          jsonb_set(
+            COALESCE(variables::jsonb, '{}'::jsonb),
+            ${fpPath}::text[],
+            ${JSON.stringify(fingerprint)}::jsonb,
+            true
+          ),
+          ${resultPath}::text[],
+          ${JSON.stringify(entry)}::jsonb,
+          true
+        )
+        WHERE id = ${conversationId}
+      `;
+    } else {
+      // No fingerprint — just write the result (backward compat)
+      await prisma.$executeRaw`
+        UPDATE "Conversation"
+        SET variables = jsonb_set(
+          COALESCE(variables::jsonb, '{}'::jsonb),
+          ${resultPath}::text[],
+          ${JSON.stringify(entry)}::jsonb,
+          true
+        )
+        WHERE id = ${conversationId}
+      `;
+    }
+  } catch (err) {
+    logger.warn("Failed to save partial result for sub-agent", {
+      conversationId,
+      toolName,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -342,7 +697,27 @@ async function loadAvailableAgents(
     orderBy: { updatedAt: "desc" },
   });
 
-  return agents;
+  if (agents.length === 0) return agents;
+
+  // Task 3.2 — Per-Agent Timeout Profiles: batch-fetch expectedDurationSeconds.
+  // Uses $queryRaw so this degrades gracefully before `pnpm db:push` is run
+  // (the column may not exist yet). On error we just leave it undefined → pattern
+  // matching / default timeout is used instead.
+  try {
+    const ids = agents.map((a) => a.id);
+    type TimeoutRow = { id: string; expectedDurationSeconds: number | null };
+    const rows = await prisma.$queryRaw<TimeoutRow[]>(
+      Prisma.sql`SELECT id, "expectedDurationSeconds" FROM "Agent" WHERE id IN (${Prisma.join(ids)})`
+    );
+    const timeoutMap = new Map(rows.map((r) => [r.id, r.expectedDurationSeconds]));
+    return agents.map((a) => ({
+      ...a,
+      expectedDurationSeconds: timeoutMap.get(a.id) ?? null,
+    }));
+  } catch {
+    // Column not yet in DB — fall back to pattern matching
+    return agents;
+  }
 }
 
 /**
@@ -470,6 +845,7 @@ interface SubAgentParams {
   callStack: string[];
   traceId: string;
   timeoutSeconds: number;
+  abortSignal?: AbortSignal;
 }
 
 interface SubAgentResult {
@@ -487,6 +863,7 @@ async function executeSubAgentInternal(
     callStack,
     traceId,
     timeoutSeconds,
+    abortSignal,
   } = params;
 
   const whereClause = callerUserId
@@ -542,11 +919,29 @@ async function executeSubAgentInternal(
     );
   });
 
-  const executionPromise = executeFlow(subContext);
+  // Abort promise: rejects immediately if signal fires (user hit Stop)
+  const abortPromise = abortSignal
+    ? new Promise<never>((_, reject) => {
+        if (abortSignal.aborted) {
+          reject(new Error("Sub-agent cancelled: parent stream was stopped"));
+          return;
+        }
+        abortSignal.addEventListener(
+          "abort",
+          () => reject(new Error("Sub-agent cancelled: parent stream was stopped")),
+          { once: true }
+        );
+      })
+    : null;
+
+  const executionPromise = executeFlow(subContext, input.message);
 
   let result: Awaited<typeof executionPromise>;
+  const races: Promise<unknown>[] = [executionPromise, timeoutPromise];
+  if (abortPromise) races.push(abortPromise);
+
   try {
-    result = await Promise.race([executionPromise, timeoutPromise]);
+    result = await Promise.race(races) as Awaited<typeof executionPromise>;
   } finally {
     clearTimeout(timeoutRef!);
   }

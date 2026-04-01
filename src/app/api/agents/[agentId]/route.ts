@@ -16,6 +16,13 @@ const updateAgentSchema = z.object({
   category: z.enum(AGENT_CATEGORIES).nullable().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
   isPublic: z.boolean().optional(),
+  /**
+   * Task 3.2 — Per-Agent Timeout Profiles.
+   * Expected execution time (seconds) for agent-as-tool orchestration.
+   * null = clear the override and fall back to pattern matching / default (120s).
+   * Valid range: 5–600 seconds.
+   */
+  expectedDurationSeconds: z.number().int().min(5).max(600).nullable().optional(),
 }).strict();
 
 interface RouteParams {

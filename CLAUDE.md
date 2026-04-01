@@ -32,13 +32,6 @@ knowledge evolution. OAuth login (GitHub + Google). Simplified extraction from t
   - **Chat (required):** DeepSeek (`@ai-sdk/deepseek`, default), OpenAI (`@ai-sdk/openai`)
   - **Chat (optional):** Anthropic (`@ai-sdk/anthropic`), Google Gemini (`@ai-sdk/google`), Groq (`@ai-sdk/groq`), Mistral (`@ai-sdk/mistral`), Moonshot/Kimi (OpenAI-compatible)
   - **Model catalog:** `src/lib/models.ts` — client-safe, 18 models across 6 providers, tiered (fast/balanced/powerful)
-    - DeepSeek: `deepseek-chat` (fast), `deepseek-reasoner` (powerful)
-    - OpenAI: `gpt-4.1-mini` (fast), `gpt-4.1` (balanced), `o4-mini` (balanced), `o3` (powerful)
-    - Anthropic: `claude-haiku-4-5-20251001` (fast), `claude-sonnet-4-6` (balanced), `claude-opus-4-6` (powerful)
-    - Google: `gemini-2.5-flash` (fast), `gemini-2.5-pro` (powerful)
-    - Groq: `llama-3.3-70b-versatile` (fast), `compound-beta` (balanced)
-    - Mistral: `mistral-small-3.1-2503` (fast), `mistral-medium-3` (balanced), `mistral-large-2512` (powerful)
-    - Kimi: `kimi-k2-0905-preview` (balanced), `kimi-k2-thinking` (powerful)
   - **Embeddings:** OpenAI `text-embedding-3-small` (1536 dim) — required, DeepSeek has no embeddings
 - **Validation:** Zod v3
 - **UI primitives:** Radix UI (individual packages) + lucide-react icons
@@ -1212,7 +1205,7 @@ All 4 checks must show PASS before pushing. Workflow: **code → precheck → co
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - E2E tests: Playwright, `e2e/tests/` folder, `.spec.ts` extension (10 spec files); `e2e/pages/` Page Object Models for reusable selectors/actions
 - Run: `pnpm test` (unit), `pnpm test:e2e` (E2E)
-- 2502+ unit tests across 179 test files
+- 2502 unit tests across 170 test files
 - E2E coverage: auth flows, dashboard CRUD, flow editor, chat streaming, knowledge base, agent import/export, API routes, health check, webhooks UI (create/list/detail/config/test/executions/replay/status-filter/export), eval generation pipeline
 - Unit test coverage: template resolution, text chunking, HTML parsing, flow engine, message handler, stream protocol, streaming engine, streaming AI handler, streaming AI+MCP handler, PDF/DOCX parsing, file type routing, agent export schema validation, error display component, env validation, logger, rate limiting, analytics, health check, search/expand-chunks, MCP client, MCP pool, MCP tool handler, diff engine, version service, auth guards, flow content validation, auth security integration (401/403 checks), circuit breaker, parallel agents, loop handler, parallel handler, memory write/read handlers, evaluator handler, schedule trigger handler, email send handler, notification handler, format transform handler, switch handler, parallel streaming handler, web fetch handler, webhook handler, set variable handler, wait handler, URL validation, engine integration tests (multi-node flows), CLI generator (prompts, pipeline phases, Zod schemas, MCP registration, stuck detection, resume endpoint), **eval assertions (all 12 types, 3 layers)**, **eval semantic similarity (cosine math + embed mocks)**, **eval LLM-as-Judge (rubric/faithfulness/relevance)**, **eval runner (suite orchestration, progress updates, error handling)**, **eval deploy hook (fire-and-forget, suite filtering, error isolation)**, **eval API routes (CRUD, 409 conflict, 422 limits)**, **inbound webhooks: verify (21 tests), execute (23 tests — incl. event filter + body event type extraction), webhook-trigger handler (11 tests), sync (22 tests)**; **E2E webhooks suite (99 tests — UI navigation, config tab, test tab, detail actions, API CRUD, trigger endpoint, flow builder integration, execution replay, replay chain, status filtering, CSV export)**
 - Test behavior, not implementation details

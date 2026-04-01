@@ -103,6 +103,11 @@ model Agent {
   instincts         Instinct[]
   eccEnabled        Boolean        @default(false)
   flowTraces        FlowTrace[]
+  /// Task 3.2 — Per-Agent Timeout Profiles.
+  /// Expected execution duration (seconds) used by agent-as-tool orchestration.
+  /// Overrides pattern-matching and flat DEFAULT_TIMEOUT_SECONDS (120s).
+  /// Valid range: 5–600 s.  null = use AGENT_TIMEOUT_PROFILES name-pattern.
+  expectedDurationSeconds Int?
 
   @@index([userId])
   @@index([userId, updatedAt])
@@ -463,9 +468,10 @@ model AgentCallLog {
   tokensUsed    Int?
   estimatedCostUsd Decimal?   @db.Decimal(10, 6)
 
-  executionId   String?
-  depth         Int           @default(0)
-  isParallel    Boolean       @default(false)
+  executionId      String?
+  conversationId   String?
+  depth            Int           @default(0)
+  isParallel       Boolean       @default(false)
 
   createdAt     DateTime      @default(now())
   completedAt   DateTime?
@@ -476,6 +482,7 @@ model AgentCallLog {
   @@index([callerAgentId])
   @@index([calleeAgentId])
   @@index([traceId])
+  @@index([conversationId])
   @@index([createdAt])
 }
 

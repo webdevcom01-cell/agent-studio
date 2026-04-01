@@ -52,7 +52,7 @@ vi.mock("@/lib/validators/flow-content", () => ({
   parseFlowContent: vi.fn((content: unknown) => content),
 }));
 
-import { getAgentToolsForAgent, extractDesktopMetadata, type AgentToolContext } from "../agent-tools";
+import { getAgentToolsForAgent, getTimeoutForAgent, extractDesktopMetadata, type AgentToolContext } from "../agent-tools";
 import { checkCircuit } from "@/lib/a2a/circuit-breaker";
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
 
@@ -435,5 +435,85 @@ describe("extractDesktopMetadata", () => {
 
     expect(metadata.outputTypes).toContain("file");
     expect(metadata.outputTypes).toContain("text");
+  });
+});
+
+// ─── Task 3.2 — Per-Agent Timeout Profiles ──────────────────────────────────
+describe("getTimeoutForAgent", () => {
+  // Priority 1: explicit DB value
+  it("returns DB value when expectedDurationSeconds is a positive number", () => {
+    expect(getTimeoutForAgent({ name: "Anything", expectedDurationSeconds: 45 })).toBe(45);
+  });
+
+  it("returns DB value of 5 (minimum valid)", () => {
+    expect(getTimeoutForAgent({ name: "Fast Agent", expectedDurationSeconds: 5 })).toBe(5);
+  });
+
+  it("returns DB value of 600 (maximum valid)", () => {
+    expect(getTimeoutForAgent({ name: "Slow Agent", expectedDurationSeconds: 600 })).toBe(600);
+  });
+
+  it("falls through to pattern matching when expectedDurationSeconds is null", () => {
+    // "Reality Checker" matches the fast pattern → 30s
+    const result = getTimeoutForAgent({ name: "Reality Checker", expectedDurationSeconds: null });
+    expect(result).toBe(30);
+  });
+
+  it("falls through to pattern matching when expectedDurationSeconds is undefined", () => {
+    const result = getTimeoutForAgent({ name: "Code Generator", expectedDurationSeconds: undefined as unknown as null });
+    expect(result).toBe(120);
+  });
+
+  it("ignores DB value of 0 and falls through to pattern matching", () => {
+    // 0 is not a valid override (our guard: > 0)
+    const result = getTimeoutForAgent({ name: "Research Assistant", expectedDurationSeconds: 0 as unknown as null });
+    expect(result).toBeGreaterThan(0);
+  });
+
+  // Priority 2: pattern matching
+  it("returns 30s for fast agents (reality-checker pattern)", () => {
+    const cases = ["Reality Checker", "Fact Check Bot", "Quick Validator", "Sanity Linter"];
+    for (const name of cases) {
+      expect(getTimeoutForAgent({ name, expectedDurationSeconds: null })).toBe(30);
+    }
+  });
+
+  it("returns 60s for standard agents (research / analysis pattern)", () => {
+    const cases = ["Research Assistant", "Market Analyzer", "Audit Tool", "Content Summarizer"];
+    for (const name of cases) {
+      expect(getTimeoutForAgent({ name, expectedDurationSeconds: null })).toBe(60);
+    }
+  });
+
+  it("returns 90s for slow agents (architecture / design pattern)", () => {
+    const cases = ["Software Architect", "Decision Planner", "Blueprint Designer", "Spec Writer"];
+    for (const name of cases) {
+      expect(getTimeoutForAgent({ name, expectedDurationSeconds: null })).toBe(90);
+    }
+  });
+
+  it("returns 120s for very-slow agents (code generation / engineering pattern)", () => {
+    const cases = ["Code Generator", "Test Engineer", "QA Bot", "Developer Agent", "Build Tool"];
+    for (const name of cases) {
+      expect(getTimeoutForAgent({ name, expectedDurationSeconds: null })).toBe(120);
+    }
+  });
+
+  // Priority 3: flat default
+  it("returns 120s default when name matches no pattern", () => {
+    const result = getTimeoutForAgent({ name: "My Custom Agent", expectedDurationSeconds: null });
+    // default is 120
+    expect(result).toBe(120);
+  });
+
+  it("returns 120s default for empty name", () => {
+    expect(getTimeoutForAgent({ name: "", expectedDurationSeconds: null })).toBe(120);
+  });
+
+  // Pattern priority: first match wins
+  it("first-match wins — fast pattern checked before slow pattern", () => {
+    // "Quick Architect" contains "quick" (fast=30) but also "architect" (slow=90)
+    // fast pattern is listed first → should return 30
+    expect(getTimeoutForAgent({ name: "Quick Architect", expectedDurationSeconds: null })).toBe(30);
   });
 });

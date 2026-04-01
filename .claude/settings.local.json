@@ -3,24 +3,8 @@
     "allow": [
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(git add:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
-      "Bash(git status:*)",
-      "Bash(git stash:*)",
-      "Bash(git checkout:*)",
-      "Bash(git branch:*)",
       "Bash(pnpm build:*)",
-      "Bash(pnpm typecheck:*)",
-      "Bash(pnpm lint:*)",
-      "Bash(pnpm test:*)",
-      "Bash(pnpm precheck:*)",
-      "Bash(pnpm db:generate:*)",
-      "Bash(pnpm db:push:*)",
-      "Bash(pnpm db:migrate:*)",
-      "Bash(pnpm install:*)",
-      "Bash(grep:*)",
-      "Bash(find:*)"
+      "Bash(pnpm typecheck:*)"
     ]
   }
 }
