@@ -67,7 +67,7 @@ export async function aiResponseStreamingHandler(
   );
   const modelId = (node.data.model as string) ?? DEFAULT_MODEL;
   const temperature = (node.data.temperature as number) ?? 0.7;
-  const maxTokens = (node.data.maxTokens as number) ?? 2000;
+  const maxTokens = (node.data.maxTokens as number) ?? 4000;
   const outputVariable = (node.data.outputVariable as string) ?? "";
   const enableAgentTools = (node.data.enableAgentTools as boolean) ?? false;
   // enableRAG defaults to true — agents with a KB always use it unless explicitly disabled

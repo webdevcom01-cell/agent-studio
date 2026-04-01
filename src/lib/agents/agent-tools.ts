@@ -26,7 +26,7 @@ import {
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
 import { parseFlowContent } from "@/lib/validators/flow-content";
 
-const DEFAULT_TIMEOUT_SECONDS = 30;
+const DEFAULT_TIMEOUT_SECONDS = 120;
 
 /**
  * Desktop capability metadata extracted from agent flows.
@@ -312,7 +312,7 @@ async function executeAgentTool(
  *   - Same owner (userId match) OR unowned agents (userId is null)
  *   - Exclude the caller itself
  *   - Must have a flow (no point calling an agent without logic)
- *   - Limit to 10 agents to keep tool list manageable for the LLM
+ *   - Limit to 20 agents to keep tool list manageable for the LLM
  */
 async function loadAvailableAgents(
   callerAgentId: string,
@@ -338,7 +338,7 @@ async function loadAvailableAgents(
       description: true,
       flow: { select: { content: true } },
     },
-    take: 10,
+    take: 20,
     orderBy: { updatedAt: "desc" },
   });
 

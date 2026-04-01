@@ -251,8 +251,8 @@ export function PropertyPanel({
                 <Label>Max Tokens</Label>
                 <Input
                   type="number"
-                  value={(data.maxTokens as number) ?? 2000}
-                  onChange={(e) => update("maxTokens", parseInt(e.target.value) || 2000)}
+                  value={(data.maxTokens as number) ?? 4000}
+                  onChange={(e) => update("maxTokens", parseInt(e.target.value) || 4000)}
                   min={1}
                   max={32000}
                 />
