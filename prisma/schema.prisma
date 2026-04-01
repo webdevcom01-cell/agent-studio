@@ -49,6 +49,11 @@ model Account {
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+    /// Task 3.2 — Per-Agent Timeout Profiles.
+  /// Expected execution duration (seconds) used by agent-as-tool orchestration.
+  /// Valid range: 5–600 s.  null = use AGENT_TIMEOUT_PROFILES name-pattern.
+  expectedDurationSeconds Int?
+
   @@index([userId])
 }
 

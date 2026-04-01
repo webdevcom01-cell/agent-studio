@@ -25,6 +25,7 @@ import {
 } from "@/lib/a2a/circuit-breaker";
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
 import { parseFlowContent } from "@/lib/validators/flow-content";
+import { Prisma } from "@/generated/prisma";
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
 
@@ -42,6 +43,54 @@ export interface AgentToolMetadata {
 /**
  * Agent metadata used to construct tool definitions.
  */
+
+const DEFAULT_TIMEOUT_SECONDS = 120;
+
+/**
+ * Task 3.2 — Per-Agent Timeout Profiles.
+ * Name-pattern tiers (first match wins):
+ *   - "fast"      30s — fact-checkers, validators, linters
+ *   - "standard"  60s — research, analysis, summaries, audits
+ *   - "slow"      90s — architecture, design, planning, specs
+ *   - "very-slow" 120s — code generation, full implementation, QA testing
+ */
+const AGENT_TIMEOUT_PROFILES: ReadonlyArray<{
+  pattern: RegExp;
+  timeoutSeconds: number;
+  label: string;
+}> = [
+  { pattern: /reality.?checker|fact.?check|quick|validator|linter|critic|sanity/i, timeoutSeconds: 30, label: "fast" },
+  { pattern: /research|discovery|product|market|analy|summar|review|audit/i, timeoutSeconds: 60, label: "standard" },
+  { pattern: /architect|design|plan|strategic|decision|spec|blueprint/i, timeoutSeconds: 90, label: "slow" },
+  { pattern: /code|generat|implement|build|develop|engineer|test|quality|qa/i, timeoutSeconds: 120, label: "very-slow" },
+];
+
+/**
+ * Resolve the per-agent call timeout using a 3-priority system:
+ *   1. Explicit `expectedDurationSeconds` stored on the Agent record (DB value).
+ *   2. Pattern matching against the agent name using AGENT_TIMEOUT_PROFILES.
+ *   3. Flat DEFAULT_TIMEOUT_SECONDS (120s) if no pattern matches.
+ *
+ * Exported so it can be unit-tested independently.
+ */
+export function getTimeoutForAgent(
+  agent: { name: string; expectedDurationSeconds?: number | null }
+): number {
+  if (
+    agent.expectedDurationSeconds !== null &&
+    agent.expectedDurationSeconds !== undefined &&
+    agent.expectedDurationSeconds > 0
+  ) {
+    return agent.expectedDurationSeconds;
+  }
+  for (const profile of AGENT_TIMEOUT_PROFILES) {
+    if (profile.pattern.test(agent.name)) {
+      return profile.timeoutSeconds;
+    }
+  }
+  return DEFAULT_TIMEOUT_SECONDS;
+}
+
 interface AgentInfo {
   id: string;
   name: string;

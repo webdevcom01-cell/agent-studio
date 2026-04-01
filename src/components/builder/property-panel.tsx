@@ -1180,6 +1180,8 @@ interface AgentOption {
   _count?: { conversations: number };
   knowledgeBase?: { id: string } | null;
   mcpServers?: unknown[];
+  /** Task 3.2 */
+  expectedDurationSeconds?: number | null;
 }
 
 interface ExternalSkill {
@@ -1212,6 +1214,9 @@ function CallAgentProperties({ data, update, variables = [], currentAgentId }: C
   const onError = (data.onError as string) ?? "continue";
 
   const [agentSearch, setAgentSearch] = useState("");
+  /** Task 3.2 — Per-Agent Timeout Profiles: local state for expectedDurationSeconds editor */
+  const [pendingExpectedDuration, setPendingExpectedDuration] = useState<string>("");
+  const [isSavingDuration, setIsSavingDuration] = useState(false);
 
   useEffect(() => {
     if (mode !== "internal") return;
@@ -1229,6 +1234,29 @@ function CallAgentProperties({ data, update, variables = [], currentAgentId }: C
       .catch(() => {})
       .finally(() => setIsLoading(false));
   }, [currentAgentId, mode]);
+
+  /** Task 3.2 — sync pendingExpectedDuration when selected target agent changes */
+  useEffect(() => {
+    if (!targetAgentId) { setPendingExpectedDuration(""); return; }
+    const agent = agents.find((a) => a.id === targetAgentId);
+    setPendingExpectedDuration(agent?.expectedDurationSeconds != null ? String(agent.expectedDurationSeconds) : "");
+  }, [targetAgentId, agents]);
+
+  async function saveExpectedDuration() {
+    if (!targetAgentId) return;
+    const numVal = pendingExpectedDuration === "" ? null : parseInt(pendingExpectedDuration, 10);
+    if (numVal !== null && (isNaN(numVal) || numVal < 5 || numVal > 600)) return;
+    setIsSavingDuration(true);
+    try {
+      const res = await fetch(`/api/agents/${targetAgentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedDurationSeconds: numVal }),
+      });
+      const j = (await res.json()) as { success: boolean };
+      if (j.success) setAgents((prev) => prev.map((a) => a.id === targetAgentId ? { ...a, expectedDurationSeconds: numVal } : a));
+    } catch { /* non-critical */ } finally { setIsSavingDuration(false); }
+  }
 
   const filteredAgents = useMemo(() => {
     if (!agentSearch.trim()) return agents;
@@ -1565,6 +1593,30 @@ function CallAgentProperties({ data, update, variables = [], currentAgentId }: C
           max={120}
         />
       </div>
+
+      {targetAgentId && mode === "internal" && (
+        <div className="space-y-2">
+          <Label>Auto-Orchestration Timeout (seconds)</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              placeholder="Auto (pattern match)"
+              value={pendingExpectedDuration}
+              onChange={(e) => setPendingExpectedDuration(e.target.value)}
+              onBlur={saveExpectedDuration}
+              min={5}
+              max={600}
+              className="flex-1"
+            />
+            <Button size="sm" variant="outline" onClick={saveExpectedDuration} disabled={isSavingDuration} className="shrink-0">
+              {isSavingDuration ? "Saving…" : "Save"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Used when this agent is called as a tool by an AI response node. Leave blank to auto-detect from name (5–600 s).
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label>On Error</Label>

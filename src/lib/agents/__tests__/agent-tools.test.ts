@@ -52,7 +52,7 @@ vi.mock("@/lib/validators/flow-content", () => ({
   parseFlowContent: vi.fn((content: unknown) => content),
 }));
 
-import { getAgentToolsForAgent, extractDesktopMetadata, type AgentToolContext } from "../agent-tools";
+import { getAgentToolsForAgent, getTimeoutForAgent, extractDesktopMetadata, type AgentToolContext } from "../agent-tools";
 import { checkCircuit } from "@/lib/a2a/circuit-breaker";
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
 
@@ -435,5 +435,32 @@ describe("extractDesktopMetadata", () => {
 
     expect(metadata.outputTypes).toContain("file");
     expect(metadata.outputTypes).toContain("text");
+  });
+});
+
+describe("getTimeoutForAgent", () => {
+  it("returns DB value when expectedDurationSeconds is positive", () => {
+    expect(getTimeoutForAgent({ name: "Anything", expectedDurationSeconds: 45 })).toBe(45);
+  });
+  it("falls through to pattern when null", () => {
+    expect(getTimeoutForAgent({ name: "Reality Checker", expectedDurationSeconds: null })).toBe(30);
+  });
+  it("returns 30s for fast agents", () => {
+    expect(getTimeoutForAgent({ name: "Fact Check Bot", expectedDurationSeconds: null })).toBe(30);
+  });
+  it("returns 60s for standard agents", () => {
+    expect(getTimeoutForAgent({ name: "Research Assistant", expectedDurationSeconds: null })).toBe(60);
+  });
+  it("returns 90s for slow agents", () => {
+    expect(getTimeoutForAgent({ name: "Software Architect", expectedDurationSeconds: null })).toBe(90);
+  });
+  it("returns 120s for very-slow agents", () => {
+    expect(getTimeoutForAgent({ name: "Code Generator", expectedDurationSeconds: null })).toBe(120);
+  });
+  it("returns 120s default for unmatched names", () => {
+    expect(getTimeoutForAgent({ name: "My Custom Agent", expectedDurationSeconds: null })).toBe(120);
+  });
+  it("first-match wins — fast before slow", () => {
+    expect(getTimeoutForAgent({ name: "Quick Architect", expectedDurationSeconds: null })).toBe(30);
   });
 });
