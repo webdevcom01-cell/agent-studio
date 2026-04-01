@@ -13,6 +13,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const { searchParams } = new URL(request.url);
     const agentId = searchParams.get("agentId");
+    const conversationId = searchParams.get("conversationId");
     const limitParam = parseInt(searchParams.get("limit") ?? "", 10);
     const limit = Number.isNaN(limitParam)
       ? DEFAULT_LIMIT
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       where: {
         callerAgent: { userId: authResult.userId },
         ...(agentId ? { callerAgentId: agentId } : {}),
+        ...(conversationId ? { conversationId } : {}),
       },
       orderBy: { createdAt: "desc" },
       take: limit,

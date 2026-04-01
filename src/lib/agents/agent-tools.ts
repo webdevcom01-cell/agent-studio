@@ -217,6 +217,7 @@ async function executeAgentTool(
         depth,
         isParallel: false,
         executionId: conversationId ?? null,
+        conversationId: conversationId ?? null,
       },
     });
     callLogId = callLog.id;

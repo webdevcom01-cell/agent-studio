@@ -59,13 +59,18 @@ export async function loadContext(
   };
 }
 
-export async function saveContext(context: RuntimeContext): Promise<void> {
+export async function saveContext(
+  context: RuntimeContext,
+  options?: { forceStatus?: "COMPLETED" | "ACTIVE" | "ABANDONED" }
+): Promise<void> {
+  const status = options?.forceStatus
+    ?? (context.currentNodeId ? "ACTIVE" : "COMPLETED");
   await prisma.conversation.update({
     where: { id: context.conversationId },
     data: {
       currentNodeId: context.currentNodeId,
       variables: context.variables as object,
-      status: context.currentNodeId ? "ACTIVE" : "COMPLETED",
+      status,
     },
   });
 }

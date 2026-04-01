@@ -435,7 +435,11 @@ export function executeFlowStreaming(
           void cleanupDebugSession(context.debugSessionId).catch(() => {});
         }
         try { await saveMessages(context.conversationId, allMessages); } catch (err) { logger.error("Failed to save messages", err, { conversationId: context.conversationId }); }
-        try { await saveContext(context); } catch (err) { logger.error("Failed to save context", err, { conversationId: context.conversationId }); }
+        // If client disconnected (aborted) while engine was still running, mark as ABANDONED
+        const statusOverride = aborted && context.currentNodeId
+          ? { forceStatus: "ABANDONED" as const }
+          : undefined;
+        try { await saveContext(context, statusOverride); } catch (err) { logger.error("Failed to save context", err, { conversationId: context.conversationId }); }
         try { writer.close(); } catch { /* stream already closed */ }
       }
     },
