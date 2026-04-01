@@ -40,11 +40,6 @@ export interface AgentToolMetadata {
   outputTypes: string[];
 }
 
-/**
- * Agent metadata used to construct tool definitions.
- */
-
-const DEFAULT_TIMEOUT_SECONDS = 120;
 
 /**
  * Task 3.2 — Per-Agent Timeout Profiles.
