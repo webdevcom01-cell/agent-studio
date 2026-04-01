@@ -279,6 +279,16 @@ async function executeAgentTool(
         );
     }
 
+    // Fire-and-forget: persist partial result so pipeline resume (Task 3.1) can
+    // skip this agent if the orchestrator restarts mid-pipeline.
+    const myToolName = sanitizeToolName(agent.name, agent.id);
+    void savePartialResult(conversationId, myToolName, {
+      status: "COMPLETED",
+      output: outputText.length > 2000 ? `${outputText.slice(0, 2000)}…` : outputText,
+      durationMs,
+      completedAt: new Date().toISOString(),
+    });
+
     return outputText || "[Agent returned no output]";
   } catch (err) {
     const durationMs = Date.now() - startTime;
@@ -319,6 +329,14 @@ async function executeAgentTool(
       return `[Agent "${agent.name}" was cancelled]`;
     }
 
+    // Fire-and-forget: persist failure so resume can surface which agents failed
+    void savePartialResult(conversationId, sanitizeToolName(agent.name, agent.id), {
+      status: "FAILED",
+      error: errorMsg.length > 500 ? `${errorMsg.slice(0, 500)}…` : errorMsg,
+      durationMs,
+      completedAt: new Date().toISOString(),
+    });
+
     logger.error("Agent tool execution failed", err instanceof Error ? err : new Error(errorMsg), {
       callerAgentId,
       calleeAgentId: agent.id,
@@ -330,6 +348,52 @@ async function executeAgentTool(
       ? `timed out after ${Math.round(durationMs / 1000)}s`
       : errorMsg;
     return `[Agent "${agent.name}" failed: ${reason}]`;
+  }
+}
+
+// ─── Partial result persistence ──────────────────────────────────────────────
+
+interface PartialResultEntry {
+  status: "COMPLETED" | "FAILED";
+  output?: string;
+  error?: string;
+  durationMs: number;
+  completedAt: string;
+}
+
+/**
+ * Atomically merge one sub-agent result into Conversation.variables.__partial_results.
+ * Uses PostgreSQL jsonb_set so parallel agents can write to different keys simultaneously
+ * without losing each other's data. Fire-and-forget — never throws.
+ *
+ * Key: toolName (e.g. "agent_research_assistant")
+ * Location: Conversation.variables.__partial_results[toolName]
+ */
+async function savePartialResult(
+  conversationId: string | undefined,
+  toolName: string,
+  entry: PartialResultEntry
+): Promise<void> {
+  if (!conversationId) return;
+  try {
+    // PostgreSQL text[] array literal: '{__partial_results,agent_name}'
+    const path = `{__partial_results,${toolName}}`;
+    await prisma.$executeRaw`
+      UPDATE "Conversation"
+      SET variables = jsonb_set(
+        COALESCE(variables::jsonb, '{}'::jsonb),
+        ${path}::text[],
+        ${JSON.stringify(entry)}::jsonb,
+        true
+      )
+      WHERE id = ${conversationId}
+    `;
+  } catch (err) {
+    logger.warn("Failed to save partial result for sub-agent", {
+      conversationId,
+      toolName,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
