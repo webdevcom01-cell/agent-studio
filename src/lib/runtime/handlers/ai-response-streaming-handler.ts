@@ -32,7 +32,8 @@ async function loadMCPTools(agentId: string): Promise<Record<string, unknown>> {
 
 async function loadAgentTools(
   agentId: string,
-  context: RuntimeContext
+  context: RuntimeContext,
+  currentInput?: string
 ): Promise<Record<string, unknown>> {
   try {
     const extended = context as unknown as Record<string, unknown>;
@@ -44,6 +45,8 @@ async function loadAgentTools(
       traceId: extended._a2aTraceId as string | undefined,
       conversationId: context.conversationId,
       abortSignal: context.abortSignal,
+      // Task 3.1: pass current user input as resume fingerprint
+      currentInput,
     };
 
     const tools = await getAgentToolsForAgent(agentId, ctx);
@@ -138,7 +141,7 @@ export async function aiResponseStreamingHandler(
 
     // Load agent tools (only when enabled on this node)
     const agentTools = enableAgentTools
-      ? await loadAgentTools(context.agentId, context)
+      ? await loadAgentTools(context.agentId, context, latestUserMsg)
       : {};
 
     // Merge all tools — MCP tools take priority on name conflicts

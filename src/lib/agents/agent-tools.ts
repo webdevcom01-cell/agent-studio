@@ -66,10 +66,16 @@ export interface AgentToolContext {
   callStack?: string[];
   /** Distributed trace ID for audit logging */
   traceId?: string;
-  /** Conversation ID for audit logging */
+  /** Conversation ID for audit logging + pipeline resume */
   conversationId?: string;
   /** AbortSignal from the parent stream — cancels sub-agent execution when user hits Stop */
   abortSignal?: AbortSignal;
+  /**
+   * The current user input (first 200 chars) — used as pipeline resume fingerprint.
+   * When set, Task 3.1 resume logic can skip already-completed sub-agents whose
+   * cached result fingerprint matches this value.
+   */
+  currentInput?: string;
 }
 
 /**
@@ -108,12 +114,36 @@ export async function getAgentToolsForAgent(
 
     if (agents.length === 0) return {};
 
+    // ── Task 3.1: Pipeline Resume ────────────────────────────────────────────
+    // Load any partial results saved by previous runs of this pipeline. If the
+    // fingerprint (first 200 chars of user input) matches, we can skip agents
+    // that already completed successfully — saving time and API cost.
+    const fingerprint = ctx.currentInput?.slice(0, 200) ?? "";
+    const cachedResults =
+      ctx.conversationId && fingerprint
+        ? await loadPartialResults(ctx.conversationId, fingerprint)
+        : {};
+
+    const resumedAgents = Object.entries(cachedResults)
+      .filter(([, r]) => r.status === "COMPLETED")
+      .map(([k]) => k);
+
+    if (resumedAgents.length > 0) {
+      logger.info("Pipeline resume: will skip already-completed sub-agents", {
+        callerAgentId,
+        conversationId: ctx.conversationId,
+        resumedAgents,
+      });
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const tools: ToolSet = {};
 
     for (const agent of agents) {
       const toolName = sanitizeToolName(agent.name, agent.id);
       const capturedAgent = agent;
       const capturedCtx = ctx;
+      const capturedCache = cachedResults[toolName] ?? null;
       const metadata = extractDesktopMetadata(agent);
 
       const inputSchema = z.object({
@@ -129,7 +159,7 @@ export async function getAgentToolsForAgent(
         inputSchema: zodSchema(inputSchema),
         execute: async (args: unknown) => {
           const { input } = args as { input: string };
-          return executeAgentTool(capturedAgent, input, capturedCtx);
+          return executeAgentTool(capturedAgent, input, capturedCtx, capturedCache);
         },
       });
     }
@@ -152,11 +182,15 @@ export async function getAgentToolsForAgent(
 
 /**
  * Execute a single agent tool call with full protection stack.
+ *
+ * @param cachedResult - If supplied and status=COMPLETED, returns the cached
+ *   output immediately without re-running the sub-agent (Task 3.1 resume).
  */
 async function executeAgentTool(
   agent: AgentInfo,
   input: string,
-  ctx: AgentToolContext
+  ctx: AgentToolContext,
+  cachedResult?: PartialResultEntry | null
 ): Promise<string> {
   const {
     callerAgentId,
@@ -166,7 +200,20 @@ async function executeAgentTool(
     traceId = generateSpanId(),
     conversationId,
     abortSignal,
+    currentInput,
   } = ctx;
+
+  // ── Task 3.1: Pipeline Resume — return cached output without re-running ──
+  if (cachedResult?.status === "COMPLETED" && cachedResult.output) {
+    logger.info("Pipeline resume: returning cached sub-agent result", {
+      callerAgentId,
+      calleeAgentName: agent.name,
+      cachedDurationMs: cachedResult.durationMs,
+      cachedAt: cachedResult.completedAt,
+    });
+    return cachedResult.output;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Bail out immediately if already aborted (user hit Stop before this tool call)
   if (abortSignal?.aborted) {
@@ -281,13 +328,19 @@ async function executeAgentTool(
 
     // Fire-and-forget: persist partial result so pipeline resume (Task 3.1) can
     // skip this agent if the orchestrator restarts mid-pipeline.
+    // Fingerprint ensures cached results are only reused for the same user input.
     const myToolName = sanitizeToolName(agent.name, agent.id);
-    void savePartialResult(conversationId, myToolName, {
-      status: "COMPLETED",
-      output: outputText.length > 2000 ? `${outputText.slice(0, 2000)}…` : outputText,
-      durationMs,
-      completedAt: new Date().toISOString(),
-    });
+    void savePartialResult(
+      conversationId,
+      myToolName,
+      {
+        status: "COMPLETED",
+        output: outputText.length > 2000 ? `${outputText.slice(0, 2000)}…` : outputText,
+        durationMs,
+        completedAt: new Date().toISOString(),
+      },
+      currentInput?.slice(0, 200)
+    );
 
     return outputText || "[Agent returned no output]";
   } catch (err) {
@@ -330,12 +383,17 @@ async function executeAgentTool(
     }
 
     // Fire-and-forget: persist failure so resume can surface which agents failed
-    void savePartialResult(conversationId, sanitizeToolName(agent.name, agent.id), {
-      status: "FAILED",
-      error: errorMsg.length > 500 ? `${errorMsg.slice(0, 500)}…` : errorMsg,
-      durationMs,
-      completedAt: new Date().toISOString(),
-    });
+    void savePartialResult(
+      conversationId,
+      sanitizeToolName(agent.name, agent.id),
+      {
+        status: "FAILED",
+        error: errorMsg.length > 500 ? `${errorMsg.slice(0, 500)}…` : errorMsg,
+        durationMs,
+        completedAt: new Date().toISOString(),
+      },
+      currentInput?.slice(0, 200)
+    );
 
     logger.error("Agent tool execution failed", err instanceof Error ? err : new Error(errorMsg), {
       callerAgentId,
@@ -351,7 +409,7 @@ async function executeAgentTool(
   }
 }
 
-// ─── Partial result persistence ──────────────────────────────────────────────
+// ─── Partial result persistence + pipeline resume ────────────────────────────
 
 interface PartialResultEntry {
   status: "COMPLETED" | "FAILED";
@@ -362,32 +420,137 @@ interface PartialResultEntry {
 }
 
 /**
+ * Task 3.1 — Pipeline Resume
+ *
+ * Load previously-saved partial results for this conversation from the DB and
+ * validate them against the current request fingerprint.
+ *
+ * The fingerprint is the first 200 chars of the user's current message. It is
+ * written alongside each partial result by savePartialResult(). If the stored
+ * fingerprint matches the current one, the results belong to the same request
+ * and can be safely reused to skip already-completed sub-agents.
+ *
+ * Returns an empty map when:
+ *   - No partial results exist in the DB
+ *   - The fingerprint doesn't match (different user message → fresh run)
+ *   - Any DB/parse error (fail-open: run agents normally)
+ */
+async function loadPartialResults(
+  conversationId: string,
+  fingerprint: string
+): Promise<Record<string, PartialResultEntry>> {
+  try {
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { variables: true },
+    });
+
+    const vars = conv?.variables as Record<string, unknown> | null;
+    const stored = vars?.__partial_results as Record<string, unknown> | null;
+    if (!stored) return {};
+
+    // Validate fingerprint to avoid returning stale results from a previous question
+    const storedFp = stored._fp as string | undefined;
+    if (storedFp !== fingerprint) {
+      logger.info("Pipeline resume: fingerprint mismatch, starting fresh", {
+        conversationId,
+        storedFp: storedFp?.slice(0, 60),
+        currentFp: fingerprint.slice(0, 60),
+      });
+      return {};
+    }
+
+    // Extract valid PartialResultEntry records (skip the internal _fp key)
+    const results: Record<string, PartialResultEntry> = {};
+    for (const [key, val] of Object.entries(stored)) {
+      if (key === "_fp") continue;
+      if (
+        val !== null &&
+        typeof val === "object" &&
+        "status" in val &&
+        "durationMs" in val
+      ) {
+        results[key] = val as PartialResultEntry;
+      }
+    }
+
+    const completedCount = Object.values(results).filter(
+      (r) => r.status === "COMPLETED"
+    ).length;
+    if (completedCount > 0) {
+      logger.info("Pipeline resume: loaded cached sub-agent results", {
+        conversationId,
+        completedCount,
+        cachedAgents: Object.entries(results)
+          .filter(([, r]) => r.status === "COMPLETED")
+          .map(([k]) => k),
+      });
+    }
+
+    return results;
+  } catch (err) {
+    logger.warn("Failed to load partial results for pipeline resume — running fresh", {
+      conversationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return {};
+  }
+}
+
+/**
  * Atomically merge one sub-agent result into Conversation.variables.__partial_results.
  * Uses PostgreSQL jsonb_set so parallel agents can write to different keys simultaneously
  * without losing each other's data. Fire-and-forget — never throws.
  *
  * Key: toolName (e.g. "agent_research_assistant")
  * Location: Conversation.variables.__partial_results[toolName]
+ *
+ * When fingerprint is supplied, also writes __partial_results._fp (the first 200 chars
+ * of the user's input). This allows Task 3.1 resume logic to verify that cached results
+ * belong to the same request before returning them.
  */
 async function savePartialResult(
   conversationId: string | undefined,
   toolName: string,
-  entry: PartialResultEntry
+  entry: PartialResultEntry,
+  fingerprint?: string
 ): Promise<void> {
   if (!conversationId) return;
   try {
-    // PostgreSQL text[] array literal: '{__partial_results,agent_name}'
-    const path = `{__partial_results,${toolName}}`;
-    await prisma.$executeRaw`
-      UPDATE "Conversation"
-      SET variables = jsonb_set(
-        COALESCE(variables::jsonb, '{}'::jsonb),
-        ${path}::text[],
-        ${JSON.stringify(entry)}::jsonb,
-        true
-      )
-      WHERE id = ${conversationId}
-    `;
+    const resultPath = `{__partial_results,${toolName}}`;
+
+    if (fingerprint !== undefined) {
+      // Nested jsonb_set: write fingerprint + result atomically in a single UPDATE.
+      // Inner call writes _fp; outer call writes the agent result.
+      const fpPath = `{__partial_results,_fp}`;
+      await prisma.$executeRaw`
+        UPDATE "Conversation"
+        SET variables = jsonb_set(
+          jsonb_set(
+            COALESCE(variables::jsonb, '{}'::jsonb),
+            ${fpPath}::text[],
+            ${JSON.stringify(fingerprint)}::jsonb,
+            true
+          ),
+          ${resultPath}::text[],
+          ${JSON.stringify(entry)}::jsonb,
+          true
+        )
+        WHERE id = ${conversationId}
+      `;
+    } else {
+      // No fingerprint — just write the result (backward compat)
+      await prisma.$executeRaw`
+        UPDATE "Conversation"
+        SET variables = jsonb_set(
+          COALESCE(variables::jsonb, '{}'::jsonb),
+          ${resultPath}::text[],
+          ${JSON.stringify(entry)}::jsonb,
+          true
+        )
+        WHERE id = ${conversationId}
+      `;
+    }
   } catch (err) {
     logger.warn("Failed to save partial result for sub-agent", {
       conversationId,
