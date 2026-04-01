@@ -290,7 +290,7 @@ export default function ChatPage({
           {/* Pipeline progress — visible during multi-agent pipeline execution */}
           <PipelineProgress
             agentId={agentId}
-            conversationId={conversationId}
+            conversationId={conversationId ?? null}
             isLoading={isLoading}
           />
 
