@@ -166,41 +166,6 @@ export function validateFlowSemantics(content: ValidatedFlowContent): string[] {
     }
   }
 
-  // ── Aggregate node checks ───────────────────────────────────────────────
-  for (const node of content.nodes) {
-    if (node.type !== "aggregate") continue;
-
-    const branchVars = node.data.branchVariables as string[] | undefined;
-
-    if (!Array.isArray(branchVars) || branchVars.length === 0) {
-      warnings.push(
-        `Node "${node.id}" (aggregate): branchVariables[] is empty — add output variable names from parallel branches.`,
-      );
-    }
-  }
-
-  // ── Call agent node checks ──────────────────────────────────────────────
-  for (const node of content.nodes) {
-    if (node.type !== "call_agent") continue;
-
-    const label = (node.data.label as string) || node.id;
-    const mapping = node.data.inputMapping as
-      | { key: string; value: string }[]
-      | Record<string, string>
-      | undefined;
-
-    const isEmpty =
-      !mapping ||
-      (Array.isArray(mapping) && mapping.length === 0) ||
-      (!Array.isArray(mapping) && typeof mapping === "object" && Object.keys(mapping).length === 0);
-
-    if (isEmpty) {
-      warnings.push(
-        `Node "${label}" (call_agent): no inputMapping configured — sub-agent will receive empty context.`,
-      );
-    }
-  }
-
   return warnings;
 }
 
