@@ -133,10 +133,6 @@ export async function aiResponseStreamingHandler(
     }
     // ─────────────────────────────────────────────────────────────────────
 
-    const systemMessages = effectiveSystemPrompt
-      ? [{ role: "system" as const, content: effectiveSystemPrompt }]
-      : [];
-
     // Load MCP tools (always)
     const mcpTools = await loadMCPTools(context.agentId);
 
@@ -148,6 +144,22 @@ export async function aiResponseStreamingHandler(
     // Merge all tools — MCP tools take priority on name conflicts
     const allTools = { ...agentTools, ...mcpTools };
     const hasTools = Object.keys(allTools).length > 0;
+
+    // Inject parallel-execution hint when 2+ agent tools are available.
+    // The AI SDK already executes parallel tool calls within a step simultaneously
+    // (Promise.allSettled internally) — we just need the LLM to batch them.
+    const agentToolCount = Object.keys(agentTools).length;
+    if (agentToolCount >= 2) {
+      effectiveSystemPrompt +=
+        "\n\n---\n**Parallel Execution:** When multiple agents can work independently, " +
+        "call them all in a single response step (multiple simultaneous tool calls) rather " +
+        "than one at a time. Only call agents sequentially when each one depends on the " +
+        "previous result.";
+    }
+
+    const systemMessages = effectiveSystemPrompt
+      ? [{ role: "system" as const, content: effectiveSystemPrompt }]
+      : [];
 
     const streamOptions: Parameters<typeof streamText>[0] = {
       model,

@@ -125,10 +125,6 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     }
     // ─────────────────────────────────────────────────────────────────────
 
-    const systemMessages = effectiveSystemPrompt
-      ? [{ role: "system" as const, content: effectiveSystemPrompt }]
-      : [];
-
     // Load MCP tools (always)
     const mcpTools = await loadMCPTools(context.agentId);
 
@@ -140,6 +136,20 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     // Merge all tools — MCP tools take priority on name conflicts
     const allTools = { ...agentTools, ...mcpTools };
     const hasTools = Object.keys(allTools).length > 0;
+
+    // Inject parallel-execution hint when 2+ agent tools are available.
+    const agentToolCount = Object.keys(agentTools).length;
+    if (agentToolCount >= 2) {
+      effectiveSystemPrompt +=
+        "\n\n---\n**Parallel Execution:** When multiple agents can work independently, " +
+        "call them all in a single response step (multiple simultaneous tool calls) rather " +
+        "than one at a time. Only call agents sequentially when each one depends on the " +
+        "previous result.";
+    }
+
+    const systemMessages = effectiveSystemPrompt
+      ? [{ role: "system" as const, content: effectiveSystemPrompt }]
+      : [];
 
     const generateOptions: Parameters<typeof generateText>[0] = {
       model,
