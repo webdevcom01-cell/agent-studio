@@ -1,5 +1,6 @@
 import { logger } from "@/lib/logger";
 import type {
+  AgentCallSpanAttributes,
   GenAISpanAttributes,
   SpanEvent,
   TraceContext,
@@ -108,6 +109,47 @@ export function traceGenAI(
     parentContext,
     attributes: attrs as unknown as Record<string, string | number | boolean>,
   });
+}
+
+/**
+ * Task 3.3 — AAIF 2026 multi-hop agent tracing.
+ *
+ * Creates a child span for a sub-agent call, propagating the parent traceId
+ * so the full chain (Orchestrator → Agent A → Agent B) appears as a single
+ * distributed trace in Grafana / OTLP backends.
+ *
+ * Usage in agent-tools.ts:
+ *   const span = traceAgentCall(callAttrs, parentTraceContext);
+ *   // … execute call …
+ *   span.setAttributes({ "gen_ai.usage.output_tokens": outputTokens });
+ *   span.end();
+ */
+export function traceAgentCall(
+  attrs: AgentCallSpanAttributes,
+  parentContext?: TraceContext
+): Span {
+  return startSpan("gen_ai.agent_call", {
+    kind: "client",
+    parentContext,
+    attributes: attrs as unknown as Record<string, string | number | boolean>,
+  });
+}
+
+/**
+ * Task 3.3 — Derive a child TraceContext from an existing context.
+ *
+ * Use this to propagate a traceId into a sub-agent call so that nested
+ * spans share the same root traceId.
+ *
+ *   const childCtx = childContext(parentCtx);
+ *   // pass childCtx as parentContext to the sub-agent's RuntimeContext
+ */
+export function childContext(parent: TraceContext): TraceContext {
+  return {
+    traceId: parent.traceId,
+    spanId: generateId(8),
+    parentSpanId: parent.spanId,
+  };
 }
 
 async function pushToOTLP(

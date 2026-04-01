@@ -4,7 +4,7 @@ vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { startSpan, traceGenAI, createTraceContext } from "../tracer";
+import { startSpan, traceGenAI, traceAgentCall, childContext, createTraceContext } from "../tracer";
 
 describe("createTraceContext", () => {
   it("generates unique traceId and spanId", () => {
@@ -72,5 +72,116 @@ describe("traceGenAI", () => {
     expect(span.kind).toBe("client");
     expect(span.attributes["gen_ai.system"]).toBe("deepseek");
     expect(span.attributes["gen_ai.request.model"]).toBe("deepseek-chat");
+  });
+
+  it("accepts AAIF 2026 gen_ai.operation.name attribute", () => {
+    const span = traceGenAI("gen_ai.generate", {
+      "gen_ai.system": "openai",
+      "gen_ai.request.model": "gpt-4.1",
+      "gen_ai.operation.name": "generate",
+      "gen_ai.agent.id": "agent-abc123",
+    });
+    expect(span.attributes["gen_ai.operation.name"]).toBe("generate");
+    expect(span.attributes["gen_ai.agent.id"]).toBe("agent-abc123");
+  });
+});
+
+// Task 3.3 — AAIF 2026 multi-hop agent tracing tests
+describe("traceAgentCall", () => {
+  it("creates a client-kind span named gen_ai.agent_call", () => {
+    const span = traceAgentCall({
+      "gen_ai.operation.name": "agent_call",
+      "gen_ai.agent.id": "callee-agent-id",
+      "gen_ai.agent.name": "Research Agent",
+      "gen_ai.caller.agent.id": "orchestrator-id",
+      "gen_ai.caller.agent.name": "Orchestrator",
+      "agent_call.depth": 1,
+      "agent_call.input_length": 42,
+      "agent_call.timeout_seconds": 60,
+    });
+    expect(span.name).toBe("gen_ai.agent_call");
+    expect(span.kind).toBe("client");
+    expect(span.attributes["gen_ai.agent.id"]).toBe("callee-agent-id");
+    expect(span.attributes["gen_ai.agent.name"]).toBe("Research Agent");
+    expect(span.attributes["gen_ai.operation.name"]).toBe("agent_call");
+  });
+
+  it("sets caller agent attributes correctly", () => {
+    const span = traceAgentCall({
+      "gen_ai.operation.name": "agent_call",
+      "gen_ai.agent.id": "callee-id",
+      "gen_ai.agent.name": "TDD Guide",
+      "gen_ai.caller.agent.id": "planner-id",
+      "gen_ai.caller.agent.name": "Strategic Planner",
+      "agent_call.depth": 2,
+      "agent_call.input_length": 100,
+      "agent_call.timeout_seconds": 90,
+    });
+    expect(span.attributes["gen_ai.caller.agent.id"]).toBe("planner-id");
+    expect(span.attributes["gen_ai.caller.agent.name"]).toBe("Strategic Planner");
+    expect(span.attributes["agent_call.depth"]).toBe(2);
+    expect(span.attributes["agent_call.timeout_seconds"]).toBe(90);
+  });
+
+  it("propagates parent traceId when parentContext is supplied", () => {
+    const parentCtx = createTraceContext();
+    const span = traceAgentCall(
+      {
+        "gen_ai.operation.name": "agent_call",
+        "gen_ai.agent.id": "callee",
+        "gen_ai.agent.name": "Sub Agent",
+        "gen_ai.caller.agent.id": "orchestrator",
+        "agent_call.depth": 1,
+        "agent_call.input_length": 10,
+        "agent_call.timeout_seconds": 30,
+      },
+      childContext(parentCtx)
+    );
+    // Same root traceId → appears as a single trace in Grafana
+    expect(span.traceContext.traceId).toBe(parentCtx.traceId);
+    expect(span.traceContext.parentSpanId).not.toBeUndefined();
+  });
+
+  it("creates an independent trace when no parentContext is supplied", () => {
+    const span = traceAgentCall({
+      "gen_ai.operation.name": "agent_call",
+      "gen_ai.agent.id": "standalone-callee",
+      "gen_ai.agent.name": "Standalone Agent",
+      "gen_ai.caller.agent.id": "root",
+      "agent_call.depth": 0,
+      "agent_call.input_length": 5,
+      "agent_call.timeout_seconds": 120,
+    });
+    expect(span.traceContext.traceId).toHaveLength(32);
+    expect(span.traceContext.parentSpanId).toBeUndefined();
+  });
+});
+
+describe("childContext", () => {
+  it("inherits traceId from parent and assigns a new spanId", () => {
+    const parent = createTraceContext();
+    const child = childContext(parent);
+    expect(child.traceId).toBe(parent.traceId);
+    expect(child.spanId).not.toBe(parent.spanId);
+    expect(child.spanId).toHaveLength(16);
+    expect(child.parentSpanId).toBe(parent.spanId);
+  });
+
+  it("produces distinct spanIds for multiple children of the same parent", () => {
+    const parent = createTraceContext();
+    const child1 = childContext(parent);
+    const child2 = childContext(parent);
+    expect(child1.spanId).not.toBe(child2.spanId);
+    // Both share the root traceId
+    expect(child1.traceId).toBe(parent.traceId);
+    expect(child2.traceId).toBe(parent.traceId);
+  });
+
+  it("nested chain — grandchild shares root traceId", () => {
+    const root = createTraceContext();
+    const child = childContext(root);
+    const grandchild = childContext(child);
+    expect(grandchild.traceId).toBe(root.traceId);
+    expect(grandchild.parentSpanId).toBe(child.spanId);
   });
 });

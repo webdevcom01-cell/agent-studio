@@ -26,6 +26,8 @@ import {
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
 import { parseFlowContent } from "@/lib/validators/flow-content";
 import { Prisma } from "@/generated/prisma";
+import { traceAgentCall, childContext } from "@/lib/observability/tracer";
+import type { TraceContext } from "@/lib/observability/types";
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
 
@@ -120,6 +122,17 @@ export interface AgentToolContext {
    * cached result fingerprint matches this value.
    */
   currentInput?: string;
+  /**
+   * Task 3.3 — AAIF 2026 multi-hop tracing.
+   * Parent span's TraceContext — propagated so all sub-agent spans share the same
+   * root traceId and form a single distributed trace in Grafana.
+   */
+  parentTraceContext?: TraceContext;
+  /**
+   * Task 3.3 — human-readable name of the calling agent, used for
+   * gen_ai.caller.agent.name in the child span.
+   */
+  callerAgentName?: string;
 }
 
 /**
@@ -245,6 +258,8 @@ async function executeAgentTool(
     conversationId,
     abortSignal,
     currentInput,
+    parentTraceContext,
+    callerAgentName,
   } = ctx;
 
   // ── Task 3.1: Pipeline Resume — return cached output without re-running ──
@@ -332,6 +347,28 @@ async function executeAgentTool(
     });
   }
 
+  // ── Task 3.3 — AAIF 2026 multi-hop trace span ──────────────────────────────
+  // Build a child span that shares the same traceId as the orchestrating agent's
+  // span. The span context is derived from the caller's parentTraceContext when
+  // available, so the full chain appears as one distributed trace in Grafana.
+  const resolvedTimeout = getTimeoutForAgent(agent);
+  const otelSpan = traceAgentCall(
+    {
+      "gen_ai.operation.name": "agent_call",
+      "gen_ai.agent.id": agent.id,
+      "gen_ai.agent.name": agent.name,
+      "gen_ai.caller.agent.id": callerAgentId,
+      "gen_ai.caller.agent.name": callerAgentName ?? callerAgentId,
+      "agent_call.depth": depth,
+      "agent_call.input_length": input.length,
+      "agent_call.timeout_seconds": resolvedTimeout,
+    },
+    parentTraceContext
+      ? childContext(parentTraceContext)
+      : undefined
+  );
+  // ─────────────────────────────────────────────────────────────────────────
+
   try {
     const result = await executeSubAgentInternal({
       targetAgentId: agent.id,
@@ -340,7 +377,7 @@ async function executeAgentTool(
       depth: depth + 1,
       callStack: [...callStack, agent.id],
       traceId,
-      timeoutSeconds: DEFAULT_TIMEOUT_SECONDS,
+      timeoutSeconds: resolvedTimeout,
       abortSignal,
     });
 
@@ -350,6 +387,14 @@ async function executeAgentTool(
     const outputText = typeof result.output === "string"
       ? result.output
       : JSON.stringify(result.output);
+
+    // Emit AAIF 2026 token usage on the span before closing it
+    otelSpan.setAttributes({
+      "agent_call.output_length": outputText.length,
+      "agent_call.duration_ms": durationMs,
+      "agent_call.status": "completed",
+    });
+    otelSpan.end();
 
     // Update audit log
     if (callLogId) {
@@ -392,6 +437,14 @@ async function executeAgentTool(
     const errorMsg = err instanceof Error ? err.message : String(err);
     const isCancelled =
       errorMsg.includes("cancelled: parent stream") || abortSignal?.aborted === true;
+
+    // Close the OTel span with error/cancelled status
+    otelSpan.setAttributes({
+      "agent_call.duration_ms": durationMs,
+      "agent_call.status": isCancelled ? "cancelled" : "failed",
+      "agent_call.error": errorMsg.slice(0, 200),
+    });
+    otelSpan.end();
 
     // Don't penalise circuit breaker for user-initiated cancellation
     if (!isCancelled) {

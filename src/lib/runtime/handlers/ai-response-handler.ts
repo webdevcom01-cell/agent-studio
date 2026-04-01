@@ -169,6 +169,8 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     const span = traceGenAI("gen_ai.generate", {
       "gen_ai.system": modelId.split("-")[0],
       "gen_ai.request.model": modelId,
+      "gen_ai.operation.name": "generate",
+      "gen_ai.agent.id": context.agentId,
       "gen_ai.request.temperature": temperature,
       "gen_ai.request.max_tokens": maxTokens,
     });
