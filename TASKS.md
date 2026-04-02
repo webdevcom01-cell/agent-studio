@@ -182,7 +182,203 @@
 
 ## Sledeće na redu
 
-- Sve faze 0–4 su ✅ DONE. Projekat spreman za open-source launch i developer ICP traction.
+Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i hardening**.
+
+---
+
+## FAZA 5 — Tehnički dug + Production Hardening (2026 standardi)
+
+> Svaki zadatak ima oznaku prioriteta, procjenu rada i standard koji implementira.
+> Redosljed = redosljed rada. Ne preskakati.
+
+---
+
+### 🔴 5.1 — KB Ingest Watchdog
+- **Status:** ⬜ TODO
+- **Prioritet:** KRITIČAN — može ostaviti korisnike sa broken knowledge base-om
+- **Problem:** KBSource zaglavi na `PROCESSING` zauvijek ako OpenAI API padne usred ingesta
+- **Fix:** Cron koji svake 10 min resetuje `PROCESSING` starije od 10 min → `FAILED` + error poruka
+- **Standard 2026:** Observability + Dead process detection (SRE praksa)
+- **Fajlovi:** `src/lib/knowledge/maintenance.ts`, `/api/cron/cleanup/route.ts`
+- **Testovi:** simulate OpenAI fail mid-ingest → source mora biti FAILED, ne PROCESSING
+- **Procjena:** 3h
+
+---
+
+### 🔴 5.2 — Handler Field Access Audit (Schema Drift Protection)
+- **Status:** ⬜ TODO
+- **Prioritet:** KRITIČAN — flow rollback može pucati na starije verzije
+- **Problem:** Handler-i pristupaju `node.data.field` direktno bez fallbacka → break na rollback
+- **Fix:** Audit svih 55 handler-a, zamijeni `node.data.field` → `node.data.field ?? defaultValue`
+- **Standard 2026:** Defensive programming, backward compatibility
+- **Fajlovi:** `src/lib/runtime/handlers/*.ts` (55 fajlova)
+- **Testovi:** svaki handler test mora provjeriti "missing node.data fields" scenario
+- **Procjena:** 1 dan (dosadan ali obavezan)
+
+---
+
+### 🔴 5.3 — OpenAI Embedding Retry + Backoff
+- **Status:** ⬜ TODO
+- **Prioritet:** KRITIČAN — jedan rate limit ruši cijelu KB ingestiju
+- **Problem:** `embeddings.ts` nema retry logiku na OpenAI 429/503
+- **Fix:** Exponential backoff sa jitter, max 3 retry-a (isti pattern kao u `cli-generator/ai-phases.ts`)
+- **Standard 2026:** Resilience patterns — retry/backoff (AWS Well-Architected)
+- **Fajlovi:** `src/lib/knowledge/embeddings.ts`
+- **Testovi:** mock OpenAI 429 → mora retry 3x → succeed ili FAILED gracefully
+- **Procjena:** 3h
+
+---
+
+### 🔴 5.4 — Dependabot Security Audit
+- **Status:** ⬜ TODO
+- **Prioritet:** KRITIČAN — GitHub je javio 1 critical + 17 high vulnerabilities
+- **Problem:** 34 vulnerabilities na main branch-u, nepoznato koliko je u prod dependencijama
+- **Fix:** Pregledati svaku, zakrpiti critical + high u prod deps, dokumentovati dev-only
+- **Standard 2026:** OWASP Dependency-Check, supply chain security
+- **Fajlovi:** `package.json`, `pnpm-lock.yaml`
+- **Testovi:** `pnpm audit` mora proći bez critical/high u prod deps
+- **Procjena:** pola dana
+
+---
+
+### 🟠 5.5 — Vitest Coverage Setup + 70% Target
+- **Status:** ⬜ TODO
+- **Prioritet:** OZBILJNO — 2728 testova ali ne znamo što pokrivaju
+- **Problem:** Coverage nije mjeren, slepe tačke su nepoznate
+- **Fix:** `vitest --coverage` setup, coverage report u CI, cilj 70% lines
+- **Standard 2026:** Industry standard — 70% line coverage za production software
+- **Fajlovi:** `vitest.config.ts`, `.github/workflows/` (ako postoji CI)
+- **Testovi:** coverage report sam po sebi je verifikacija
+- **Procjena:** 2h setup + kontinuirano
+
+---
+
+### 🟠 5.6 — Redis Edge Cases Test Suite
+- **Status:** ⬜ TODO
+- **Prioritet:** OZBILJNO — graciozni fallback postoji u kodu ali nije testiran
+- **Problem:** Redis = null scenariji nisu pokriveni testovima
+- **Fix:** Test suite za rate-limiting, caching, MCP pool kad Redis nije dostupan
+- **Standard 2026:** Chaos engineering principles — test failure modes
+- **Fajlovi:** `src/lib/redis.ts`, `src/lib/rate-limit.ts`, `src/lib/cache/index.ts`
+- **Testovi:** `vi.mock('ioredis')` → sve funkcije moraju raditi s null Redis
+- **Procjena:** 1 dan
+
+---
+
+### 🟠 5.7 — Concurrent Flow Edit (Optimistic Locking)
+- **Status:** ⬜ TODO
+- **Prioritet:** OZBILJNO — dva korisnika edituju isti flow → izgubljen rad
+- **Problem:** Flow PUT nema version check, "last write wins"
+- **Fix:** `version: Int` field na Flow modelu, PUT provjerava version match → 409 ako conflict
+- **Standard 2026:** Optimistic concurrency control (standard u svim kolaborativnim alatima)
+- **Fajlovi:** `prisma/schema.prisma`, `/api/agents/[agentId]/flow/route.ts`
+- **Testovi:** concurrent PUT requests → jedan mora dobiti 409
+- **Procjena:** pola dana
+
+---
+
+### 🟠 5.8 — Embed Widget Error State
+- **Status:** ⬜ TODO
+- **Prioritet:** OZBILJNO — korisnik widgeta ne zna zašto chat ne radi
+- **Problem:** Ako agent padne, widget prikazuje praznu stranicu bez poruke
+- **Fix:** Error boundary u `src/app/embed/[agentId]/page.tsx` + fallback UI
+- **Standard 2026:** Error boundaries (React 18 standard), graceful degradation
+- **Fajlovi:** `src/app/embed/[agentId]/page.tsx`, `src/app/embed/layout.tsx`
+- **Testovi:** E2E test — agent returns 500 → widget prikazuje error poruku
+- **Procjena:** 2h
+
+---
+
+### 🟠 5.9 — CLI Generator Stuck Notification
+- **Status:** ⬜ TODO
+- **Prioritet:** OZBILJNO — korisnik čeka 5 min ne znajući da je zaglavilo
+- **Problem:** Stuck detection postoji, ali nema proaktivne notifikacije korisniku
+- **Fix:** In-app toast + email notifikacija kad `updatedAt > STUCK_THRESHOLD_MS`
+- **Standard 2026:** UX standard — korisnik uvijek zna stanje async operacija
+- **Fajlovi:** `src/app/cli-generator/page.tsx`, `src/lib/cli-generator/types.ts`
+- **Testovi:** mock stuck state → provjeriti da se notifikacija šalje
+- **Procjena:** 2h
+
+---
+
+### 🟡 5.10 — BullMQ za Heavy Tasks (KB ingest + Eval runs)
+- **Status:** ⬜ TODO
+- **Prioritet:** SKALIRANJE — blokira main Next.js process
+- **Problem:** KB ingest i eval runs se izvršavaju u istom procesu kao API rute
+- **Fix:** Prebaciti na BullMQ queue (infrastruktura već postoji!) + worker processing
+- **Standard 2026:** Queue-based load leveling (Azure Architecture pattern)
+- **Fajlovi:** `src/lib/queue/`, `src/lib/knowledge/ingest.ts`, `src/lib/evals/runner.ts`
+- **Testovi:** BullMQ job enqueue → worker procesira → rezultat u DB
+- **Procjena:** 3-5 dana
+
+---
+
+### 🟡 5.11 — ECC Instinct Human Approval Gate
+- **Status:** ⬜ TODO
+- **Prioritet:** AI GOVERNANCE — loš pattern može postati "znanje"
+- **Problem:** Instinct s >0.85 confidence se promovira u Skill bez human review
+- **Fix:** Human approval step (postoji HumanApprovalRequest model!) za instinct → skill
+- **Standard 2026:** Human-in-the-loop AI (EU AI Act, responsible AI standards)
+- **Fajlovi:** `src/lib/ecc/instinct-engine.ts`, `/api/skills/evolve/route.ts`
+- **Testovi:** instinct s 0.9 confidence → kreira HumanApprovalRequest, ne direktno Skill
+- **Procjena:** 1 dan
+
+---
+
+### 🟡 5.12 — Load Testovi (k6)
+- **Status:** ⬜ TODO
+- **Prioritet:** SKALIRANJE — ne znamo koliko korisnika možemo podnijeti
+- **Problem:** k6 plan postoji u dokumentaciji, nikad implementiran
+- **Fix:** k6 skript, 100 concurrent users, 30 min test, SLO: P95 < 5s chat response
+- **Standard 2026:** Performance engineering, SLO-based testing (Google SRE book)
+- **Fajlovi:** `load-tests/` (novi direktorij), `.github/workflows/load-test.yml`
+- **Testovi:** k6 report je verifikacija
+- **Procjena:** 1 dan
+
+---
+
+### 🟢 5.13 — API Key Scopes Dokumentacija
+- **Status:** ⬜ TODO
+- **Prioritet:** DEVELOPER EXPERIENCE
+- **Problem:** `agents:read`, `chat:write` scope-i postoje u kodu ali nigdje nisu dokumentovani
+- **Fix:** Dodati scopes tabelu u OpenAPI spec description + `/api/docs` stranicu
+- **Standard 2026:** Developer experience (DX) — zero guesswork API design
+- **Fajlovi:** `src/lib/openapi/spec.ts`, `src/app/api/docs/route.ts`
+- **Testovi:** openapi spec mora sadržavati scopes tabelu
+- **Procjena:** 1h
+
+---
+
+### 🟢 5.14 — CHANGELOG.md Automatizacija
+- **Status:** ⬜ TODO
+- **Prioritet:** OPEN SOURCE TRACTION
+- **Problem:** GitHub posjetioci ne vide historiju razvoja, loš prvi utisak
+- **Fix:** `conventional-changelog` CLI, generisati iz git log, dodati u release workflow
+- **Standard 2026:** Conventional Commits standard, semantic versioning
+- **Fajlovi:** `CHANGELOG.md` (novi), `package.json` (changelog script)
+- **Testovi:** `pnpm changelog` mora generisati validan markdown
+- **Procjena:** 2h
+
+---
+
+## Prioritet redosljed sesija
+
+```
+Sesija 1 (štiti produkciju — odmah):
+  5.1 KB Watchdog + 5.3 Embedding Retry + 5.4 Dependabot
+
+Sesija 2 (sprječava izgubljen rad):
+  5.2 Handler Audit + 5.7 Optimistic Locking
+
+Sesija 3 (vidljivost i pouzdanost):
+  5.5 Coverage + 5.6 Redis Tests + 5.8 Embed Error
+
+Sesija 4 (skaliranje):
+  5.10 BullMQ + 5.12 Load Tests
+
+Sesija 5 (AI governance + DX):
+  5.11 ECC Human Approval + 5.13 Scopes + 5.14 CHANGELOG
+```
 
 ---
 
