@@ -20,6 +20,7 @@ import { loadContext, saveContext, saveMessages } from "@/lib/runtime/context";
 import { executeFlow } from "@/lib/runtime/engine";
 import { verifyWebhookSignature, decryptWebhookSecret } from "./verify";
 import { resolveJsonPathTyped } from "./json-path";
+import { handleFailedExecution, RETRY_DELAYS_MS } from "./retry";
 
 /** Per-webhook rate limit: 60 requests per minute. */
 const WEBHOOK_RATE_LIMIT = 60;
@@ -40,6 +41,12 @@ export interface WebhookExecuteOptions {
    * Stored on the new execution record for traceability.
    */
   replayOf?: string;
+  /**
+   * When set, this is a BullMQ retry of an existing execution.
+   * The function will skip idempotency/rate-limit checks and will update
+   * this execution record in-place rather than creating a new one.
+   */
+  retryExecutionId?: string;
 }
 
 export interface WebhookExecuteResult {
@@ -107,9 +114,6 @@ function extractEventTypeFromBody(parsedBody: unknown): string | null {
 }
 
 /**
- * Executes the full inbound webhook pipeline.
- */
-/**
  * Strips sensitive headers (Authorization, Cookie, API keys, secrets) and
  * flattens array values for storage.  Returns a plain Record<string, string>.
  */
@@ -142,10 +146,75 @@ export function sanitizeHeadersForStorage(
   return result;
 }
 
+/**
+ * Schedules a BullMQ delayed retry for a failed webhook execution,
+ * or moves it to the dead-letter table if retries are exhausted.
+ * Always called fire-and-forget — never throws to the caller.
+ */
+async function scheduleWebhookRetry(
+  executionId: string,
+  webhookId: string,
+  agentId: string,
+  currentRetryCount: number,
+  errorMessage: string,
+): Promise<void> {
+  try {
+    const retryResult = await handleFailedExecution(
+      executionId,
+      webhookId,
+      currentRetryCount,
+      errorMessage,
+    );
+
+    if (retryResult.action === "retry") {
+      const delayMs =
+        RETRY_DELAYS_MS[currentRetryCount] ??
+        RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
+
+      try {
+        const { addWebhookRetryJob } = await import("@/lib/queue");
+        const jobId = await addWebhookRetryJob(
+          {
+            agentId,
+            webhookId,
+            executionId,
+            retryCount: currentRetryCount + 1,
+          },
+          delayMs,
+        );
+
+        // Persist the BullMQ job ID so operators can look it up.
+        await prisma.webhookExecution.update({
+          where: { id: executionId },
+          data: { retryJobId: jobId },
+        });
+      } catch (queueErr) {
+        // Queue unavailable (Redis not configured) — log and let the dead
+        // letter record serve as the audit trail.
+        logger.warn("Webhook retry queue unavailable — retry not scheduled", {
+          executionId,
+          webhookId,
+          error: queueErr,
+        });
+      }
+    }
+
+    logger.info("Webhook retry decision", {
+      executionId,
+      webhookId,
+      action: retryResult.action,
+      details: retryResult.details,
+    });
+  } catch (err) {
+    logger.error("scheduleWebhookRetry error", err, { executionId, webhookId });
+  }
+}
+
 export async function executeWebhookTrigger(
   opts: WebhookExecuteOptions
 ): Promise<WebhookExecuteResult> {
-  const { agentId, webhookId, rawBody, headers, sourceIp, isReplay = false, replayOf } = opts;
+  const { agentId, webhookId, rawBody, headers, sourceIp, isReplay = false, replayOf, retryExecutionId } = opts;
+  const isRetry = retryExecutionId !== undefined;
   const startedAt = Date.now();
 
   // ── 1. Load webhook config ────────────────────────────────────────────────
@@ -202,33 +271,39 @@ export async function executeWebhookTrigger(
     ? rawId[0]
     : rawId ?? `${webhookId}:${startedAt}`;
 
-  const existing = await prisma.webhookExecution.findUnique({
-    where: { idempotencyKey },
-    select: { id: true, conversationId: true, status: true },
-  });
-
-  if (existing) {
-    logger.info("Webhook event already processed (idempotent skip)", {
-      webhookId,
-      idempotencyKey,
+  // Retries re-use an existing execution record — skip idempotency check entirely.
+  if (!isRetry) {
+    const existing = await prisma.webhookExecution.findUnique({
+      where: { idempotencyKey },
+      select: { id: true, conversationId: true, status: true },
     });
-    return {
-      success: true,
-      status: 409,
-      executionId: existing.id,
-      conversationId: existing.conversationId ?? undefined,
-      skipped: true,
-    };
+
+    if (existing) {
+      logger.info("Webhook event already processed (idempotent skip)", {
+        webhookId,
+        idempotencyKey,
+      });
+      return {
+        success: true,
+        status: 409,
+        executionId: existing.id,
+        conversationId: existing.conversationId ?? undefined,
+        skipped: true,
+      };
+    }
   }
 
   // ── 4. Rate limiting ──────────────────────────────────────────────────────
-  const rl = checkRateLimit(`webhook:${webhookId}`, WEBHOOK_RATE_LIMIT);
-  if (!rl.allowed) {
-    return {
-      success: false,
-      status: 429,
-      error: `Rate limit exceeded. Retry after ${Math.ceil(rl.retryAfterMs / 1000)}s`,
-    };
+  // Retries are dispatched by the internal BullMQ worker — no rate limiting needed.
+  if (!isRetry) {
+    const rl = checkRateLimit(`webhook:${webhookId}`, WEBHOOK_RATE_LIMIT);
+    if (!rl.allowed) {
+      return {
+        success: false,
+        status: 429,
+        error: `Rate limit exceeded. Retry after ${Math.ceil(rl.retryAfterMs / 1000)}s`,
+      };
+    }
   }
 
   // ── 5. Parse payload & build variable mappings ────────────────────────────
@@ -345,26 +420,43 @@ export async function executeWebhookTrigger(
     };
   }
 
-  // ── 6. Create execution record (PENDING) ──────────────────────────────────
+  // ── 6. Execution record ────────────────────────────────────────────────────
   const sanitizedHeaders = sanitizeHeadersForStorage(headers);
 
-  const execution = await prisma.webhookExecution.create({
-    data: {
-      webhookConfigId: webhookId,
-      idempotencyKey,
-      status: "PENDING",
-      triggeredAt: new Date(),
-      sourceIp: sourceIp ?? null,
-      eventType,
-      // Store original payload and sanitized headers for replay support.
-      // rawPayload is capped at 1 MB to prevent unbounded storage.
-      rawPayload: rawBody.length <= 1_048_576 ? rawBody : null,
-      rawHeaders: sanitizedHeaders,
-      isReplay,
-      replayOf: replayOf ?? null,
-    },
-    select: { id: true },
-  });
+  // currentRetryCount tracks how many previous failures this execution has had.
+  // For new executions it starts at 0; for retries it reads the persisted value.
+  let currentRetryCount = 0;
+
+  const execution: { id: string } = isRetry
+    ? await (async () => {
+        // Load the existing execution so we know its current retryCount.
+        const existing = await prisma.webhookExecution.findUnique({
+          where: { id: retryExecutionId },
+          select: { id: true, retryCount: true },
+        });
+        if (!existing) {
+          throw new Error(`Retry execution ${retryExecutionId} not found`);
+        }
+        currentRetryCount = existing.retryCount;
+        return { id: existing.id };
+      })()
+    : await prisma.webhookExecution.create({
+        data: {
+          webhookConfigId: webhookId,
+          idempotencyKey,
+          status: "PENDING",
+          triggeredAt: new Date(),
+          sourceIp: sourceIp ?? null,
+          eventType,
+          // Store original payload and sanitized headers for replay support.
+          // rawPayload is capped at 1 MB to prevent unbounded storage.
+          rawPayload: rawBody.length <= 1_048_576 ? rawBody : null,
+          rawHeaders: sanitizedHeaders,
+          isReplay,
+          replayOf: replayOf ?? null,
+        },
+        select: { id: true },
+      });
 
   // ── 7. Execute flow ───────────────────────────────────────────────────────
   let conversationId: string | undefined;
@@ -438,6 +530,17 @@ export async function executeWebhookTrigger(
   ]);
 
   if (executionStatus === "FAILED") {
+    // Schedule a BullMQ retry (or move to dead letter) — fire-and-forget so it
+    // doesn't block the HTTP response.  Errors in scheduling are logged but
+    // never surfaced to the caller.
+    void scheduleWebhookRetry(
+      execution.id,
+      webhookId,
+      agentId,
+      currentRetryCount,
+      errorMessage ?? "Unknown execution error",
+    );
+
     return {
       success: false,
       status: 500,

@@ -26,7 +26,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Next.js-15.5-000?logo=next.js" alt="Next.js">
   <img src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white" alt="Node">
-  <img src="https://img.shields.io/badge/Tests-2502%2B-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-2684%2B-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/Node_Types-55-orange" alt="55 Node Types">
   <img src="https://img.shields.io/badge/Templates-221-purple" alt="221 Templates">
   <img src="https://img.shields.io/badge/MCP-Ready-8B5CF6?logo=anthropic&logoColor=white" alt="MCP Ready">
@@ -130,6 +130,59 @@ Agent Studio works with **18 models across 7 providers** out of the box. Add the
 | Open source | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 *✅ Full support · ⚠️ Partial · ❌ Not supported*
+
+---
+
+## API Authentication
+
+Agent Studio exposes a full REST API secured with scoped API keys.
+
+### Creating a key
+
+Go to **Settings → API Keys** (`/settings/api-keys`) or call the API directly:
+
+```bash
+curl -X POST https://your-app.railway.app/api/api-keys \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: as_live_<existing-key>" \
+  -d '{ "name": "CI pipeline", "scopes": ["agents:read", "flows:execute"] }'
+# → { "success": true, "data": { ..., "key": "as_live_..." } }
+# The raw key is returned ONCE and never stored.
+```
+
+### Using a key
+
+Pass the key as an `x-api-key` header on every request:
+
+```bash
+# List agents
+curl https://your-app.railway.app/api/agents \
+  -H "x-api-key: as_live_…"
+
+# Execute a flow
+curl -X POST https://your-app.railway.app/api/agents/<agentId>/execute \
+  -H "x-api-key: as_live_…" \
+  -H "Content-Type: application/json" \
+  -d '{ "input": "Summarise the weekly report" }'
+```
+
+### Available scopes
+
+| Scope | Grants |
+|---|---|
+| `agents:read` | List and view agents |
+| `agents:write` | Create and update agents |
+| `agents:delete` | Delete agents |
+| `flows:read` | Read flow definitions |
+| `flows:execute` | Run agent flows |
+| `kb:read` | Search knowledge bases |
+| `kb:write` | Add knowledge base sources |
+| `evals:read` | View eval results |
+| `evals:run` | Trigger eval runs |
+| `webhooks:read` | View webhook configs |
+| `admin` | Wildcard — grants all of the above |
+
+Keys are SHA-256 hashed before storage. Maximum 20 active keys per account. Revoked keys stop working immediately.
 
 ---
 
@@ -239,7 +292,7 @@ pnpm dev              # Dev server (Turbopack)
 pnpm build            # Production build
 pnpm lint             # ESLint
 pnpm typecheck        # TypeScript check (no emit)
-pnpm test             # Vitest unit tests (2502+)
+pnpm test             # Vitest unit tests (2684+)
 pnpm test:e2e         # Playwright E2E tests
 pnpm db:push          # Sync Prisma schema to DB
 pnpm db:generate      # Generate Prisma client
@@ -283,6 +336,7 @@ src/
     discover/               # Agent marketplace
     skills/                 # ECC Skills Browser
     cli-generator/          # CLI-to-MCP pipeline
+    settings/               # API keys + account settings
   components/               # React components
   lib/
     runtime/                # Flow engine (55 handlers)

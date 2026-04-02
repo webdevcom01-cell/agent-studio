@@ -21,6 +21,7 @@
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
     "mcp:playwright": "npx @playwright/mcp --port 3100",
+    "worker": "tsx src/lib/queue/worker.ts",
     "precheck": "bash scripts/pre-push-check.sh",
     "precheck:file": "bash scripts/pre-push-check.sh",
     "knip": "npx knip@5",

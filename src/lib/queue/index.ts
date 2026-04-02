@@ -36,7 +36,16 @@ export interface EvalRunJobData {
   authHeader?: string;
 }
 
-export type JobData = FlowExecuteJobData | EvalRunJobData;
+export interface WebhookRetryJobData {
+  type: "webhook.retry";
+  agentId: string;
+  webhookId: string;
+  executionId: string;
+  /** Retry attempt number (1 = first retry, 2 = second, etc.) */
+  retryCount: number;
+}
+
+export type JobData = FlowExecuteJobData | EvalRunJobData | WebhookRetryJobData;
 
 const PRIORITY_MAP: Record<string, number> = {
   chat: 1,
@@ -126,6 +135,38 @@ export async function addEvalJob(
   });
 
   return job.id ?? `eval-${data.suiteId}`;
+}
+
+export async function addWebhookRetryJob(
+  data: Omit<WebhookRetryJobData, "type">,
+  delayMs: number,
+): Promise<string> {
+  const q = getQueue();
+
+  const job = await q.add(
+    "webhook.retry",
+    { ...data, type: "webhook.retry" as const },
+    {
+      delay: delayMs,
+      // Priority 3: higher than pipeline (5) so retries run before batch jobs,
+      // but lower than live chat (1) so interactive users are never starved.
+      priority: 3,
+      // Stable job ID prevents double-scheduling if the scheduler runs twice.
+      jobId: `webhook-retry-${data.executionId}-${data.retryCount}`,
+      removeOnComplete: { age: 86400 },
+      removeOnFail: { age: 604800 },
+    },
+  );
+
+  logger.info("Webhook retry job scheduled", {
+    jobId: job.id,
+    executionId: data.executionId,
+    webhookId: data.webhookId,
+    delayMs,
+    retryCount: data.retryCount,
+  });
+
+  return job.id ?? `webhook-retry-${data.executionId}-${data.retryCount}`;
 }
 
 export async function getJobStatus(jobId: string): Promise<{

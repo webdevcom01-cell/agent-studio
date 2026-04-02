@@ -64,3 +64,40 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:3000/api/health || exit 1
 
 CMD ["node", "server.js"]
+
+# ── Stage 4: Database migration runner ───────────────────────────────────────
+# Runs `prisma migrate deploy` once at startup, then exits (restart: no).
+FROM node:20-alpine AS migrate
+
+RUN corepack enable && corepack prepare pnpm@9 --activate
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY prisma ./prisma
+COPY package.json pnpm-lock.yaml .npmrc ./
+
+ENV NODE_ENV=production
+
+CMD ["npx", "prisma", "migrate", "deploy"]
+
+# ── Stage 5: BullMQ worker ────────────────────────────────────────────────────
+# Processes flow.execute, eval.run, and webhook.retry jobs from Redis queue.
+# Requires REDIS_URL and DATABASE_URL environment variables.
+FROM node:20-alpine AS worker
+
+RUN corepack enable && corepack prepare pnpm@9 --activate
+WORKDIR /app
+
+# Use the full deps (includes devDeps for tsx TypeScript execution)
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Regenerate Prisma client for the correct binary target
+RUN pnpm db:generate
+
+ENV NODE_ENV=production
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:${PORT:-8080}/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+
+CMD ["npx", "tsx", "src/lib/queue/worker.ts"]

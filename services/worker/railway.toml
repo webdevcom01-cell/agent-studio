@@ -1,9 +1,33 @@
+# BullMQ Worker — Railway Service Config
+#
+# This service runs the BullMQ job processor for:
+#   - flow.execute  (chat pipeline jobs)
+#   - eval.run      (eval suite runs)
+#   - webhook.retry (delayed webhook retries with exponential back-off)
+#
+# RAILWAY SETUP:
+#   1. Create a new service in Railway pointing to the same GitHub repo.
+#   2. Set Root Directory to "/" (project root) — the worker imports from src/.
+#   3. Add environment variable: RAILWAY_CONFIG_FILE=services/worker/railway.toml
+#   4. Copy all env vars from the main service (DATABASE_URL, OPENAI_API_KEY, etc.)
+#   5. REDIS_URL is REQUIRED — the worker will not start without a queue connection.
+#
+# LOCAL DEVELOPMENT:
+#   pnpm worker    (runs src/lib/queue/worker.ts via tsx)
+#
+# SCALING: numReplicas=2 provides redundancy. Each replica handles up to
+# CONCURRENCY=5 concurrent jobs, so 2 replicas = 10 parallel job slots.
+
 [build]
 builder = "NIXPACKS"
-buildCommand = "pnpm install && pnpm db:generate"
+# --no-frozen-lockfile is required to match the nixpacks.toml install phase
+# and avoid lockfile-drift errors during Railway builds.
+buildCommand = "pnpm install --no-frozen-lockfile && pnpm db:generate"
 
 [deploy]
-startCommand = "node --import tsx/esm src/lib/queue/worker.ts"
+# npx tsx avoids "node --import tsx/esm" ESM loader flag issues on some Node
+# versions and is the recommended approach for tsx v4 in production scripts.
+startCommand = "npx tsx src/lib/queue/worker.ts"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"

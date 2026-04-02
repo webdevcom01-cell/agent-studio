@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { headers as nextHeaders } from "next/headers";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -59,8 +60,11 @@ function agentNotFound(): NextResponse {
 export async function requireAuth(
   req?: NextRequest,
 ): Promise<AuthResult | NextResponse> {
-  // 1️⃣  Try API key from x-api-key header
-  const rawApiKey = req?.headers.get("x-api-key") ?? null;
+  // 1️⃣  Try API key from x-api-key header.
+  //     Prefer the explicitly passed NextRequest; fall back to Next.js
+  //     server-side headers() so callers don't need to pass req manually.
+  const headerSource = req ? req.headers : await nextHeaders();
+  const rawApiKey = headerSource.get("x-api-key") ?? null;
   if (rawApiKey) {
     const keyResult = await validateApiKey(rawApiKey);
     if (!keyResult) {

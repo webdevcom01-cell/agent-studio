@@ -1,4 +1,34 @@
+# Agent Studio — self-hosted Docker Compose
+#
+# Quick start:
+#   cp .env.example .env          # fill in API keys
+#   docker compose up -d          # start all services
+#   docker compose logs -f app    # watch app logs
+#
+# With the optional ECC Skills MCP service:
+#   docker compose --profile ecc up -d
+#
+# For local development (live reload + debug):
+#   docker compose up             # docker-compose.override.yml is applied automatically
+
 services:
+  # ── Database migrations ─────────────────────────────────────────────────────
+  # Runs `prisma migrate deploy` once before the app starts, then exits.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agent_studio
+      DIRECT_URL: postgresql://postgres:postgres@postgres:5432/agent_studio
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ── Next.js application ─────────────────────────────────────────────────────
   app:
     build:
       context: .
@@ -15,6 +45,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
@@ -23,6 +55,28 @@ services:
       retries: 3
     restart: unless-stopped
 
+  # ── BullMQ worker ───────────────────────────────────────────────────────────
+  # Processes background jobs: chat pipeline, eval runs, webhook retries.
+  # Requires REDIS_URL. Scale up with: docker compose scale worker=2
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agent_studio
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ── PostgreSQL + pgvector ───────────────────────────────────────────────────
   postgres:
     image: pgvector/pgvector:pg16
     ports:
@@ -40,6 +94,7 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ── Redis ───────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     ports:
@@ -51,6 +106,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # ── ECC Skills MCP (optional) ───────────────────────────────────────────────
+  # Exposes the ECC skill library via MCP protocol.
+  # Enable with: docker compose --profile ecc up -d
+  # Then set ECC_ENABLED=true and ECC_MCP_URL=http://ecc-mcp:8000 in .env.
+  ecc-mcp:
+    profiles:
+      - ecc
+    build:
+      context: ./services/ecc-skills-mcp
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agent_studio
+      PORT: "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

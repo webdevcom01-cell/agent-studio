@@ -83,21 +83,67 @@ Examples:
 
 ---
 
+## Pre-Push Checks
+
+Before every commit + push, run the full pre-push gate:
+
+```bash
+pnpm precheck
+```
+
+This runs TypeScript type-check → Vitest unit tests → lucide icon mock check → placeholder string consistency. All four checks must show **PASS** before pushing. To run the same checks against a single file:
+
+```bash
+pnpm precheck:file src/lib/webhooks/execute.ts
+```
+
+---
+
 ## Pull Request Process
 
 1. **Fork** the repository and create a branch from `main`.
 2. **Make your changes** in small, focused commits.
-3. **Run checks** before pushing:
+3. **Run the pre-push gate** before pushing:
    ```bash
-   pnpm test        # Unit tests must pass
-   pnpm lint        # No lint errors
-   pnpm typecheck   # No type errors
+   pnpm precheck   # TypeScript + tests + lint + checks — all must pass
    ```
 4. **Push** your branch and open a Pull Request against `main`.
 5. **Fill in the PR template** with a description, change type, and checklist.
 6. **Address review feedback** — maintainers may request changes before merging.
 
 Keep PRs focused on a single concern. If your change touches multiple areas, split it into separate PRs.
+
+---
+
+## Running the BullMQ Worker
+
+The BullMQ worker processes background jobs (chat pipeline, eval runs, webhook retries). To run it locally alongside the dev server:
+
+```bash
+# Terminal 1 — dev server
+pnpm dev
+
+# Terminal 2 — job worker (requires REDIS_URL in .env.local)
+pnpm worker
+```
+
+Without Redis, the worker exits immediately. The web app degrades gracefully — jobs that require a worker (e.g. scheduled flows, webhook retries) simply won't execute until the worker is running.
+
+---
+
+## Adding a New Flow Node Type
+
+The project has 55 node types. To add a new one, follow this checklist in order:
+
+1. Add the type to the `NodeType` union in `src/types/index.ts`
+2. Create the handler in `src/lib/runtime/handlers/<name>-handler.ts`
+3. Register the handler in `src/lib/runtime/handlers/index.ts`
+4. Create the display component in `src/components/builder/nodes/<name>-node.tsx`
+5. Add the type to the node picker in `src/components/builder/node-picker.tsx`
+6. Add the property editor in `src/components/builder/property-panel.tsx`
+7. Write unit tests in `src/lib/runtime/handlers/__tests__/<name>-handler.test.ts`
+
+Every handler must return `ExecutionResult` and never throw — wrap everything in try/catch and return a graceful fallback message on failure.
 
 ---
 

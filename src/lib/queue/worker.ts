@@ -14,7 +14,7 @@
 
 import { Worker, type Job } from "bullmq";
 import { logger } from "@/lib/logger";
-import type { JobData, FlowExecuteJobData, EvalRunJobData } from "./index";
+import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData } from "./index";
 
 const QUEUE_NAME = "agent-studio";
 const CONCURRENCY = 5;
@@ -33,6 +33,8 @@ async function processJob(job: Job<JobData>): Promise<unknown> {
       return processFlowJob(job as Job<FlowExecuteJobData>);
     case "eval.run":
       return processEvalJob(job as Job<EvalRunJobData>);
+    case "webhook.retry":
+      return processWebhookRetryJob(job as Job<WebhookRetryJobData>);
     default:
       throw new Error(`Unknown job type: ${(data as Record<string, unknown>).type}`);
   }
@@ -97,6 +99,52 @@ async function processEvalJob(job: Job<EvalRunJobData>): Promise<unknown> {
     score: result.score,
     passed: result.passedCases,
     failed: result.failedCases,
+  });
+
+  return result;
+}
+
+async function processWebhookRetryJob(job: Job<WebhookRetryJobData>): Promise<unknown> {
+  const { agentId, webhookId, executionId } = job.data;
+
+  const { prisma } = await import("@/lib/prisma");
+  const { executeWebhookTrigger } = await import("@/lib/webhooks/execute");
+
+  // Load the stored payload and headers from the original execution.
+  const execution = await prisma.webhookExecution.findUnique({
+    where: { id: executionId },
+    select: { rawPayload: true, rawHeaders: true, retryCount: true },
+  });
+
+  if (!execution) {
+    throw new Error(`Webhook execution ${executionId} not found — cannot retry`);
+  }
+
+  if (!execution.rawPayload) {
+    throw new Error(
+      `Webhook execution ${executionId} has no stored payload — enable rawPayload capture to support retries`,
+    );
+  }
+
+  await job.updateProgress(10);
+
+  const result = await executeWebhookTrigger({
+    agentId,
+    webhookId,
+    rawBody: execution.rawPayload,
+    headers: (execution.rawHeaders as Record<string, string>) ?? {},
+    isReplay: true,
+    retryExecutionId: executionId,
+  });
+
+  await job.updateProgress(100);
+
+  logger.info("Webhook retry job completed", {
+    jobId: job.id,
+    executionId,
+    webhookId,
+    success: result.success,
+    retryCount: execution.retryCount,
   });
 
   return result;

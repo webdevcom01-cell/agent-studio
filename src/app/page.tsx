@@ -9,7 +9,7 @@ import {
   Plus, Bot, MessageSquare, Database, Trash2, MoreVertical,
   Download, Upload, LogOut, BarChart3, Plug, ArrowRightLeft,
   Sun, Moon, Compass, Terminal, FlaskConical, ShieldCheck,
-  Sparkles, Loader2, Webhook, Shield,
+  Sparkles, Loader2, Webhook, Shield, LayoutDashboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -278,6 +278,19 @@ export default function DashboardPage() {
             >
               <Link href="/analytics">
                 <BarChart3 className="size-4" aria-hidden="true" />
+              </Link>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              asChild
+              title="Admin Dashboard"
+              aria-label="Admin Dashboard"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Link href="/admin">
+                <LayoutDashboard className="size-4" aria-hidden="true" />
               </Link>
             </Button>
 

@@ -1,6 +1,12 @@
 # Development overrides — applied automatically by `docker compose up`
 # For production only, use: docker compose -f docker-compose.yml up
 services:
+  # In dev, skip the one-shot migrate service — the app runs db:push instead.
+  migrate:
+    profiles:
+      - production-only
+
+  # Hot-reload Next.js dev server with volume mounts.
   app:
     build:
       context: .
@@ -17,6 +23,23 @@ services:
       NODE_ENV: development
     healthcheck:
       start_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Hot-reload worker with volume mounts (shares the same node_modules mount).
+  worker:
+    build:
+      context: .
+      target: deps
+    command: npx tsx --watch src/lib/queue/worker.ts
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      NODE_ENV: development
 
   postgres:
     ports:

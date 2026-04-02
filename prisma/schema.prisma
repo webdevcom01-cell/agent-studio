@@ -802,6 +802,11 @@ model WebhookExecution {
   @@index([status])
 }
 
+/// Dead-letter store for webhook executions that exhausted all retry attempts.
+/// Records are written by the webhook trigger route when retryCount >= maxRetries.
+/// TODO (Phase 2 — BullMQ): Implement a Worker that periodically reads unprocessed
+/// dead-letters, alerts the agent owner, and optionally replays after manual review.
+/// Until then this table serves as an audit trail only — no automatic reprocessing.
 model WebhookDeadLetter {
   id              String   @id @default(cuid())
   webhookConfigId String

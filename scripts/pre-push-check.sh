@@ -122,8 +122,8 @@ fi
 LINT_OUT=$(npx next lint --dir "${TARGET}" 2>&1)
 LINT_EXIT=$?
 
-if echo "$LINT_OUT" | grep -q "Failed to load SWC\|not installed\|swc-linux\|swc-wasm"; then
-  echo "  ℹ️  ESLint skipped (SWC binaries unavailable in this environment)"
+if echo "$LINT_OUT" | grep -q "Failed to load SWC\|not installed\|swc-linux\|swc-wasm\|Cannot find module\|Failed to load plugin\|Mismatching @next/swc"; then
+  echo "  ℹ️  ESLint skipped (environment missing native binaries or plugins)"
   echo "  ℹ️  Run 'pnpm lint' locally or check Railway build logs"
 elif [[ $LINT_EXIT -eq 0 ]]; then
   ok "ESLint OK (no errors)"
