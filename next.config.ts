@@ -1,3 +1,4 @@
+import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const CDN_URL = process.env.CDN_URL;
@@ -78,4 +79,13 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default process.env.SENTRY_DSN
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      silent: true,
+      sourcemaps: {
+        disable: !process.env.SENTRY_AUTH_TOKEN,
+      },
+    })
+  : nextConfig;

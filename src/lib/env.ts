@@ -60,6 +60,9 @@ const envSchema = z.object({
   AZURE_CONTENT_SAFETY_ENDPOINT: optionalStr,
   CODE_INTERPRETER_TIMEOUT_MS: optionalStr,
   CODE_INTERPRETER_MEMORY_MB: optionalStr,
+  RESEND_API_KEY: optionalStr,
+  RESEND_FROM_EMAIL: optionalStr,
+  SENTRY_DSN: optionalStr,
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
