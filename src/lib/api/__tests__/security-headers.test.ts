@@ -66,17 +66,18 @@ describe("applySecurityHeaders", () => {
     expect(csp).toContain("default-src 'self'");
   });
 
-  it("includes nonce in CSP script-src", () => {
+  it("uses self + unsafe-inline for script-src (no strict-dynamic)", () => {
     const res = makeResponse();
     applySecurityHeaders(res, "/dashboard");
     const csp = res.headers.get("Content-Security-Policy")!;
-    expect(csp).toMatch(/nonce-[A-Za-z0-9+/=]+/);
+    expect(csp).toContain("script-src 'self' 'unsafe-inline'");
+    expect(csp).not.toContain("strict-dynamic");
   });
 
-  it("sets x-csp-nonce header", () => {
+  it("does not set x-csp-nonce header", () => {
     const res = makeResponse();
     applySecurityHeaders(res, "/dashboard");
-    expect(res.headers.get("x-csp-nonce")).toBeTruthy();
+    expect(res.headers.get("x-csp-nonce")).toBeNull();
   });
 
   it("CSP allows frame-ancestors * for embed pages", () => {

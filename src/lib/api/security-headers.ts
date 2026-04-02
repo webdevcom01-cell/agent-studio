@@ -7,14 +7,19 @@ const COMMON_HEADERS: Record<string, string> = {
 
 /**
  * Build a Content-Security-Policy header value.
- * Nonce-based script-src for inline Next.js scripts.
+ *
+ * Uses 'self' + 'unsafe-inline' for script-src because Next.js standalone
+ * mode injects inline bootstrap scripts without nonce attributes. The previous
+ * nonce + 'strict-dynamic' approach silently broke JS loading: 'strict-dynamic'
+ * causes CSP Level 3 browsers to IGNORE 'self', so all <script src> tags
+ * without a nonce were blocked — rendering the app as a blank "Loading..." page.
  */
-function buildCSP(nonce: string, pathname: string): string {
+function buildCSP(pathname: string): string {
   const isEmbed = pathname.startsWith("/embed");
 
   const directives = [
     `default-src 'self'`,
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src 'self' 'unsafe-inline'`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data: https: blob:`,
     `font-src 'self' data:`,
@@ -43,12 +48,7 @@ export function applySecurityHeaders(
   const framePolicy = pathname.startsWith("/embed") ? "SAMEORIGIN" : "DENY";
   response.headers.set("X-Frame-Options", framePolicy);
 
-  // CSP with nonce for inline scripts (Web Crypto API — Edge-compatible)
-  const nonceBytes = new Uint8Array(16);
-  crypto.getRandomValues(nonceBytes);
-  const nonce = btoa(String.fromCharCode(...nonceBytes));
-  response.headers.set("Content-Security-Policy", buildCSP(nonce, pathname));
-  response.headers.set("x-csp-nonce", nonce);
+  response.headers.set("Content-Security-Policy", buildCSP(pathname));
 }
 
 export { buildCSP };
