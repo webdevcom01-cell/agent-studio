@@ -68,36 +68,121 @@ export async function fetchAndParseURL(url: string): Promise<string> {
   return contentType.includes("text/html") ? parseHTML(text) : text.trim();
 }
 
+// ── Excel cell value → string (handles all ExcelJS CellValue variants) ────────
+
+function excelCellToString(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value instanceof Date) return value.toISOString().split("T")[0];
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const obj = value as Record<string, unknown>;
+    // Formula cell: { formula: "...", result: CellValue }
+    if ("result" in obj) return excelCellToString(obj.result);
+    // Rich text: { richText: [{ text: "..." }] }
+    if ("richText" in obj && Array.isArray(obj.richText)) {
+      return (obj.richText as Array<{ text: string }>).map((r) => r.text).join("").trim();
+    }
+    // Hyperlink: { text: "...", hyperlink: "..." }
+    if ("text" in obj) return String(obj.text).trim();
+    // Error value: { error: "#VALUE!" } — silently empty
+    if ("error" in obj) return "";
+  }
+  return String(value);
+}
+
+// ── RFC-4180 CSV parser ────────────────────────────────────────────────────────
+
+function parseCSVLine(line: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === "," && !inQuotes) {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function parseCSVBuffer(buffer: Buffer): string {
+  const lines = buffer.toString("utf-8").split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length === 0) throw new Error("CSV contains no data");
+
+  const rows = lines.map(parseCSVLine);
+  const headers = rows[0];
+  if (!headers || headers.length === 0) throw new Error("CSV contains no data");
+
+  const colCount = headers.length;
+  const headerRow = `| ${headers.join(" | ")} |`;
+  const separator = `| ${headers.map(() => "---").join(" | ")} |`;
+  const dataRows = rows.slice(1).map((row) => {
+    const cells = Array.from({ length: colCount }, (_, i) => row[i] ?? "");
+    return `| ${cells.join(" | ")} |`;
+  });
+
+  return `## Sheet: CSV\n\n${headerRow}\n${separator}\n${dataRows.join("\n")}`;
+}
+
+// ── parseExcel — uses ExcelJS (replaces SheetJS/xlsx, no security CVEs) ──────
+
 export async function parseExcel(buffer: Buffer, filename: string): Promise<string> {
   if (buffer.length > MAX_FILE_SIZE) {
     throw new Error(`File size (${(buffer.length / 1024 / 1024).toFixed(1)} MB) exceeds 10 MB limit`);
   }
 
-  const XLSX = await import("xlsx");
   const ext = getFileExtension(filename);
-  const workbook = ext === ".csv"
-    ? XLSX.read(buffer.toString("utf-8"), { type: "string" })
-    : XLSX.read(buffer, { type: "buffer" });
+
+  // CSV: pure text path, no binary parsing needed
+  if (ext === ".csv") {
+    return parseCSVBuffer(buffer);
+  }
+
+  // XLSX / XLS — ExcelJS binary parser
+  const ExcelJSModule = await import("exceljs");
+  const workbook = new ExcelJSModule.Workbook();
+  // ExcelJS declares its own Buffer interface that conflicts with Node's generic Buffer<T>.
+  // Extract the exact parameter type from the load() signature to satisfy TypeScript.
+  type ExcelLoadBuffer = Parameters<typeof workbook.xlsx.load>[0];
+  await workbook.xlsx.load(buffer as unknown as ExcelLoadBuffer);
 
   const parts: string[] = [];
 
-  for (const sheetName of workbook.SheetNames) {
-    const sheet = workbook.Sheets[sheetName];
-    if (!sheet) continue;
+  workbook.eachSheet((worksheet) => {
+    const allRows: string[][] = [];
 
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-    if (rows.length === 0) continue;
+    worksheet.eachRow({ includeEmpty: false }, (row) => {
+      // row.values is 1-indexed; index 0 is always undefined
+      const values = (row.values as unknown[]).slice(1);
+      allRows.push(values.map(excelCellToString));
+    });
 
-    const headers = Object.keys(rows[0]);
+    if (allRows.length === 0) return;
+
+    const headers = allRows[0];
+    const colCount = headers.length;
     const headerRow = `| ${headers.join(" | ")} |`;
     const separator = `| ${headers.map(() => "---").join(" | ")} |`;
+    const dataRows = allRows.slice(1).map((row) => {
+      const cells = Array.from({ length: colCount }, (_, i) => row[i] ?? "");
+      return `| ${cells.join(" | ")} |`;
+    });
 
-    const dataRows = rows.map((row) =>
-      `| ${headers.map((h) => String(row[h] ?? "")).join(" | ")} |`
-    );
-
-    parts.push(`## Sheet: ${sheetName}\n\n${headerRow}\n${separator}\n${dataRows.join("\n")}`);
-  }
+    parts.push(`## Sheet: ${worksheet.name}\n\n${headerRow}\n${separator}\n${dataRows.join("\n")}`);
+  });
 
   const text = parts.join("\n\n");
   if (!text.trim()) throw new Error("Spreadsheet contains no data");
