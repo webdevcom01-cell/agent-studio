@@ -37,8 +37,8 @@ export async function register(): Promise<void> {
       transport: "OTLP/HTTP (custom push)",
     });
   } else {
-    logger.info("OpenTelemetry not configured — spans and metrics will be logged only", {
-      hint: "Set OTEL_EXPORTER_OTLP_ENDPOINT to enable OTLP push",
+    logger.warn("OpenTelemetry not configured — spans and metrics will be logged only. Set OTEL_EXPORTER_OTLP_ENDPOINT for production observability.", {
+      hint: "Set OTEL_EXPORTER_OTLP_ENDPOINT to enable OTLP push to Grafana Cloud",
     });
   }
 
