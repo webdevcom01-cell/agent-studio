@@ -20,6 +20,8 @@ model User {
   emailVerified DateTime?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+  deletionRequestedAt DateTime?
+  deletionScheduledFor DateTime?
   agents           Agent[]
   accounts         Account[]
   sessions         Session[]
