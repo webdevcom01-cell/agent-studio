@@ -141,7 +141,28 @@ export function createWorker(): Worker<JobData> {
   return worker;
 }
 
+/**
+ * Start a minimal HTTP server for Railway health checks.
+ */
+function startHealthServer(port: number): void {
+  import("node:http").then(({ createServer }) => {
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "healthy", service: "worker" }));
+    });
+    server.listen(port, () => {
+      logger.info("Worker health server started", { port });
+    });
+  });
+}
+
 // Direct execution: npx tsx src/lib/queue/worker.ts
-if (typeof require !== "undefined" && require.main === module) {
+const isDirectRun =
+  typeof process !== "undefined" &&
+  process.argv[1]?.includes("worker");
+
+if (isDirectRun) {
   createWorker();
+  const port = Number(process.env.PORT) || 8080;
+  startHealthServer(port);
 }

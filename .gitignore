@@ -57,6 +57,7 @@ scripts/*
 !scripts/pre-push-check.sh
 services/*
 !services/ecc-skills-mcp
+!services/worker
 !services/ecc-skills-mcp/**
 !services/security-scanner-mcp
 !services/security-scanner-mcp/**
