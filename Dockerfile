@@ -23,49 +23,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
 # Cache bust: change this value to force Docker to re-run pnpm build
-ARG CACHE_BUST=2
+ARG CACHE_BUST=3
 RUN pnpm build
 
-# ── Stage 3: Production runner ───────────────────────────────────────────────
-FROM node:20-alpine AS runner
-
-RUN apk add --no-cache curl
-
-WORKDIR /app
-
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/public ./public
-
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-# Prisma engine binaries are bundled in standalone output
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
-
-# tiktoken WASM binary (not traced by Next.js standalone)
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/tiktoken ./node_modules/tiktoken
-
-USER nextjs
-
-EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
-
-CMD ["node", "server.js"]
-
-# ── Stage 4: Database migration runner ───────────────────────────────────────
+# ── Stage 3: Database migration runner ───────────────────────────────────────
 # Runs `prisma migrate deploy` once at startup, then exits (restart: no).
 FROM node:20-alpine AS migrate
 
@@ -80,7 +41,7 @@ ENV NODE_ENV=production
 
 CMD ["npx", "prisma", "migrate", "deploy"]
 
-# ── Stage 5: BullMQ worker ────────────────────────────────────────────────────
+# ── Stage 4: BullMQ worker ────────────────────────────────────────────────────
 # Processes flow.execute, eval.run, and webhook.retry jobs from Redis queue.
 # Requires REDIS_URL and DATABASE_URL environment variables.
 FROM node:20-alpine AS worker
@@ -101,3 +62,44 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
   CMD node -e "require('http').get('http://localhost:${PORT:-8080}/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
 CMD ["npx", "tsx", "src/lib/queue/worker.ts"]
+
+# ── Stage 5: Production runner (LAST — Railway builds this stage) ─────────────
+FROM node:20-alpine AS runner
+
+RUN apk add --no-cache curl
+
+WORKDIR /app
+
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/public ./public
+
+RUN mkdir .next
+RUN chown nextjs:nodejs .next
+
+# Copy Next.js standalone output — server.js lands at /app/server.js
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Prisma engine binaries are bundled in standalone output
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
+
+# tiktoken WASM binary (not traced by Next.js standalone)
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/tiktoken ./node_modules/tiktoken
+
+USER nextjs
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:3000/api/health || exit 1
+
+# server.js is at /app/server.js after COPY --from=builder /app/.next/standalone ./
+CMD ["node", "server.js"]

@@ -1,9 +1,8 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "mkdir -p .git && pnpm install --no-frozen-lockfile && pnpm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public"
+builder = "DOCKERFILE"
 
 [deploy]
-startCommand = "node .next/standalone/server.js"
+startCommand = "node server.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
