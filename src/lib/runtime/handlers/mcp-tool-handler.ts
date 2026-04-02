@@ -1,6 +1,8 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { callMCPTool } from "@/lib/mcp/client";
+import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
 
 export const mcpToolHandler: NodeHandler = async (node, context) => {
   const mcpServerId = node.data.mcpServerId as string | undefined;
@@ -18,6 +20,28 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
       ],
       nextNodeId: null,
       waitForInput: false,
+    };
+  }
+
+  // RBAC: verify agent has this MCP server linked and tool is permitted
+  const accessCheck = await checkMCPToolAccess(
+    context.agentId, mcpServerId, toolName,
+  );
+  if (!accessCheck.allowed) {
+    logger.warn("MCP tool access denied", {
+      agentId: context.agentId,
+      mcpServerId,
+      toolName,
+      reason: accessCheck.reason,
+    });
+    return {
+      messages: [],
+      nextNodeId: null,
+      waitForInput: false,
+      updatedVariables: {
+        ...context.variables,
+        [outputVariable]: `[Error: Access denied — ${accessCheck.reason}]`,
+      },
     };
   }
 
@@ -58,3 +82,38 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
     };
   }
 };
+
+interface AccessCheckResult {
+  allowed: boolean;
+  reason?: string;
+}
+
+async function checkMCPToolAccess(
+  agentId: string,
+  mcpServerId: string,
+  toolName: string,
+): Promise<AccessCheckResult> {
+  try {
+    const link = await prisma.agentMCPServer.findUnique({
+      where: {
+        agentId_mcpServerId: { agentId, mcpServerId },
+      },
+      select: { enabledTools: true },
+    });
+
+    if (!link) {
+      return { allowed: false, reason: "MCP server not linked to this agent" };
+    }
+
+    const enabledTools = link.enabledTools as string[] | null;
+
+    if (enabledTools && enabledTools.length > 0 && !enabledTools.includes(toolName)) {
+      return { allowed: false, reason: `Tool "${toolName}" not in agent's enabled tools list` };
+    }
+
+    return { allowed: true };
+  } catch {
+    // DB error — allow through to avoid blocking on transient failures
+    return { allowed: true };
+  }
+}

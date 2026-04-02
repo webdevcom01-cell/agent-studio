@@ -1,9 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockCallMCPTool = vi.hoisted(() => vi.fn());
+const mockFindUnique = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/mcp/client", () => ({
   callMCPTool: mockCallMCPTool,
+}));
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    agentMCPServer: {
+      findUnique: (...args: unknown[]) => mockFindUnique(...args),
+    },
+  },
+}));
+
+vi.mock("@/lib/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 import { mcpToolHandler } from "../mcp-tool-handler";
@@ -33,6 +46,8 @@ function makeContext(variables: Record<string, unknown> = {}): RuntimeContext {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: agent has the MCP server linked with no tool restrictions
+  mockFindUnique.mockResolvedValue({ enabledTools: null });
 });
 
 describe("mcpToolHandler", () => {
@@ -178,5 +193,104 @@ describe("mcpToolHandler", () => {
 
     expect(result.updatedVariables?.existing).toBe("keep");
     expect(result.updatedVariables?.total).toBe("42");
+  });
+
+  // ── RBAC enforcement (Phase 0.2) ──────────────────────────────────────
+
+  describe("RBAC enforcement", () => {
+    it("blocks when MCP server is not linked to agent", async () => {
+      mockFindUnique.mockResolvedValueOnce(null);
+
+      const result = await mcpToolHandler(
+        makeNode({
+          mcpServerId: "server-1",
+          toolName: "search",
+          inputMapping: {},
+        }),
+        makeContext(),
+      );
+
+      expect(result.updatedVariables?.mcp_result).toContain("Access denied");
+      expect(result.updatedVariables?.mcp_result).toContain("not linked");
+      expect(mockCallMCPTool).not.toHaveBeenCalled();
+    });
+
+    it("blocks when tool is not in enabledTools list", async () => {
+      mockFindUnique.mockResolvedValueOnce({
+        enabledTools: ["allowed_tool_1", "allowed_tool_2"],
+      });
+
+      const result = await mcpToolHandler(
+        makeNode({
+          mcpServerId: "server-1",
+          toolName: "forbidden_tool",
+          inputMapping: {},
+        }),
+        makeContext(),
+      );
+
+      expect(result.updatedVariables?.mcp_result).toContain("Access denied");
+      expect(result.updatedVariables?.mcp_result).toContain("forbidden_tool");
+      expect(mockCallMCPTool).not.toHaveBeenCalled();
+    });
+
+    it("allows when enabledTools is null (all tools permitted)", async () => {
+      mockFindUnique.mockResolvedValueOnce({ enabledTools: null });
+      mockCallMCPTool.mockResolvedValueOnce("result");
+
+      const result = await mcpToolHandler(
+        makeNode({
+          mcpServerId: "server-1",
+          toolName: "any_tool",
+          inputMapping: {},
+        }),
+        makeContext(),
+      );
+
+      expect(mockCallMCPTool).toHaveBeenCalledTimes(1);
+      expect(result.updatedVariables?.mcp_result).toBe("result");
+    });
+
+    it("allows when tool is in enabledTools list", async () => {
+      mockFindUnique.mockResolvedValueOnce({
+        enabledTools: ["search", "summarize"],
+      });
+      mockCallMCPTool.mockResolvedValueOnce("search results");
+
+      const result = await mcpToolHandler(
+        makeNode({
+          mcpServerId: "server-1",
+          toolName: "search",
+          inputMapping: {},
+        }),
+        makeContext(),
+      );
+
+      expect(mockCallMCPTool).toHaveBeenCalledTimes(1);
+      expect(result.updatedVariables?.mcp_result).toBe("search results");
+    });
+
+    it("logs warning when access is denied", async () => {
+      const { logger } = await import("@/lib/logger");
+      mockFindUnique.mockResolvedValueOnce(null);
+
+      await mcpToolHandler(
+        makeNode({
+          mcpServerId: "server-1",
+          toolName: "tool",
+          inputMapping: {},
+        }),
+        makeContext(),
+      );
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        "MCP tool access denied",
+        expect.objectContaining({
+          agentId: "agent-1",
+          mcpServerId: "server-1",
+          toolName: "tool",
+        }),
+      );
+    });
   });
 });
