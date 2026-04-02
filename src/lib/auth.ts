@@ -74,36 +74,11 @@ const NEXTAUTH_COOKIE_PREFIX = "authjs";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   debug: process.env.NODE_ENV !== "production",
-  // Explicitly pass secret — NextAuth v5 beta sometimes doesn't auto-read AUTH_SECRET
   secret: process.env.AUTH_SECRET,
   adapter: createEncryptedAdapter(),
   session: { strategy: "jwt", maxAge: 24 * 60 * 60 },
   providers,
   trustHost: true,
-  logger: {
-    error(code, ...message) {
-      // Surface auth errors in Railway logs via structured JSON
-      const detail = message.length > 0 ? message[0] : undefined;
-      const errorObj = detail && typeof detail === "object" && "error" in detail
-        ? (detail as Record<string, unknown>).error
-        : detail;
-      process.stderr.write(
-        JSON.stringify({ level: "error", msg: "nextauth-error", code, error: String(errorObj), stack: errorObj instanceof Error ? errorObj.stack : undefined, ts: new Date().toISOString() }) + "\n"
-      );
-    },
-    warn(code) {
-      process.stderr.write(
-        JSON.stringify({ level: "warn", msg: "nextauth-warn", code, ts: new Date().toISOString() }) + "\n"
-      );
-    },
-    debug(code, ...message) {
-      if (process.env.AUTH_DEBUG === "true") {
-        process.stderr.write(
-          JSON.stringify({ level: "debug", msg: "nextauth-debug", code, detail: message[0], ts: new Date().toISOString() }) + "\n"
-        );
-      }
-    },
-  },
   cookies: {
     sessionToken: {
       name: `${NEXTAUTH_COOKIE_PREFIX}.session-token`,
