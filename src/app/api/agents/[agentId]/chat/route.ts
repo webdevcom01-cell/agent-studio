@@ -10,6 +10,8 @@ import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { auth } from "@/lib/auth";
+import { addFlowJob, getJobStatus } from "@/lib/queue";
+import { createJobEventStream } from "@/lib/queue/events";
 
 const MAX_MESSAGE_LENGTH = 10_000;
 
@@ -67,6 +69,7 @@ export async function POST(
   const conversationId =
     typeof body.conversationId === "string" ? body.conversationId : undefined;
   const isStreaming = body.stream === true;
+  const isAsync = body.async === true;
   // Eval compare: optional flow version override (only used for head-to-head eval runs)
   const evalFlowVersionId =
     typeof body.flowVersionId === "string" && body.flowVersionId.length > 0
@@ -109,6 +112,51 @@ export async function POST(
   if (isDebug || evalFlowVersionId || evalModelOverride) {
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
+  }
+
+  // ── Async job-based execution (Phase 1.2) ─────────────────────────────
+  if (isAsync) {
+    try {
+      const session = await auth().catch(() => null);
+      const context = await loadContext(agentId, conversationId);
+
+      const jobId = await addFlowJob({
+        agentId,
+        conversationId: context.conversationId,
+        userMessage: message,
+        userId: session?.user?.id,
+        streaming: isStreaming,
+        priority: "chat",
+      });
+
+      // If streaming requested with async, return SSE event stream
+      if (isStreaming) {
+        const stream = createJobEventStream(jobId);
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+          },
+        });
+      }
+
+      // Non-streaming async: return jobId for polling
+      return NextResponse.json({
+        success: true,
+        data: {
+          jobId,
+          conversationId: context.conversationId,
+          status: "queued",
+        },
+      }, { status: 202 });
+    } catch (err) {
+      logger.error("Failed to queue chat job", err, { agentId });
+      return NextResponse.json(
+        { success: false, error: "Failed to queue request" },
+        { status: 500 },
+      );
+    }
   }
 
   try {
