@@ -117,9 +117,12 @@
 - **Fajlovi:** `website/docusaurus.config.ts`, `website/sidebars.ts`, `website/docs/`
 
 ### 3.2 — OpenAPI spec generacija
-- **Status:** 🔲 TODO (sledeće na redu)
-- **Šta:** zod-to-openapi, auto-generated API reference
-- **Procena:** 2 dana
+- **Status:** ✅ DONE (2026-04-03)
+- **Šta:** `@asteasolutions/zod-to-openapi` + `openapi3-ts` — OpenAPI 3.1 spec sa 30+ endpoints, Swagger UI
+- **Fajlovi:** `src/lib/openapi/` (registry, schemas, paths, spec), `src/app/api/openapi.json/route.ts`, `src/app/api/docs/route.ts`
+- **Endpoints:** `GET /api/openapi.json` (JSON spec, cached), `GET /api/docs` (Swagger UI, zero npm deps)
+- **Dokumentovano:** Health, Agents CRUD, Chat, Flow, Knowledge, API Keys, MCP Servers, Evals, Webhooks, Jobs, Schedules
+- **Testovi:** 13/13 spec testova prolaze (vi.mock + ZodType.prototype patch za rad bez instaliranog paketa)
 
 ### 3.3 — Contributing guide + templates
 - **Status:** ✅ DONE (2026-04-02)
@@ -166,6 +169,8 @@
 | 2026-04-02 | Faza 3.4 DONE: Docker Compose — migrate init container, worker service, ecc-mcp profile, override.yml |
 | 2026-04-02 | Faza 4.1 DONE: Admin dashboard — SWR, 3 taba, stats API proširena, /admin/jobs redirect |
 | 2026-04-02 | Kontrolni checkup PASS — 0 TS grešaka, 2715/2715 testova, precheck ✅ Spreman za push. |
+| 2026-04-02 | Railway deploy fix — Dockerfile runner stage zadnji, builder = DOCKERFILE, startCommand = node server.js |
+| 2026-04-03 | Faza 3.2 DONE: OpenAPI spec — registry, 11 tagova, 30+ paths, /api/openapi.json + /api/docs Swagger UI, 13/13 testova |
 
 ---
 
@@ -177,8 +182,8 @@
 
 ## Sledeće na redu
 
-- **3.2 — OpenAPI spec generacija** (zod-to-openapi, auto-generated API reference)
+- Sve faze 0–4 su ✅ DONE. Projekat spreman za open-source launch i developer ICP traction.
 
 ---
 
-> Poslednje ažuriranje: 2026-04-02
+> Poslednje ažuriranje: 2026-04-03

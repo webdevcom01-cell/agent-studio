@@ -24,6 +24,8 @@ const SESSION_COOKIE_PATTERN = /session[_-]?token/i;
 
 function isPublicPath(pathname: string): boolean {
   if (pathname === "/api/health") return true;
+  if (pathname === "/api/openapi.json") return true;
+  if (pathname === "/api/docs") return true;
   if (pathname === "/login") return true;
   if (pathname.startsWith("/embed")) return true;
   if (pathname === "/evals/standards") return true;
