@@ -1,0 +1,101 @@
+From 5a22e9a9de4db3bfd75b8f930202baed9a0c569f Mon Sep 17 00:00:00 2001
+From: buky <webdevcom01@gmail.com>
+Date: Tue, 31 Mar 2026 20:22:36 +0200
+Subject: [PATCH] fix: increase sub-agent timeout, maxTokens, and agent
+ discovery limit
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- agent-tools.ts: increase DEFAULT_TIMEOUT_SECONDS 30→120 for DeepSeek
+  compatibility (DeepSeek V3 takes 30-64s per call)
+- agent-tools.ts: increase loadAvailableAgents take 10→20 so orchestrators
+  can discover more sub-agents (58 agents in project)
+- ai-response-handler.ts: raise default maxTokens 2000→4000 to prevent
+  finish_reason:length cutoffs on complex responses
+- ai-response-streaming-handler.ts: same maxTokens default fix
+- property-panel.tsx: update UI default for maxTokens 2000→4000
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+---
+ src/components/builder/property-panel.tsx                 | 4 ++--
+ src/lib/agents/agent-tools.ts                             | 6 +++---
+ src/lib/runtime/handlers/ai-response-handler.ts           | 2 +-
+ src/lib/runtime/handlers/ai-response-streaming-handler.ts | 2 +-
+ 4 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/src/components/builder/property-panel.tsx b/src/components/builder/property-panel.tsx
+index 3df1f6c..1234941 100644
+--- a/src/components/builder/property-panel.tsx
++++ b/src/components/builder/property-panel.tsx
+@@ -251,8 +251,8 @@ export function PropertyPanel({
+                 <Label>Max Tokens</Label>
+                 <Input
+                   type="number"
+-                  value={(data.maxTokens as number) ?? 2000}
+-                  onChange={(e) => update("maxTokens", parseInt(e.target.value) || 2000)}
++                  value={(data.maxTokens as number) ?? 4000}
++                  onChange={(e) => update("maxTokens", parseInt(e.target.value) || 4000)}
+                   min={1}
+                   max={32000}
+                 />
+diff --git a/src/lib/agents/agent-tools.ts b/src/lib/agents/agent-tools.ts
+index c62d8bf..e2ba4e9 100644
+--- a/src/lib/agents/agent-tools.ts
++++ b/src/lib/agents/agent-tools.ts
+@@ -26,7 +26,7 @@ import {
+ import { checkRateLimit } from "@/lib/a2a/rate-limiter";
+ import { parseFlowContent } from "@/lib/validators/flow-content";
+ 
+-const DEFAULT_TIMEOUT_SECONDS = 30;
++const DEFAULT_TIMEOUT_SECONDS = 120;
+ 
+ /**
+  * Desktop capability metadata extracted from agent flows.
+@@ -312,7 +312,7 @@ async function executeAgentTool(
+  *   - Same owner (userId match) OR unowned agents (userId is null)
+  *   - Exclude the caller itself
+  *   - Must have a flow (no point calling an agent without logic)
+- *   - Limit to 10 agents to keep tool list manageable for the LLM
++ *   - Limit to 20 agents to keep tool list manageable for the LLM
+  */
+ async function loadAvailableAgents(
+   callerAgentId: string,
+@@ -338,7 +338,7 @@ async function loadAvailableAgents(
+       description: true,
+       flow: { select: { content: true } },
+     },
+-    take: 10,
++    take: 20,
+     orderBy: { updatedAt: "desc" },
+   });
+ 
+diff --git a/src/lib/runtime/handlers/ai-response-handler.ts b/src/lib/runtime/handlers/ai-response-handler.ts
+index 630f6a5..654dd62 100644
+--- a/src/lib/runtime/handlers/ai-response-handler.ts
++++ b/src/lib/runtime/handlers/ai-response-handler.ts
+@@ -61,7 +61,7 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
+   );
+   const modelId = (node.data.model as string) ?? DEFAULT_MODEL;
+   const temperature = (node.data.temperature as number) ?? 0.7;
+-  const maxTokens = (node.data.maxTokens as number) ?? 2000;
++  const maxTokens = (node.data.maxTokens as number) ?? 4000;
+   const outputVariable = (node.data.outputVariable as string) ?? "";
+   const enableAgentTools = (node.data.enableAgentTools as boolean) ?? false;
+   // enableRAG defaults to true — agents with a KB always use it unless explicitly disabled
+diff --git a/src/lib/runtime/handlers/ai-response-streaming-handler.ts b/src/lib/runtime/handlers/ai-response-streaming-handler.ts
+index 16202ff..4f3c948 100644
+--- a/src/lib/runtime/handlers/ai-response-streaming-handler.ts
++++ b/src/lib/runtime/handlers/ai-response-streaming-handler.ts
+@@ -67,7 +67,7 @@ export async function aiResponseStreamingHandler(
+   );
+   const modelId = (node.data.model as string) ?? DEFAULT_MODEL;
+   const temperature = (node.data.temperature as number) ?? 0.7;
+-  const maxTokens = (node.data.maxTokens as number) ?? 2000;
++  const maxTokens = (node.data.maxTokens as number) ?? 4000;
+   const outputVariable = (node.data.outputVariable as string) ?? "";
+   const enableAgentTools = (node.data.enableAgentTools as boolean) ?? false;
+   // enableRAG defaults to true — agents with a KB always use it unless explicitly disabled
+-- 
+2.34.1
+
