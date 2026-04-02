@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { auditKBSourceAdd } from "@/lib/security/audit";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -143,6 +144,9 @@ export async function POST(
     ingestSource(source.id, type === "TEXT" ? body.content : undefined).catch(
       (err) => logger.error("Background ingest failed", err)
     );
+
+    // Compliance audit — fire-and-forget
+    auditKBSourceAdd(authResult.userId, agentId, source.id, { name, type, url: body.url ?? null });
 
     return NextResponse.json({ success: true, data: source }, { status: 201 });
   } catch (err) {

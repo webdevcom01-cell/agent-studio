@@ -11,10 +11,25 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/security/audit", () => ({
+  writeAuditLog: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { prisma } from "@/lib/prisma";
-import { checkSkillAccess, grantSkillAccess, revokeSkillAccess, getAgentSkills } from "../rbac";
+import {
+  checkSkillAccess,
+  enforceSkillAccess,
+  withSkillAccess,
+  listAccessibleSkills,
+  grantSkillAccess,
+  revokeSkillAccess,
+  getAgentSkills,
+  RBACError,
+} from "../rbac";
 
 const mockPrisma = vi.mocked(prisma);
+
+// ── checkSkillAccess ─────────────────────────────────────────────────────────
 
 describe("checkSkillAccess", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -54,6 +69,147 @@ describe("checkSkillAccess", () => {
   });
 });
 
+// ── enforceSkillAccess ───────────────────────────────────────────────────────
+
+describe("enforceSkillAccess", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("resolves silently when access is granted", async () => {
+    mockPrisma.agentSkillPermission.findUnique.mockResolvedValue({
+      accessLevel: "EXECUTE",
+    } as never);
+
+    await expect(
+      enforceSkillAccess("a1", "s1", "READ"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("throws RBACError when no permission exists", async () => {
+    mockPrisma.agentSkillPermission.findUnique.mockResolvedValue(null);
+
+    await expect(
+      enforceSkillAccess("a1", "s1", "READ"),
+    ).rejects.toThrow(RBACError);
+  });
+
+  it("throws RBACError with correct fields", async () => {
+    mockPrisma.agentSkillPermission.findUnique.mockResolvedValue({
+      accessLevel: "READ",
+    } as never);
+
+    try {
+      await enforceSkillAccess("agent-1", "skill-1", "EXECUTE", "user-1");
+      expect.fail("should have thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(RBACError);
+      const rbacErr = err as RBACError;
+      expect(rbacErr.agentId).toBe("agent-1");
+      expect(rbacErr.skillId).toBe("skill-1");
+      expect(rbacErr.requiredLevel).toBe("EXECUTE");
+      expect(rbacErr.grantedLevel).toBe("READ");
+    }
+  });
+
+  it("RBACError.name is 'RBACError'", async () => {
+    mockPrisma.agentSkillPermission.findUnique.mockResolvedValue(null);
+
+    await expect(
+      enforceSkillAccess("a1", "s1", "READ"),
+    ).rejects.toMatchObject({ name: "RBACError" });
+  });
+
+  it("resolves when ADMIN is granted for EXECUTE requirement", async () => {
+    mockPrisma.agentSkillPermission.findUnique.mockResolvedValue({
+      accessLevel: "ADMIN",
+    } as never);
+
+    await expect(
+      enforceSkillAccess("a1", "s1", "EXECUTE"),
+    ).resolves.toBeUndefined();
+  });
+});
+
+// ── withSkillAccess ──────────────────────────────────────────────────────────
+
+describe("withSkillAccess", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("executes wrapped function when access granted", async () => {
+    mockPrisma.agentSkillPermission.findUnique.mockResolvedValue({
+      accessLevel: "EXECUTE",
+    } as never);
+
+    const fn = vi.fn().mockResolvedValue("result");
+    const result = await withSkillAccess("a1", "s1", "READ", fn);
+
+    expect(fn).toHaveBeenCalledOnce();
+    expect(result).toBe("result");
+  });
+
+  it("does NOT call wrapped function when access denied", async () => {
+    mockPrisma.agentSkillPermission.findUnique.mockResolvedValue(null);
+
+    const fn = vi.fn().mockResolvedValue("result");
+
+    await expect(
+      withSkillAccess("a1", "s1", "READ", fn),
+    ).rejects.toThrow(RBACError);
+
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it("propagates wrapped function errors", async () => {
+    mockPrisma.agentSkillPermission.findUnique.mockResolvedValue({
+      accessLevel: "ADMIN",
+    } as never);
+
+    const fn = vi.fn().mockRejectedValue(new Error("fn error"));
+
+    await expect(
+      withSkillAccess("a1", "s1", "READ", fn),
+    ).rejects.toThrow("fn error");
+  });
+});
+
+// ── listAccessibleSkills ─────────────────────────────────────────────────────
+
+describe("listAccessibleSkills", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns only skills at or above minimum level", async () => {
+    mockPrisma.agentSkillPermission.findMany.mockResolvedValue([
+      { skillId: "s1", accessLevel: "READ" },
+      { skillId: "s2", accessLevel: "EXECUTE" },
+      { skillId: "s3", accessLevel: "ADMIN" },
+    ] as never);
+
+    const skills = await listAccessibleSkills("a1", "EXECUTE");
+
+    expect(skills).toHaveLength(2);
+    expect(skills.map((s) => s.skillId)).toEqual(["s2", "s3"]);
+  });
+
+  it("defaults to READ minimum and returns all", async () => {
+    mockPrisma.agentSkillPermission.findMany.mockResolvedValue([
+      { skillId: "s1", accessLevel: "READ" },
+      { skillId: "s2", accessLevel: "EXECUTE" },
+    ] as never);
+
+    const skills = await listAccessibleSkills("a1");
+
+    expect(skills).toHaveLength(2);
+  });
+
+  it("returns empty array when agent has no permissions", async () => {
+    mockPrisma.agentSkillPermission.findMany.mockResolvedValue([] as never);
+
+    const skills = await listAccessibleSkills("a1");
+    expect(skills).toHaveLength(0);
+  });
+});
+
+// ── grantSkillAccess ─────────────────────────────────────────────────────────
+
 describe("grantSkillAccess", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -70,6 +226,8 @@ describe("grantSkillAccess", () => {
   });
 });
 
+// ── revokeSkillAccess ────────────────────────────────────────────────────────
+
 describe("revokeSkillAccess", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -84,6 +242,8 @@ describe("revokeSkillAccess", () => {
   });
 });
 
+// ── getAgentSkills ───────────────────────────────────────────────────────────
+
 describe("getAgentSkills", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -96,5 +256,27 @@ describe("getAgentSkills", () => {
     const skills = await getAgentSkills("a1");
     expect(skills).toHaveLength(2);
     expect(skills[0].skillId).toBe("s1");
+  });
+});
+
+// ── RBACError class ──────────────────────────────────────────────────────────
+
+describe("RBACError", () => {
+  it("is an instance of Error", () => {
+    const err = new RBACError("a1", "s1", "EXECUTE", "READ");
+    expect(err).toBeInstanceOf(Error);
+    expect(err).toBeInstanceOf(RBACError);
+  });
+
+  it("message includes agent, skill and levels", () => {
+    const err = new RBACError("my-agent", "my-skill", "ADMIN", null);
+    expect(err.message).toContain("my-agent");
+    expect(err.message).toContain("my-skill");
+    expect(err.message).toContain("ADMIN");
+  });
+
+  it("grantedLevel is null when no permission", () => {
+    const err = new RBACError("a1", "s1", "READ", null);
+    expect(err.grantedLevel).toBeNull();
   });
 });

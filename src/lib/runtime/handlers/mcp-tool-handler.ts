@@ -3,6 +3,14 @@ import { resolveTemplate } from "../template";
 import { callMCPTool } from "@/lib/mcp/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { auditMCPToolCall } from "@/lib/security/audit";
+import { enforceSkillAccess, RBACError } from "@/lib/security/rbac";
+import { isECCEnabled } from "@/lib/ecc/feature-flag";
+
+const ECC_MCP_URL = process.env.ECC_MCP_URL ?? "";
+
+// ECC skill tools that require RBAC enforcement
+const ECC_SKILL_TOOLS = new Set(["get_skill", "execute_skill", "search_skills"]);
 
 export const mcpToolHandler: NodeHandler = async (node, context) => {
   const mcpServerId = node.data.mcpServerId as string | undefined;
@@ -50,10 +58,59 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
     resolvedArgs[param] = resolveTemplate(template, context.variables);
   }
 
+  // ECC Skill RBAC enforcement — if this is the ECC MCP server and a skill tool, enforce RBAC
+  if (isECCEnabled() && ECC_MCP_URL && ECC_SKILL_TOOLS.has(toolName)) {
+    const server = await prisma.mCPServer.findUnique({
+      where: { id: mcpServerId },
+      select: { url: true },
+    });
+
+    if (server?.url === ECC_MCP_URL) {
+      // Extract skill name from args — `get_skill` and `execute_skill` use a `name` param
+      const skillName = typeof resolvedArgs.name === "string" ? resolvedArgs.name : null;
+
+      if (skillName) {
+        const skill = await prisma.skill.findUnique({
+          where: { slug: skillName },
+          select: { id: true },
+        });
+
+        if (skill) {
+          const requiredLevel = toolName === "execute_skill" ? "EXECUTE" : "READ";
+          try {
+            await enforceSkillAccess(context.agentId, skill.id, requiredLevel);
+          } catch (rbacErr) {
+            if (rbacErr instanceof RBACError) {
+              logger.warn("ECC skill RBAC denial in mcp_tool node", {
+                agentId: context.agentId,
+                skillName,
+                toolName,
+                requiredLevel,
+              });
+              return {
+                messages: [],
+                nextNodeId: null,
+                waitForInput: false,
+                updatedVariables: {
+                  ...context.variables,
+                  [outputVariable]: `[Error: Skill access denied — ${rbacErr.message}]`,
+                },
+              };
+            }
+            throw rbacErr;
+          }
+        }
+      }
+    }
+  }
+
   const MAX_RESULT_LENGTH = 10_000;
 
   try {
     const result = await callMCPTool(mcpServerId, toolName, resolvedArgs);
+
+    // Compliance audit — fire-and-forget, never blocks execution
+    auditMCPToolCall(context.agentId, mcpServerId, toolName);
 
     const sanitized = typeof result === "string"
       ? result.slice(0, MAX_RESULT_LENGTH)

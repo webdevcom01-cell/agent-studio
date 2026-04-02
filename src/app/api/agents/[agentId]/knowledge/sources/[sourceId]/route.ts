@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { deleteSourceChunks } from "@/lib/knowledge/ingest";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
+import { auditKBSourceDelete } from "@/lib/security/audit";
 
 interface RouteParams {
   params: Promise<{ agentId: string; sourceId: string }>;
@@ -32,6 +33,9 @@ export async function DELETE(
 
     await deleteSourceChunks(sourceId);
     await prisma.kBSource.delete({ where: { id: sourceId } });
+
+    // Compliance audit — fire-and-forget
+    auditKBSourceDelete(authResult.userId, agentId, sourceId);
 
     return NextResponse.json({ success: true, data: null });
   } catch (err) {

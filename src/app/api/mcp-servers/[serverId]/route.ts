@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
+import { auditMCPServerDelete } from "@/lib/security/audit";
 
 interface RouteParams {
   params: Promise<{ serverId: string }>;
@@ -129,6 +130,9 @@ export async function DELETE(
     }
 
     await prisma.mCPServer.delete({ where: { id: serverId } });
+
+    // Compliance audit — fire-and-forget
+    auditMCPServerDelete(authResult.userId, serverId);
 
     return NextResponse.json({ success: true, data: null });
   } catch (err) {

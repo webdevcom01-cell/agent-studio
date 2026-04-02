@@ -12,6 +12,7 @@ import { applySecurityHeaders } from "@/lib/api/security-headers";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { generateWebhookSecret, encryptWebhookSecret } from "@/lib/webhooks/verify";
+import { auditWebhookCreate } from "@/lib/security/audit";
 
 const CreateWebhookSchema = z.object({
   name: z.string().min(1).max(100),
@@ -134,6 +135,9 @@ export async function POST(
     });
 
     logger.info("Webhook config created", { agentId, webhookId: webhook.id });
+
+    // Compliance audit — fire-and-forget
+    auditWebhookCreate(authResult.userId, webhook.id, agentId);
 
     // Return plaintext secret ONCE — never stored in plaintext if encryption is configured
     const response = NextResponse.json(

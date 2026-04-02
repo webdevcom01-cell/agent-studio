@@ -29,6 +29,36 @@ model User {
   cliGenerations   CLIGeneration[]
   googleOAuthTokens GoogleOAuthToken[]
   orgMemberships   OrganizationMember[]
+  apiKeys          ApiKey[]
+}
+
+// ---------------------------------------------------------------------------
+// API Key Authentication — programmatic access (2026 enterprise standard)
+// Keys are stored as SHA-256 hashes — plaintext is never persisted.
+// Format: as_live_<32 random bytes base64url>
+// ---------------------------------------------------------------------------
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  /// SHA-256 hash of the raw key — never store plaintext
+  keyHash     String    @unique
+  /// First 8 chars of the raw key for identification in UI (e.g. "as_live_")
+  keyPrefix   String
+  name        String
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Array of scope strings, e.g. ["agents:read","agents:write","flows:execute"]
+  scopes      String[]  @default([])
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  /// Set when key is revoked — soft delete
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([keyHash])
+  @@index([userId])
+  @@index([userId, revokedAt])
 }
 
 model Account {

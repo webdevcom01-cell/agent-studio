@@ -9,6 +9,10 @@ import {
   callCLITool,
   getCLIBridgeTools,
 } from "./cli-bridge/cli-mcp-server";
+import { eccMcpCircuitBreaker } from "@/lib/ecc/mcp-circuit-breaker";
+import { isECCEnabled } from "@/lib/ecc/feature-flag";
+
+const ECC_MCP_URL = process.env.ECC_MCP_URL ?? "";
 
 type MCPToolSet = Awaited<ReturnType<Awaited<ReturnType<typeof createMCPClient>>["tools"]>>;
 
@@ -44,15 +48,33 @@ export async function getMCPToolsForAgent(agentId: string): Promise<AIToolSet> {
     mcpServers.map(async (as) => {
       const { mcpServer } = as;
       const headers = parseHeaders(mcpServer.headers);
+      const isEccServer = isECCEnabled() && ECC_MCP_URL && mcpServer.url === ECC_MCP_URL;
 
-      const client = await getOrCreate(
-        mcpServer.id,
-        mcpServer.url,
-        mcpServer.transport,
-        headers,
-      );
+      const loadTools = async (): Promise<MCPToolSet | null> => {
+        const client = await getOrCreate(
+          mcpServer.id,
+          mcpServer.url,
+          mcpServer.transport,
+          headers,
+        );
+        return client.tools();
+      };
 
-      const tools = await client.tools();
+      let rawTools: MCPToolSet | null;
+
+      if (isEccServer) {
+        // Wrap ECC server calls with circuit breaker — graceful degradation if server is down
+        rawTools = await eccMcpCircuitBreaker.execute(loadTools);
+        if (rawTools === null) {
+          logger.warn("ECC MCP tools unavailable (circuit open)", { agentId, serverId: mcpServer.id });
+          return {};
+        }
+      } else {
+        rawTools = await loadTools();
+      }
+
+      // rawTools is non-null here: ECC guard above returns early on null, loadTools() never returns null
+      const tools: MCPToolSet = rawTools ?? ({} as MCPToolSet);
 
       const enabledTools = as.enabledTools as string[] | null;
       if (!enabledTools) return tools;
@@ -209,19 +231,32 @@ export async function callMCPTool(
   }
 
   const headers = parseHeaders(server.headers);
-  const client = await getOrCreate(serverId, server.url, server.transport, headers);
-  const tools = await client.tools();
-  const tool = tools[toolName];
+  const isEccServer = isECCEnabled() && ECC_MCP_URL && server.url === ECC_MCP_URL;
 
-  if (!tool) {
-    throw new Error(`Tool "${toolName}" not found on server "${server.name}"`);
+  const executeTool = async (): Promise<unknown> => {
+    const client = await getOrCreate(serverId, server.url, server.transport, headers);
+    const tools = await client.tools();
+    const tool = tools[toolName];
+
+    if (!tool) {
+      throw new Error(`Tool "${toolName}" not found on server "${server.name}"`);
+    }
+
+    return tool.execute(args, {
+      toolCallId: `call_${Date.now()}`,
+      messages: [],
+    });
+  };
+
+  if (isEccServer) {
+    const result = await eccMcpCircuitBreaker.executeWithTimeout(executeTool, 30_000);
+    if (result === null) {
+      throw new Error(`ECC MCP server "${server.name}" is unavailable (circuit open or timeout)`);
+    }
+    return result;
   }
 
-  const result = await tool.execute(args, {
-    toolCallId: `call_${Date.now()}`,
-    messages: [],
-  });
-  return result;
+  return executeTool();
 }
 
 export async function refreshToolsCache(serverId: string): Promise<string[]> {

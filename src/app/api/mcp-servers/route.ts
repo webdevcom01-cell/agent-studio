@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { auditMCPServerCreate } from "@/lib/security/audit";
 
 const createServerSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
@@ -74,6 +75,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         headers: parsed.data.headers ?? undefined,
         userId: authResult.userId,
       },
+    });
+
+    // Compliance audit — fire-and-forget
+    auditMCPServerCreate(authResult.userId, server.id, {
+      name: parsed.data.name,
+      url: parsed.data.url,
+      transport: parsed.data.transport,
     });
 
     return NextResponse.json({ success: true, data: server }, { status: 201 });

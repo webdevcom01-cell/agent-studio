@@ -1,17 +1,75 @@
+/**
+ * NextAuth v5 configuration
+ *
+ * Supported providers (any combination via env vars):
+ *   - GitHub OAuth       AUTH_GITHUB_ID + AUTH_GITHUB_SECRET
+ *   - Google OAuth       AUTH_GOOGLE_ID + AUTH_GOOGLE_SECRET
+ *   - Generic OIDC       AUTH_OIDC_ISSUER + AUTH_OIDC_CLIENT_ID + AUTH_OIDC_CLIENT_SECRET
+ *                        (works with Okta, Azure AD B2C, Keycloak, Auth0, Ping, …)
+ *
+ * Authentication methods (in priority order):
+ *   1. Session cookie  (NextAuth JWT strategy)
+ *   2. API key         (x-api-key header — see src/lib/api/auth-guard.ts)
+ */
+
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 import { createEncryptedAdapter } from "@/lib/auth-adapter";
 
+// ── OIDC provider factory ────────────────────────────────────────────────────
+// Dynamically constructs a standards-compliant OIDC provider when all three
+// required env vars are present. Compatible with any OAuth 2.0 + OIDC server.
+
+function buildOIDCProvider() {
+  const issuer = process.env.AUTH_OIDC_ISSUER;
+  const clientId = process.env.AUTH_OIDC_CLIENT_ID;
+  const clientSecret = process.env.AUTH_OIDC_CLIENT_SECRET;
+
+  if (!issuer || !clientId || !clientSecret) return null;
+
+  const displayName = process.env.AUTH_OIDC_DISPLAY_NAME ?? "SSO";
+
+  // NextAuth v5 generic OAuth provider with OIDC discovery
+  // The issuer URL MUST expose /.well-known/openid-configuration
+  return {
+    id: "oidc",
+    name: displayName,
+    type: "oidc" as const,
+    issuer,
+    clientId,
+    clientSecret,
+    // Request standard OIDC scopes
+    authorization: {
+      params: { scope: "openid email profile" },
+    },
+    // Map OIDC claims → NextAuth user
+    profile(profile: Record<string, string>) {
+      return {
+        id: profile.sub,
+        name: profile.name ?? profile.preferred_username ?? profile.email,
+        email: profile.email,
+        image: profile.picture ?? null,
+      };
+    },
+  };
+}
+
+// ── Provider list ─────────────────────────────────────────────────────────────
+
+const oidcProvider = buildOIDCProvider();
+
 const providers = [
   ...(process.env.AUTH_GITHUB_ID ? [GitHub] : []),
   ...(process.env.AUTH_GOOGLE_ID ? [Google] : []),
+  ...(oidcProvider ? [oidcProvider] : []),
 ];
+
+// ── NextAuth config ───────────────────────────────────────────────────────────
 
 // NextAuth v5 Stabilization (P2-T2):
 // Pin cookie names explicitly so NextAuth beta updates don't change them silently.
 // These must match PRIMARY_SESSION_COOKIES in src/middleware.ts.
-// Current version: next-auth@5.0.0-beta.30
 const NEXTAUTH_COOKIE_PREFIX = "authjs";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({

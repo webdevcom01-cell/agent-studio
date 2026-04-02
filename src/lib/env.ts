@@ -17,6 +17,11 @@ const envSchema = z.object({
   AUTH_GITHUB_SECRET: optionalStr,
   AUTH_GOOGLE_ID: optionalStr,
   AUTH_GOOGLE_SECRET: optionalStr,
+  // Generic OIDC provider (Okta, Azure AD, Keycloak, Auth0, …)
+  AUTH_OIDC_ISSUER: optionalStr,
+  AUTH_OIDC_CLIENT_ID: optionalStr,
+  AUTH_OIDC_CLIENT_SECRET: optionalStr,
+  AUTH_OIDC_DISPLAY_NAME: optionalStr,
   ANTHROPIC_API_KEY: optionalStr,
   GOOGLE_GENERATIVE_AI_API_KEY: optionalStr,
   GROQ_API_KEY: optionalStr,
