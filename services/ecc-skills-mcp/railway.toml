@@ -7,7 +7,7 @@ healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
-numReplicas = 1
+numReplicas = 2
 watchPaths = [
   "services/ecc-skills-mcp/**"
 ]
