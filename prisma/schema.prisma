@@ -156,6 +156,10 @@ model Flow {
   name            String        @default("Main Flow")
   content         Json          @default("{\"nodes\":[],\"edges\":[],\"variables\":[]}")
   activeVersionId String?
+  /// Optimistic concurrency token — incremented on every successful PUT save.
+  /// Clients read this via GET and send it back on PUT; mismatches → 409 Conflict.
+  /// Distinct from FlowVersion.version which tracks publish/rollback history.
+  lockVersion     Int           @default(1)
   agentId         String        @unique
   agent           Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
   versions        FlowVersion[]

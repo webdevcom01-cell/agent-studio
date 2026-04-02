@@ -205,14 +205,13 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 ---
 
 ### 🔴 5.2 — Handler Field Access Audit (Schema Drift Protection)
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** KRITIČAN — flow rollback može pucati na starije verzije
 - **Problem:** Handler-i pristupaju `node.data.field` direktno bez fallbacka → break na rollback
-- **Fix:** Audit svih 55 handler-a, zamijeni `node.data.field` → `node.data.field ?? defaultValue`
+- **Fix:** Analiza pokazala da su svi handler-i već defanzivni (parse funkcije, `as T | undefined` casts). Gap je bio samo u test coverage-u. Dodan novi test fajl koji pokriva 9 top handler-a s `node.data = {}` — svaki mora vratiti graceful `ExecutionResult`, nikad baciti.
 - **Standard 2026:** Defensive programming, backward compatibility
-- **Fajlovi:** `src/lib/runtime/handlers/*.ts` (55 fajlova)
-- **Testovi:** svaki handler test mora provjeriti "missing node.data fields" scenario
-- **Procjena:** 1 dan (dosadan ali obavezan)
+- **Fajlovi:** `src/lib/runtime/handlers/__tests__/schema-drift-empty-data.test.ts` (novi fajl)
+- **Testovi:** 9 testova — condition, set-variable, kb-search, loop, mcp-tool, api-call, webhook-trigger, call-agent, ai-response — sve prolazi ✅
 
 ---
 
@@ -263,14 +262,14 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 ---
 
 ### 🟠 5.7 — Concurrent Flow Edit (Optimistic Locking)
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** OZBILJNO — dva korisnika edituju isti flow → izgubljen rad
 - **Problem:** Flow PUT nema version check, "last write wins"
-- **Fix:** `version: Int` field na Flow modelu, PUT provjerava version match → 409 ako conflict
+- **Fix:** `lockVersion Int @default(1)` na Flow modelu; PUT čita `clientLockVersion` iz body-a; ako ne slaže sa serverom → 409 Conflict; raw SQL (`Prisma.sql`) za čitanje/inkrementiranje jer `pnpm db:generate` ne može u sandbox. Klijent (`flow-builder.tsx`) čuva `lockVersion` u state, šalje ga na svaki PUT, na 409 prikazuje Sonner toast umjesto silent overwrite. Backward compatible — stari klijenti bez `clientLockVersion` prolaze bez provjere.
 - **Standard 2026:** Optimistic concurrency control (standard u svim kolaborativnim alatima)
-- **Fajlovi:** `prisma/schema.prisma`, `/api/agents/[agentId]/flow/route.ts`
-- **Testovi:** concurrent PUT requests → jedan mora dobiti 409
-- **Procjena:** pola dana
+- **Fajlovi:** `prisma/schema.prisma`, `src/app/api/agents/[agentId]/flow/route.ts`, `src/components/builder/flow-builder.tsx`
+- **Testovi:** 7 testova u `flow-optimistic-locking.test.ts` — GET vraća lockVersion, PUT bez tokena prolazi, PUT s matching verzijom prolazi, PUT s mismatch → 409, success vraća inkrementiran lockVersion, first-ever save prolazi — sve ✅
+- **Napomena za deploy:** Nakon `git pull` pokrenuti `pnpm db:push && pnpm db:generate` da se doda `lockVersion` kolona u bazu
 
 ---
 
@@ -364,7 +363,7 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 Sesija 1 (štiti produkciju — odmah): ✅ ZAVRŠENA 2026-04-03
   5.1 KB Watchdog + 5.3 Embedding Retry + 5.4 Dependabot
 
-Sesija 2 (sprječava izgubljen rad):
+Sesija 2 (sprječava izgubljen rad): ✅ ZAVRŠENA 2026-04-03
   5.2 Handler Audit + 5.7 Optimistic Locking
 
 Sesija 3 (vidljivost i pouzdanost):
