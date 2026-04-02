@@ -70,8 +70,66 @@ export async function requireAgentOwner(
   return { userId: authResult.userId, agentId };
 }
 
+// ── Organization-level auth guards (Phase 2) ────────────────────────────────
+
+interface OrgMemberResult extends AuthResult {
+  organizationId: string;
+  role: string;
+}
+
+export async function requireOrgMember(
+  orgId: string,
+): Promise<OrgMemberResult | NextResponse> {
+  const authResult = await requireAuth();
+  if (authResult instanceof NextResponse) return authResult;
+
+  const member = await prisma.organizationMember.findUnique({
+    where: {
+      userId_organizationId: {
+        userId: authResult.userId,
+        organizationId: orgId,
+      },
+    },
+    select: { role: true },
+  });
+
+  if (!member) return forbidden();
+
+  return {
+    userId: authResult.userId,
+    organizationId: orgId,
+    role: member.role,
+  };
+}
+
+export async function requireOrgAdmin(
+  orgId: string,
+): Promise<OrgMemberResult | NextResponse> {
+  const result = await requireOrgMember(orgId);
+  if (result instanceof NextResponse) return result;
+
+  if (result.role !== "ADMIN" && result.role !== "OWNER") {
+    return forbidden();
+  }
+
+  return result;
+}
+
+export async function requireOrgOwner(
+  orgId: string,
+): Promise<OrgMemberResult | NextResponse> {
+  const result = await requireOrgMember(orgId);
+  if (result instanceof NextResponse) return result;
+
+  if (result.role !== "OWNER") {
+    return forbidden();
+  }
+
+  return result;
+}
+
 export function isAuthError(
-  result: AuthResult | AgentOwnerResult | NextResponse
+  result: AuthResult | AgentOwnerResult | OrgMemberResult | NextResponse
 ): result is NextResponse {
   return result instanceof NextResponse;
 }

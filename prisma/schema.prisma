@@ -26,6 +26,7 @@ model User {
   mcpServers       MCPServer[]
   cliGenerations   CLIGeneration[]
   googleOAuthTokens GoogleOAuthToken[]
+  orgMemberships   OrganizationMember[]
 }
 
 model Account {
@@ -83,6 +84,8 @@ model Agent {
   isPublic      Boolean        @default(false)
   userId        String?
   user          User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization?  @relation("OrgAgents", fields: [organizationId], references: [id], onDelete: SetNull)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   flow          Flow?
@@ -111,6 +114,7 @@ model Agent {
 
   @@index([userId])
   @@index([userId, updatedAt])
+  @@index([organizationId])
   @@index([category])
   @@index([isPublic, updatedAt])
 }
@@ -993,4 +997,63 @@ model FlowTrace {
   updatedAt       DateTime    @updatedAt
 
   @@index([agentId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Multi-tenancy — Organization + RBAC (Phase 2)
+// ---------------------------------------------------------------------------
+
+enum PlanTier {
+  FREE
+  PRO
+  TEAM
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model Organization {
+  id          String                @id @default(cuid())
+  name        String
+  slug        String                @unique
+  plan        PlanTier              @default(FREE)
+  members     OrganizationMember[]
+  agents      Agent[]               @relation("OrgAgents")
+  invitations Invitation[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([slug])
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           OrgRole      @default(MEMBER)
+  joinedAt       DateTime     @default(now())
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model Invitation {
+  id             String       @id @default(cuid())
+  email          String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           OrgRole      @default(MEMBER)
+  token          String       @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([token])
+  @@index([email, organizationId])
 }

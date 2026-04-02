@@ -55,6 +55,7 @@ scripts/*
 !scripts/create-vulnerable-demo
 !scripts/create-vulnerable-demo/**
 !scripts/pre-push-check.sh
+!scripts/migrate-to-orgs.mjs
 services/*
 !services/ecc-skills-mcp
 !services/worker
