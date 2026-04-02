@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "mkdir -p .git && pnpm install --no-frozen-lockfile && pnpm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public"
+buildCommand = "mkdir -p .git && pnpm install --no-frozen-lockfile && npx prisma db push --skip-generate && pnpm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public"
 
 [deploy]
 startCommand = "node server.js"
