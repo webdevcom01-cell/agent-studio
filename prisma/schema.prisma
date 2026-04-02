@@ -760,11 +760,31 @@ model WebhookExecution {
   /// If this is a replay, points to the original execution that was replayed.
   replayOf        String?
 
+  /// Number of retry attempts for this execution (0 = first try)
+  retryCount      Int                  @default(0)
+  /// BullMQ job ID for next scheduled retry, null if no retry pending
+  retryJobId      String?
+
   createdAt       DateTime             @default(now())
 
   @@index([webhookConfigId])
   @@index([webhookConfigId, createdAt])
   @@index([status])
+}
+
+model WebhookDeadLetter {
+  id              String   @id @default(cuid())
+  webhookConfigId String
+  executionId     String
+  eventType       String?
+  payload         String?  @db.Text
+  headers         Json?
+  errorMessage    String?  @db.Text
+  retryCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([webhookConfigId])
+  @@index([createdAt])
 }
 
 // ─── Agent Evals / Testing Framework ─────────────────────────────────────────
