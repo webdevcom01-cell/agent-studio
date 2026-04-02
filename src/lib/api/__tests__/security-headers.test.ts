@@ -55,4 +55,48 @@ describe("applySecurityHeaders", () => {
     applySecurityHeaders(res, "/embed");
     expect(res.headers.get("X-Frame-Options")).toBe("SAMEORIGIN");
   });
+
+  // ── CSP (Phase 3.1) ─────────────────────────────────────────────────────
+
+  it("sets Content-Security-Policy header", () => {
+    const res = makeResponse();
+    applySecurityHeaders(res, "/dashboard");
+    const csp = res.headers.get("Content-Security-Policy");
+    expect(csp).toBeTruthy();
+    expect(csp).toContain("default-src 'self'");
+  });
+
+  it("includes nonce in CSP script-src", () => {
+    const res = makeResponse();
+    applySecurityHeaders(res, "/dashboard");
+    const csp = res.headers.get("Content-Security-Policy")!;
+    expect(csp).toMatch(/nonce-[A-Za-z0-9+/=]+/);
+  });
+
+  it("sets x-csp-nonce header", () => {
+    const res = makeResponse();
+    applySecurityHeaders(res, "/dashboard");
+    expect(res.headers.get("x-csp-nonce")).toBeTruthy();
+  });
+
+  it("CSP allows frame-ancestors * for embed pages", () => {
+    const res = makeResponse();
+    applySecurityHeaders(res, "/embed/agent-123");
+    const csp = res.headers.get("Content-Security-Policy")!;
+    expect(csp).toContain("frame-ancestors *");
+  });
+
+  it("CSP restricts frame-ancestors to self for non-embed", () => {
+    const res = makeResponse();
+    applySecurityHeaders(res, "/builder/agent-123");
+    const csp = res.headers.get("Content-Security-Policy")!;
+    expect(csp).toContain("frame-ancestors 'self'");
+  });
+
+  it("CSP blocks object-src", () => {
+    const res = makeResponse();
+    applySecurityHeaders(res, "/");
+    const csp = res.headers.get("Content-Security-Policy")!;
+    expect(csp).toContain("object-src 'none'");
+  });
 });
