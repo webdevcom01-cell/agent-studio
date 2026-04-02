@@ -1,5 +1,3 @@
-import { randomBytes } from "node:crypto";
-
 const COMMON_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "X-XSS-Protection": "0",
@@ -45,8 +43,10 @@ export function applySecurityHeaders(
   const framePolicy = pathname.startsWith("/embed") ? "SAMEORIGIN" : "DENY";
   response.headers.set("X-Frame-Options", framePolicy);
 
-  // CSP with nonce for inline scripts
-  const nonce = randomBytes(16).toString("base64");
+  // CSP with nonce for inline scripts (Web Crypto API — Edge-compatible)
+  const nonceBytes = new Uint8Array(16);
+  crypto.getRandomValues(nonceBytes);
+  const nonce = btoa(String.fromCharCode(...nonceBytes));
   response.headers.set("Content-Security-Policy", buildCSP(nonce, pathname));
   response.headers.set("x-csp-nonce", nonce);
 }
