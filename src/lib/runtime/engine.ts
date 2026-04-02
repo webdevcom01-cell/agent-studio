@@ -3,6 +3,7 @@ import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { writeAuditLog } from "@/lib/safety/audit-logger";
 import type { FlowNode } from "@/types";
 
 /**
@@ -135,6 +136,15 @@ export async function executeFlow(
     context.messageHistory = context.messageHistory.slice(-MAX_HISTORY);
   }
 
+  // Audit: flow execution start
+  writeAuditLog({
+    userId: context.userId,
+    action: "FLOW_EXECUTION_START",
+    resourceType: "Agent",
+    resourceId: context.agentId,
+    after: { conversationId: context.conversationId, hasUserMessage: !!userMessage },
+  }).catch(() => {});
+
   while (context.currentNodeId && iterations < MAX_ITERATIONS) {
     iterations++;
 
@@ -229,6 +239,19 @@ export async function executeFlow(
 
   await saveMessages(context.conversationId, allMessages);
   await saveContext(context);
+
+  // Audit: flow execution end
+  writeAuditLog({
+    userId: context.userId,
+    action: "FLOW_EXECUTION_END",
+    resourceType: "Agent",
+    resourceId: context.agentId,
+    after: {
+      conversationId: context.conversationId,
+      iterations,
+      messageCount: allMessages.length,
+    },
+  }).catch(() => {});
 
   return { messages: allMessages, waitingForInput: false };
 }

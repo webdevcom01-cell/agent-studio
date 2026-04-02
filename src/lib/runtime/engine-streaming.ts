@@ -9,6 +9,7 @@ import {
 import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
 import { findNextNode, findStartNode, SELF_ROUTING_NODES, resolveNextNodeId } from "./engine";
+import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
 import { parallelStreamingHandler } from "./handlers/parallel-streaming-handler";
@@ -108,6 +109,14 @@ export function executeFlowStreaming(
         }
 
         let waitingForInput = false;
+
+        writeAuditLog({
+          userId: context.userId,
+          action: "FLOW_EXECUTION_START",
+          resourceType: "Agent",
+          resourceId: context.agentId,
+          after: { conversationId: context.conversationId, streaming: true },
+        }).catch(() => {});
 
         while (context.currentNodeId && iterations < MAX_ITERATIONS && !aborted) {
           iterations++;
@@ -449,6 +458,19 @@ export function executeFlowStreaming(
           ? { forceStatus: "ABANDONED" as const }
           : undefined;
         try { await saveContext(context, statusOverride); } catch (err) { logger.error("Failed to save context", err, { conversationId: context.conversationId }); }
+        writeAuditLog({
+          userId: context.userId,
+          action: "FLOW_EXECUTION_END",
+          resourceType: "Agent",
+          resourceId: context.agentId,
+          after: {
+            conversationId: context.conversationId,
+            iterations,
+            messageCount: allMessages.length,
+            aborted,
+            streaming: true,
+          },
+        }).catch(() => {});
         try { writer.close(); } catch { /* stream already closed */ }
       }
     },

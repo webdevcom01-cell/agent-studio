@@ -2,6 +2,7 @@ import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { writeAuditLog } from "@/lib/safety/audit-logger";
 import {
   checkCircuit,
   recordSuccess,
@@ -307,6 +308,14 @@ async function executeCallAttempt(
     recordSuccess(context.agentId, calleeId);
 
     const durationMs = Date.now() - startTime;
+
+    writeAuditLog({
+      userId: getOwnerUserId(context as RuntimeContextWithDepth) ?? undefined,
+      action: "AGENT_TO_AGENT_CALL",
+      resourceType: "Agent",
+      resourceId: context.agentId,
+      after: { targetAgentId, calleeId, durationMs, status: "COMPLETED" },
+    }).catch(() => {});
 
     await prisma.agentCallLog.update({
       where: { id: callLog.id },

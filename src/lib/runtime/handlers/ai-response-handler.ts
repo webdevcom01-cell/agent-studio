@@ -10,6 +10,7 @@ import { reformulateWithHistory } from "@/lib/knowledge/query-reformulation";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { checkInputSafety, checkOutputSafety } from "@/lib/safety/engine-safety-middleware";
+import { writeAuditLog } from "@/lib/safety/audit-logger";
 
 const MAX_TOOL_STEPS = 20;
 
@@ -205,6 +206,14 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     if (inputTokens > 0 || outputTokens > 0) {
       recordTokenUsage(context.agentId, modelId, inputTokens, outputTokens);
     }
+
+    writeAuditLog({
+      userId: context.userId,
+      action: "AI_CALL",
+      resourceType: "Agent",
+      resourceId: context.agentId,
+      after: { model: modelId, inputTokens, outputTokens, durationMs, nodeId: node.id },
+    }).catch(() => {});
 
     let responseText = result.text || "I couldn't generate a response.";
 
