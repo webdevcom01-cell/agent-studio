@@ -1,6 +1,6 @@
 /**
  * Knowledge Base maintenance — dead chunk detection, cleanup, retrieval stats,
- * and scheduled re-ingestion support.
+ * stuck source reset, and scheduled re-ingestion support.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -121,6 +121,63 @@ export async function cleanupDeadChunks(
   });
 
   return { deletedCount };
+}
+
+// ── Stuck Source Reset ────────────────────────────────────────────────────
+
+const DEFAULT_STUCK_MINUTES = 10;
+
+export interface ResetStuckSourcesResult {
+  resetCount: number;
+  sourceIds: string[];
+}
+
+/**
+ * Finds KBSources that have been stuck in PROCESSING for longer than
+ * `olderThanMinutes` and resets them to FAILED so users can retry.
+ *
+ * A source is considered "stuck" when:
+ *   - status = 'PROCESSING'
+ *   - updatedAt < NOW() - olderThanMinutes minutes
+ *
+ * This covers the gap where the ingest worker crashed / was killed mid-run
+ * and never transitioned the source to READY or FAILED.
+ */
+export async function resetStuckSources(
+  olderThanMinutes: number = DEFAULT_STUCK_MINUTES
+): Promise<ResetStuckSourcesResult> {
+  const cutoff = new Date(Date.now() - olderThanMinutes * 60 * 1000);
+
+  // Find the IDs first so we can return them and log them
+  const stuck = await prisma.kBSource.findMany({
+    where: {
+      status: "PROCESSING",
+      updatedAt: { lt: cutoff },
+    },
+    select: { id: true },
+  });
+
+  if (stuck.length === 0) {
+    return { resetCount: 0, sourceIds: [] };
+  }
+
+  const sourceIds = stuck.map((s) => s.id);
+
+  await prisma.kBSource.updateMany({
+    where: { id: { in: sourceIds } },
+    data: {
+      status: "FAILED",
+      errorMsg: "Ingest timed out — please retry",
+    },
+  });
+
+  logger.info("Stuck KB sources reset to FAILED", {
+    resetCount: stuck.length,
+    sourceIds,
+    olderThanMinutes,
+  });
+
+  return { resetCount: stuck.length, sourceIds };
 }
 
 // ── Retrieval Stats ──────────────────────────────────────────────────────

@@ -194,14 +194,13 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 ---
 
 ### 🔴 5.1 — KB Ingest Watchdog
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** KRITIČAN — može ostaviti korisnike sa broken knowledge base-om
 - **Problem:** KBSource zaglavi na `PROCESSING` zauvijek ako OpenAI API padne usred ingesta
-- **Fix:** Cron koji svake 10 min resetuje `PROCESSING` starije od 10 min → `FAILED` + error poruka
+- **Fix:** `resetStuckSources(olderThanMinutes=10)` u `maintenance.ts`; `/api/cron/cleanup` sad resetuje zaglavljene izvore + briše stare verzije
 - **Standard 2026:** Observability + Dead process detection (SRE praksa)
-- **Fajlovi:** `src/lib/knowledge/maintenance.ts`, `/api/cron/cleanup/route.ts`
-- **Testovi:** simulate OpenAI fail mid-ingest → source mora biti FAILED, ne PROCESSING
-- **Procjena:** 3h
+- **Fajlovi:** `src/lib/knowledge/maintenance.ts`, `src/app/api/cron/cleanup/route.ts`
+- **Testovi:** 6 testova u `maintenance.test.ts` — sve prolazi ✅
 
 ---
 
@@ -218,26 +217,24 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 ---
 
 ### 🔴 5.3 — OpenAI Embedding Retry + Backoff
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** KRITIČAN — jedan rate limit ruši cijelu KB ingestiju
 - **Problem:** `embeddings.ts` nema retry logiku na OpenAI 429/503
-- **Fix:** Exponential backoff sa jitter, max 3 retry-a (isti pattern kao u `cli-generator/ai-phases.ts`)
+- **Fix:** `withRetry()` wrapper — exponential backoff 1s→2s→4s + ±25% jitter, max 3 retry-a; retryable na 429/503, ne na 4xx
 - **Standard 2026:** Resilience patterns — retry/backoff (AWS Well-Architected)
 - **Fajlovi:** `src/lib/knowledge/embeddings.ts`
-- **Testovi:** mock OpenAI 429 → mora retry 3x → succeed ili FAILED gracefully
-- **Procjena:** 3h
+- **Testovi:** 12 testova u `embeddings.test.ts` — sve prolazi ✅
 
 ---
 
 ### 🔴 5.4 — Dependabot Security Audit
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** KRITIČAN — GitHub je javio 1 critical + 17 high vulnerabilities
 - **Problem:** 34 vulnerabilities na main branch-u, nepoznato koliko je u prod dependencijama
-- **Fix:** Pregledati svaku, zakrpiti critical + high u prod deps, dokumentovati dev-only
+- **Fix:** `pnpm audit --prod` → **0 vulnerabilities** u production dependencies. GitHub advisory-ji su u dev deps (playwright, test tooling) — ne isporučuju se u produkcionu build.
 - **Standard 2026:** OWASP Dependency-Check, supply chain security
 - **Fajlovi:** `package.json`, `pnpm-lock.yaml`
-- **Testovi:** `pnpm audit` mora proći bez critical/high u prod deps
-- **Procjena:** pola dana
+- **Rezultat:** No known vulnerabilities found (prod deps clean)
 
 ---
 
@@ -364,7 +361,7 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 ## Prioritet redosljed sesija
 
 ```
-Sesija 1 (štiti produkciju — odmah):
+Sesija 1 (štiti produkciju — odmah): ✅ ZAVRŠENA 2026-04-03
   5.1 KB Watchdog + 5.3 Embedding Retry + 5.4 Dependabot
 
 Sesija 2 (sprječava izgubljen rad):
