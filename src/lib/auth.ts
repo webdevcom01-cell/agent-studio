@@ -74,6 +74,8 @@ const NEXTAUTH_COOKIE_PREFIX = "authjs";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   debug: process.env.NODE_ENV !== "production",
+  // Explicitly pass secret — NextAuth v5 beta sometimes doesn't auto-read AUTH_SECRET
+  secret: process.env.AUTH_SECRET,
   adapter: createEncryptedAdapter(),
   session: { strategy: "jwt", maxAge: 24 * 60 * 60 },
   providers,
