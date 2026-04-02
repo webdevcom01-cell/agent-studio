@@ -56,10 +56,14 @@ const AGENT_TIMEOUT_PROFILES: ReadonlyArray<{
   timeoutSeconds: number;
   label: string;
 }> = [
-  { pattern: /reality.?checker|fact.?check|quick|validator|linter|critic|sanity/i, timeoutSeconds: 30, label: "fast" },
-  { pattern: /research|discovery|product|market|analy|summar|review|audit/i, timeoutSeconds: 60, label: "standard" },
-  { pattern: /architect|design|plan|strategic|decision|spec|blueprint/i, timeoutSeconds: 90, label: "slow" },
-  { pattern: /code|generat|implement|build|develop|engineer|test|quality|qa/i, timeoutSeconds: 120, label: "very-slow" },
+  // fast: lightweight validators and checkers — typically < 20s
+  { pattern: /reality.?checker|fact.?check|quick|validator|linter|critic|sanity/i, timeoutSeconds: 45, label: "fast" },
+  // standard: research, discovery, analysis — DeepSeek needs 70-90s for full PRDs
+  { pattern: /research|discovery|product|market|analy|summar|review|audit/i, timeoutSeconds: 120, label: "standard" },
+  // slow: architecture, design, planning — detailed structured outputs
+  { pattern: /architect|design|plan|strategic|decision|spec|blueprint/i, timeoutSeconds: 150, label: "slow" },
+  // very-slow: code generation, implementation — can produce thousands of tokens
+  { pattern: /code|generat|implement|build|develop|engineer|test|quality|qa/i, timeoutSeconds: 180, label: "very-slow" },
 ];
 
 /**

@@ -443,24 +443,24 @@ describe("getTimeoutForAgent", () => {
     expect(getTimeoutForAgent({ name: "Anything", expectedDurationSeconds: 45 })).toBe(45);
   });
   it("falls through to pattern when null", () => {
-    expect(getTimeoutForAgent({ name: "Reality Checker", expectedDurationSeconds: null })).toBe(30);
+    expect(getTimeoutForAgent({ name: "Reality Checker", expectedDurationSeconds: null })).toBe(45);
   });
-  it("returns 30s for fast agents", () => {
-    expect(getTimeoutForAgent({ name: "Fact Check Bot", expectedDurationSeconds: null })).toBe(30);
+  it("returns 45s for fast agents", () => {
+    expect(getTimeoutForAgent({ name: "Fact Check Bot", expectedDurationSeconds: null })).toBe(45);
   });
-  it("returns 60s for standard agents", () => {
-    expect(getTimeoutForAgent({ name: "Research Assistant", expectedDurationSeconds: null })).toBe(60);
+  it("returns 120s for standard agents (research/discovery needs 70-90s on DeepSeek)", () => {
+    expect(getTimeoutForAgent({ name: "Research Assistant", expectedDurationSeconds: null })).toBe(120);
   });
-  it("returns 90s for slow agents", () => {
-    expect(getTimeoutForAgent({ name: "Software Architect", expectedDurationSeconds: null })).toBe(90);
+  it("returns 150s for slow agents", () => {
+    expect(getTimeoutForAgent({ name: "Software Architect", expectedDurationSeconds: null })).toBe(150);
   });
-  it("returns 120s for very-slow agents", () => {
-    expect(getTimeoutForAgent({ name: "Code Generator", expectedDurationSeconds: null })).toBe(120);
+  it("returns 180s for very-slow agents", () => {
+    expect(getTimeoutForAgent({ name: "Code Generator", expectedDurationSeconds: null })).toBe(180);
   });
   it("returns 120s default for unmatched names", () => {
     expect(getTimeoutForAgent({ name: "My Custom Agent", expectedDurationSeconds: null })).toBe(120);
   });
   it("first-match wins — fast before slow", () => {
-    expect(getTimeoutForAgent({ name: "Quick Architect", expectedDurationSeconds: null })).toBe(30);
+    expect(getTimeoutForAgent({ name: "Quick Architect", expectedDurationSeconds: null })).toBe(45);
   });
 });
