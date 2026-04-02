@@ -54,6 +54,7 @@
     "ai": "^6.0.116",
     "archiver": "^7.0.1",
     "better-sqlite3": "^12.8.0",
+    "bullmq": "^5.72.0",
     "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
