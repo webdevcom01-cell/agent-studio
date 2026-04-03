@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState, useRef, useReducer } from "react";
+import { toast } from "sonner";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -250,6 +251,8 @@ function FlowBuilderCanvas({
   const [deployedVersion, setDeployedVersion] = useState<number | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [saveTimeLabel, setSaveTimeLabel] = useState<string>("");
+  // Optimistic lock token — updated on every successful GET and PUT
+  const [lockVersion, setLockVersion] = useState<number | null>(null);
 
   // Debug session
   const debugSession = useDebugSession(agentId);
@@ -274,9 +277,15 @@ function FlowBuilderCanvas({
     fetch(`/api/agents/${agentId}/flow`)
       .then((r) => r.json())
       .then((json) => {
-        if (json.success && json.data?.activeVersion) {
-          setDeployedVersion(json.data.activeVersion.version);
-          setLastSavedVersionId(json.data.activeVersion.id);
+        if (json.success) {
+          if (json.data?.activeVersion) {
+            setDeployedVersion(json.data.activeVersion.version);
+            setLastSavedVersionId(json.data.activeVersion.id);
+          }
+          // Capture the optimistic lock token for conflict detection on save
+          if (typeof json.data?.lockVersion === "number") {
+            setLockVersion(json.data.lockVersion);
+          }
         }
       })
       .catch(() => {});
@@ -471,19 +480,42 @@ function FlowBuilderCanvas({
         variables: initialContent.variables ?? [],
       };
 
+      // Include lockVersion for optimistic conflict detection.
+      // Old clients / embed widget callers that omit it are still accepted by the server.
+      const body: Record<string, unknown> = { content };
+      if (lockVersion !== null) {
+        body.clientLockVersion = lockVersion;
+      }
+
       const res = await fetch(`/api/agents/${agentId}/flow`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify(body),
       });
-      const json = await res.json();
 
-      if (json.success && json.data?.latestVersion?.id) {
-        setLastSavedVersionId(json.data.latestVersion.id);
+      if (res.status === 409) {
+        // Another session saved this flow while we had it open.
+        // Don't overwrite — surface a friendly message instead.
+        toast.error(
+          "Flow was modified in another session. Reload the page to continue editing.",
+          { duration: 8000 }
+        );
+        return;
       }
 
-      setHasChanges(false);
-      setLastSavedAt(new Date());
+      const json = await res.json();
+
+      if (json.success) {
+        if (json.data?.latestVersion?.id) {
+          setLastSavedVersionId(json.data.latestVersion.id);
+        }
+        // Update our local lock token so the next auto-save uses the new value
+        if (typeof json.data?.lockVersion === "number") {
+          setLockVersion(json.data.lockVersion);
+        }
+        setHasChanges(false);
+        setLastSavedAt(new Date());
+      }
     } catch (error) {
       if (process.env.NODE_ENV === "development") {
         // eslint-disable-next-line no-console
@@ -492,7 +524,7 @@ function FlowBuilderCanvas({
     } finally {
       setIsSaving(false);
     }
-  }, [agentId, initialContent.variables]);
+  }, [agentId, initialContent.variables, lockVersion]);
 
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedNodeId) ?? null,

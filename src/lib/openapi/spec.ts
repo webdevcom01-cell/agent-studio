@@ -15,6 +15,23 @@ import { registry } from "./registry";
 import "./schemas"; // registers schema components
 import "./paths"; // registers path items
 
+// Register security schemes once (side-effect safe — registry deduplicates)
+registry.registerComponent("securitySchemes", "BearerAuth", {
+  type: "http",
+  scheme: "bearer",
+  bearerFormat: "API key (as_prod_… or as_test_…)",
+  description:
+    "API key obtained from `/settings/api-keys`. " +
+    "Pass scopes when creating the key. Example: `Authorization: Bearer as_prod_abc123`",
+} as never);
+
+registry.registerComponent("securitySchemes", "CookieAuth", {
+  type: "apiKey",
+  in: "cookie",
+  name: "authjs.session-token",
+  description: "Session cookie set automatically after OAuth login (GitHub / Google).",
+} as never);
+
 let cached: OpenAPIObject | null = null;
 
 export function generateOpenApiSpec(): OpenAPIObject {
@@ -22,7 +39,7 @@ export function generateOpenApiSpec(): OpenAPIObject {
 
   const generator = new OpenApiGeneratorV31(registry.definitions);
 
-  cached = generator.generateDocument({
+  const doc = generator.generateDocument({
     openapi: "3.1.0",
     info: {
       title: "Agent Studio API",
@@ -40,6 +57,25 @@ export function generateOpenApiSpec(): OpenAPIObject {
         "The `/api/agents/{agentId}/chat` and `/api/agents/{agentId}/trigger/{webhookId}`",
         "endpoints are **public** (or HMAC-verified) so your embed widget and webhook",
         "providers can reach them without a session.",
+        "",
+        "## API Key Scopes",
+        "",
+        "API keys use fine-grained scopes. Pass the required scopes when creating a key",
+        "at `POST /api/api-keys`. The `admin` scope grants all permissions.",
+        "",
+        "| Scope | Description |",
+        "|-------|-------------|",
+        "| `agents:read` | List and retrieve agents |",
+        "| `agents:write` | Create and update agents |",
+        "| `agents:delete` | Delete agents |",
+        "| `flows:read` | Read flow content and version history |",
+        "| `flows:execute` | Execute flows and send chat messages |",
+        "| `kb:read` | Search and list knowledge base sources |",
+        "| `kb:write` | Add, upload, and delete knowledge sources |",
+        "| `evals:read` | Read eval suites and run results |",
+        "| `evals:run` | Trigger eval suite runs |",
+        "| `webhooks:read` | List webhooks and execution history |",
+        "| `admin` | Full access — all scopes above |",
         "",
         "## Rate limits",
         "",
@@ -79,6 +115,9 @@ export function generateOpenApiSpec(): OpenAPIObject {
       { name: "Schedules",    description: "Scheduled flow execution" },
     ],
   }) as OpenAPIObject;
+
+  // Inject top-level security requirement (generated separately from registry components)
+  cached = { ...doc, security: [{ BearerAuth: [] }, { CookieAuth: [] }] };
 
   return cached;
 }

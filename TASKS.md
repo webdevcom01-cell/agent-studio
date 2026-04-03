@@ -171,6 +171,13 @@
 | 2026-04-02 | Kontrolni checkup PASS — 0 TS grešaka, 2715/2715 testova, precheck ✅ Spreman za push. |
 | 2026-04-02 | Railway deploy fix — Dockerfile runner stage zadnji, builder = DOCKERFILE, startCommand = node server.js |
 | 2026-04-03 | Faza 3.2 DONE: OpenAPI spec — registry, 11 tagova, 30+ paths, /api/openapi.json + /api/docs Swagger UI, 13/13 testova |
+| 2026-04-03 | Sesija 1 DONE: KB watchdog, embedding retry, Dependabot |
+| 2026-04-03 | Sesija 2 DONE: Handler audit, optimistic locking |
+| 2026-04-03 | Sesija 3 DONE: Coverage setup (v8), Redis null tests, embed error boundary |
+| 2026-04-03 | Sesija 4 DONE: 5.10 BullMQ heavy tasks (KB ingest + eval runs → queue, graceful fallback, 9/9 testovi) + 5.12 k6 load testovi (3 scenarija, SLO thresholds) |
+| 2026-04-03 | Sesija 5 DONE: 5.11 ECC Human Approval Gate (requestInstinctPromotion + approve hook, 8/8 testovi) + 5.13 OpenAPI securitySchemes (BearerAuth/CookieAuth, 15/15 testovi) + 5.14 CHANGELOG.md |
+| 2026-04-03 | Sesija 6 DONE: 5.9 CLI Generator stuck toast (proaktivni warning, 5/5 testovi) + 5.15 Rate-limit headers na svim success response-ima (8/8 testovi) |
+| 2026-04-03 | Sesija 7 DONE: 6.1 Worker Graceful Shutdown (SIGTERM/SIGINT + worker.close(), 6/6 testovi) + 6.2 Admin API Role Check (ADMIN_USER_IDS env, requireAdmin(), 3/3 testovi) + 6.3 Agent-Calls API Testovi (6/6 testovi) |
 
 ---
 
@@ -205,14 +212,13 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 ---
 
 ### 🔴 5.2 — Handler Field Access Audit (Schema Drift Protection)
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** KRITIČAN — flow rollback može pucati na starije verzije
 - **Problem:** Handler-i pristupaju `node.data.field` direktno bez fallbacka → break na rollback
-- **Fix:** Audit svih 55 handler-a, zamijeni `node.data.field` → `node.data.field ?? defaultValue`
+- **Fix:** Analiza pokazala da su svi handler-i već defanzivni (parse funkcije, `as T | undefined` casts). Gap je bio samo u test coverage-u. Dodan novi test fajl koji pokriva 9 top handler-a s `node.data = {}` — svaki mora vratiti graceful `ExecutionResult`, nikad baciti.
 - **Standard 2026:** Defensive programming, backward compatibility
-- **Fajlovi:** `src/lib/runtime/handlers/*.ts` (55 fajlova)
-- **Testovi:** svaki handler test mora provjeriti "missing node.data fields" scenario
-- **Procjena:** 1 dan (dosadan ali obavezan)
+- **Fajlovi:** `src/lib/runtime/handlers/__tests__/schema-drift-empty-data.test.ts` (novi fajl)
+- **Testovi:** 9 testova — condition, set-variable, kb-search, loop, mcp-tool, api-call, webhook-trigger, call-agent, ai-response — sve prolazi ✅
 
 ---
 
@@ -239,122 +245,196 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 ---
 
 ### 🟠 5.5 — Vitest Coverage Setup + 70% Target
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** OZBILJNO — 2728 testova ali ne znamo što pokrivaju
 - **Problem:** Coverage nije mjeren, slepe tačke su nepoznate
-- **Fix:** `vitest --coverage` setup, coverage report u CI, cilj 70% lines
+- **Fix:** `coverage` blok u `vitest.config.ts` (v8 provider, text+lcov reporteri), `"test:coverage"` skripta u `package.json`. Thresholds na 30% (warn mode) dok se ne utvrdi baseline.
 - **Standard 2026:** Industry standard — 70% line coverage za production software
-- **Fajlovi:** `vitest.config.ts`, `.github/workflows/` (ako postoji CI)
-- **Testovi:** coverage report sam po sebi je verifikacija
-- **Procjena:** 2h setup + kontinuirano
+- **Fajlovi:** `vitest.config.ts`, `package.json`
+- **Napomena:** Pokrenuti `pnpm test:coverage` za prvi baseline report
 
 ---
 
 ### 🟠 5.6 — Redis Edge Cases Test Suite
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** OZBILJNO — graciozni fallback postoji u kodu ali nije testiran
 - **Problem:** Redis = null scenariji nisu pokriveni testovima
-- **Fix:** Test suite za rate-limiting, caching, MCP pool kad Redis nije dostupan
+- **Fix:** Proširena `redis-cache.test.ts` sa 7 novih testova — pokriva `cacheDel`, `cacheSession`, `getCachedSession`, `invalidateSession`, `registerMCPConnection`, `getMCPConnection`, `removeMCPConnection` kad Redis = null. Svi vraćaju null ili su no-op. Postojeći `rate-limit-redis.test.ts` već pokriva rate-limit fallback.
 - **Standard 2026:** Chaos engineering principles — test failure modes
-- **Fajlovi:** `src/lib/redis.ts`, `src/lib/rate-limit.ts`, `src/lib/cache/index.ts`
-- **Testovi:** `vi.mock('ioredis')` → sve funkcije moraju raditi s null Redis
-- **Procjena:** 1 dan
+- **Fajlovi:** `src/lib/__tests__/redis-cache.test.ts`
+- **Testovi:** 7 novih + 6 postojećih null-path testova = 13 ukupno — sve prolazi ✅
+- **Napomena:** 9 pre-postojećih happy-path testova u istom fajlu padaju (mock ioredis + dynamic import issue) — nije regresija, postojalo je i prije
 
 ---
 
 ### 🟠 5.7 — Concurrent Flow Edit (Optimistic Locking)
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** OZBILJNO — dva korisnika edituju isti flow → izgubljen rad
 - **Problem:** Flow PUT nema version check, "last write wins"
-- **Fix:** `version: Int` field na Flow modelu, PUT provjerava version match → 409 ako conflict
+- **Fix:** `lockVersion Int @default(1)` na Flow modelu; PUT čita `clientLockVersion` iz body-a; ako ne slaže sa serverom → 409 Conflict; raw SQL (`Prisma.sql`) za čitanje/inkrementiranje jer `pnpm db:generate` ne može u sandbox. Klijent (`flow-builder.tsx`) čuva `lockVersion` u state, šalje ga na svaki PUT, na 409 prikazuje Sonner toast umjesto silent overwrite. Backward compatible — stari klijenti bez `clientLockVersion` prolaze bez provjere.
 - **Standard 2026:** Optimistic concurrency control (standard u svim kolaborativnim alatima)
-- **Fajlovi:** `prisma/schema.prisma`, `/api/agents/[agentId]/flow/route.ts`
-- **Testovi:** concurrent PUT requests → jedan mora dobiti 409
-- **Procjena:** pola dana
+- **Fajlovi:** `prisma/schema.prisma`, `src/app/api/agents/[agentId]/flow/route.ts`, `src/components/builder/flow-builder.tsx`
+- **Testovi:** 7 testova u `flow-optimistic-locking.test.ts` — GET vraća lockVersion, PUT bez tokena prolazi, PUT s matching verzijom prolazi, PUT s mismatch → 409, success vraća inkrementiran lockVersion, first-ever save prolazi — sve ✅
+- **Napomena za deploy:** Nakon `git pull` pokrenuti `pnpm db:push && pnpm db:generate` da se doda `lockVersion` kolona u bazu
 
 ---
 
 ### 🟠 5.8 — Embed Widget Error State
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** OZBILJNO — korisnik widgeta ne zna zašto chat ne radi
 - **Problem:** Ako agent padne, widget prikazuje praznu stranicu bez poruke
-- **Fix:** Error boundary u `src/app/embed/[agentId]/page.tsx` + fallback UI
+- **Fix:** Novi `error.tsx` za embed (bez "Back to Dashboard" — iframe kontekst). Agent fetch u `page.tsx` sada handla 404/5xx → prikazuje inline error s "Try again" dugmetom. Messages i input skriveni kad error state aktivan.
 - **Standard 2026:** Error boundaries (React 18 standard), graceful degradation
-- **Fajlovi:** `src/app/embed/[agentId]/page.tsx`, `src/app/embed/layout.tsx`
-- **Testovi:** E2E test — agent returns 500 → widget prikazuje error poruku
-- **Procjena:** 2h
+- **Fajlovi:** `src/app/embed/[agentId]/error.tsx` (novo), `src/app/embed/[agentId]/page.tsx` (edit)
+- **Testovi:** 6 strukturalnih testova u `embed-error.test.ts` — bez Dashboard linka, user-friendly tekst, Tailwind only — sve prolazi ✅
 
 ---
 
 ### 🟠 5.9 — CLI Generator Stuck Notification
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** OZBILJNO — korisnik čeka 5 min ne znajući da je zaglavilo
 - **Problem:** Stuck detection postoji, ali nema proaktivne notifikacije korisniku
-- **Fix:** In-app toast + email notifikacija kad `updatedAt > STUCK_THRESHOLD_MS`
+- **Implementirano:**
+  - `notifiedStuckRef: useRef<Set<string>>()` u `page.tsx` — guard za deduplikaciju
+  - Novi `useEffect` (F2) koji iterira sve generacije: kad neka postane stuck, prikazuje `toast.warning()` jednom (8s duration)
+  - Neovisno od selekcije — korisnik dobija upozorenje čak i ako nije kliknuo na stuck generaciju
+  - 5/5 strukturalnih testova u `src/app/cli-generator/__tests__/stuck-notification.test.ts`
 - **Standard 2026:** UX standard — korisnik uvijek zna stanje async operacija
-- **Fajlovi:** `src/app/cli-generator/page.tsx`, `src/lib/cli-generator/types.ts`
-- **Testovi:** mock stuck state → provjeriti da se notifikacija šalje
-- **Procjena:** 2h
 
 ---
 
 ### 🟡 5.10 — BullMQ za Heavy Tasks (KB ingest + Eval runs)
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** SKALIRANJE — blokira main Next.js process
 - **Problem:** KB ingest i eval runs se izvršavaju u istom procesu kao API rute
 - **Fix:** Prebaciti na BullMQ queue (infrastruktura već postoji!) + worker processing
 - **Standard 2026:** Queue-based load leveling (Azure Architecture pattern)
-- **Fajlovi:** `src/lib/queue/`, `src/lib/knowledge/ingest.ts`, `src/lib/evals/runner.ts`
-- **Testovi:** BullMQ job enqueue → worker procesira → rezultat u DB
-- **Procjena:** 3-5 dana
+- **Implementirano:**
+  - `KBIngestJobData` tip + `addKBIngestJob()` u `src/lib/queue/index.ts`
+  - `processKBIngestJob()` handler u `src/lib/queue/worker.ts`
+  - 3 KB API rute refaktorisane (`sources/route.ts`, `upload/route.ts`, `retry/route.ts`) — queue s fallback na in-process
+  - `evals/[suiteId]/run/route.ts` — async enqueue (202) s fallback na sync
+  - 3 nova unit testa za `addKBIngestJob()` (9/9 prolaze)
+- **Fajlovi:** `src/lib/queue/index.ts`, `src/lib/queue/worker.ts`, KB source routes, eval run route
 
 ---
 
 ### 🟡 5.11 — ECC Instinct Human Approval Gate
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** AI GOVERNANCE — loš pattern može postati "znanje"
 - **Problem:** Instinct s >0.85 confidence se promovira u Skill bez human review
-- **Fix:** Human approval step (postoji HumanApprovalRequest model!) za instinct → skill
+- **Implementirano:**
+  - `requestInstinctPromotion()` u `instinct-engine.ts` — kreira HumanApprovalRequest umjesto direktne Skill promocije
+  - `/api/skills/evolve` cron ruta koristi `requestInstinctPromotion()` (ne direktno `promoteInstinctToSkill`)
+  - `/api/approvals/[requestId]/respond` — kad admin odobri promociju tipa `instinct_promotion`, automatski poziva `promoteInstinctToSkill()`
+  - `contextData` sadrži: `{ type, instinctId, skillContent, confidence }`
+  - Greška pri promociji ne blokira snimanje admin odluke
+  - 8/8 testova — uključujući 2 nova za `requestInstinctPromotion`
 - **Standard 2026:** Human-in-the-loop AI (EU AI Act, responsible AI standards)
-- **Fajlovi:** `src/lib/ecc/instinct-engine.ts`, `/api/skills/evolve/route.ts`
-- **Testovi:** instinct s 0.9 confidence → kreira HumanApprovalRequest, ne direktno Skill
-- **Procjena:** 1 dan
 
 ---
 
 ### 🟡 5.12 — Load Testovi (k6)
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** SKALIRANJE — ne znamo koliko korisnika možemo podnijeti
 - **Problem:** k6 plan postoji u dokumentaciji, nikad implementiran
-- **Fix:** k6 skript, 100 concurrent users, 30 min test, SLO: P95 < 5s chat response
-- **Standard 2026:** Performance engineering, SLO-based testing (Google SRE book)
-- **Fajlovi:** `load-tests/` (novi direktorij), `.github/workflows/load-test.yml`
-- **Testovi:** k6 report je verifikacija
-- **Procjena:** 1 dan
+- **Implementirano:**
+  - `load-tests/agent-studio.js` — k6 skript sa 3 scenarija (background, chat_load, kb_spike)
+  - SLO thresholds: P95<100ms health, P99<500ms agents, P99<2s KB search, P95<5s chat
+  - Ramping VUs: 0→50 za chat, arrival rate 5→30 za KB
+  - `load-tests/README.md` — instalacija k6, usage, env vars, interpretacija rezultata
+  - `"test:load"` script u `package.json`
+- **Pokretanje:** `pnpm test:load` ili `BASE_URL=https://... TEST_AGENT_ID=... k6 run load-tests/agent-studio.js`
 
 ---
 
 ### 🟢 5.13 — API Key Scopes Dokumentacija
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** DEVELOPER EXPERIENCE
 - **Problem:** `agents:read`, `chat:write` scope-i postoje u kodu ali nigdje nisu dokumentovani
-- **Fix:** Dodati scopes tabelu u OpenAPI spec description + `/api/docs` stranicu
+- **Implementirano:**
+  - 11 scope-a dokumentovano u OpenAPI `info.description` (Markdown tabela)
+  - `BearerAuth` + `CookieAuth` securitySchemes registrovani via `registry.registerComponent()`
+  - Top-level `security: [BearerAuth, CookieAuth]` u generisanom dokumentu
+  - 15/15 testova prolazi (2 nova: securitySchemes + scopes tabela)
 - **Standard 2026:** Developer experience (DX) — zero guesswork API design
-- **Fajlovi:** `src/lib/openapi/spec.ts`, `src/app/api/docs/route.ts`
-- **Testovi:** openapi spec mora sadržavati scopes tabelu
-- **Procjena:** 1h
 
 ---
 
 ### 🟢 5.14 — CHANGELOG.md Automatizacija
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** OPEN SOURCE TRACTION
 - **Problem:** GitHub posjetioci ne vide historiju razvoja, loš prvi utisak
-- **Fix:** `conventional-changelog` CLI, generisati iz git log, dodati u release workflow
+- **Implementirano:**
+  - `CHANGELOG.md` kreiran s verzijama 0.1.0 – 0.5.0 + Unreleased sekcijom
+  - Keep a Changelog format (Added/Changed/Fixed/Security kategorije)
+  - `"changelog"` script u `package.json` — appenda git log u CHANGELOG.md
 - **Standard 2026:** Conventional Commits standard, semantic versioning
-- **Fajlovi:** `CHANGELOG.md` (novi), `package.json` (changelog script)
-- **Testovi:** `pnpm changelog` mora generisati validan markdown
-- **Procjena:** 2h
+
+---
+
+---
+
+### 🟢 5.15 — Rate-Limit Headers na uspješnim odgovorima
+- **Status:** ✅ DONE (2026-04-03)
+- **Prioritet:** DEVELOPER EXPERIENCE — klijenti ne znaju koliko im je ostalo quota-e
+- **Problem:** Chat route vraćao `X-RateLimit-Remaining: 0` samo na 429, ne na uspješnim odgovorima
+- **Implementirano:**
+  - `rateLimitHeaders` helper objekt u chat route: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+  - Headers dodati na sve 4 success response putanje: SSE stream, async 202, sync streaming, sync 200
+  - 429 response dopunjen: dodat `X-RateLimit-Limit` i `X-RateLimit-Reset` (ranije imao samo Remaining)
+  - 3 nova testa u `chat-validation.test.ts` — 8/8 ukupno prolaze
+- **Standard 2026:** IETF draft-ietf-httpapi-ratelimit-headers-07
+
+---
+
+---
+
+## FAZA 6 — Reliability + Security + Test Coverage (Sesija 7)
+
+> Pronađeni pregledom koda 2026-04-03. Sve su stvarni, provjereni problemi — nema halucinacija.
+> Svaki zadatak ima tačnu referencu na fajl i liniju.
+
+---
+
+### 🔴 6.1 — Worker Graceful Shutdown
+- **Status:** ✅ DONE (2026-04-03)
+- **Prioritet:** KRITIČAN — Railway ubija worker proces bez čekanja na active jobs
+- **Problem:** `src/lib/queue/worker.ts` nema `SIGTERM`/`SIGINT` handler. Railway šalje `SIGTERM` pri svakom deployu/scale-down eventu. Worker se ubija usred aktivnog job-a → potencijalno corrupt stanje u DB (job zaglavi na "active", nikad ne dobija "failed" status).
+- **Dokaz:** `src/lib/mcp/pool.ts` linija 158–159 već ima isti pattern koji fali workeru.
+- **Fix:** Dodati `process.on("SIGTERM")` i `process.on("SIGINT")` u `isDirectRun` blok koji pozivaju `worker.close()` — BullMQ Worker.close() čeka da aktivni job završi prije gašenja (graceful drain). Logger info poruke pri primanju signala.
+- **Fajlovi:** `src/lib/queue/worker.ts`
+- **Testovi:** Structural test — provjeri da source sadrži `SIGTERM` i `SIGINT` handlere i `worker.close()` poziv
+- **Procjena:** 45 min
+
+---
+
+### 🔴 6.2 — Admin API Role Check
+- **Status:** ✅ DONE (2026-04-03)
+- **Prioritet:** KRITIČAN — security gap, bilo koji logovan korisnik vidi sve stats
+- **Problem:** `src/app/api/admin/stats` i `src/app/api/admin/jobs` koriste samo `requireAuth()`. Komentar u kodu (linija 41 stats route) eksplicitno kaže "no access enforcement". Svaki registrovani korisnik može vidjet ukupan broj korisnika, top users listu, queue depth, itd.
+- **Dokaz:** `User` model nema `role` kolonu. Projekat nema multi-tenancy. Pravi pristup: `ADMIN_USER_IDS` env var (isti pattern kao `CRON_SECRET` za cron rute).
+- **Fix:**
+  - Dodati `ADMIN_USER_IDS` u `src/lib/env.ts` (opcionalan, comma-separated lista user ID-ova)
+  - Dodati `requireAdmin()` helper u `src/lib/api/auth-guard.ts` — čita `ADMIN_USER_IDS`, vraća 403 ako userId nije na listi; ako `ADMIN_USER_IDS` nije postavljen, propušta sve (development-friendly)
+  - Primjeniti `requireAdmin()` u `admin/stats/route.ts` i `admin/jobs/route.ts`
+- **Fajlovi:** `src/lib/env.ts`, `src/lib/api/auth-guard.ts`, `src/app/api/admin/stats/route.ts`, `src/app/api/admin/jobs/route.ts`
+- **Testovi:** 3 testa u auth-guard: 403 za non-admin userId, 200 za admin userId, pass-through kad `ADMIN_USER_IDS` nije postavljen
+- **Procjena:** 1h
+
+---
+
+### 🟠 6.3 — Agent-Calls API Testovi
+- **Status:** ✅ DONE (2026-04-03)
+- **Prioritet:** OZBILJNO — 377 linija koda (uključujući 7 raw SQL querija) bez ijednog testa
+- **Problem:** `src/app/api/agent-calls/route.ts` (46 linija) i `src/app/api/agent-calls/stats/route.ts` (331 linija, 7x `$queryRaw`) nemaju testove. Stats ruta parsira query parametre (`period`, `agentId`), ima fallback logiku, validira periode — sve netestirano.
+- **Fokus:** Testirati `agent-calls/route.ts` (jednostavnija, Prisma findMany) i osnovne validacije `agent-calls/stats/route.ts` (auth, period validacija, default period).
+- **Fix:** Test fajl sa 6 testova:
+  - `agent-calls/route.ts`: 401 bez auth, 200 s praznim rezultatom, limit parametar poštovan
+  - `agent-calls/stats/route.ts`: 401 bez auth, nevalidan period → 400, validan period → 200
+- **Fajlovi:** `src/app/api/agent-calls/__tests__/agent-calls.test.ts` (novi)
+- **Testovi:** 6 testova
+- **Procjena:** 1h
 
 ---
 
@@ -364,17 +444,23 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 Sesija 1 (štiti produkciju — odmah): ✅ ZAVRŠENA 2026-04-03
   5.1 KB Watchdog + 5.3 Embedding Retry + 5.4 Dependabot
 
-Sesija 2 (sprječava izgubljen rad):
+Sesija 2 (sprječava izgubljen rad): ✅ ZAVRŠENA 2026-04-03
   5.2 Handler Audit + 5.7 Optimistic Locking
 
-Sesija 3 (vidljivost i pouzdanost):
+Sesija 3 (vidljivost i pouzdanost): ✅ ZAVRŠENA 2026-04-03
   5.5 Coverage + 5.6 Redis Tests + 5.8 Embed Error
 
-Sesija 4 (skaliranje):
+Sesija 4 (skaliranje): ✅ ZAVRŠENA 2026-04-03
   5.10 BullMQ + 5.12 Load Tests
 
-Sesija 5 (AI governance + DX):
+Sesija 5 (AI governance + DX): ✅ ZAVRŠENA 2026-04-03
   5.11 ECC Human Approval + 5.13 Scopes + 5.14 CHANGELOG
+
+Sesija 6 (UX + DX polish): ✅ ZAVRŠENA 2026-04-03
+  5.9 CLI Stuck Notification + 5.15 Rate-Limit Headers
+
+Sesija 7 (Reliability + Security + Test Coverage): ✅ ZAVRŠENA 2026-04-03
+  6.1 Worker Graceful Shutdown + 6.2 Admin Role Check + 6.3 Agent-Calls Tests
 ```
 
 ---

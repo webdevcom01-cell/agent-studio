@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ingestSource, deleteSourceChunks } from "@/lib/knowledge/ingest";
+import { addKBIngestJob } from "@/lib/queue";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
@@ -44,9 +45,11 @@ export async function POST(
       },
     });
 
-    // Re-trigger background ingest
-    ingestSource(sourceId).catch((err) => {
-      logger.error("Retry ingest failed", err);
+    // Enqueue KB ingest — falls back to in-process if Redis unavailable
+    addKBIngestJob({ sourceId }).catch(() => {
+      ingestSource(sourceId).catch((err) => {
+        logger.error("Retry ingest failed", err);
+      });
     });
 
     return NextResponse.json({ success: true, data: null });

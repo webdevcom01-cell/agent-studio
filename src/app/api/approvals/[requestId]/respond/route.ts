@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { promoteInstinctToSkill } from "@/lib/ecc/instinct-engine";
 
 interface RouteParams {
   params: Promise<{ requestId: string }>;
@@ -56,7 +57,39 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ success: true, data: updated });
+    // If this was an instinct promotion approval, trigger the actual Skill creation
+    let promotionResult: { skillId: string } | null = null;
+    if (
+      parsed.data.decision === "approved" &&
+      approvalRequest.contextData !== null
+    ) {
+      const ctx = approvalRequest.contextData as Record<string, unknown>;
+      if (
+        ctx.type === "instinct_promotion" &&
+        typeof ctx.instinctId === "string" &&
+        typeof ctx.skillContent === "string"
+      ) {
+        try {
+          promotionResult = await promoteInstinctToSkill(ctx.instinctId, ctx.skillContent);
+          logger.info("Instinct promoted after approval", {
+            requestId,
+            instinctId: ctx.instinctId,
+            skillId: promotionResult.skillId,
+          });
+        } catch (promoteErr) {
+          logger.error("Failed to promote instinct after approval", promoteErr, {
+            requestId,
+            instinctId: ctx.instinctId,
+          });
+          // Don't fail the approval response — admin decision is already recorded
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: { ...updated, promotionResult },
+    });
   } catch (err) {
     logger.error("Failed to respond to approval", err, {});
     return NextResponse.json(

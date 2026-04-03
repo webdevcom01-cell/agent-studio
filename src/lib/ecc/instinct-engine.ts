@@ -139,6 +139,57 @@ export async function promoteInstinctToSkill(
 }
 
 /**
+ * Human-in-the-loop gate for automatic instinct promotion (EU AI Act compliance).
+ *
+ * Instead of creating a Skill directly, creates a HumanApprovalRequest so an
+ * admin can review the generated skill content before it enters the knowledge base.
+ * Used by the automated cron evolve flow; `promoteInstinctToSkill` is still called
+ * directly when an admin explicitly approves via `/api/approvals/:id/respond`.
+ */
+export async function requestInstinctPromotion(
+  instinctId: string,
+  skillContent: string,
+): Promise<{ approvalRequestId: string }> {
+  const instinct = await prisma.instinct.findUniqueOrThrow({
+    where: { id: instinctId },
+    select: { id: true, name: true, description: true, confidence: true, agentId: true },
+  });
+
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  const request = await prisma.humanApprovalRequest.create({
+    data: {
+      agentId: instinct.agentId,
+      executionId: instinctId, // reuse instinctId as the execution context identifier
+      prompt:
+        `Promote instinct to skill: "${instinct.name}"\n\n` +
+        `Instinct reached confidence ${instinct.confidence.toFixed(2)} ≥ 0.85. ` +
+        `Approve to create a reusable Skill in the knowledge base.\n\n` +
+        `**Generated skill content preview:**\n\n${skillContent.slice(0, 500)}${skillContent.length > 500 ? "…" : ""}`,
+      contextData: {
+        instinctId,
+        skillContent,
+        confidence: instinct.confidence,
+        type: "instinct_promotion",
+      },
+      expiresAt,
+    },
+  });
+
+  recordMetric("ecc.instinct.approval_requested", 1, "count", {
+    agentId: instinct.agentId,
+  });
+
+  logger.info("Instinct promotion approval requested", {
+    instinctId,
+    approvalRequestId: request.id,
+    confidence: instinct.confidence,
+  });
+
+  return { approvalRequestId: request.id };
+}
+
+/**
  * Decays confidence of inactive instincts by 0.05.
  * Targets instincts not updated in the last 7 days (weekly decay).
  */

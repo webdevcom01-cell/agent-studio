@@ -6,7 +6,7 @@ import { getEnv } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import {
   getPromotionCandidates,
-  promoteInstinctToSkill,
+  requestInstinctPromotion,
   decayStaleInstincts,
 } from "@/lib/ecc/instinct-engine";
 
@@ -63,25 +63,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       });
     }
 
-    const promoted: { instinctId: string; skillId: string; slug: string }[] = [];
+    // Cron evolve uses requestInstinctPromotion (human-in-the-loop gate).
+    // Actual Skill creation happens when an admin approves via POST /api/approvals/:id/respond.
+    const promoted: { instinctId: string; approvalRequestId: string; slug: string }[] = [];
     const errors: { instinctId: string; error: string }[] = [];
 
     for (const candidate of candidates) {
       try {
         const skillContent = await generateSkillContent(candidate.instinct);
-        const result = await promoteInstinctToSkill(
+        const result = await requestInstinctPromotion(
           candidate.instinct.id,
-          skillContent
+          skillContent,
         );
         promoted.push({
           instinctId: candidate.instinct.id,
-          skillId: result.skillId,
+          approvalRequestId: result.approvalRequestId,
           slug: candidate.skillSlug,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         errors.push({ instinctId: candidate.instinct.id, error: message });
-        logger.error("Failed to promote instinct", err, {
+        logger.error("Failed to request instinct promotion", err, {
           instinctId: candidate.instinct.id,
         });
       }

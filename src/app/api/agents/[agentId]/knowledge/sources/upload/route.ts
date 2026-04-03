@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseSource } from "@/lib/knowledge/parsers";
 import { ingestSource } from "@/lib/knowledge/ingest";
+import { addKBIngestJob } from "@/lib/queue";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
@@ -125,9 +126,12 @@ export async function POST(
       },
     });
 
-    ingestSource(source.id, extractedText).catch(
-      (err) => logger.error("Background ingest failed", err)
-    );
+    // Enqueue KB ingest — falls back to in-process if Redis unavailable
+    addKBIngestJob({ sourceId: source.id, content: extractedText }).catch(() => {
+      ingestSource(source.id, extractedText).catch(
+        (err) => logger.error("Background ingest failed", err),
+      );
+    });
 
     return NextResponse.json(
       { success: true, data: source },

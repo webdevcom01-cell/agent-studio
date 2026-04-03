@@ -81,6 +81,8 @@ export default function CLIGeneratorPage(): React.JSX.Element {
   const [isResumingId, setIsResumingId] = useState<string | null>(null);
   /** Tracks generation IDs that have already been auto-resumed this session. */
   const autoResumedRef = useRef<Set<string>>(new Set());
+  /** Tracks generation IDs that have already triggered a stuck toast this session. */
+  const notifiedStuckRef = useRef<Set<string>>(new Set());
 
   const {
     data: detailResponse,
@@ -126,6 +128,21 @@ export default function CLIGeneratorPage(): React.JSX.Element {
       ),
     );
   }, [detail]);
+
+  // F2: Proactive stuck notification — fires a warning toast the first time a
+  // generation transitions into a stuck state, regardless of whether it is selected.
+  // Fires at most once per generation per page session (guarded by notifiedStuckRef).
+  useEffect(() => {
+    for (const gen of generations) {
+      if (!isStuck(gen)) continue;
+      if (notifiedStuckRef.current.has(gen.id)) continue;
+      notifiedStuckRef.current.add(gen.id);
+      toast.warning(
+        `Generation "${gen.applicationName}" appears stuck — click it to auto-resume.`,
+        { duration: 8000 },
+      );
+    }
+  }, [generations]);
 
   // F1: Auto-resume stuck generations when they are selected.
   // Fires at most once per generation per page session (guarded by autoResumedRef).

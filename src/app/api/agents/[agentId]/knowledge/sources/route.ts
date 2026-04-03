@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ingestSource } from "@/lib/knowledge/ingest";
+import { addKBIngestJob } from "@/lib/queue";
 import { logger } from "@/lib/logger";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
@@ -141,9 +142,16 @@ export async function POST(
       },
     });
 
-    ingestSource(source.id, type === "TEXT" ? body.content : undefined).catch(
-      (err) => logger.error("Background ingest failed", err)
-    );
+    // Enqueue KB ingest — falls back to in-process if Redis unavailable
+    addKBIngestJob({
+      sourceId: source.id,
+      content: type === "TEXT" ? (body.content as string) : undefined,
+    }).catch(() => {
+      // Redis unavailable — fall back to in-process ingest
+      ingestSource(source.id, type === "TEXT" ? body.content : undefined).catch(
+        (err) => logger.error("Background ingest failed", err),
+      );
+    });
 
     // Compliance audit — fire-and-forget
     auditKBSourceAdd(authResult.userId, agentId, source.id, { name, type, url: body.url ?? null });

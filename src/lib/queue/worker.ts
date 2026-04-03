@@ -14,7 +14,7 @@
 
 import { Worker, type Job } from "bullmq";
 import { logger } from "@/lib/logger";
-import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData } from "./index";
+import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData } from "./index";
 
 const QUEUE_NAME = "agent-studio";
 const CONCURRENCY = 5;
@@ -35,6 +35,8 @@ async function processJob(job: Job<JobData>): Promise<unknown> {
       return processEvalJob(job as Job<EvalRunJobData>);
     case "webhook.retry":
       return processWebhookRetryJob(job as Job<WebhookRetryJobData>);
+    case "kb.ingest":
+      return processKBIngestJob(job as Job<KBIngestJobData>);
     default:
       throw new Error(`Unknown job type: ${(data as Record<string, unknown>).type}`);
   }
@@ -150,6 +152,25 @@ async function processWebhookRetryJob(job: Job<WebhookRetryJobData>): Promise<un
   return result;
 }
 
+async function processKBIngestJob(job: Job<KBIngestJobData>): Promise<unknown> {
+  const { sourceId, content } = job.data;
+
+  const { ingestSource } = await import("@/lib/knowledge/ingest");
+
+  await job.updateProgress(10);
+
+  await ingestSource(sourceId, content);
+
+  await job.updateProgress(100);
+
+  logger.info("KB ingest job completed", {
+    jobId: job.id,
+    sourceId,
+  });
+
+  return { sourceId, success: true };
+}
+
 export function createWorker(): Worker<JobData> {
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) {
@@ -210,7 +231,22 @@ const isDirectRun =
   process.argv[1]?.includes("worker");
 
 if (isDirectRun) {
-  createWorker();
+  const worker = createWorker();
   const port = Number(process.env.PORT) || 8080;
   startHealthServer(port);
+
+  // Graceful shutdown: drain active jobs before exiting
+  async function shutdown(signal: string): Promise<void> {
+    logger.info("Graceful shutdown initiated", { signal });
+    try {
+      await worker.close();
+      logger.info("Worker drained and closed");
+    } catch (err) {
+      logger.error("Error during worker shutdown", { error: err });
+    }
+    process.exit(0);
+  }
+
+  process.on("SIGTERM", () => { void shutdown("SIGTERM"); });
+  process.on("SIGINT",  () => { void shutdown("SIGINT"); });
 }
