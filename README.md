@@ -26,9 +26,9 @@
   <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Next.js-15.5-000?logo=next.js" alt="Next.js">
   <img src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white" alt="Node">
-  <img src="https://img.shields.io/badge/Tests-2684%2B-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-2800%2B-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/Node_Types-55-orange" alt="55 Node Types">
-  <img src="https://img.shields.io/badge/Templates-221-purple" alt="221 Templates">
+  <img src="https://img.shields.io/badge/Templates-250-purple" alt="250 Templates">
   <img src="https://img.shields.io/badge/MCP-Ready-8B5CF6?logo=anthropic&logoColor=white" alt="MCP Ready">
   <img src="https://img.shields.io/badge/A2A-v0.3-4285F4?logo=google&logoColor=white" alt="A2A v0.3">
 </p>
@@ -87,11 +87,18 @@ Open [http://localhost:3000](http://localhost:3000) and create your first agent.
 - **Enterprise RAG Pipeline** — Ingest URLs, PDFs, DOCX, Excel, PPTX; chunk with 5 strategies; hybrid search (semantic + BM25) with pgvector; LLM re-ranking and RAGAS evaluation
 - **MCP + A2A Protocols** — Connect any MCP server (Streamable HTTP + SSE); agent-to-agent communication following Google A2A v0.3 with circuit breaker and distributed tracing
 - **Inbound Webhooks** — Standard Webhooks spec (HMAC-SHA256); receive events from GitHub, Stripe, Slack, and any provider; trigger flows with idempotency and event filtering
-- **Agent Marketplace** — 221 production-ready templates across 19 industries with faceted search, discovery, and one-click import
+- **Agent Marketplace** — 250 production-ready templates across 21 categories with faceted search, discovery, and one-click import
 - **Agent Evals** — 3-layer testing: deterministic assertions, semantic similarity, LLM-as-Judge with 12 assertion types and deploy-triggered automatic runs
 - **CLI Generator** — 6-phase AI pipeline wraps any CLI tool as a fully-typed MCP server (Python FastMCP or TypeScript MCP SDK)
 - **ECC Developer Skills** — 60+ skill modules and 25 developer agent templates with autonomous meta-orchestration and instinct-based continuous learning
 - **Embeddable Chat Widget** — Drop-in `<script>` tag for any website with streaming NDJSON responses, mobile support, and proactive messaging
+- **Multi-Tenancy** — Organization model with OWNER/ADMIN/MEMBER roles, invitation system, and org-scoped agent ownership
+- **API Keys** — Scoped `as_live_` keys with SHA-256 hashing, 11 permission scopes, and per-key expiry/revocation
+- **Admin Dashboard** — Platform metrics, job queue monitoring, top users, and webhook health with auto-refresh
+- **Safety Middleware** — Prompt injection detection, PII redaction, and content moderation on all AI calls
+- **BullMQ Job Queue** — Background processing for KB ingest, eval runs, and webhook retries with priority levels
+- **GDPR Compliance** — Account deletion (30-day grace), data export, and configurable retention policies
+- **Feature Flags** — 3-layer evaluation (org override > Redis > default) with percentage-based rollout
 
 ---
 
@@ -196,7 +203,7 @@ graph TB
         Chat[Chat Interface]
     end
 
-    subgraph API["API Layer (87 routes)"]
+    subgraph API["API Layer (107 routes)"]
         Agents[Agent CRUD]
         FlowAPI[Flow Versioning & Deploy]
         ChatAPI[Chat - Streaming NDJSON]
@@ -292,7 +299,7 @@ pnpm dev              # Dev server (Turbopack)
 pnpm build            # Production build
 pnpm lint             # ESLint
 pnpm typecheck        # TypeScript check (no emit)
-pnpm test             # Vitest unit tests (2684+)
+pnpm test             # Vitest unit tests (2800+)
 pnpm test:e2e         # Playwright E2E tests
 pnpm db:push          # Sync Prisma schema to DB
 pnpm db:generate      # Generate Prisma client
@@ -319,16 +326,16 @@ pnpm precheck:file    # Same, for a specific file
 | Caching | Redis (ioredis, graceful fallback) |
 | Validation | Zod v3 |
 | UI | Radix UI + lucide-react |
-| Tests | Vitest 2502+ unit · Playwright E2E |
+| Tests | Vitest 2800+ unit · Playwright E2E |
 
 ---
 
 ## Project Structure
 
 ```
-prisma/schema.prisma        # 36 models, pgvector, versioning, A2A, ECC
+prisma/schema.prisma        # 41 models, pgvector, versioning, A2A, ECC
 src/
-  app/                      # Pages and 87 API routes
+  app/                      # Pages and 107 API routes
     builder/[agentId]/      # Flow editor
     chat/[agentId]/         # Chat interface
     knowledge/[agentId]/    # Knowledge base
@@ -344,7 +351,7 @@ src/
     ecc/                    # ECC module
     evals/                  # Eval runner
     mcp/                    # MCP client + pool
-  data/                     # 221 agent templates
+  data/                     # 250 agent templates (221 + 29 ECC)
 services/ecc-skills-mcp/    # Python FastMCP server (Railway service)
 e2e/                        # Playwright E2E tests
 docs/                       # Documentation

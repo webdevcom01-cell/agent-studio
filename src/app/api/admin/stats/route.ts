@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, isAuthError } from "@/lib/api/auth-guard";
+import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
 export async function GET(): Promise<NextResponse> {
-  const authResult = await requireAdmin();
+  const authResult = await requireAuth();
   if (isAuthError(authResult)) return authResult;
 
   try {

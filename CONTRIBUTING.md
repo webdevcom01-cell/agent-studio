@@ -133,7 +133,7 @@ Without Redis, the worker exits immediately. The web app degrades gracefully —
 
 ## Adding a New Flow Node Type
 
-The project has 55 node types. To add a new one, follow this checklist in order:
+The project has 55 node types (see `NodeType` in `src/types/index.ts`). To add a new one, follow this checklist in order:
 
 1. Add the type to the `NodeType` union in `src/types/index.ts`
 2. Create the handler in `src/lib/runtime/handlers/<name>-handler.ts`

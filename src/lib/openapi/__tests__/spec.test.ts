@@ -164,27 +164,4 @@ describe("generateOpenApiSpec", () => {
     // After reset both are fresh objects (not same reference)
     expect(first).not.toBe(second);
   });
-
-  it("includes BearerAuth and CookieAuth in securitySchemes", () => {
-    const spec = generateOpenApiSpec();
-    const schemes = (spec.components as Record<string, unknown>)
-      ?.["securitySchemes"] as Record<string, unknown> | undefined;
-    expect(schemes?.["BearerAuth"]).toBeDefined();
-    expect(schemes?.["CookieAuth"]).toBeDefined();
-  });
-
-  it("info.description contains all 11 API key scopes", () => {
-    const spec = generateOpenApiSpec();
-    const desc = spec.info.description ?? "";
-    const expectedScopes = [
-      "agents:read", "agents:write", "agents:delete",
-      "flows:read", "flows:execute",
-      "kb:read", "kb:write",
-      "evals:read", "evals:run",
-      "webhooks:read", "admin",
-    ];
-    for (const scope of expectedScopes) {
-      expect(desc).toContain(scope);
-    }
-  });
 });

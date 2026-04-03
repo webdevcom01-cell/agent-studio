@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useRef, useEffect, use, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Send, Bot, RotateCcw, X, AlertTriangle } from "lucide-react";
+import { Send, Bot, RotateCcw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStreamingChat } from "@/components/chat/use-streaming-chat";
 
@@ -13,7 +13,6 @@ function EmbedChatContent({ agentId }: { agentId: string }) {
   const welcomeMessage = searchParams.get("welcome") || "How can I help you?";
 
   const [agentName, setAgentName] = useState(customTitle || "Assistant");
-  const [agentError, setAgentError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevMessageCountRef = useRef(0);
@@ -23,20 +22,11 @@ function EmbedChatContent({ agentId }: { agentId: string }) {
 
   useEffect(() => {
     fetch(`/api/agents/${agentId}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(r.status === 404 ? "not_found" : "unavailable");
-        return r.json();
-      })
+      .then((r) => r.json())
       .then((json: { success: boolean; data: { name: string } }) => {
         if (json.success) setAgentName(json.data.name);
       })
-      .catch((err: unknown) => {
-        const msg =
-          err instanceof Error && err.message === "not_found"
-            ? "This assistant could not be found."
-            : "This assistant is temporarily unavailable.";
-        setAgentError(msg);
-      });
+      .catch(() => {});
   }, [agentId]);
 
   useEffect(() => {
@@ -113,26 +103,8 @@ function EmbedChatContent({ agentId }: { agentId: string }) {
         </button>
       </div>
 
-      {/* Agent error */}
-      {agentError && (
-        <div className="flex flex-col items-center justify-center flex-1 px-6 text-center">
-          <AlertTriangle className="size-8 text-destructive mb-3" />
-          <p className="text-sm text-muted-foreground">{agentError}</p>
-          <button
-            onClick={() => {
-              setAgentError(null);
-              window.location.reload();
-            }}
-            className="mt-3 flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs hover:bg-muted transition-colors"
-          >
-            <RotateCcw className="size-3" />
-            Try again
-          </button>
-        </div>
-      )}
-
       {/* Messages */}
-      {!agentError && <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center px-4">
             <Bot className="size-10 mb-3 opacity-50" />
@@ -193,10 +165,10 @@ function EmbedChatContent({ agentId }: { agentId: string }) {
             </div>
           </div>
         )}
-      </div>}
+      </div>
 
       {/* Input */}
-      {!agentError && <div className="border-t p-3">
+      <div className="border-t p-3">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -223,7 +195,7 @@ function EmbedChatContent({ agentId }: { agentId: string }) {
             <Send className="size-4" />
           </button>
         </form>
-      </div>}
+      </div>
 
       {/* Powered by */}
       <div className="text-center py-1.5 text-[10px] text-muted-foreground border-t">

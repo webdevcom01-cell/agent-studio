@@ -43,20 +43,11 @@ export async function POST(
         status: 429,
         headers: {
           "Retry-After": String(Math.ceil(rateResult.retryAfterMs / 1000)),
-          "X-RateLimit-Limit": "20",
           "X-RateLimit-Remaining": "0",
-          "X-RateLimit-Reset": String(Math.ceil((Date.now() + rateResult.retryAfterMs) / 1000)),
         },
       }
     );
   }
-
-  // Headers to include in all successful responses so clients can track their quota.
-  const rateLimitHeaders = {
-    "X-RateLimit-Limit": "20",
-    "X-RateLimit-Remaining": String(rateResult.remaining),
-    "X-RateLimit-Reset": String(Math.ceil((Date.now() + 60_000) / 1000)),
-  };
 
   let body: Record<string, unknown>;
   try {
@@ -146,7 +137,6 @@ export async function POST(
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
             Connection: "keep-alive",
-            ...rateLimitHeaders,
           },
         });
       }
@@ -159,7 +149,7 @@ export async function POST(
           conversationId: context.conversationId,
           status: "queued",
         },
-      }, { status: 202, headers: rateLimitHeaders });
+      }, { status: 202 });
     } catch (err) {
       logger.error("Failed to queue chat job", err, { agentId });
       return NextResponse.json(
@@ -263,7 +253,6 @@ export async function POST(
           "Transfer-Encoding": "chunked",
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
-          ...rateLimitHeaders,
         },
       });
     }
@@ -288,7 +277,7 @@ export async function POST(
         messages: result.messages,
         waitForInput: result.waitingForInput,
       },
-    }, { headers: rateLimitHeaders });
+    });
   } catch (err) {
     trackError({
       agentId,

@@ -7,7 +7,7 @@ Agent Studio is a visual builder for creating AI agents with multi-agent orchest
 ## Main Components
 
 ### 1. Flow Builder
-A visual editor (XyFlow) where you connect nodes to define conversation and automation flows. 32 node types available — from basic message/condition nodes to AI response, MCP tool calls, parallel execution, loops, webhooks, and the Learn node for continuous improvement.
+A visual editor (XyFlow) where you connect nodes to define conversation and automation flows. 55 node types available — from basic message/condition nodes to AI response, MCP tool calls, parallel execution, loops, webhooks, guardrails, cost monitoring, and the Learn node for continuous improvement.
 
 ### 2. Knowledge Base (KB)
 RAG pipeline: add URLs, upload files (PDF/DOCX), or paste text. Content is automatically scraped, chunked (400 tokens, 20% overlap), embedded (OpenAI text-embedding-3-small), and stored in pgvector. Hybrid search combines semantic cosine similarity (70%) + BM25 keyword search (30%) with optional LLM re-ranking.
@@ -33,7 +33,7 @@ Wraps any CLI application as a fully functional MCP server via a 6-phase AI pipe
 Standard Webhooks spec with HMAC-SHA256 signatures. Public trigger endpoint for external services. Provider presets for GitHub, Stripe, Slack. Event filtering, idempotency, secret rotation. Managed at `/webhooks/[agentId]`.
 
 ### 8. Agent Marketplace
-Discover and share agents at `/discover`. Faceted search by category, tags, model, scope. 137 templates across 12 categories available at `/templates`.
+Discover and share agents at `/discover`. Faceted search by category, tags, model, scope. 250 templates across 21 categories available at `/templates`.
 
 ### 9. Agent-as-Tool Orchestration
 AI response nodes can dynamically call sibling agents as tools. Circuit breaker, rate limiter, circular call detection, depth limiting (max 3), and audit logging protect the call chain.
@@ -70,7 +70,7 @@ Separate service running Python FastMCP. Exposes 3 tools: `get_skill`, `search_s
 
 1. Create an agent — give it a name and description (or pick a template)
 2. Add Knowledge Base — enter URLs, upload files, or paste text
-3. Build a flow — add and connect nodes in the Builder (32 node types)
+3. Build a flow — add and connect nodes in the Builder (55 node types)
 4. Configure webhooks — set up external triggers if needed
 5. Add evals — define test cases with assertions for quality assurance
 6. Test — use Test Chat to verify the agent works correctly
@@ -96,9 +96,9 @@ When a user sends a message:
 
 | Tier | Models |
 |------|--------|
-| Fast | deepseek-chat, gpt-4o-mini, claude-haiku-4-5, gemini-2.5-flash, llama-3.3-70b, mistral-small |
-| Balanced | gpt-4o, claude-sonnet-4-5, gemini-2.5-pro, mistral-medium, moonshot-v1-auto |
-| Powerful | deepseek-reasoner, o3-mini, claude-opus-4-5, mistral-large, groq-compound-beta |
+| Fast | deepseek-chat, gpt-4.1-mini, claude-haiku-4-5, gemini-2.5-flash, llama-3.3-70b, mistral-small-3.1 |
+| Balanced | gpt-4.1, claude-sonnet-4-6, compound-beta, mistral-medium-3, kimi-k2 |
+| Powerful | deepseek-reasoner, o4-mini, o3, claude-opus-4-6, gemini-2.5-pro, mistral-large-3, kimi-k2-thinking |
 
 DeepSeek is the default. OpenAI API key is required for embeddings (DeepSeek has no embedding support).
 

@@ -8,7 +8,7 @@ Description: Generates an AI response based on conversation context and a system
 Fields:
 - Label — internal node name
 - System Prompt — instructions for the AI (who the agent is, how it behaves, what it can/cannot do)
-- Model — AI model to use (deepseek-chat, gpt-4o-mini, claude-haiku-4-5-20251001, etc.)
+- Model — AI model to use (deepseek-chat, gpt-4.1-mini, claude-haiku-4-5, etc.)
 - Max Tokens — maximum number of tokens in the response (default: 500)
 - Output Variable — name of the variable where the response is stored (e.g. ai_response)
 

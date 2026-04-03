@@ -68,9 +68,6 @@ const envSchema = z.object({
   RESEND_API_KEY: optionalStr,
   RESEND_FROM_EMAIL: optionalStr,
   SENTRY_DSN: optionalStr,
-  /** Comma-separated list of user IDs allowed to call admin endpoints.
-   *  When unset, admin endpoints fall back to any authenticated user (dev-friendly). */
-  ADMIN_USER_IDS: optionalStr,
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),

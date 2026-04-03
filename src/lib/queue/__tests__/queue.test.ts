@@ -25,7 +25,7 @@ vi.mock("@/lib/logger", () => ({
 // Must stub REDIS_URL before importing queue module
 vi.stubEnv("REDIS_URL", "redis://localhost:6379");
 
-import { addFlowJob, addEvalJob, addKBIngestJob, getJobStatus, closeQueue } from "../index";
+import { addFlowJob, addEvalJob, getJobStatus, closeQueue } from "../index";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -90,48 +90,6 @@ describe("Queue — addEvalJob", () => {
       expect.objectContaining({ type: "eval.run" }),
       expect.objectContaining({ priority: 10 }),
     );
-  });
-});
-
-describe("Queue — addKBIngestJob", () => {
-  it("enqueues a KB ingest job with source ID", async () => {
-    mockAdd.mockResolvedValueOnce({ id: "kb-ingest-123" });
-
-    const jobId = await addKBIngestJob({ sourceId: "source-abc" });
-
-    expect(jobId).toBe("kb-ingest-123");
-    expect(mockAdd).toHaveBeenCalledWith(
-      "kb.ingest",
-      expect.objectContaining({
-        type: "kb.ingest",
-        sourceId: "source-abc",
-      }),
-      expect.objectContaining({ priority: 5 }),
-    );
-  });
-
-  it("passes optional content to the job data", async () => {
-    mockAdd.mockResolvedValueOnce({ id: "kb-ingest-456" });
-
-    await addKBIngestJob({ sourceId: "source-xyz", content: "Some text content" });
-
-    expect(mockAdd).toHaveBeenCalledWith(
-      "kb.ingest",
-      expect.objectContaining({
-        type: "kb.ingest",
-        sourceId: "source-xyz",
-        content: "Some text content",
-      }),
-      expect.anything(),
-    );
-  });
-
-  it("falls back to sourceId when job has no id", async () => {
-    mockAdd.mockResolvedValueOnce({ id: undefined });
-
-    const jobId = await addKBIngestJob({ sourceId: "source-fallback" });
-
-    expect(jobId).toContain("source-fallback");
   });
 });
 

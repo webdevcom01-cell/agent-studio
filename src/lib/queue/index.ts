@@ -45,18 +45,7 @@ export interface WebhookRetryJobData {
   retryCount: number;
 }
 
-export interface KBIngestJobData {
-  type: "kb.ingest";
-  sourceId: string;
-  /** Pre-extracted text content (for TEXT type sources). URL/FILE sources re-fetch from DB. */
-  content?: string;
-}
-
-export type JobData =
-  | FlowExecuteJobData
-  | EvalRunJobData
-  | WebhookRetryJobData
-  | KBIngestJobData;
+export type JobData = FlowExecuteJobData | EvalRunJobData | WebhookRetryJobData;
 
 const PRIORITY_MAP: Record<string, number> = {
   chat: 1,
@@ -178,30 +167,6 @@ export async function addWebhookRetryJob(
   });
 
   return job.id ?? `webhook-retry-${data.executionId}-${data.retryCount}`;
-}
-
-export async function addKBIngestJob(
-  data: Omit<KBIngestJobData, "type">,
-): Promise<string> {
-  const q = getQueue();
-
-  const job = await q.add(
-    "kb.ingest",
-    { ...data, type: "kb.ingest" as const },
-    {
-      priority: 5,
-      jobId: `kb-ingest-${data.sourceId}-${Date.now()}`,
-      removeOnComplete: { age: 3600 },
-      removeOnFail: { age: 604800 },
-    },
-  );
-
-  logger.info("KB ingest job added", {
-    jobId: job.id,
-    sourceId: data.sourceId,
-  });
-
-  return job.id ?? `kb-ingest-${data.sourceId}`;
 }
 
 export async function getJobStatus(jobId: string): Promise<{

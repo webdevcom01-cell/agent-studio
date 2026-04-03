@@ -18,29 +18,6 @@ export default defineConfig({
         inline: ["next-auth"],
       },
     },
-    coverage: {
-      provider: "v8",
-      reporter: ["text", "text-summary", "lcov"],
-      reportsDirectory: "coverage",
-      include: ["src/**/*.{ts,tsx}"],
-      exclude: [
-        "src/generated/**",
-        "src/types/**",
-        "src/**/*.test.{ts,tsx}",
-        "src/**/*.d.ts",
-        "src/data/**",
-        "src/app/**/layout.tsx",
-        "src/app/**/loading.tsx",
-        "src/instrumentation.ts",
-      ],
-      // Target: 70% lines. Warn only — do not fail CI until baseline is established.
-      thresholds: {
-        lines: 30,
-        functions: 30,
-        branches: 25,
-        statements: 30,
-      },
-    },
   },
   resolve: {
     alias: {

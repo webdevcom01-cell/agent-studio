@@ -20,7 +20,7 @@ Most common reasons:
 1. KB doesn't have relevant information — add more URLs or check if pages were successfully ingested
 2. KB Search Query Variable is wrong — in the Query Variable field, enter user_question if you have a Capture node, or last_message for directly using the latest message
 3. System Prompt is unclear — precisely describe what the agent should do
-4. Model isn't suitable — for more complex queries use gpt-4o or claude-sonnet-4-5-20250929
+4. Model isn't suitable — for more complex queries use gpt-4.1 or claude-sonnet-4-6
 
 ---
 
@@ -180,7 +180,7 @@ Cause: Issue with the API key or model.
 
 Solution:
 1. Check .env.local to make sure API keys are correct
-2. Change the model to gpt-4o-mini or deepseek-chat and try again
+2. Change the model to gpt-4.1-mini or deepseek-chat and try again
 3. Check Max Tokens — increase to 1000 if responses are being cut off
 
 ---

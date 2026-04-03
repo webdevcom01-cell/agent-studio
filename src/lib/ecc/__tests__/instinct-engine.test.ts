@@ -10,14 +10,7 @@ vi.mock("@/lib/prisma", () => ({
     skill: {
       upsert: vi.fn(),
     },
-    humanApprovalRequest: {
-      create: vi.fn(),
-    },
   },
-}));
-
-vi.mock("@/lib/observability/metrics", () => ({
-  recordMetric: vi.fn(),
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -25,11 +18,7 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import {
-  getPromotionCandidates,
-  promoteInstinctToSkill,
-  requestInstinctPromotion,
-} from "../instinct-engine";
+import { getPromotionCandidates, promoteInstinctToSkill } from "../instinct-engine";
 
 const mockPrisma = vi.mocked(prisma);
 
@@ -132,53 +121,5 @@ describe("promoteInstinctToSkill", () => {
 
     const upsertCall = mockPrisma.skill.upsert.mock.calls[0][0];
     expect(upsertCall.where.slug).toBe("instinct-error-handling-best-practices");
-  });
-});
-
-describe("requestInstinctPromotion", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("creates a HumanApprovalRequest and does NOT create a Skill", async () => {
-    mockPrisma.instinct.findUniqueOrThrow.mockResolvedValue({
-      id: "i1",
-      name: "TDD First",
-      description: "Always write tests first",
-      confidence: 0.92,
-      agentId: "a1",
-    } as never);
-
-    mockPrisma.humanApprovalRequest.create.mockResolvedValue({
-      id: "req-1",
-    } as never);
-
-    const result = await requestInstinctPromotion("i1", "# TDD First\n\nContent");
-
-    expect(result.approvalRequestId).toBe("req-1");
-    expect(mockPrisma.humanApprovalRequest.create).toHaveBeenCalledOnce();
-    expect(mockPrisma.skill.upsert).not.toHaveBeenCalled();
-  });
-
-  it("stores correct contextData in the approval request", async () => {
-    mockPrisma.instinct.findUniqueOrThrow.mockResolvedValue({
-      id: "i2",
-      name: "Error Handling",
-      description: "Always handle errors",
-      confidence: 0.88,
-      agentId: "a2",
-    } as never);
-
-    mockPrisma.humanApprovalRequest.create.mockResolvedValue({
-      id: "req-2",
-    } as never);
-
-    await requestInstinctPromotion("i2", "skill-body");
-
-    const createCall = mockPrisma.humanApprovalRequest.create.mock.calls[0][0];
-    expect(createCall.data.contextData).toMatchObject({
-      type: "instinct_promotion",
-      instinctId: "i2",
-      skillContent: "skill-body",
-      confidence: 0.88,
-    });
   });
 });
