@@ -14,7 +14,7 @@
 
 import { Worker, type Job } from "bullmq";
 import { logger } from "@/lib/logger";
-import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData } from "./index";
+import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData } from "./index";
 
 const QUEUE_NAME = "agent-studio";
 const CONCURRENCY = 5;
@@ -35,6 +35,8 @@ async function processJob(job: Job<JobData>): Promise<unknown> {
       return processEvalJob(job as Job<EvalRunJobData>);
     case "webhook.retry":
       return processWebhookRetryJob(job as Job<WebhookRetryJobData>);
+    case "kb.ingest":
+      return processKBIngestJob(job as Job<KBIngestJobData>);
     default:
       throw new Error(`Unknown job type: ${(data as Record<string, unknown>).type}`);
   }
@@ -148,6 +150,25 @@ async function processWebhookRetryJob(job: Job<WebhookRetryJobData>): Promise<un
   });
 
   return result;
+}
+
+async function processKBIngestJob(job: Job<KBIngestJobData>): Promise<unknown> {
+  const { sourceId, content } = job.data;
+
+  const { ingestSource } = await import("@/lib/knowledge/ingest");
+
+  await job.updateProgress(10);
+
+  await ingestSource(sourceId, content);
+
+  await job.updateProgress(100);
+
+  logger.info("KB ingest job completed", {
+    jobId: job.id,
+    sourceId,
+  });
+
+  return { sourceId, success: true };
 }
 
 export function createWorker(): Worker<JobData> {

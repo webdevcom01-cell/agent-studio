@@ -4,6 +4,7 @@ import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { runEvalSuite, failEvalRun } from "@/lib/evals/runner";
 import { TriggerEvalRunSchema } from "@/lib/evals/schemas";
+import { addEvalJob } from "@/lib/queue";
 
 interface RouteParams {
   params: Promise<{ agentId: string; suiteId: string }>;
@@ -70,7 +71,27 @@ export async function POST(
 
     logger.info("eval_run_triggered", { suiteId, agentId, triggeredBy });
 
-    // Run eval suite — this blocks until complete (all test cases evaluated)
+    // Try to enqueue via BullMQ (non-blocking). Falls back to sync if Redis unavailable.
+    try {
+      const jobId = await addEvalJob({
+        suiteId,
+        agentId,
+        triggeredBy,
+        baseUrl,
+        authHeader: cookieHeader,
+      });
+
+      logger.info("eval_run_queued", { suiteId, agentId, jobId });
+      return NextResponse.json(
+        { success: true, data: { queued: true, jobId } },
+        { status: 202 },
+      );
+    } catch {
+      // Redis unavailable — run synchronously as fallback
+      logger.warn("eval queue unavailable, running synchronously", { suiteId, agentId });
+    }
+
+    // Synchronous fallback
     let summary;
     try {
       summary = await runEvalSuite(suiteId, agentId, {

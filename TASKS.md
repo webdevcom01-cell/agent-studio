@@ -171,6 +171,10 @@
 | 2026-04-02 | Kontrolni checkup PASS — 0 TS grešaka, 2715/2715 testova, precheck ✅ Spreman za push. |
 | 2026-04-02 | Railway deploy fix — Dockerfile runner stage zadnji, builder = DOCKERFILE, startCommand = node server.js |
 | 2026-04-03 | Faza 3.2 DONE: OpenAPI spec — registry, 11 tagova, 30+ paths, /api/openapi.json + /api/docs Swagger UI, 13/13 testova |
+| 2026-04-03 | Sesija 1 DONE: KB watchdog, embedding retry, Dependabot |
+| 2026-04-03 | Sesija 2 DONE: Handler audit, optimistic locking |
+| 2026-04-03 | Sesija 3 DONE: Coverage setup (v8), Redis null tests, embed error boundary |
+| 2026-04-03 | Sesija 4 DONE: 5.10 BullMQ heavy tasks (KB ingest + eval runs → queue, graceful fallback, 9/9 testovi) + 5.12 k6 load testovi (3 scenarija, SLO thresholds) |
 
 ---
 
@@ -296,14 +300,18 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 ---
 
 ### 🟡 5.10 — BullMQ za Heavy Tasks (KB ingest + Eval runs)
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** SKALIRANJE — blokira main Next.js process
 - **Problem:** KB ingest i eval runs se izvršavaju u istom procesu kao API rute
 - **Fix:** Prebaciti na BullMQ queue (infrastruktura već postoji!) + worker processing
 - **Standard 2026:** Queue-based load leveling (Azure Architecture pattern)
-- **Fajlovi:** `src/lib/queue/`, `src/lib/knowledge/ingest.ts`, `src/lib/evals/runner.ts`
-- **Testovi:** BullMQ job enqueue → worker procesira → rezultat u DB
-- **Procjena:** 3-5 dana
+- **Implementirano:**
+  - `KBIngestJobData` tip + `addKBIngestJob()` u `src/lib/queue/index.ts`
+  - `processKBIngestJob()` handler u `src/lib/queue/worker.ts`
+  - 3 KB API rute refaktorisane (`sources/route.ts`, `upload/route.ts`, `retry/route.ts`) — queue s fallback na in-process
+  - `evals/[suiteId]/run/route.ts` — async enqueue (202) s fallback na sync
+  - 3 nova unit testa za `addKBIngestJob()` (9/9 prolaze)
+- **Fajlovi:** `src/lib/queue/index.ts`, `src/lib/queue/worker.ts`, KB source routes, eval run route
 
 ---
 
@@ -320,14 +328,16 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 ---
 
 ### 🟡 5.12 — Load Testovi (k6)
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** SKALIRANJE — ne znamo koliko korisnika možemo podnijeti
 - **Problem:** k6 plan postoji u dokumentaciji, nikad implementiran
-- **Fix:** k6 skript, 100 concurrent users, 30 min test, SLO: P95 < 5s chat response
-- **Standard 2026:** Performance engineering, SLO-based testing (Google SRE book)
-- **Fajlovi:** `load-tests/` (novi direktorij), `.github/workflows/load-test.yml`
-- **Testovi:** k6 report je verifikacija
-- **Procjena:** 1 dan
+- **Implementirano:**
+  - `load-tests/agent-studio.js` — k6 skript sa 3 scenarija (background, chat_load, kb_spike)
+  - SLO thresholds: P95<100ms health, P99<500ms agents, P99<2s KB search, P95<5s chat
+  - Ramping VUs: 0→50 za chat, arrival rate 5→30 za KB
+  - `load-tests/README.md` — instalacija k6, usage, env vars, interpretacija rezultata
+  - `"test:load"` script u `package.json`
+- **Pokretanje:** `pnpm test:load` ili `BASE_URL=https://... TEST_AGENT_ID=... k6 run load-tests/agent-studio.js`
 
 ---
 
@@ -367,7 +377,7 @@ Sesija 2 (sprječava izgubljen rad): ✅ ZAVRŠENA 2026-04-03
 Sesija 3 (vidljivost i pouzdanost): ✅ ZAVRŠENA 2026-04-03
   5.5 Coverage + 5.6 Redis Tests + 5.8 Embed Error
 
-Sesija 4 (skaliranje):
+Sesija 4 (skaliranje): ✅ ZAVRŠENA 2026-04-03
   5.10 BullMQ + 5.12 Load Tests
 
 Sesija 5 (AI governance + DX):
