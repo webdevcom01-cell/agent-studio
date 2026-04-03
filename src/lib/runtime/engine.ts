@@ -4,6 +4,7 @@ import { saveContext, saveMessages } from "./context";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
+import { shouldCompact, compactContext } from "./context-compaction";
 import type { FlowNode } from "@/types";
 
 /**
@@ -132,6 +133,13 @@ export async function executeFlow(
   }
 
   const MAX_HISTORY = 100;
+  // Smart compaction: summarize context before truncating so the AI retains
+  // key facts, decisions, and state from earlier in the conversation.
+  // The summary is stored in context.variables['__context_summary'] which
+  // ai-response handlers inject into the system prompt.
+  if (shouldCompact(context)) {
+    await compactContext(context);
+  }
   if (context.messageHistory.length > MAX_HISTORY) {
     context.messageHistory = context.messageHistory.slice(-MAX_HISTORY);
   }

@@ -116,6 +116,13 @@ export async function aiResponseStreamingHandler(
     }
     // ──────────────────────────────────────────────────────────────────────────
 
+    // ── Context summary injection ─────────────────────────────────────────
+    const contextSummary = context.variables["__context_summary"];
+    if (typeof contextSummary === "string" && contextSummary.length > 0) {
+      effectiveSystemPrompt = `[Context from earlier in this conversation:\n${contextSummary}]\n\n${effectiveSystemPrompt}`;
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
     // ── Safety: check user input for injection ────────────────────────────
     if (latestUserMsg) {
       const inputCheck = await checkInputSafety(latestUserMsg, context.agentId, node.id);

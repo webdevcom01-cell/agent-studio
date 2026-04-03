@@ -20,6 +20,9 @@ export interface RuntimeContext {
   debugSessionId?: string;
   // AbortSignal from the stream — propagated to sub-agent calls for early cancellation
   abortSignal?: AbortSignal;
+  // When false, disables smart context compaction before history truncation.
+  // Defaults to true — the engine summarizes context before discarding old messages.
+  enableSmartCompaction?: boolean;
 }
 
 export interface ExecutionResult {

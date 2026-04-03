@@ -111,6 +111,15 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     }
     // ──────────────────────────────────────────────────────────────────────────
 
+    // ── Context summary injection ─────────────────────────────────────────
+    // If smart compaction ran previously, inject the saved summary so the AI
+    // retains awareness of earlier conversation context beyond the 20-message window.
+    const contextSummary = context.variables["__context_summary"];
+    if (typeof contextSummary === "string" && contextSummary.length > 0) {
+      effectiveSystemPrompt = `[Context from earlier in this conversation:\n${contextSummary}]\n\n${effectiveSystemPrompt}`;
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
     // ── Safety: check user input for injection ────────────────────────────
     if (latestUserMsg) {
       const inputCheck = await checkInputSafety(latestUserMsg, context.agentId, node.id);

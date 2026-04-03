@@ -10,6 +10,7 @@ import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
 import { findNextNode, findStartNode, SELF_ROUTING_NODES, resolveNextNodeId } from "./engine";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
+import { shouldCompact, compactContext } from "./context-compaction";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
 import { parallelStreamingHandler } from "./handlers/parallel-streaming-handler";
@@ -104,6 +105,10 @@ export function executeFlowStreaming(
           context.variables["last_message"] = userMessage;
         }
 
+        // Smart compaction before truncation (see context-compaction.ts)
+        if (shouldCompact(context)) {
+          await compactContext(context);
+        }
         if (context.messageHistory.length > MAX_HISTORY) {
           context.messageHistory = context.messageHistory.slice(-MAX_HISTORY);
         }
