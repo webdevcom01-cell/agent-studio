@@ -46,6 +46,23 @@ vi.mock("@/lib/api/auth-guard", () => ({
 vi.mock("@/lib/auth", () => ({
   auth: vi.fn().mockResolvedValue(null),
 }));
+vi.mock("@/lib/queue", () => ({
+  addFlowJob: vi.fn().mockResolvedValue("job-1"),
+  getJobStatus: vi.fn().mockResolvedValue({ state: "completed" }),
+}));
+vi.mock("@/lib/queue/events", () => ({
+  createJobEventStream: vi.fn().mockReturnValue(new ReadableStream()),
+}));
+vi.mock("@/lib/api/body-limit", () => ({
+  parseBodyWithLimit: vi.fn().mockImplementation(async (req: Request) => req.json()),
+  BodyTooLargeError: class BodyTooLargeError extends Error {},
+  InvalidJsonError: class InvalidJsonError extends Error {},
+}));
+vi.mock("@/lib/api/sanitize-error", () => ({
+  sanitizeErrorMessage: vi.fn().mockImplementation((err: unknown, fallback: string) =>
+    err instanceof Error ? err.message : fallback
+  ),
+}));
 
 import { POST } from "../route";
 
@@ -63,7 +80,12 @@ function makeRequest(body: Record<string, unknown>): NextRequest {
   );
 }
 
+// Import mocked modules so we can re-apply defaults in beforeEach
+import * as RateLimit from "@/lib/rate-limit";
+import * as BodyLimit from "@/lib/api/body-limit";
+
 beforeEach(() => {
+  // clearAllMocks resets call counts but preserves mock implementations set in vi.mock(...)
   vi.clearAllMocks();
 });
 
@@ -103,5 +125,54 @@ describe("POST /api/agents/[agentId]/chat message validation", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe("Message is required");
+  });
+});
+
+describe("POST /api/agents/[agentId]/chat — rate-limit headers", () => {
+  it("successful 200 response includes X-RateLimit-Limit and X-RateLimit-Remaining", async () => {
+    vi.mocked(RateLimit.checkRateLimitAsync).mockResolvedValue({
+      allowed: true,
+      remaining: 17,
+      retryAfterMs: 0,
+    });
+
+    const res = await POST(makeRequest({ message: "Hello" }), PARAMS);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-RateLimit-Limit")).toBe("20");
+    expect(res.headers.get("X-RateLimit-Remaining")).toBe("17");
+    expect(res.headers.get("X-RateLimit-Reset")).toBeTruthy();
+  });
+
+  it("429 response includes X-RateLimit-Limit, Remaining=0, and Retry-After", async () => {
+    vi.mocked(RateLimit.checkRateLimitAsync).mockResolvedValue({
+      allowed: false,
+      remaining: 0,
+      retryAfterMs: 45_000,
+    });
+
+    const res = await POST(makeRequest({ message: "Hello" }), PARAMS);
+    expect(res.status).toBe(429);
+    expect(res.headers.get("X-RateLimit-Limit")).toBe("20");
+    expect(res.headers.get("X-RateLimit-Remaining")).toBe("0");
+    expect(res.headers.get("Retry-After")).toBe("45");
+    expect(res.headers.get("X-RateLimit-Reset")).toBeTruthy();
+  });
+
+  it("X-RateLimit-Reset is a Unix timestamp in seconds (integer string)", async () => {
+    vi.mocked(RateLimit.checkRateLimitAsync).mockResolvedValue({
+      allowed: true,
+      remaining: 10,
+      retryAfterMs: 0,
+    });
+
+    const res = await POST(makeRequest({ message: "Hello" }), PARAMS);
+    const reset = res.headers.get("X-RateLimit-Reset");
+    expect(reset).toBeTruthy();
+    // Must be a valid integer
+    expect(Number.isInteger(Number(reset))).toBe(true);
+    // Must be a reasonable future timestamp (within next 2 minutes)
+    const nowSec = Math.floor(Date.now() / 1000);
+    expect(Number(reset)).toBeGreaterThan(nowSec);
+    expect(Number(reset)).toBeLessThan(nowSec + 120);
   });
 });

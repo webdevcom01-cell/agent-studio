@@ -175,6 +175,8 @@
 | 2026-04-03 | Sesija 2 DONE: Handler audit, optimistic locking |
 | 2026-04-03 | Sesija 3 DONE: Coverage setup (v8), Redis null tests, embed error boundary |
 | 2026-04-03 | Sesija 4 DONE: 5.10 BullMQ heavy tasks (KB ingest + eval runs → queue, graceful fallback, 9/9 testovi) + 5.12 k6 load testovi (3 scenarija, SLO thresholds) |
+| 2026-04-03 | Sesija 5 DONE: 5.11 ECC Human Approval Gate (requestInstinctPromotion + approve hook, 8/8 testovi) + 5.13 OpenAPI securitySchemes (BearerAuth/CookieAuth, 15/15 testovi) + 5.14 CHANGELOG.md |
+| 2026-04-03 | Sesija 6 DONE: 5.9 CLI Generator stuck toast (proaktivni warning, 5/5 testovi) + 5.15 Rate-limit headers na svim success response-ima (8/8 testovi) |
 
 ---
 
@@ -288,14 +290,15 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 ---
 
 ### 🟠 5.9 — CLI Generator Stuck Notification
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** OZBILJNO — korisnik čeka 5 min ne znajući da je zaglavilo
 - **Problem:** Stuck detection postoji, ali nema proaktivne notifikacije korisniku
-- **Fix:** In-app toast + email notifikacija kad `updatedAt > STUCK_THRESHOLD_MS`
+- **Implementirano:**
+  - `notifiedStuckRef: useRef<Set<string>>()` u `page.tsx` — guard za deduplikaciju
+  - Novi `useEffect` (F2) koji iterira sve generacije: kad neka postane stuck, prikazuje `toast.warning()` jednom (8s duration)
+  - Neovisno od selekcije — korisnik dobija upozorenje čak i ako nije kliknuo na stuck generaciju
+  - 5/5 strukturalnih testova u `src/app/cli-generator/__tests__/stuck-notification.test.ts`
 - **Standard 2026:** UX standard — korisnik uvijek zna stanje async operacija
-- **Fajlovi:** `src/app/cli-generator/page.tsx`, `src/lib/cli-generator/types.ts`
-- **Testovi:** mock stuck state → provjeriti da se notifikacija šalje
-- **Procjena:** 2h
 
 ---
 
@@ -369,6 +372,21 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 
 ---
 
+---
+
+### 🟢 5.15 — Rate-Limit Headers na uspješnim odgovorima
+- **Status:** ✅ DONE (2026-04-03)
+- **Prioritet:** DEVELOPER EXPERIENCE — klijenti ne znaju koliko im je ostalo quota-e
+- **Problem:** Chat route vraćao `X-RateLimit-Remaining: 0` samo na 429, ne na uspješnim odgovorima
+- **Implementirano:**
+  - `rateLimitHeaders` helper objekt u chat route: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+  - Headers dodati na sve 4 success response putanje: SSE stream, async 202, sync streaming, sync 200
+  - 429 response dopunjen: dodat `X-RateLimit-Limit` i `X-RateLimit-Reset` (ranije imao samo Remaining)
+  - 3 nova testa u `chat-validation.test.ts` — 8/8 ukupno prolaze
+- **Standard 2026:** IETF draft-ietf-httpapi-ratelimit-headers-07
+
+---
+
 ## Prioritet redosljed sesija
 
 ```
@@ -386,6 +404,9 @@ Sesija 4 (skaliranje): ✅ ZAVRŠENA 2026-04-03
 
 Sesija 5 (AI governance + DX): ✅ ZAVRŠENA 2026-04-03
   5.11 ECC Human Approval + 5.13 Scopes + 5.14 CHANGELOG
+
+Sesija 6 (UX + DX polish): ✅ ZAVRŠENA 2026-04-03
+  5.9 CLI Stuck Notification + 5.15 Rate-Limit Headers
 ```
 
 ---
