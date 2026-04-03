@@ -1,468 +1,654 @@
-# Agent Studio — Implementation Tracker
+# TASKS — Agent Studio OpenClaw-Inspired Upgrade Plan
 
-> **Pravilo #1:** Svaka sesija počinje čitanjem ovog fajla.
-> **Pravilo #2:** Svaki završen zadatak se odmah označava kao ✅.
-> **Pravilo #3:** Ako nešto blokira zadatak, piše se BLOCKER ispod njega.
-
----
-
-## Kontekst
-
-- **ICP:** Scenario A — Developer tools, self-serve
-- **Model:** Option B — Open source core + hosted
-- **Billing:** Van scope-a dok nema firme i dokazanog traction-a
-- **Repo:** Javan na GitHub-u
+> Generated: 2026-04-03
+> Source: Deep analysis of claw-code, oh-my-codex (OMX), oh-my-claudecode (OMC), clawhip, memsearch, bb25
+> Status legend: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 
 ---
 
-## FAZA 0 — Stabilizacija (preduslov za sve ostalo)
+## FAZA A — Runtime Engine Hooks (P0 — Highest Impact)
 
-### 0.1 — Agent.userId nullable fix
-- **Status:** ✅ DONE (2026-04-02)
-- **Šta:** Bug pronađen: 118 route poziva `requireAuth()` bez `req` → x-api-key se nikad nije čitao
-- **Fix:** `auth-guard.ts` koristi `headers()` iz `next/headers` kao fallback kad `req` nije prosleđen
-- **Bonus:** `vitest.setup.ts` dobio globalni mock za `next/headers` → 2684/2684 testovi prolaze
+These address the most critical architectural gaps in the runtime engine.
+Inspired by: claw-code hook DAG, OMC 11 lifecycle events, clawhip event pipeline.
 
-### 0.2 — WebhookDeadLetter komentar
-- **Status:** ✅ DONE (2026-04-02)
-- **Šta:** Dodat TODO komentar u schema.prisma — tabela postoji, processor dolazi u Fazi 2
-- **Fajl:** `prisma/schema.prisma`
+### A1. Lifecycle Hook System
 
-### 0.3 — Baseline test check
-- **Status:** ✅ DONE (2026-04-02)
-- **Šta:** 2684 testova PASSED, 0 TypeScript grešaka
-- **Output:** Svi testovi prolaze — stabilna baza za dalji razvoj
+> **Gap**: `engine.ts` and `engine-streaming.ts` have only 2 audit log points
+> (FLOW_EXECUTION_START, FLOW_EXECUTION_END). No per-node or per-tool hooks exist.
+> OMC has 11 lifecycle hooks; claw-code has a full DAG-based hook pipeline.
 
-### 0.4 — README.md rewrite
-- **Status:** ✅ DONE (2026-04-02)
-- **Šta:** Ažuriran test badge (2502→2684), dodata sekcija "API Authentication" sa svim scope-ovima, curl primeri, menija `/settings`, ažuriran project structure
+**Current state** (verified in code):
+- `engine.ts` line 140-146: `FLOW_EXECUTION_START` audit log
+- `engine.ts` line 244-254: `FLOW_EXECUTION_END` audit log
+- No events emitted between nodes, before/after tool calls, or on errors
 
----
+**Tasks:**
 
-## FAZA 1 — API Keys (kapija za developer ICP)
+- [ ] A1.1 — Define `FlowHookEvent` type with 7 events:
+  - `onFlowStart` — before first node executes
+  - `onFlowComplete` — after last node or end node
+  - `onFlowError` — on unrecoverable flow error
+  - `beforeNodeExecute` — before each handler runs (includes nodeId, nodeType, input variables)
+  - `afterNodeExecute` — after each handler returns (includes nodeId, output, messages, duration)
+  - `beforeToolCall` — before MCP tool or agent-as-tool invocation
+  - `afterToolCall` — after tool returns (includes toolName, result, latency)
+- [ ] A1.2 — Create `src/lib/runtime/hooks.ts`:
+  - `FlowHookRegistry` class with `register(event, callback)` and `emit(event, payload)`
+  - Support sync and async callbacks
+  - Error in hook callback must NOT crash the flow (try/catch with logger.warn)
+- [ ] A1.3 — Integrate hooks into `engine.ts`:
+  - Emit `onFlowStart` at line ~140 (where audit log currently fires)
+  - Emit `beforeNodeExecute` / `afterNodeExecute` around handler call at line ~189
+  - Emit `onFlowComplete` at line ~244
+  - Emit `onFlowError` in catch block at line ~258
+- [ ] A1.4 — Integrate hooks into `engine-streaming.ts`:
+  - Same integration points as engine.ts (lines ~113, ~166, ~461)
+  - Hook emit must NOT block the stream writer
+- [ ] A1.5 — Integrate hooks into `ai-response-handler.ts` and `ai-response-streaming-handler.ts`:
+  - Emit `beforeToolCall` / `afterToolCall` around MCP tool execution and agent-as-tool calls
+- [ ] A1.6 — Create `WebhookHookSink`:
+  - Auto-register webhook URLs from agent config
+  - POST hook events to configured webhook URLs (fire-and-forget, 5s timeout)
+  - JSON payload: `{ event, agentId, flowId, nodeId, timestamp, data }`
+- [ ] A1.7 — Add hook configuration to Agent model or Flow config:
+  - `hookWebhookUrls: string[]` — URLs to receive hook events
+  - `hookEvents: string[]` — which events to emit (default: all)
+- [ ] A1.8 — Write unit tests for hooks.ts (register, emit, error isolation)
+- [ ] A1.9 — Write integration test: flow with hooks -> webhook receives events
 
-> **⚠️ DISCOVERY (2026-04-02):** Backend API keys infrastruktura je KOMPLETNA.
-> Implementirano: `src/app/api/api-keys/route.ts`, `src/app/api/api-keys/[keyId]/route.ts`,
-> `src/lib/api/api-key.ts`, `src/lib/api/auth-guard.ts`.
-> **Jedino što nedostaje je Settings UI (1.6).**
+**Files to modify:**
+- `src/lib/runtime/hooks.ts` (NEW)
+- `src/lib/runtime/engine.ts`
+- `src/lib/runtime/engine-streaming.ts`
+- `src/lib/runtime/handlers/ai-response-handler.ts`
+- `src/lib/runtime/handlers/ai-response-streaming-handler.ts`
+- `src/lib/runtime/types.ts` (add FlowHookEvent type)
 
-### 1.1 — POST /api/api-keys
-- **Status:** ✅ DONE — već postoji `src/app/api/api-keys/route.ts`
-- **Šta:** Generisanje ključa, SHA-256 hash, vraća plaintext samo jednom, max 20 ključeva
-
-### 1.2 — GET /api/api-keys
-- **Status:** ✅ DONE — isti route.ts
-- **Šta:** Lista ključeva (samo prefix + metadata, nikad hash)
-
-### 1.3 — DELETE /api/api-keys/[keyId] + PATCH
-- **Status:** ✅ DONE — `src/app/api/api-keys/[keyId]/route.ts`
-- **Šta:** Soft delete (revokedAt) + rename + scope update, ownership check
-
-### 1.4 — Auth middleware proširenje
-- **Status:** ✅ DONE — `src/lib/api/auth-guard.ts`
-- **Šta:** `requireAuth(req?)` prihvata `x-api-key` header, timing-safe hash comparison via validateApiKey()
-
-### 1.5 — Scopes enforcement
-- **Status:** ✅ DONE — `src/lib/api/api-key.ts`
-- **Šta:** API_KEY_SCOPES, hasScope(), requiresScope(), ApiKeyScopeError (11 scope-ova)
-
-### 1.6 — UI: Settings → API Keys
-- **Status:** ✅ DONE (2026-04-02)
-- **Šta:** Nova stranica, lista ključeva, kreiranje sa one-time reveal modal, revokacija
-- **Fajlovi:** `src/app/settings/layout.tsx`, `src/app/settings/page.tsx`, `src/app/settings/api-keys/page.tsx`
-- **Features:** SWR lista, create dialog sa scopes checkboxes + expiry, SHA-256 one-time reveal modal + clipboard copy, revoke confirm dialog, scope colour badges, docs callout, empty state
-
-### 1.7 — Testovi za API Keys route
-- **Status:** ✅ DONE (2026-04-02)
-- **Šta:** 19 route-level integration testova: GET(401,empty,list), POST(401,422,429,create,expiry), PATCH(401,404,rename,scopes,invalid), DELETE(401,404,soft-delete,cross-user)
-- **Fajl:** `src/app/api/api-keys/__tests__/api-keys.test.ts`
-
----
-
-## FAZA 2 — Job Queue / Async Execution
-
-> **⚠️ DISCOVERY (2026-04-02):** BullMQ infrastruktura je KOMPLETNA.
-> Implementirano: `src/lib/queue/index.ts`, `src/lib/queue/worker.ts`,
-> `src/app/api/jobs/[jobId]/route.ts`. Chat route (`/api/agents/[id]/chat`) već koristi addFlowJob.
-
-### 2.1 — BullMQ setup
-- **Status:** ✅ DONE — `src/lib/queue/index.ts` + `src/lib/queue/worker.ts`
-- **Šta:** QUEUE_NAME="agent-studio", addFlowJob(), addEvalJob(), getJobStatus(), CONCURRENCY=5
-
-### 2.2 — POST /api/agents/[id]/execute/async
-- **Status:** ✅ DONE — chat route već koristi addFlowJob (linija 123 u chat/route.ts)
-- **Napomena:** Postoji i `/api/agents/[id]/execute/route.ts` — proveriti da li i on koristi queue
-
-### 2.3 — GET /api/jobs/[jobId]
-- **Status:** ✅ DONE — `src/app/api/jobs/[jobId]/route.ts`
-- **Šta:** Status polling endpoint, vraća state/progress/result/failedReason
-
-### 2.4 — Webhook retry (Dead Letter processing)
-- **Status:** ✅ DONE (2026-04-02)
-- **Šta:** Exponential backoff retry sa BullMQ, `retryWebhookExecution()`, `handleFailedExecution()`, idempotency check, dead letter processing
-- **Fajlovi:** `src/lib/webhooks/retry.ts`, `src/lib/webhooks/__tests__/retry-integration.test.ts` (12/12 testova)
-
-### 2.5 — Railway Worker service config
-- **Status:** ✅ DONE (2026-04-02)
-- **Šta:** `services/worker/railway.toml` sa `RAILWAY_CONFIG_FILE` pattern, `"worker"` script u package.json, `worker` Docker stage
-- **Fajlovi:** `services/worker/railway.toml`, `Dockerfile` (worker + migrate stages), `docker-compose.yml`
+**Estimated effort:** Medium (3-5 days)
+**Impact:** Foundation for all monitoring, debugging, and external integrations
 
 ---
 
-## FAZA 3 — Open Source Priprema
+### A2. PreCompact — Agentic Turn Before Context Truncation
 
-### 3.1 — Docusaurus aktivacija (/docs)
-- **Status:** ✅ DONE (2026-04-02)
-- **Šta:** `website/` folder sa kompletnom Docusaurus konfiguracijom — Getting Started, self-hosting, env vars, API reference
-- **Fajlovi:** `website/docusaurus.config.ts`, `website/sidebars.ts`, `website/docs/`
+> **Gap**: `engine.ts` line 134-137 does `messageHistory.slice(-MAX_HISTORY)`.
+> This is a brutal truncation that permanently loses context.
+> OpenClaw triggers a "silent agentic turn" before compaction — asks the AI
+> to save critical information to AgentMemory BEFORE truncating.
+> OMC has a `pre-compact` hook that fires before context window compression.
 
-### 3.2 — OpenAPI spec generacija
-- **Status:** ✅ DONE (2026-04-03)
-- **Šta:** `@asteasolutions/zod-to-openapi` + `openapi3-ts` — OpenAPI 3.1 spec sa 30+ endpoints, Swagger UI
-- **Fajlovi:** `src/lib/openapi/` (registry, schemas, paths, spec), `src/app/api/openapi.json/route.ts`, `src/app/api/docs/route.ts`
-- **Endpoints:** `GET /api/openapi.json` (JSON spec, cached), `GET /api/docs` (Swagger UI, zero npm deps)
-- **Dokumentovano:** Health, Agents CRUD, Chat, Flow, Knowledge, API Keys, MCP Servers, Evals, Webhooks, Jobs, Schedules
-- **Testovi:** 13/13 spec testova prolaze (vi.mock + ZodType.prototype patch za rad bez instaliranog paketa)
+**Current state** (verified in code):
+- `engine.ts` line 134: `context.messageHistory = context.messageHistory.slice(-MAX_HISTORY)`
+- `engine-streaming.ts` line 25-27: same MAX_HISTORY=100
+- No pre-truncation logic whatsoever — context is lost permanently
 
-### 3.3 — Contributing guide + templates
-- **Status:** ✅ DONE (2026-04-02)
-- **Šta:** CONTRIBUTING.md (186 linija, sekcije: pre-push, worker, node types), CODE_OF_CONDUCT.md (placeholder fix), `.github/` (ISSUE_TEMPLATE, PR template, SECURITY.md, dependabot, release-please)
-- **Fajlovi:** `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `.github/`
+**Tasks:**
 
-### 3.4 — Docker Compose za self-hosting
-- **Status:** ✅ DONE (2026-04-02)
-- **Šta:** PostgreSQL + Redis + Next.js + ECC MCP + Worker + migrate init container — `docker compose up -d`, `--profile ecc` za ECC
-- **Fajlovi:** `docker-compose.yml`, `docker-compose.override.yml`, `Dockerfile` (migrate + worker stages)
+- [ ] A2.1 — Create `src/lib/runtime/context-compaction.ts`:
+  - `compactContext(context, model)` function
+  - Step 1: Generate summary prompt: "Summarize the key facts, decisions, and state from this conversation that should be preserved"
+  - Step 2: Call AI with summarization prompt (use cheap model: deepseek-chat or haiku)
+  - Step 3: Write summary to AgentMemory via `memory_write` handler (key: `__context_summary_{timestamp}`, category: `context_compaction`)
+  - Step 4: Optionally write important variable states to memory
+  - Step 5: THEN truncate messageHistory to MAX_HISTORY
+  - Step 6: Prepend a system message with the summary to the truncated history
+- [ ] A2.2 — Add compaction threshold to engine.ts:
+  - `COMPACTION_THRESHOLD = 80` (trigger compaction at 80% of MAX_HISTORY)
+  - At line ~134: if `messageHistory.length > COMPACTION_THRESHOLD`, call `compactContext()` before slice
+- [ ] A2.3 — Same integration in engine-streaming.ts
+- [ ] A2.4 — Emit `onPreCompact` hook event (from A1) before compaction runs
+- [ ] A2.5 — Add agent-level config: `enableSmartCompaction: boolean` (default: true for new agents)
+- [ ] A2.6 — Write unit tests:
+  - Test: compaction saves summary to AgentMemory
+  - Test: truncated history includes prepended summary
+  - Test: compaction threshold triggers correctly at 80%
+  - Test: compaction works even if AI call fails (graceful fallback to raw truncation)
 
----
+**Files to modify:**
+- `src/lib/runtime/context-compaction.ts` (NEW)
+- `src/lib/runtime/engine.ts` (line ~134)
+- `src/lib/runtime/engine-streaming.ts`
 
-## FAZA 4 — Usage Analytics (interna vidljivost)
-
-### 4.1 — Admin analytics dashboard
-- **Status:** ✅ DONE (2026-04-02)
-- **Šta:** `/admin` — tri taba (Overview/Job Queue/Top Users), SWR auto-refresh, Skeleton loading; `/api/admin/stats` proširena sa totalUsers, topUsers, recentConversations, queueDelayed; `/admin/jobs` redirect na `/admin#jobs`
-- **Fajlovi:** `src/app/admin/page.tsx`, `src/app/api/admin/stats/route.ts`, `src/app/admin/jobs/page.tsx`
-
----
-
-## Van Scope-a (ne radimo ovo sada)
-
-- ❌ Stripe integracija (nema firme)
-- ❌ Organization/Multi-tenancy API (solo devs ne trebaju timove)
-- ❌ Usage enforcement/hard limits (dolazi sa billing-om)
-- ❌ ECC Meta-Orchestrator kao runtime engine (nema korisnika koji to trebaju)
-- ❌ ECC Skills vector search (LIKE search je dovoljan za sada)
-
----
-
-## Log Sesija
-
-| Datum | Šta je urađeno |
-|-------|---------------|
-| 2026-04-02 | Inicijalna analiza koda, definisan plan, kreiran TASKS.md |
-| 2026-04-02 | Discovery: BullMQ + API keys backend već kompletni. Ažuriran TASKS.md. |
-| 2026-04-02 | Faza 1.6 DONE: Settings UI za API Keys — layout, page, api-keys page (0 TS grešaka, 2684 testova prolaze) |
-| 2026-04-02 | Faza 1.7 DONE: 19 API Keys route testova (401/422/429/create/expiry/rename/revoke) |
-| 2026-04-02 | Faza 2.4 DONE: Webhook retry — exponential backoff, dead letter, idempotency (12/12 testova) |
-| 2026-04-02 | Faza 2.5 DONE: Railway Worker service — railway.toml, Dockerfile worker stage, package.json worker script |
-| 2026-04-02 | Faza 3.3 DONE: CONTRIBUTING.md proširen, CODE_OF_CONDUCT.md placeholder fix, .github/ templates |
-| 2026-04-02 | Faza 3.4 DONE: Docker Compose — migrate init container, worker service, ecc-mcp profile, override.yml |
-| 2026-04-02 | Faza 4.1 DONE: Admin dashboard — SWR, 3 taba, stats API proširena, /admin/jobs redirect |
-| 2026-04-02 | Kontrolni checkup PASS — 0 TS grešaka, 2715/2715 testova, precheck ✅ Spreman za push. |
-| 2026-04-02 | Railway deploy fix — Dockerfile runner stage zadnji, builder = DOCKERFILE, startCommand = node server.js |
-| 2026-04-03 | Faza 3.2 DONE: OpenAPI spec — registry, 11 tagova, 30+ paths, /api/openapi.json + /api/docs Swagger UI, 13/13 testova |
-| 2026-04-03 | Sesija 1 DONE: KB watchdog, embedding retry, Dependabot |
-| 2026-04-03 | Sesija 2 DONE: Handler audit, optimistic locking |
-| 2026-04-03 | Sesija 3 DONE: Coverage setup (v8), Redis null tests, embed error boundary |
-| 2026-04-03 | Sesija 4 DONE: 5.10 BullMQ heavy tasks (KB ingest + eval runs → queue, graceful fallback, 9/9 testovi) + 5.12 k6 load testovi (3 scenarija, SLO thresholds) |
-| 2026-04-03 | Sesija 5 DONE: 5.11 ECC Human Approval Gate (requestInstinctPromotion + approve hook, 8/8 testovi) + 5.13 OpenAPI securitySchemes (BearerAuth/CookieAuth, 15/15 testovi) + 5.14 CHANGELOG.md |
-| 2026-04-03 | Sesija 6 DONE: 5.9 CLI Generator stuck toast (proaktivni warning, 5/5 testovi) + 5.15 Rate-limit headers na svim success response-ima (8/8 testovi) |
-| 2026-04-03 | Sesija 7 DONE: 6.1 Worker Graceful Shutdown (SIGTERM/SIGINT + worker.close(), 6/6 testovi) + 6.2 Admin API Role Check (ADMIN_USER_IDS env, requireAdmin(), 3/3 testovi) + 6.3 Agent-Calls API Testovi (6/6 testovi) |
+**Estimated effort:** Medium (2-3 days)
+**Impact:** ENORMOUS — eliminates the #1 problem with long-running agents (context loss)
 
 ---
 
-## Aktivni Blocker-i
+### A3. Persistent Mode — ralph-Style Completion Loops
 
-*Nema trenutno.*
+> **Gap**: `reflexive_loop` has max 5 iterations and no build/test/lint verification.
+> OMC's `$ralph` mode runs indefinitely with single ownership until a verifier
+> confirms completion. The `persistent-mode` hook prevents stopping.
 
----
+**Current state** (verified in code):
+- `reflexive-loop-handler.ts` line 34-37: `maxIterations` capped at 1-5, default 3
+- Evaluation is AI-only (no build/test/lint commands)
+- No "persistent mode" concept — loop always terminates after max iterations
 
-## Sledeće na redu
+**Tasks:**
 
-Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i hardening**.
+- [ ] A3.1 — Add `persistent` mode to `reflexive_loop` node config:
+  - `mode: "bounded" | "persistent"` (default: "bounded" = current behavior)
+  - In persistent mode: max iterations raised to 20 (safety cap), but primary exit is verifier pass
+- [ ] A3.2 — Add verification commands to evaluator step:
+  - New config field: `verificationCommands: string[]` (e.g., ["npm run build", "npm run test", "npm run lint"])
+  - After AI evaluation, if commands configured, run them via `python_code` or `code_interpreter` sandbox
+  - All commands must pass (exit code 0) for the verifier to approve
+  - Command output appended to evaluator context
+- [ ] A3.3 — Add `persistent-mode` check to `end` node handler:
+  - If flow has `__persistent_mode = true` variable, `end` node checks verifier status
+  - If verifier has not confirmed, route back to the generating node instead of terminating
+- [ ] A3.4 — Emit `session.blocked` hook event when persistent loop is waiting for verification
+- [ ] A3.5 — Write unit tests for persistent mode (verifier pass, verifier fail, safety cap reached)
 
----
+**Files to modify:**
+- `src/lib/runtime/handlers/reflexive-loop-handler.ts`
+- `src/lib/runtime/handlers/end-handler.ts`
+- `src/types/index.ts` (add persistent mode config to reflexive_loop node data)
 
-## FAZA 5 — Tehnički dug + Production Hardening (2026 standardi)
-
-> Svaki zadatak ima oznaku prioriteta, procjenu rada i standard koji implementira.
-> Redosljed = redosljed rada. Ne preskakati.
-
----
-
-### 🔴 5.1 — KB Ingest Watchdog
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** KRITIČAN — može ostaviti korisnike sa broken knowledge base-om
-- **Problem:** KBSource zaglavi na `PROCESSING` zauvijek ako OpenAI API padne usred ingesta
-- **Fix:** `resetStuckSources(olderThanMinutes=10)` u `maintenance.ts`; `/api/cron/cleanup` sad resetuje zaglavljene izvore + briše stare verzije
-- **Standard 2026:** Observability + Dead process detection (SRE praksa)
-- **Fajlovi:** `src/lib/knowledge/maintenance.ts`, `src/app/api/cron/cleanup/route.ts`
-- **Testovi:** 6 testova u `maintenance.test.ts` — sve prolazi ✅
-
----
-
-### 🔴 5.2 — Handler Field Access Audit (Schema Drift Protection)
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** KRITIČAN — flow rollback može pucati na starije verzije
-- **Problem:** Handler-i pristupaju `node.data.field` direktno bez fallbacka → break na rollback
-- **Fix:** Analiza pokazala da su svi handler-i već defanzivni (parse funkcije, `as T | undefined` casts). Gap je bio samo u test coverage-u. Dodan novi test fajl koji pokriva 9 top handler-a s `node.data = {}` — svaki mora vratiti graceful `ExecutionResult`, nikad baciti.
-- **Standard 2026:** Defensive programming, backward compatibility
-- **Fajlovi:** `src/lib/runtime/handlers/__tests__/schema-drift-empty-data.test.ts` (novi fajl)
-- **Testovi:** 9 testova — condition, set-variable, kb-search, loop, mcp-tool, api-call, webhook-trigger, call-agent, ai-response — sve prolazi ✅
+**Estimated effort:** Medium (2-3 days)
+**Impact:** Enables production-grade autonomous workflows that self-verify
 
 ---
 
-### 🔴 5.3 — OpenAI Embedding Retry + Backoff
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** KRITIČAN — jedan rate limit ruši cijelu KB ingestiju
-- **Problem:** `embeddings.ts` nema retry logiku na OpenAI 429/503
-- **Fix:** `withRetry()` wrapper — exponential backoff 1s→2s→4s + ±25% jitter, max 3 retry-a; retryable na 429/503, ne na 4xx
-- **Standard 2026:** Resilience patterns — retry/backoff (AWS Well-Architected)
-- **Fajlovi:** `src/lib/knowledge/embeddings.ts`
-- **Testovi:** 12 testova u `embeddings.test.ts` — sve prolazi ✅
+## FAZA B — New Execution Modes (P1 — Major New Capabilities)
+
+Inspired by: OMC's 5 execution modes (Autopilot, Ultrapilot, Swarm, Pipeline, Ecomode).
+
+### B1. `swarm` Node Type — Shared Task Pool
+
+> **Gap**: No equivalent exists. OMC Swarm mode spawns N agents that pull from
+> a shared task pool. Each agent atomically claims a task, executes it, and
+> marks it complete. Prevents duplicate work.
+
+**Current state**: Closest is `parallel` node (MAX_BRANCHES=5, fixed branch assignment).
+No dynamic task claiming or shared pool.
+
+**Tasks:**
+
+- [ ] B1.1 — Add `swarm` to `NodeType` union in `src/types/index.ts`
+- [ ] B1.2 — Create `src/lib/runtime/handlers/swarm-handler.ts`:
+  - Config: `tasks: string[]` (list of task descriptions), `workerCount: number` (1-10, default 3), `workerModel: string`, `mergeStrategy: "concat" | "summarize"`
+  - Implementation:
+    1. Parse task list from config or variable
+    2. Create task queue (array with status: pending/claimed/done)
+    3. Spawn N workers (similar to parallel handler branches)
+    4. Each worker: claim next pending task (atomic via mutex/index), execute via AI call, mark done
+    5. Workers continue until queue empty
+    6. Merge all results per mergeStrategy
+  - Safety: timeout per task (60s), overall timeout (300s), max tasks = 50
+- [ ] B1.3 — Register handler in `src/lib/runtime/handlers/index.ts`
+- [ ] B1.4 — Create display component `src/components/builder/nodes/swarm-node.tsx`
+- [ ] B1.5 — Add to node picker in `src/components/builder/node-picker.tsx`
+- [ ] B1.6 — Add property editor in `src/components/builder/property-panel.tsx`:
+  - Task list editor (add/remove/reorder)
+  - Worker count slider
+  - Model selector
+  - Merge strategy dropdown
+- [ ] B1.7 — Write unit tests (task claiming, concurrent workers, empty queue, timeout)
+- [ ] B1.8 — Add swarm node to node type documentation
+
+**Files to create/modify:**
+- `src/types/index.ts` (add to NodeType union)
+- `src/lib/runtime/handlers/swarm-handler.ts` (NEW)
+- `src/lib/runtime/handlers/index.ts` (register)
+- `src/components/builder/nodes/swarm-node.tsx` (NEW)
+- `src/components/builder/node-picker.tsx`
+- `src/components/builder/property-panel.tsx`
+
+**Estimated effort:** High (4-6 days)
+**Impact:** Enables sprint-backlog-style parallel work — major new orchestration pattern
 
 ---
 
-### 🔴 5.4 — Dependabot Security Audit
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** KRITIČAN — GitHub je javio 1 critical + 17 high vulnerabilities
-- **Problem:** 34 vulnerabilities na main branch-u, nepoznato koliko je u prod dependencijama
-- **Fix:** `pnpm audit --prod` → **0 vulnerabilities** u production dependencies. GitHub advisory-ji su u dev deps (playwright, test tooling) — ne isporučuju se u produkcionu build.
-- **Standard 2026:** OWASP Dependency-Check, supply chain security
-- **Fajlovi:** `package.json`, `pnpm-lock.yaml`
-- **Rezultat:** No known vulnerabilities found (prod deps clean)
+### B2. Enhanced `parallel` Node — Worker Pool + Context Isolation
+
+> **Gap**: `parallel-handler.ts` line 35 uses shallow copy `{ ...context.variables }`.
+> Branches share the messageHistory reference. OMC Ultrapilot uses full context isolation
+> per worker with worktree-style independence.
+
+**Current state** (verified in code):
+- MAX_BRANCHES = 5 (hardcoded at line 4)
+- Branch context: `{ ...context, variables: { ...context.variables } }` (shallow copy)
+- messageHistory is shared by reference — branches can see each other's messages
+- Fixed branch assignment (no dynamic worker pool)
+
+**Tasks:**
+
+- [ ] B2.1 — Deep-copy messageHistory per branch:
+  - Change branch context creation (line ~76-81) to deep-copy messageHistory
+  - Each branch gets independent message accumulation
+  - Merge strategy determines how branch messages combine after completion
+- [ ] B2.2 — Add worker pool mode to parallel node:
+  - New config: `mode: "branches" | "workers"` (default: "branches" = current)
+  - Workers mode: N workers execute the same sub-flow with different inputs
+  - Input mapping: `workerInputs: Array<Record<string, unknown>>` — each worker gets one input set
+- [ ] B2.3 — Increase MAX_BRANCHES to 10 (configurable per node, default 5)
+- [ ] B2.4 — Write tests for context isolation (branch A writes variable, branch B doesn't see it)
+
+**Files to modify:**
+- `src/lib/runtime/handlers/parallel-handler.ts`
+- `src/lib/runtime/handlers/parallel-streaming-handler.ts`
+
+**Estimated effort:** Medium (2-3 days)
+**Impact:** Prevents context pollution between parallel branches — correctness improvement
 
 ---
 
-### 🟠 5.5 — Vitest Coverage Setup + 70% Target
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** OZBILJNO — 2728 testova ali ne znamo što pokrivaju
-- **Problem:** Coverage nije mjeren, slepe tačke su nepoznate
-- **Fix:** `coverage` blok u `vitest.config.ts` (v8 provider, text+lcov reporteri), `"test:coverage"` skripta u `package.json`. Thresholds na 30% (warn mode) dok se ne utvrdi baseline.
-- **Standard 2026:** Industry standard — 70% line coverage za production software
-- **Fajlovi:** `vitest.config.ts`, `package.json`
-- **Napomena:** Pokrenuti `pnpm test:coverage` za prvi baseline report
+### B3. Ecomode Enhancement for `cost_monitor`
+
+> **Gap**: cost_monitor adaptive mode already has tier downgrade at 60/80/95%.
+> OMC Ecomode additionally routes each sub-task to the cheapest capable model
+> automatically, achieving 30-50% token savings.
+
+**Current state** (verified in code):
+- Adaptive mode: Tier 1 (60%) -> balanced, Tier 2 (80%) -> fast, Tier 3 (95%) -> block/fast
+- Sets `__model_tier_override` variable for downstream nodes
+- This already exists and works well
+
+**Tasks:**
+
+- [ ] B3.1 — Add `ecomode` to cost_monitor modes (alongside monitor/budget/alert/adaptive/enforce):
+  - In ecomode: before each AI node, classify task complexity (simple/moderate/complex) using a cheap 1-shot call
+  - Route to cheapest model that can handle that complexity tier
+  - Log savings per node for dashboard analytics
+- [ ] B3.2 — Add per-task model selection log to cost tracking output:
+  - Track `{ nodeId, taskComplexity, modelUsed, tokensSaved }` per node
+- [ ] B3.3 — Write tests for ecomode routing (simple task -> haiku, complex task -> opus)
+
+**Files to modify:**
+- `src/lib/runtime/handlers/cost-monitor-handler.ts`
+
+**Estimated effort:** Low-Medium (1-2 days)
+**Impact:** 30-50% token cost reduction — significant for production workloads
 
 ---
 
-### 🟠 5.6 — Redis Edge Cases Test Suite
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** OZBILJNO — graciozni fallback postoji u kodu ali nije testiran
-- **Problem:** Redis = null scenariji nisu pokriveni testovima
-- **Fix:** Proširena `redis-cache.test.ts` sa 7 novih testova — pokriva `cacheDel`, `cacheSession`, `getCachedSession`, `invalidateSession`, `registerMCPConnection`, `getMCPConnection`, `removeMCPConnection` kad Redis = null. Svi vraćaju null ili su no-op. Postojeći `rate-limit-redis.test.ts` već pokriva rate-limit fallback.
-- **Standard 2026:** Chaos engineering principles — test failure modes
-- **Fajlovi:** `src/lib/__tests__/redis-cache.test.ts`
-- **Testovi:** 7 novih + 6 postojećih null-path testova = 13 ukupno — sve prolazi ✅
-- **Napomena:** 9 pre-postojećih happy-path testova u istom fajlu padaju (mock ioredis + dynamic import issue) — nije regresija, postojalo je i prije
+## FAZA C — Memory Architecture Upgrade (P1 — High Impact)
+
+Inspired by: memsearch (Zilliz), OpenClaw memory system, clawhip MEMORY.md + shards, bb25.
+
+### C1. memsearch-Style Markdown Memory Layer
+
+> **Gap**: AgentMemory stores JSON in PostgreSQL only. Not human-readable, not editable,
+> not exportable. memsearch uses Markdown files as source of truth with vector index
+> as cache. OpenClaw uses MEMORY.md index + memory/ shards for hot/cold tiers.
+
+**Current state** (verified in code):
+- `AgentMemory` model: `key`, `value (Json)`, `category`, `importance`, `embedding`, `accessCount`
+- No hot/cold tier distinction
+- No markdown export
+- No human-editable UI
+- No context-window-friendly summary layer
+
+**Tasks:**
+
+- [ ] C1.1 — Create `src/lib/memory/markdown-export.ts`:
+  - `exportAgentMemoryAsMarkdown(agentId)` — generates MEMORY.md index:
+    ```markdown
+    # Agent Memory — {agentName}
+    ## Hot (recently accessed, high importance)
+    - **{key}**: {summary} (importance: {importance}, accessed: {accessedAt})
+    ## Categories
+    ### general
+    - {key}: {truncated value}
+    ### context_compaction
+    - {key}: {summary}
+    ```
+  - `exportMemoryShards(agentId)` — generates per-category shard files
+- [ ] C1.2 — Create `src/lib/memory/hot-cold-tier.ts`:
+  - `getHotMemories(agentId, limit=10)` — top N by: importance x recencyScore x accessFrequency
+  - `getColdMemories(agentId, query)` — semantic search in pgvector for relevant cold memories
+  - `injectHotMemoryIntoContext(context)` — prepend hot memory summary as system message
+  - Hot memory = accessed in last 24h OR importance > 0.8 OR accessCount > 10
+  - Cold memory = everything else
+- [ ] C1.3 — Integrate hot memory injection into engine.ts and engine-streaming.ts:
+  - Before first AI node executes, inject hot memory summary into context
+  - This gives the agent "always-on" memory without loading everything
+- [ ] C1.4 — Create Memory UI tab on agent page (like Knowledge Base):
+  - List all memories with key, value preview, importance, category, lastAccessed
+  - Edit button: inline edit of value field
+  - Delete button with confirmation
+  - Export as Markdown button
+  - Import from Markdown (parse MEMORY.md format back into AgentMemory records)
+- [ ] C1.5 — API routes:
+  - `GET /api/agents/[agentId]/memory` — list all memories (paginated)
+  - `PATCH /api/agents/[agentId]/memory/[memoryId]` — edit value/importance/category
+  - `DELETE /api/agents/[agentId]/memory/[memoryId]` — delete single memory
+  - `GET /api/agents/[agentId]/memory/export` — download MEMORY.md
+  - `POST /api/agents/[agentId]/memory/import` — upload and parse MEMORY.md
+- [ ] C1.6 — Write tests for markdown export/import roundtrip, hot/cold tier selection
+
+**Files to create/modify:**
+- `src/lib/memory/markdown-export.ts` (NEW)
+- `src/lib/memory/hot-cold-tier.ts` (NEW)
+- `src/lib/runtime/engine.ts` (hot memory injection)
+- `src/lib/runtime/engine-streaming.ts` (hot memory injection)
+- `src/app/api/agents/[agentId]/memory/route.ts` (NEW)
+- `src/app/api/agents/[agentId]/memory/[memoryId]/route.ts` (NEW)
+- `src/app/api/agents/[agentId]/memory/export/route.ts` (NEW)
+- `src/app/api/agents/[agentId]/memory/import/route.ts` (NEW)
+- Agent detail page (new Memory tab)
+
+**Estimated effort:** High (5-7 days)
+**Impact:** Transparent, human-editable agent memory — major UX and capability improvement
 
 ---
 
-### 🟠 5.7 — Concurrent Flow Edit (Optimistic Locking)
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** OZBILJNO — dva korisnika edituju isti flow → izgubljen rad
-- **Problem:** Flow PUT nema version check, "last write wins"
-- **Fix:** `lockVersion Int @default(1)` na Flow modelu; PUT čita `clientLockVersion` iz body-a; ako ne slaže sa serverom → 409 Conflict; raw SQL (`Prisma.sql`) za čitanje/inkrementiranje jer `pnpm db:generate` ne može u sandbox. Klijent (`flow-builder.tsx`) čuva `lockVersion` u state, šalje ga na svaki PUT, na 409 prikazuje Sonner toast umjesto silent overwrite. Backward compatible — stari klijenti bez `clientLockVersion` prolaze bez provjere.
-- **Standard 2026:** Optimistic concurrency control (standard u svim kolaborativnim alatima)
-- **Fajlovi:** `prisma/schema.prisma`, `src/app/api/agents/[agentId]/flow/route.ts`, `src/components/builder/flow-builder.tsx`
-- **Testovi:** 7 testova u `flow-optimistic-locking.test.ts` — GET vraća lockVersion, PUT bez tokena prolazi, PUT s matching verzijom prolazi, PUT s mismatch → 409, success vraća inkrementiran lockVersion, first-ever save prolazi — sve ✅
-- **Napomena za deploy:** Nakon `git pull` pokrenuti `pnpm db:push && pnpm db:generate` da se doda `lockVersion` kolona u bazu
+### C2. 3-Layer Skill Composition
+
+> **Gap**: rbac.ts has READ/EXECUTE/ADMIN permissions only.
+> OMC uses 3-layer composition: Guarantee -> Enhancement -> Execution.
+> Guarantee skills (security, guardrails) always run first.
+
+**Current state** (verified in code):
+- `rbac.ts`: `AccessLevel` enum with READ/EXECUTE/ADMIN — flat hierarchy
+- No skill ordering, no composition layers, no mandatory skills
+
+**Tasks:**
+
+- [ ] C2.1 — Add `compositionLayer` field to Skill model:
+  - `compositionLayer: "guarantee" | "enhancement" | "execution"` (default: "execution")
+  - Guarantee: always runs first (security-check, guardrails, pii-detector)
+  - Enhancement: runs after guarantee, before execution (performance-monitor, mem-check)
+  - Execution: primary task skill (autopilot, ralph, team)
+- [ ] C2.2 — Create `src/lib/ecc/skill-composer.ts`:
+  - `composeSkillPipeline(agentId, taskSkillId)` — returns ordered skill list:
+    1. All guarantee-layer skills the agent has access to
+    2. Enhancement-layer skills matching task context
+    3. The requested execution-layer skill
+  - Skills within each layer ordered by priority/importance
+- [ ] C2.3 — Integrate skill composition into AI response handler:
+  - Before main AI call, inject guarantee-layer skill instructions into system prompt
+  - Append enhancement-layer context
+  - Main execution skill becomes the primary instruction
+- [ ] C2.4 — Update Skills Browser UI to show composition layer badge
+- [ ] C2.5 — Prisma migration: add `compositionLayer String @default("execution")` to Skill model
+- [ ] C2.6 — Write tests for composition ordering and layer enforcement
+
+**Files to create/modify:**
+- `prisma/schema.prisma` (add compositionLayer to Skill model)
+- `src/lib/ecc/skill-composer.ts` (NEW)
+- `src/lib/runtime/handlers/ai-response-handler.ts`
+- `src/app/skills/page.tsx`
+
+**Estimated effort:** Medium (2-3 days)
+**Impact:** Ensures security/guardrail skills always execute — safety improvement
 
 ---
 
-### 🟠 5.8 — Embed Widget Error State
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** OZBILJNO — korisnik widgeta ne zna zašto chat ne radi
-- **Problem:** Ako agent padne, widget prikazuje praznu stranicu bez poruke
-- **Fix:** Novi `error.tsx` za embed (bez "Back to Dashboard" — iframe kontekst). Agent fetch u `page.tsx` sada handla 404/5xx → prikazuje inline error s "Try again" dugmetom. Messages i input skriveni kad error state aktivan.
-- **Standard 2026:** Error boundaries (React 18 standard), graceful degradation
-- **Fajlovi:** `src/app/embed/[agentId]/error.tsx` (novo), `src/app/embed/[agentId]/page.tsx` (edit)
-- **Testovi:** 6 strukturalnih testova u `embed-error.test.ts` — bez Dashboard linka, user-friendly tekst, Tailwind only — sve prolazi ✅
+### C3. bb25 Bayesian Hybrid Search
+
+> **Gap**: `search.ts` uses manual RRF with fixed weights (0.7 semantic / 0.3 keyword).
+> bb25 uses Bayesian calibration to automatically balance semantic and keyword scores
+> without scale mismatch. Proven +1.0%p NDCG on SQuAD benchmark. Rust core.
+
+**Current state** (verified in code):
+- `search.ts` line 282-310: `reciprocalRankFusion()` with k=60, weights 0.7/0.3
+- Post-fusion: min-max normalization
+- Manual weight tuning per KB via `hybridAlpha` config field
+
+**Tasks:**
+
+- [ ] C3.1 — Research bb25 integration options:
+  - Option A: Call bb25 via Python subprocess (pip install bb25, Rust core)
+  - Option B: Port Bayesian calibration logic to TypeScript
+  - Option C: Use bb25 as MCP tool (FastMCP wrapper)
+  - Decision: TBD after benchmarking on our data
+- [ ] C3.2 — Add `fusionStrategy` config to KnowledgeBase model:
+  - `fusionStrategy: "rrf" | "bayesian"` (default: "rrf" = current behavior)
+  - When "bayesian": use bb25 for score calibration before fusion
+- [ ] C3.3 — Implement bayesian fusion in `search.ts`:
+  - Replace `reciprocalRankFusion()` with `bayesianFusion()` when configured
+  - Bayesian calibration: transform raw BM25 scores to posterior probabilities
+  - Fuse calibrated BM25 probabilities with vector cosine scores (natural blend, no scale mismatch)
+- [ ] C3.4 — Benchmark: run hybrid search on 20 test queries with RRF vs Bayesian
+  - Measure: NDCG, MRR, P@5, latency
+- [ ] C3.5 — Write tests for bayesian fusion (score calibration, edge cases)
+
+**Files to modify:**
+- `src/lib/knowledge/search.ts`
+- `src/lib/schemas/kb-config.ts` (add fusionStrategy)
+- `prisma/schema.prisma` (optional: add fusionStrategy to KnowledgeBase)
+
+**Estimated effort:** Medium (3-4 days, includes benchmarking)
+**Impact:** Better RAG search precision — measurable improvement in retrieval quality
 
 ---
 
-### 🟠 5.9 — CLI Generator Stuck Notification
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** OZBILJNO — korisnik čeka 5 min ne znajući da je zaglavilo
-- **Problem:** Stuck detection postoji, ali nema proaktivne notifikacije korisniku
-- **Implementirano:**
-  - `notifiedStuckRef: useRef<Set<string>>()` u `page.tsx` — guard za deduplikaciju
-  - Novi `useEffect` (F2) koji iterira sve generacije: kad neka postane stuck, prikazuje `toast.warning()` jednom (8s duration)
-  - Neovisno od selekcije — korisnik dobija upozorenje čak i ako nije kliknuo na stuck generaciju
-  - 5/5 strukturalnih testova u `src/app/cli-generator/__tests__/stuck-notification.test.ts`
-- **Standard 2026:** UX standard — korisnik uvijek zna stanje async operacija
+## FAZA D — Verification & Multi-Provider (P1-P2)
+
+Inspired by: OMC verification protocol, OMC `omc ask` cross-provider delegation.
+
+### D1. Verification Protocol Node
+
+> **Gap**: `reflexive_loop` evaluator is AI-only — never runs build/test/lint commands.
+> OMC verifier runs: BUILD, TEST, LINT, FUNCTIONALITY, ARCHITECT review, ERROR_FREE.
+
+**Tasks:**
+
+- [ ] D1.1 — Create `src/lib/runtime/handlers/verification-handler.ts`:
+  - New node type: `verification`
+  - Config: `checks: Array<{ type: "build" | "test" | "lint" | "custom", command: string }>`
+  - Execution: run each command via sandbox (code_interpreter or python_code handler)
+  - Result: all must pass (exit code 0) -> route to "passed" sourceHandle
+  - Any failure -> route to "failed" sourceHandle with error output
+- [ ] D1.2 — Add `verification` to NodeType union and register handler
+- [ ] D1.3 — Create display component `src/components/builder/nodes/verification-node.tsx`
+- [ ] D1.4 — Add to node picker and property panel
+- [ ] D1.5 — Create starter flow template: "verification-pipeline" (executor -> verification -> end/retry)
+- [ ] D1.6 — Write tests for verification (all pass, one fails, command timeout)
+
+**Files to create/modify:**
+- `src/lib/runtime/handlers/verification-handler.ts` (NEW)
+- `src/types/index.ts` (add to NodeType union)
+- `src/lib/runtime/handlers/index.ts` (register)
+- `src/components/builder/nodes/verification-node.tsx` (NEW)
+- `src/components/builder/node-picker.tsx`
+- `src/components/builder/property-panel.tsx`
+- `src/data/starter-flows.ts` (new template)
+
+**Estimated effort:** Medium (2-3 days)
+**Impact:** Agents can verify their own work with real commands — production quality
 
 ---
 
-### 🟡 5.10 — BullMQ za Heavy Tasks (KB ingest + Eval runs)
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** SKALIRANJE — blokira main Next.js process
-- **Problem:** KB ingest i eval runs se izvršavaju u istom procesu kao API rute
-- **Fix:** Prebaciti na BullMQ queue (infrastruktura već postoji!) + worker processing
-- **Standard 2026:** Queue-based load leveling (Azure Architecture pattern)
-- **Implementirano:**
-  - `KBIngestJobData` tip + `addKBIngestJob()` u `src/lib/queue/index.ts`
-  - `processKBIngestJob()` handler u `src/lib/queue/worker.ts`
-  - 3 KB API rute refaktorisane (`sources/route.ts`, `upload/route.ts`, `retry/route.ts`) — queue s fallback na in-process
-  - `evals/[suiteId]/run/route.ts` — async enqueue (202) s fallback na sync
-  - 3 nova unit testa za `addKBIngestJob()` (9/9 prolaze)
-- **Fajlovi:** `src/lib/queue/index.ts`, `src/lib/queue/worker.ts`, KB source routes, eval run route
+### D2. Cross-Provider Orchestration
+
+> **Gap**: `call_agent` handler calls sibling agents but they all use the same
+> provider ecosystem. OMC's `omc ask` sends tasks to Claude, Codex, and Gemini
+> separately and synthesizes results. OMC's `ccg` skill fans out to Codex+Gemini
+> with Claude synthesizing.
+
+**Tasks:**
+
+- [ ] D2.1 — Add `providerOverride` option to `call_agent` handler:
+  - When set, the called agent uses a different model/provider than its default
+  - Example: Agent A (DeepSeek) calls Agent B with providerOverride="claude-sonnet-4-6"
+- [ ] D2.2 — Create `cross-provider` starter flow template:
+  - Input -> parallel[Agent-Claude, Agent-DeepSeek, Agent-Gemini] -> AI synthesizer -> output
+- [ ] D2.3 — Update property panel to show provider badge per agent in parallel node config
+- [ ] D2.4 — Write tests for cross-provider call (mock different providers)
+
+**Files to modify:**
+- `src/lib/runtime/handlers/call-agent-handler.ts`
+- `src/data/starter-flows.ts` (new template)
+- `src/components/builder/property-panel.tsx`
+
+**Estimated effort:** Low (1-2 days)
+**Impact:** Better results through multi-model synthesis — quality improvement
 
 ---
 
-### 🟡 5.11 — ECC Instinct Human Approval Gate
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** AI GOVERNANCE — loš pattern može postati "znanje"
-- **Problem:** Instinct s >0.85 confidence se promovira u Skill bez human review
-- **Implementirano:**
-  - `requestInstinctPromotion()` u `instinct-engine.ts` — kreira HumanApprovalRequest umjesto direktne Skill promocije
-  - `/api/skills/evolve` cron ruta koristi `requestInstinctPromotion()` (ne direktno `promoteInstinctToSkill`)
-  - `/api/approvals/[requestId]/respond` — kad admin odobri promociju tipa `instinct_promotion`, automatski poziva `promoteInstinctToSkill()`
-  - `contextData` sadrži: `{ type, instinctId, skillContent, confidence }`
-  - Greška pri promociji ne blokira snimanje admin odluke
-  - 8/8 testova — uključujući 2 nova za `requestInstinctPromotion`
-- **Standard 2026:** Human-in-the-loop AI (EU AI Act, responsible AI standards)
+## FAZA E — Notification & Monitoring (P2)
+
+Inspired by: clawhip typed event pipeline, renderer/sink split, session.* events.
+
+### E1. Session Event Types
+
+> **Gap**: notification-handler.ts supports generic levels (info/warning/error/success)
+> but no standardized session lifecycle events. clawhip defines: session.started,
+> session.blocked, session.finished, session.failed, session.pr_created.
+
+**Tasks:**
+
+- [ ] E1.1 — Define `SessionEventType` in `src/lib/runtime/types.ts`:
+  - `session.started` | `session.blocked` | `session.finished` | `session.failed` |
+    `session.timeout` | `session.verification_passed` | `session.verification_failed`
+- [ ] E1.2 — Emit session events from engine.ts and engine-streaming.ts:
+  - `session.started` at flow start
+  - `session.finished` at successful flow end
+  - `session.failed` on flow error
+  - `session.timeout` on MAX_ITERATIONS hit
+  - `session.blocked` on human_approval waitForInput
+- [ ] E1.3 — Auto-fire notifications for session events (configurable per agent):
+  - Agent config: `sessionNotifications: { events: SessionEventType[], channel: "webhook" | "in_app", webhookUrl?: string }`
+- [ ] E1.4 — Add Discord and Slack webhook presets to notification config:
+  - Discord: format message with embed (title, color by event type, fields)
+  - Slack: format as Block Kit message
+- [ ] E1.5 — Write tests for each session event type emission
+
+**Files to modify:**
+- `src/lib/runtime/types.ts`
+- `src/lib/runtime/engine.ts`
+- `src/lib/runtime/engine-streaming.ts`
+- `src/lib/runtime/handlers/notification-handler.ts`
+
+**Estimated effort:** Medium (2-3 days)
+**Impact:** Real-time visibility into agent execution — essential for production monitoring
 
 ---
 
-### 🟡 5.12 — Load Testovi (k6)
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** SKALIRANJE — ne znamo koliko korisnika možemo podnijeti
-- **Problem:** k6 plan postoji u dokumentaciji, nikad implementiran
-- **Implementirano:**
-  - `load-tests/agent-studio.js` — k6 skript sa 3 scenarija (background, chat_load, kb_spike)
-  - SLO thresholds: P95<100ms health, P99<500ms agents, P99<2s KB search, P95<5s chat
-  - Ramping VUs: 0→50 za chat, arrival rate 5→30 za KB
-  - `load-tests/README.md` — instalacija k6, usage, env vars, interpretacija rezultata
-  - `"test:load"` script u `package.json`
-- **Pokretanje:** `pnpm test:load` ili `BASE_URL=https://... TEST_AGENT_ID=... k6 run load-tests/agent-studio.js`
+### E2. Renderer/Sink Split in Notification Handler
+
+> **Gap**: notification-handler.ts mixes formatting and transport in a single handler.
+> clawhip separates renderer (format message) from sink (deliver to Discord/Slack/etc).
+> This makes adding new sinks trivial without touching rendering logic.
+
+**Tasks:**
+
+- [ ] E2.1 — Refactor notification-handler.ts into renderer + sink pattern:
+  - `NotificationRenderer` interface: `render(event, options) -> RenderedMessage`
+  - `NotificationSink` interface: `deliver(rendered, config) -> DeliveryResult`
+- [ ] E2.2 — Create renderers:
+  - `PlainTextRenderer` — current behavior
+  - `DiscordRenderer` — Discord embed format (rich)
+  - `SlackRenderer` — Slack Block Kit format (mrkdwn)
+  - `MarkdownRenderer` — for in-app display
+- [ ] E2.3 — Create sinks:
+  - `WebhookSink` — current HTTP POST behavior
+  - `InAppSink` — current in-app behavior
+  - `LogSink` — current logger behavior
+- [ ] E2.4 — Config: `{ renderer: "plain" | "discord" | "slack" | "markdown", sink: "webhook" | "in_app" | "log" }`
+- [ ] E2.5 — Write tests for each renderer x sink combination
+
+**Files to modify:**
+- `src/lib/runtime/handlers/notification-handler.ts` (refactor)
+- `src/lib/notifications/renderers/` (NEW directory)
+- `src/lib/notifications/sinks/` (NEW directory)
+
+**Estimated effort:** Medium (2-3 days)
+**Impact:** Extensible notification system — easy to add Telegram, email, Teams, etc.
 
 ---
 
-### 🟢 5.13 — API Key Scopes Dokumentacija
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** DEVELOPER EXPERIENCE
-- **Problem:** `agents:read`, `chat:write` scope-i postoje u kodu ali nigdje nisu dokumentovani
-- **Implementirano:**
-  - 11 scope-a dokumentovano u OpenAPI `info.description` (Markdown tabela)
-  - `BearerAuth` + `CookieAuth` securitySchemes registrovani via `registry.registerComponent()`
-  - Top-level `security: [BearerAuth, CookieAuth]` u generisanom dokumentu
-  - 15/15 testova prolazi (2 nova: securitySchemes + scopes tabela)
-- **Standard 2026:** Developer experience (DX) — zero guesswork API design
+## FAZA F — Advanced Capabilities (P3 — Long Term)
+
+### F1. LSP Integration for Code-Aware Agents
+
+> **Gap**: No Language Server Protocol support. OMC has real LSP integration with
+> 15s timeout for semantic analysis, go-to-definition, find-references, rename-symbol.
+
+**Tasks:**
+
+- [ ] F1.1 — Research: evaluate LSP client libraries for Node.js (vscode-languageclient, etc.)
+- [ ] F1.2 — Create `src/lib/lsp/client.ts`:
+  - `startLSPServer(language, workspacePath)` — launch tsserver or pylsp
+  - `getDefinition(file, position)` — go-to-definition
+  - `getReferences(file, position)` — find-references
+  - `getDiagnostics(file)` — get errors/warnings
+- [ ] F1.3 — Create `lsp_query` node type:
+  - Input: file path, symbol name, operation type
+  - Output: definition location, reference list, or diagnostics
+- [ ] F1.4 — Integrate LSP context into ai_response system prompt for code-aware agents
+- [ ] F1.5 — Write tests with mock LSP server
+
+**Estimated effort:** High (7-10 days)
+**Impact:** ENORMOUS for developer agents — semantic code understanding
 
 ---
 
-### 🟢 5.14 — CHANGELOG.md Automatizacija
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** OPEN SOURCE TRACTION
-- **Problem:** GitHub posjetioci ne vide historiju razvoja, loš prvi utisak
-- **Implementirano:**
-  - `CHANGELOG.md` kreiran s verzijama 0.1.0 – 0.5.0 + Unreleased sekcijom
-  - Keep a Changelog format (Added/Changed/Fixed/Security kategorije)
-  - `"changelog"` script u `package.json` — appenda git log u CHANGELOG.md
-- **Standard 2026:** Conventional Commits standard, semantic versioning
+### F2. AST-Grep Pattern Matching
+
+> **Gap**: No AST-level code analysis. OMC integrates ast-grep for precise
+> pattern matching and refactoring via syntax trees.
+
+**Tasks:**
+
+- [ ] F2.1 — Add `@ast-grep/napi` package (Node.js bindings)
+- [ ] F2.2 — Create `src/lib/ast/pattern-matcher.ts`:
+  - `matchPattern(code, pattern, language)` — find AST matches
+  - `replacePattern(code, pattern, replacement, language)` — AST-based refactoring
+- [ ] F2.3 — Integrate into `code_interpreter` handler as optional AST mode
+- [ ] F2.4 — Write tests for pattern matching and replacement
+
+**Estimated effort:** Medium (3-4 days)
+**Impact:** Precise code transformations — quality improvement for code agents
 
 ---
 
----
+### F3. Dynamic Skill Injection (Context-Aware)
 
-### 🟢 5.15 — Rate-Limit Headers na uspješnim odgovorima
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** DEVELOPER EXPERIENCE — klijenti ne znaju koliko im je ostalo quota-e
-- **Problem:** Chat route vraćao `X-RateLimit-Remaining: 0` samo na 429, ne na uspješnim odgovorima
-- **Implementirano:**
-  - `rateLimitHeaders` helper objekt u chat route: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
-  - Headers dodati na sve 4 success response putanje: SSE stream, async 202, sync streaming, sync 200
-  - 429 response dopunjen: dodat `X-RateLimit-Limit` i `X-RateLimit-Reset` (ranije imao samo Remaining)
-  - 3 nova testa u `chat-validation.test.ts` — 8/8 ukupno prolaze
-- **Standard 2026:** IETF draft-ietf-httpapi-ratelimit-headers-07
+> **Gap**: ECC skills are loaded statically. claw-code/clawhip approach: auto-detect
+> which skill is relevant for the current task and inject ONLY that skill into
+> the agent's context. Reduces context bloat dramatically.
 
----
+**Tasks:**
 
----
+- [ ] F3.1 — Create `src/lib/ecc/skill-router.ts`:
+  - `routeToSkill(taskDescription, availableSkills)` — semantic similarity match
+  - Use embedding comparison (reuse KB embeddings infrastructure)
+  - Return top-N relevant skills (default N=3)
+- [ ] F3.2 — Integrate into ai_response handler:
+  - Before AI call, run skill router on the current task/prompt
+  - Inject only matched skill content into system prompt
+  - Track which skills were injected for audit
+- [ ] F3.3 — Write tests for skill routing accuracy
 
-## FAZA 6 — Reliability + Security + Test Coverage (Sesija 7)
+**Files to create/modify:**
+- `src/lib/ecc/skill-router.ts` (NEW)
+- `src/lib/runtime/handlers/ai-response-handler.ts`
 
-> Pronađeni pregledom koda 2026-04-03. Sve su stvarni, provjereni problemi — nema halucinacija.
-> Svaki zadatak ima tačnu referencu na fajl i liniju.
-
----
-
-### 🔴 6.1 — Worker Graceful Shutdown
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** KRITIČAN — Railway ubija worker proces bez čekanja na active jobs
-- **Problem:** `src/lib/queue/worker.ts` nema `SIGTERM`/`SIGINT` handler. Railway šalje `SIGTERM` pri svakom deployu/scale-down eventu. Worker se ubija usred aktivnog job-a → potencijalno corrupt stanje u DB (job zaglavi na "active", nikad ne dobija "failed" status).
-- **Dokaz:** `src/lib/mcp/pool.ts` linija 158–159 već ima isti pattern koji fali workeru.
-- **Fix:** Dodati `process.on("SIGTERM")` i `process.on("SIGINT")` u `isDirectRun` blok koji pozivaju `worker.close()` — BullMQ Worker.close() čeka da aktivni job završi prije gašenja (graceful drain). Logger info poruke pri primanju signala.
-- **Fajlovi:** `src/lib/queue/worker.ts`
-- **Testovi:** Structural test — provjeri da source sadrži `SIGTERM` i `SIGINT` handlere i `worker.close()` poziv
-- **Procjena:** 45 min
+**Estimated effort:** Medium (2-3 days)
+**Impact:** Less context bloat, more relevant skill context — quality + cost improvement
 
 ---
 
-### 🔴 6.2 — Admin API Role Check
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** KRITIČAN — security gap, bilo koji logovan korisnik vidi sve stats
-- **Problem:** `src/app/api/admin/stats` i `src/app/api/admin/jobs` koriste samo `requireAuth()`. Komentar u kodu (linija 41 stats route) eksplicitno kaže "no access enforcement". Svaki registrovani korisnik može vidjet ukupan broj korisnika, top users listu, queue depth, itd.
-- **Dokaz:** `User` model nema `role` kolonu. Projekat nema multi-tenancy. Pravi pristup: `ADMIN_USER_IDS` env var (isti pattern kao `CRON_SECRET` za cron rute).
-- **Fix:**
-  - Dodati `ADMIN_USER_IDS` u `src/lib/env.ts` (opcionalan, comma-separated lista user ID-ova)
-  - Dodati `requireAdmin()` helper u `src/lib/api/auth-guard.ts` — čita `ADMIN_USER_IDS`, vraća 403 ako userId nije na listi; ako `ADMIN_USER_IDS` nije postavljen, propušta sve (development-friendly)
-  - Primjeniti `requireAdmin()` u `admin/stats/route.ts` i `admin/jobs/route.ts`
-- **Fajlovi:** `src/lib/env.ts`, `src/lib/api/auth-guard.ts`, `src/app/api/admin/stats/route.ts`, `src/app/api/admin/jobs/route.ts`
-- **Testovi:** 3 testa u auth-guard: 403 za non-admin userId, 200 za admin userId, pass-through kad `ADMIN_USER_IDS` nije postavljen
-- **Procjena:** 1h
+## Summary — Total Effort Estimate
+
+| Faza | Tasks | Effort | Priority |
+|------|-------|--------|----------|
+| A — Runtime Hooks | A1-A3 (19 subtasks) | 7-11 days | P0 |
+| B — Execution Modes | B1-B3 (15 subtasks) | 7-11 days | P1 |
+| C — Memory Upgrade | C1-C3 (17 subtasks) | 10-14 days | P1 |
+| D — Verification | D1-D2 (10 subtasks) | 3-5 days | P1-P2 |
+| E — Notifications | E1-E2 (10 subtasks) | 4-6 days | P2 |
+| F — Advanced | F1-F3 (12 subtasks) | 12-17 days | P3 |
+| **TOTAL** | **6 faza, 83 subtasks** | **43-64 days** | — |
+
+**Recommended implementation order:**
+A2 -> A1 -> B2 -> C1 -> A3 -> B1 -> D1 -> C2 -> C3 -> E1 -> E2 -> B3 -> D2 -> F3 -> F2 -> F1
 
 ---
 
-### 🟠 6.3 — Agent-Calls API Testovi
-- **Status:** ✅ DONE (2026-04-03)
-- **Prioritet:** OZBILJNO — 377 linija koda (uključujući 7 raw SQL querija) bez ijednog testa
-- **Problem:** `src/app/api/agent-calls/route.ts` (46 linija) i `src/app/api/agent-calls/stats/route.ts` (331 linija, 7x `$queryRaw`) nemaju testove. Stats ruta parsira query parametre (`period`, `agentId`), ima fallback logiku, validira periode — sve netestirano.
-- **Fokus:** Testirati `agent-calls/route.ts` (jednostavnija, Prisma findMany) i osnovne validacije `agent-calls/stats/route.ts` (auth, period validacija, default period).
-- **Fix:** Test fajl sa 6 testova:
-  - `agent-calls/route.ts`: 401 bez auth, 200 s praznim rezultatom, limit parametar poštovan
-  - `agent-calls/stats/route.ts`: 401 bez auth, nevalidan period → 400, validan period → 200
-- **Fajlovi:** `src/app/api/agent-calls/__tests__/agent-calls.test.ts` (novi)
-- **Testovi:** 6 testova
-- **Procjena:** 1h
+## References
 
----
-
-## Prioritet redosljed sesija
-
-```
-Sesija 1 (štiti produkciju — odmah): ✅ ZAVRŠENA 2026-04-03
-  5.1 KB Watchdog + 5.3 Embedding Retry + 5.4 Dependabot
-
-Sesija 2 (sprječava izgubljen rad): ✅ ZAVRŠENA 2026-04-03
-  5.2 Handler Audit + 5.7 Optimistic Locking
-
-Sesija 3 (vidljivost i pouzdanost): ✅ ZAVRŠENA 2026-04-03
-  5.5 Coverage + 5.6 Redis Tests + 5.8 Embed Error
-
-Sesija 4 (skaliranje): ✅ ZAVRŠENA 2026-04-03
-  5.10 BullMQ + 5.12 Load Tests
-
-Sesija 5 (AI governance + DX): ✅ ZAVRŠENA 2026-04-03
-  5.11 ECC Human Approval + 5.13 Scopes + 5.14 CHANGELOG
-
-Sesija 6 (UX + DX polish): ✅ ZAVRŠENA 2026-04-03
-  5.9 CLI Stuck Notification + 5.15 Rate-Limit Headers
-
-Sesija 7 (Reliability + Security + Test Coverage): ✅ ZAVRŠENA 2026-04-03
-  6.1 Worker Graceful Shutdown + 6.2 Admin Role Check + 6.3 Agent-Calls Tests
-```
-
----
-
-> Poslednje ažuriranje: 2026-04-03
+- [claw-code](https://github.com/instructkr/claw-code) — Agent harness architecture, hook DAG, session management
+- [oh-my-codex (OMX)](https://github.com/Yeachan-Heo/oh-my-codex) — $ralph, $team, SKILL.md, .omx/ state
+- [oh-my-claudecode (OMC)](https://github.com/yeachan-heo/oh-my-claudecode) — 5 execution modes, 29 agents, 32 skills, hook system, verification protocol
+- [OMC ARCHITECTURE.md](https://github.com/Yeachan-Heo/oh-my-claudecode/blob/main/docs/ARCHITECTURE.md) — 3-layer skills, hook events, verification protocol
+- [OMC REFERENCE.md](https://github.com/Yeachan-Heo/oh-my-claudecode/blob/main/docs/REFERENCE.md) — Full agent roster, skill list, CLI commands
+- [clawhip](https://github.com/Yeachan-Heo/clawhip) — Event pipeline, MEMORY.md + shards, renderer/sink split
+- [memsearch](https://github.com/zilliztech/memsearch) — Markdown-first memory, vector cache, human-editable
+- [bb25](https://github.com/instructkr/bb25) — Bayesian BM25 hybrid search, Rust core, +1.0%p NDCG
+- [OpenClaw Memory System](https://docs.openclaw.ai/concepts/memory) — Hot/cold tiers, agentic compaction
