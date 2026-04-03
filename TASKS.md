@@ -84,7 +84,7 @@ Inspired by: claw-code hook DAG, OMC 11 lifecycle events, clawhip event pipeline
 
 **Tasks:**
 
-- [ ] A2.1 — Create `src/lib/runtime/context-compaction.ts`:
+- [x] A2.1 — Create `src/lib/runtime/context-compaction.ts`:
   - `compactContext(context, model)` function
   - Step 1: Generate summary prompt: "Summarize the key facts, decisions, and state from this conversation that should be preserved"
   - Step 2: Call AI with summarization prompt (use cheap model: deepseek-chat or haiku)
@@ -92,13 +92,13 @@ Inspired by: claw-code hook DAG, OMC 11 lifecycle events, clawhip event pipeline
   - Step 4: Optionally write important variable states to memory
   - Step 5: THEN truncate messageHistory to MAX_HISTORY
   - Step 6: Prepend a system message with the summary to the truncated history
-- [ ] A2.2 — Add compaction threshold to engine.ts:
+- [x] A2.2 — Add compaction threshold to engine.ts:
   - `COMPACTION_THRESHOLD = 80` (trigger compaction at 80% of MAX_HISTORY)
   - At line ~134: if `messageHistory.length > COMPACTION_THRESHOLD`, call `compactContext()` before slice
-- [ ] A2.3 — Same integration in engine-streaming.ts
-- [ ] A2.4 — Emit `onPreCompact` hook event (from A1) before compaction runs
-- [ ] A2.5 — Add agent-level config: `enableSmartCompaction: boolean` (default: true for new agents)
-- [ ] A2.6 — Write unit tests:
+- [x] A2.3 — Same integration in engine-streaming.ts
+- [ ] A2.4 — Emit `onPreCompact` hook event (from A1) before compaction runs *(deferred until A1 is done)*
+- [x] A2.5 — Add agent-level config: `enableSmartCompaction: boolean` (default: true for new agents)
+- [x] A2.6 — Write unit tests:
   - Test: compaction saves summary to AgentMemory
   - Test: truncated history includes prepended summary
   - Test: compaction threshold triggers correctly at 80%
