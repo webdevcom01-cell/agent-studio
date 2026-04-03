@@ -1,5 +1,48 @@
 import type { FlowContent, FlowNode } from "@/types";
 
+// ---------------------------------------------------------------------------
+// Lifecycle Hook types
+// ---------------------------------------------------------------------------
+
+export type FlowHookEventType =
+  | "onFlowStart"
+  | "onFlowComplete"
+  | "onFlowError"
+  | "beforeNodeExecute"
+  | "afterNodeExecute"
+  | "beforeToolCall"
+  | "afterToolCall"
+  | "onPreCompact";
+
+export interface FlowHookPayload {
+  event: FlowHookEventType;
+  agentId: string;
+  conversationId: string;
+  timestamp: number;
+  /** Node context — present for node/tool events */
+  nodeId?: string;
+  nodeType?: string;
+  /** Tool context — present for tool events */
+  toolName?: string;
+  toolCallId?: string;
+  /** Duration in ms — present for "after" events */
+  durationMs?: number;
+  /** Error message — present for error/failure events */
+  error?: string;
+  /** Arbitrary extra data (e.g. iteration count, variable snapshot) */
+  meta?: Record<string, unknown>;
+}
+
+/** Interface for hook sink implementations (webhook, logging, etc.) */
+export interface FlowHookSink {
+  send(payload: FlowHookPayload): void;
+}
+
+/** Registry that manages hook subscriptions and dispatch */
+export interface FlowHookRegistryInterface {
+  emit(payload: FlowHookPayload): void;
+}
+
 export interface RuntimeContext {
   conversationId: string;
   agentId: string;
@@ -23,6 +66,8 @@ export interface RuntimeContext {
   // When false, disables smart context compaction before history truncation.
   // Defaults to true — the engine summarizes context before discarding old messages.
   enableSmartCompaction?: boolean;
+  // Lifecycle hook registry — emits events to registered sinks (webhooks, etc.)
+  hooks?: FlowHookRegistryInterface;
 }
 
 export interface ExecutionResult {

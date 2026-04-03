@@ -10,6 +10,7 @@ import { reformulateWithHistory } from "@/lib/knowledge/query-reformulation";
 import type { ExecutionResult, RuntimeContext, StreamWriter } from "../types";
 import { debugEmit } from "../types";
 import type { FlowNode } from "@/types";
+import { emitHook } from "../hooks";
 import { resolveTemplate } from "../template";
 import { checkInputSafety, checkOutputSafety } from "@/lib/safety/engine-safety-middleware";
 
@@ -181,6 +182,31 @@ export async function aiResponseStreamingHandler(
     if (hasTools) {
       streamOptions.tools = allTools as Parameters<typeof streamText>[0]["tools"];
       streamOptions.stopWhen = stepCountIs(MAX_TOOL_STEPS);
+
+      // Lifecycle hooks for tool calls (fire-and-forget, never blocks)
+      const toolStartTimes = new Map<string, number>();
+      streamOptions.experimental_onToolCallStart = (event: { toolCall: { toolName: string; toolCallId: string } }) => {
+        toolStartTimes.set(event.toolCall.toolCallId, Date.now());
+        emitHook(context, "beforeToolCall", {
+          nodeId: node.id,
+          nodeType: node.type,
+          toolName: event.toolCall.toolName,
+          toolCallId: event.toolCall.toolCallId,
+        });
+      };
+      streamOptions.experimental_onToolCallFinish = (event: { toolCall: { toolName: string; toolCallId: string }; durationMs: number; success?: boolean; error?: unknown }) => {
+        toolStartTimes.delete(event.toolCall.toolCallId);
+        emitHook(context, "afterToolCall", {
+          nodeId: node.id,
+          nodeType: node.type,
+          toolName: event.toolCall.toolName,
+          toolCallId: event.toolCall.toolCallId,
+          durationMs: event.durationMs,
+          error: event.success === false && event.error
+            ? (event.error instanceof Error ? event.error.message : String(event.error))
+            : undefined,
+        });
+      };
     }
 
     // Send heartbeats during long-running tool calls to keep connection alive

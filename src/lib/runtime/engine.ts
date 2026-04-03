@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { shouldCompact, compactContext } from "./context-compaction";
+import { createHooksFromFlowContent, emitHook } from "./hooks";
 import type { FlowNode } from "@/types";
 
 /**
@@ -144,6 +145,12 @@ export async function executeFlow(
     context.messageHistory = context.messageHistory.slice(-MAX_HISTORY);
   }
 
+  // Initialize lifecycle hooks from flow config (zero overhead when unconfigured)
+  if (!context.hooks) {
+    const registry = createHooksFromFlowContent(context.flowContent);
+    if (registry) context.hooks = registry;
+  }
+
   // Audit: flow execution start
   writeAuditLog({
     userId: context.userId,
@@ -152,6 +159,10 @@ export async function executeFlow(
     resourceId: context.agentId,
     after: { conversationId: context.conversationId, hasUserMessage: !!userMessage },
   }).catch(() => {});
+
+  emitHook(context, "onFlowStart", {
+    meta: { hasUserMessage: !!userMessage, streaming: false },
+  });
 
   while (context.currentNodeId && iterations < MAX_ITERATIONS) {
     iterations++;
@@ -192,9 +203,27 @@ export async function executeFlow(
     }
 
     let result: ExecutionResult;
+    const nodeStartMs = Date.now();
+    emitHook(context, "beforeNodeExecute", {
+      nodeId: node.id,
+      nodeType: node.type,
+    });
     try {
       result = await handler(node, context);
     } catch (error) {
+      const durationMs = Date.now() - nodeStartMs;
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      emitHook(context, "afterNodeExecute", {
+        nodeId: node.id,
+        nodeType: node.type,
+        durationMs,
+        error: errorMsg,
+      });
+      emitHook(context, "onFlowError", {
+        nodeId: node.id,
+        nodeType: node.type,
+        error: errorMsg,
+      });
       logger.error("Node handler error", error, { agentId: context.agentId, nodeType: node.type, nodeId: node.id });
       allMessages.push({
         role: "assistant",
@@ -206,6 +235,11 @@ export async function executeFlow(
       );
       continue;
     }
+    emitHook(context, "afterNodeExecute", {
+      nodeId: node.id,
+      nodeType: node.type,
+      durationMs: Date.now() - nodeStartMs,
+    });
 
     if (context.isResuming) {
       context.isResuming = false;
@@ -247,6 +281,10 @@ export async function executeFlow(
 
   await saveMessages(context.conversationId, allMessages);
   await saveContext(context);
+
+  emitHook(context, "onFlowComplete", {
+    meta: { iterations, messageCount: allMessages.length, streaming: false },
+  });
 
   // Audit: flow execution end
   writeAuditLog({

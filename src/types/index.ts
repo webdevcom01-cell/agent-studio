@@ -23,6 +23,10 @@ export interface FlowContent {
   nodes: FlowNode[];
   edges: FlowEdge[];
   variables: FlowVariable[];
+  /** Webhook URLs to receive lifecycle hook events (fire-and-forget POST) */
+  hookWebhookUrls?: string[];
+  /** Which hook events to emit — empty/undefined = all events */
+  hookEvents?: string[];
 }
 
 export type NodeType =

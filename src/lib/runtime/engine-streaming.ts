@@ -11,6 +11,7 @@ import { saveContext, saveMessages } from "./context";
 import { findNextNode, findStartNode, SELF_ROUTING_NODES, resolveNextNodeId } from "./engine";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { shouldCompact, compactContext } from "./context-compaction";
+import { createHooksFromFlowContent, emitHook } from "./hooks";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
 import { parallelStreamingHandler } from "./handlers/parallel-streaming-handler";
@@ -115,6 +116,12 @@ export function executeFlowStreaming(
 
         let waitingForInput = false;
 
+        // Initialize lifecycle hooks from flow config (zero overhead when unconfigured)
+        if (!context.hooks) {
+          const registry = createHooksFromFlowContent(context.flowContent);
+          if (registry) context.hooks = registry;
+        }
+
         writeAuditLog({
           userId: context.userId,
           action: "FLOW_EXECUTION_START",
@@ -122,6 +129,10 @@ export function executeFlowStreaming(
           resourceId: context.agentId,
           after: { conversationId: context.conversationId, streaming: true },
         }).catch(() => {});
+
+        emitHook(context, "onFlowStart", {
+          meta: { hasUserMessage: !!userMessage, streaming: true },
+        });
 
         while (context.currentNodeId && iterations < MAX_ITERATIONS && !aborted) {
           iterations++;
@@ -223,6 +234,11 @@ export function executeFlowStreaming(
           debugEmitNodeStart(writer, context, node.id, node.type, nodeName, iteration);
           executionPath.push(node.id);
 
+          emitHook(context, "beforeNodeExecute", {
+            nodeId: node.id,
+            nodeType: node.type,
+          });
+
           let result: ExecutionResult;
 
           // ── Codepath 1: ai_response ──────────────────────────────────────
@@ -241,16 +257,24 @@ export function executeFlowStreaming(
                   result.messages[0]?.content);
               } catch { /* stream closed by client */ }
             } catch (error) {
+              const errDuration = Date.now() - nodeStartMs;
+              const errorMsg = error instanceof Error ? error.message : String(error);
+              emitHook(context, "afterNodeExecute", {
+                nodeId: node.id, nodeType: node.type, durationMs: errDuration, error: errorMsg,
+              });
+              emitHook(context, "onFlowError", {
+                nodeId: node.id, nodeType: node.type, error: errorMsg,
+              });
               logger.error("AI streaming handler error", error, { agentId: context.agentId, nodeId: node.id });
               nodesFailed++;
               try {
-                debugEmitNodeEnd(writer, context, node.id, "error", Date.now() - nodeStartMs,
-                  undefined, error instanceof Error ? error.message : String(error));
+                debugEmitNodeEnd(writer, context, node.id, "error", errDuration,
+                  undefined, errorMsg);
               } catch { /* stream closed by client */ }
               const nodeLabel = nodeName ? `"${nodeName}"` : `node [${node.type}]`;
               const isTimeout = error instanceof Error && error.message.toLowerCase().includes("timeout");
               const errorDetail = isTimeout
-                ? `${nodeLabel} timed out after ${Math.round((Date.now() - nodeStartMs) / 1000)}s`
+                ? `${nodeLabel} timed out after ${Math.round(errDuration / 1000)}s`
                 : nodeLabel;
               const msg: OutputMessage = {
                 role: "assistant",
@@ -273,11 +297,19 @@ export function executeFlowStreaming(
                 debugEmitNodeEnd(writer, context, node.id, "success", Date.now() - nodeStartMs);
               } catch { /* stream closed by client */ }
             } catch (error) {
+              const errDuration = Date.now() - nodeStartMs;
+              const errorMsg = error instanceof Error ? error.message : String(error);
+              emitHook(context, "afterNodeExecute", {
+                nodeId: node.id, nodeType: node.type, durationMs: errDuration, error: errorMsg,
+              });
+              emitHook(context, "onFlowError", {
+                nodeId: node.id, nodeType: node.type, error: errorMsg,
+              });
               logger.error("Parallel streaming handler error", error, { agentId: context.agentId, nodeId: node.id });
               nodesFailed++;
               try {
-                debugEmitNodeEnd(writer, context, node.id, "error", Date.now() - nodeStartMs,
-                  undefined, error instanceof Error ? error.message : String(error));
+                debugEmitNodeEnd(writer, context, node.id, "error", errDuration,
+                  undefined, errorMsg);
               } catch { /* stream closed by client */ }
               const msg: OutputMessage = {
                 role: "assistant",
@@ -335,10 +367,18 @@ export function executeFlowStreaming(
               debugEmitNodeEnd(writer, context, node.id, "success", Date.now() - nodeStartMs,
                 result.messages[0]?.content);
             } catch (error) {
+              const errDuration = Date.now() - nodeStartMs;
+              const errorMsg = error instanceof Error ? error.message : String(error);
+              emitHook(context, "afterNodeExecute", {
+                nodeId: node.id, nodeType: node.type, durationMs: errDuration, error: errorMsg,
+              });
+              emitHook(context, "onFlowError", {
+                nodeId: node.id, nodeType: node.type, error: errorMsg,
+              });
               logger.error("Node handler error", error, { agentId: context.agentId, nodeType: node.type, nodeId: node.id });
               nodesFailed++;
-              debugEmitNodeEnd(writer, context, node.id, "error", Date.now() - nodeStartMs,
-                undefined, error instanceof Error ? error.message : String(error));
+              debugEmitNodeEnd(writer, context, node.id, "error", errDuration,
+                undefined, errorMsg);
               const nodeLabel = nodeName ? `"${nodeName}"` : `a [${node.type}] step`;
               const msg: OutputMessage = {
                 role: "assistant",
@@ -370,6 +410,13 @@ export function executeFlowStreaming(
               }
             }
           }
+
+          // Hook: successful node execution
+          emitHook(context, "afterNodeExecute", {
+            nodeId: node.id,
+            nodeType: node.type,
+            durationMs: Date.now() - nodeStartMs,
+          });
 
           if (context.isResuming) {
             context.isResuming = false;
@@ -432,6 +479,15 @@ export function executeFlowStreaming(
           try { writer.write({ type: "message", role: msg.role, content: msg.content }); } catch { /* stream closed */ }
           context.currentNodeId = null;
         }
+
+        emitHook(context, "onFlowComplete", {
+          meta: {
+            iterations,
+            messageCount: allMessages.length,
+            streaming: true,
+            aborted,
+          },
+        });
 
         // ── Debug: flow summary ────────────────────────────────────────────
         try {

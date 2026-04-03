@@ -2,6 +2,7 @@ import { generateText } from "ai";
 import { getModel } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { emitHook } from "./hooks";
 import type { RuntimeContext } from "./types";
 
 /**
@@ -57,6 +58,11 @@ export async function compactContext(
   context: RuntimeContext
 ): Promise<string | null> {
   const startMs = Date.now();
+
+  // A2.4 — notify hook subscribers before compaction runs
+  emitHook(context, "onPreCompact", {
+    meta: { historyLength: context.messageHistory.length },
+  });
 
   try {
     const model = getModel(COMPACTION_MODEL);

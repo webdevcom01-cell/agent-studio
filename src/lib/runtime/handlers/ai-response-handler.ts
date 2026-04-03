@@ -8,6 +8,7 @@ import { recordChatLatency, recordTokenUsage } from "@/lib/observability/metrics
 import { injectRAGContext } from "@/lib/knowledge/rag-inject";
 import { reformulateWithHistory } from "@/lib/knowledge/query-reformulation";
 import type { NodeHandler } from "../types";
+import { emitHook } from "../hooks";
 import { resolveTemplate } from "../template";
 import { checkInputSafety, checkOutputSafety } from "@/lib/safety/engine-safety-middleware";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
@@ -174,6 +175,31 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     if (hasTools) {
       generateOptions.tools = allTools as Parameters<typeof generateText>[0]["tools"];
       generateOptions.stopWhen = stepCountIs(MAX_TOOL_STEPS);
+
+      // Lifecycle hooks for tool calls (fire-and-forget, never blocks)
+      const toolStartTimes = new Map<string, number>();
+      generateOptions.experimental_onToolCallStart = (event: { toolCall: { toolName: string; toolCallId: string } }) => {
+        toolStartTimes.set(event.toolCall.toolCallId, Date.now());
+        emitHook(context, "beforeToolCall", {
+          nodeId: node.id,
+          nodeType: node.type,
+          toolName: event.toolCall.toolName,
+          toolCallId: event.toolCall.toolCallId,
+        });
+      };
+      generateOptions.experimental_onToolCallFinish = (event: { toolCall: { toolName: string; toolCallId: string }; durationMs: number; success?: boolean; error?: unknown }) => {
+        toolStartTimes.delete(event.toolCall.toolCallId);
+        emitHook(context, "afterToolCall", {
+          nodeId: node.id,
+          nodeType: node.type,
+          toolName: event.toolCall.toolName,
+          toolCallId: event.toolCall.toolCallId,
+          durationMs: event.durationMs,
+          error: event.success === false && event.error
+            ? (event.error instanceof Error ? event.error.message : String(event.error))
+            : undefined,
+        });
+      };
     }
 
     const span = traceGenAI("gen_ai.generate", {

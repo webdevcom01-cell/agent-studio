@@ -24,37 +24,22 @@ Inspired by: claw-code hook DAG, OMC 11 lifecycle events, clawhip event pipeline
 
 **Tasks:**
 
-- [ ] A1.1 — Define `FlowHookEvent` type with 7 events:
-  - `onFlowStart` — before first node executes
-  - `onFlowComplete` — after last node or end node
-  - `onFlowError` — on unrecoverable flow error
-  - `beforeNodeExecute` — before each handler runs (includes nodeId, nodeType, input variables)
-  - `afterNodeExecute` — after each handler returns (includes nodeId, output, messages, duration)
-  - `beforeToolCall` — before MCP tool or agent-as-tool invocation
-  - `afterToolCall` — after tool returns (includes toolName, result, latency)
-- [ ] A1.2 — Create `src/lib/runtime/hooks.ts`:
-  - `FlowHookRegistry` class with `register(event, callback)` and `emit(event, payload)`
-  - Support sync and async callbacks
-  - Error in hook callback must NOT crash the flow (try/catch with logger.warn)
-- [ ] A1.3 — Integrate hooks into `engine.ts`:
-  - Emit `onFlowStart` at line ~140 (where audit log currently fires)
-  - Emit `beforeNodeExecute` / `afterNodeExecute` around handler call at line ~189
-  - Emit `onFlowComplete` at line ~244
-  - Emit `onFlowError` in catch block at line ~258
-- [ ] A1.4 — Integrate hooks into `engine-streaming.ts`:
-  - Same integration points as engine.ts (lines ~113, ~166, ~461)
-  - Hook emit must NOT block the stream writer
-- [ ] A1.5 — Integrate hooks into `ai-response-handler.ts` and `ai-response-streaming-handler.ts`:
-  - Emit `beforeToolCall` / `afterToolCall` around MCP tool execution and agent-as-tool calls
-- [ ] A1.6 — Create `WebhookHookSink`:
-  - Auto-register webhook URLs from agent config
-  - POST hook events to configured webhook URLs (fire-and-forget, 5s timeout)
-  - JSON payload: `{ event, agentId, flowId, nodeId, timestamp, data }`
-- [ ] A1.7 — Add hook configuration to Agent model or Flow config:
-  - `hookWebhookUrls: string[]` — URLs to receive hook events
-  - `hookEvents: string[]` — which events to emit (default: all)
-- [ ] A1.8 — Write unit tests for hooks.ts (register, emit, error isolation)
-- [ ] A1.9 — Write integration test: flow with hooks -> webhook receives events
+- [x] A1.1 — Define `FlowHookEvent` type with 8 events (added `onPreCompact`):
+  - `onFlowStart`, `onFlowComplete`, `onFlowError`, `beforeNodeExecute`, `afterNodeExecute`,
+    `beforeToolCall`, `afterToolCall`, `onPreCompact`
+- [x] A1.2 — Created `src/lib/runtime/hooks.ts`:
+  - `FlowHookRegistry` class with `addSink(sink)` and `emit(payload)`
+  - `WebhookHookSink` for fire-and-forget webhook delivery (5s timeout)
+  - `createHooksFromFlowContent()` factory, `emitHook()` convenience wrapper
+  - Error in any sink never crashes the flow (try/catch with logger.warn)
+- [x] A1.3 — Integrated hooks into `engine.ts` (5 points + auto-initialization)
+- [x] A1.4 — Integrated hooks into `engine-streaming.ts` (5 points in all 3 codepaths)
+- [x] A1.5 — Added `experimental_onToolCallStart` / `experimental_onToolCallFinish` to both AI handlers
+- [x] A1.6 — `WebhookHookSink` implemented (fire-and-forget POST, 5s AbortSignal timeout)
+- [x] A1.7 — Hook config in `FlowContent` JSON: `hookWebhookUrls?: string[]`, `hookEvents?: string[]`
+  - Zod validation: max 10 URLs, enum of valid event types; no DB migration needed
+- [x] A1.8 — 17 unit tests: FlowHookRegistry, WebhookHookSink, factory, emitHook — all pass
+- [ ] A1.9 — Integration test: flow with hooks → webhook receives events *(deferred)*
 
 **Files to modify:**
 - `src/lib/runtime/hooks.ts` (NEW)
@@ -96,7 +81,7 @@ Inspired by: claw-code hook DAG, OMC 11 lifecycle events, clawhip event pipeline
   - `COMPACTION_THRESHOLD = 80` (trigger compaction at 80% of MAX_HISTORY)
   - At line ~134: if `messageHistory.length > COMPACTION_THRESHOLD`, call `compactContext()` before slice
 - [x] A2.3 — Same integration in engine-streaming.ts
-- [ ] A2.4 — Emit `onPreCompact` hook event (from A1) before compaction runs *(deferred until A1 is done)*
+- [x] A2.4 — Emit `onPreCompact` hook event before compaction runs (added to `compactContext()`)
 - [x] A2.5 — Add agent-level config: `enableSmartCompaction: boolean` (default: true for new agents)
 - [x] A2.6 — Write unit tests:
   - Test: compaction saves summary to AgentMemory

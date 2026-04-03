@@ -89,10 +89,24 @@ const flowVariableSchema = z.object({
   default: z.unknown(),
 });
 
+const HOOK_EVENT_TYPES = [
+  "onFlowStart",
+  "onFlowComplete",
+  "onFlowError",
+  "beforeNodeExecute",
+  "afterNodeExecute",
+  "beforeToolCall",
+  "afterToolCall",
+  "onPreCompact",
+] as const;
+
 export const flowContentSchema = z.object({
   nodes: z.array(flowNodeSchema).max(MAX_NODES),
   edges: z.array(flowEdgeSchema).max(MAX_EDGES),
   variables: z.array(flowVariableSchema).max(MAX_VARIABLES).default([]),
+  // Lifecycle hooks — optional, no DB migration needed (stored in Flow.content JSON)
+  hookWebhookUrls: z.array(z.string().url()).max(10).optional(),
+  hookEvents: z.array(z.enum(HOOK_EVENT_TYPES)).optional(),
 });
 
 export type ValidatedFlowContent = z.infer<typeof flowContentSchema>;
