@@ -40,6 +40,12 @@ function getMistral() {
   return createMistral({ apiKey: key });
 }
 
+// Ollama — local inference via OpenAI-compatible API (localhost only)
+function getOllama() {
+  const baseURL = getEnv().OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
+  return createOpenAI({ baseURL, apiKey: "ollama" });
+}
+
 // Moonshot (Kimi) uses OpenAI-compatible API
 function getMoonshot() {
   const key = getEnv().MOONSHOT_API_KEY;
@@ -92,6 +98,10 @@ export function getModel(modelId: string) {
     const mistral = getMistral();
     if (!mistral) throw new Error("MISTRAL_API_KEY not configured");
     return mistral(modelId);
+  }
+  // Ollama (local) — prefix: "ollama/"
+  if (modelId.startsWith("ollama/")) {
+    return getOllama()(modelId.replace("ollama/", ""));
   }
   // Moonshot (Kimi)
   if (modelId.startsWith("moonshot") || modelId.startsWith("kimi")) {

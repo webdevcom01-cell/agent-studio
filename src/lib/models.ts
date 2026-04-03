@@ -51,6 +51,11 @@ export const ALL_MODELS: ModelOption[] = [
   { id: "mistral-medium-3",       name: "Mistral Medium 3",  provider: "Mistral", tier: "balanced", envKey: "MISTRAL_API_KEY" },
   { id: "mistral-large-2512",     name: "Mistral Large 3",   provider: "Mistral", tier: "powerful", envKey: "MISTRAL_API_KEY" },
 
+  // ── Ollama — local inference only (requires OLLAMA_BASE_URL) ────────────
+  // Runs on your machine via Ollama (http://localhost:11434).
+  // Not available on Railway — only shown in UI when OLLAMA_BASE_URL is set.
+  { id: "ollama/qwen3:8b", name: "Qwen3 8B (local)", provider: "Ollama", tier: "fast", envKey: "OLLAMA_BASE_URL" },
+
   // ── Moonshot Kimi — optional ─────────────────────────────────────────────
   // K2: 1T parameter MoE, strong agentic capabilities, OpenAI-compatible API
   // K2 Thinking: extended reasoning variant (chain-of-thought)

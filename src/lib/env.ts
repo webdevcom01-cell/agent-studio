@@ -71,6 +71,9 @@ const envSchema = z.object({
   /** Comma-separated list of user IDs allowed to call admin endpoints.
    *  When unset, admin endpoints fall back to any authenticated user (dev-friendly). */
   ADMIN_USER_IDS: optionalStr,
+  /** Base URL of local Ollama server — enables local model inference.
+   *  Default: http://localhost:11434/v1  (only works in local dev, not Railway). */
+  OLLAMA_BASE_URL: optionalStr,
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
