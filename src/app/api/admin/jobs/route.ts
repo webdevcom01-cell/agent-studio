@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
+import { requireAdmin, isAuthError } from "@/lib/api/auth-guard";
 import { getQueue } from "@/lib/queue";
 import { logger } from "@/lib/logger";
 
 export async function GET(): Promise<NextResponse> {
-  const authResult = await requireAuth();
+  const authResult = await requireAdmin();
   if (isAuthError(authResult)) return authResult;
 
   try {

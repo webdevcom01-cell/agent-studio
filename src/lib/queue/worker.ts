@@ -231,7 +231,22 @@ const isDirectRun =
   process.argv[1]?.includes("worker");
 
 if (isDirectRun) {
-  createWorker();
+  const worker = createWorker();
   const port = Number(process.env.PORT) || 8080;
   startHealthServer(port);
+
+  // Graceful shutdown: drain active jobs before exiting
+  async function shutdown(signal: string): Promise<void> {
+    logger.info("Graceful shutdown initiated", { signal });
+    try {
+      await worker.close();
+      logger.info("Worker drained and closed");
+    } catch (err) {
+      logger.error("Error during worker shutdown", { error: err });
+    }
+    process.exit(0);
+  }
+
+  process.on("SIGTERM", () => { void shutdown("SIGTERM"); });
+  process.on("SIGINT",  () => { void shutdown("SIGINT"); });
 }

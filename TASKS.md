@@ -177,6 +177,7 @@
 | 2026-04-03 | Sesija 4 DONE: 5.10 BullMQ heavy tasks (KB ingest + eval runs → queue, graceful fallback, 9/9 testovi) + 5.12 k6 load testovi (3 scenarija, SLO thresholds) |
 | 2026-04-03 | Sesija 5 DONE: 5.11 ECC Human Approval Gate (requestInstinctPromotion + approve hook, 8/8 testovi) + 5.13 OpenAPI securitySchemes (BearerAuth/CookieAuth, 15/15 testovi) + 5.14 CHANGELOG.md |
 | 2026-04-03 | Sesija 6 DONE: 5.9 CLI Generator stuck toast (proaktivni warning, 5/5 testovi) + 5.15 Rate-limit headers na svim success response-ima (8/8 testovi) |
+| 2026-04-03 | Sesija 7 DONE: 6.1 Worker Graceful Shutdown (SIGTERM/SIGINT + worker.close(), 6/6 testovi) + 6.2 Admin API Role Check (ADMIN_USER_IDS env, requireAdmin(), 3/3 testovi) + 6.3 Agent-Calls API Testovi (6/6 testovi) |
 
 ---
 
@@ -387,6 +388,56 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 
 ---
 
+---
+
+## FAZA 6 — Reliability + Security + Test Coverage (Sesija 7)
+
+> Pronađeni pregledom koda 2026-04-03. Sve su stvarni, provjereni problemi — nema halucinacija.
+> Svaki zadatak ima tačnu referencu na fajl i liniju.
+
+---
+
+### 🔴 6.1 — Worker Graceful Shutdown
+- **Status:** ✅ DONE (2026-04-03)
+- **Prioritet:** KRITIČAN — Railway ubija worker proces bez čekanja na active jobs
+- **Problem:** `src/lib/queue/worker.ts` nema `SIGTERM`/`SIGINT` handler. Railway šalje `SIGTERM` pri svakom deployu/scale-down eventu. Worker se ubija usred aktivnog job-a → potencijalno corrupt stanje u DB (job zaglavi na "active", nikad ne dobija "failed" status).
+- **Dokaz:** `src/lib/mcp/pool.ts` linija 158–159 već ima isti pattern koji fali workeru.
+- **Fix:** Dodati `process.on("SIGTERM")` i `process.on("SIGINT")` u `isDirectRun` blok koji pozivaju `worker.close()` — BullMQ Worker.close() čeka da aktivni job završi prije gašenja (graceful drain). Logger info poruke pri primanju signala.
+- **Fajlovi:** `src/lib/queue/worker.ts`
+- **Testovi:** Structural test — provjeri da source sadrži `SIGTERM` i `SIGINT` handlere i `worker.close()` poziv
+- **Procjena:** 45 min
+
+---
+
+### 🔴 6.2 — Admin API Role Check
+- **Status:** ✅ DONE (2026-04-03)
+- **Prioritet:** KRITIČAN — security gap, bilo koji logovan korisnik vidi sve stats
+- **Problem:** `src/app/api/admin/stats` i `src/app/api/admin/jobs` koriste samo `requireAuth()`. Komentar u kodu (linija 41 stats route) eksplicitno kaže "no access enforcement". Svaki registrovani korisnik može vidjet ukupan broj korisnika, top users listu, queue depth, itd.
+- **Dokaz:** `User` model nema `role` kolonu. Projekat nema multi-tenancy. Pravi pristup: `ADMIN_USER_IDS` env var (isti pattern kao `CRON_SECRET` za cron rute).
+- **Fix:**
+  - Dodati `ADMIN_USER_IDS` u `src/lib/env.ts` (opcionalan, comma-separated lista user ID-ova)
+  - Dodati `requireAdmin()` helper u `src/lib/api/auth-guard.ts` — čita `ADMIN_USER_IDS`, vraća 403 ako userId nije na listi; ako `ADMIN_USER_IDS` nije postavljen, propušta sve (development-friendly)
+  - Primjeniti `requireAdmin()` u `admin/stats/route.ts` i `admin/jobs/route.ts`
+- **Fajlovi:** `src/lib/env.ts`, `src/lib/api/auth-guard.ts`, `src/app/api/admin/stats/route.ts`, `src/app/api/admin/jobs/route.ts`
+- **Testovi:** 3 testa u auth-guard: 403 za non-admin userId, 200 za admin userId, pass-through kad `ADMIN_USER_IDS` nije postavljen
+- **Procjena:** 1h
+
+---
+
+### 🟠 6.3 — Agent-Calls API Testovi
+- **Status:** ✅ DONE (2026-04-03)
+- **Prioritet:** OZBILJNO — 377 linija koda (uključujući 7 raw SQL querija) bez ijednog testa
+- **Problem:** `src/app/api/agent-calls/route.ts` (46 linija) i `src/app/api/agent-calls/stats/route.ts` (331 linija, 7x `$queryRaw`) nemaju testove. Stats ruta parsira query parametre (`period`, `agentId`), ima fallback logiku, validira periode — sve netestirano.
+- **Fokus:** Testirati `agent-calls/route.ts` (jednostavnija, Prisma findMany) i osnovne validacije `agent-calls/stats/route.ts` (auth, period validacija, default period).
+- **Fix:** Test fajl sa 6 testova:
+  - `agent-calls/route.ts`: 401 bez auth, 200 s praznim rezultatom, limit parametar poštovan
+  - `agent-calls/stats/route.ts`: 401 bez auth, nevalidan period → 400, validan period → 200
+- **Fajlovi:** `src/app/api/agent-calls/__tests__/agent-calls.test.ts` (novi)
+- **Testovi:** 6 testova
+- **Procjena:** 1h
+
+---
+
 ## Prioritet redosljed sesija
 
 ```
@@ -407,6 +458,9 @@ Sesija 5 (AI governance + DX): ✅ ZAVRŠENA 2026-04-03
 
 Sesija 6 (UX + DX polish): ✅ ZAVRŠENA 2026-04-03
   5.9 CLI Stuck Notification + 5.15 Rate-Limit Headers
+
+Sesija 7 (Reliability + Security + Test Coverage): ✅ ZAVRŠENA 2026-04-03
+  6.1 Worker Graceful Shutdown + 6.2 Admin Role Check + 6.3 Agent-Calls Tests
 ```
 
 ---

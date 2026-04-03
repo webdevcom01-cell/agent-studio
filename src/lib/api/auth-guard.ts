@@ -193,6 +193,36 @@ export async function requireOrgOwner(
   return result;
 }
 
+// ── requireAdmin ─────────────────────────────────────────────────────────────
+// Requires authentication AND that the userId appears in the ADMIN_USER_IDS
+// environment variable (comma-separated list).
+// When ADMIN_USER_IDS is not configured, any authenticated user is allowed
+// (dev-friendly fallback — tighten in production by setting the env var).
+
+export async function requireAdmin(
+  req?: NextRequest,
+): Promise<AuthResult | NextResponse> {
+  const authResult = await requireAuth(req);
+  if (authResult instanceof NextResponse) return authResult;
+
+  const rawIds = process.env.ADMIN_USER_IDS;
+  if (!rawIds) {
+    // Not configured → allow all authenticated users (dev mode)
+    return authResult;
+  }
+
+  const adminIds = rawIds
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+  if (!adminIds.includes(authResult.userId)) {
+    return forbidden("Admin access required");
+  }
+
+  return authResult;
+}
+
 // ── Type guard ───────────────────────────────────────────────────────────────
 
 export function isAuthError(
