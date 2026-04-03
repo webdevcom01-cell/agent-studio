@@ -316,14 +316,17 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 ---
 
 ### 🟡 5.11 — ECC Instinct Human Approval Gate
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** AI GOVERNANCE — loš pattern može postati "znanje"
 - **Problem:** Instinct s >0.85 confidence se promovira u Skill bez human review
-- **Fix:** Human approval step (postoji HumanApprovalRequest model!) za instinct → skill
+- **Implementirano:**
+  - `requestInstinctPromotion()` u `instinct-engine.ts` — kreira HumanApprovalRequest umjesto direktne Skill promocije
+  - `/api/skills/evolve` cron ruta koristi `requestInstinctPromotion()` (ne direktno `promoteInstinctToSkill`)
+  - `/api/approvals/[requestId]/respond` — kad admin odobri promociju tipa `instinct_promotion`, automatski poziva `promoteInstinctToSkill()`
+  - `contextData` sadrži: `{ type, instinctId, skillContent, confidence }`
+  - Greška pri promociji ne blokira snimanje admin odluke
+  - 8/8 testova — uključujući 2 nova za `requestInstinctPromotion`
 - **Standard 2026:** Human-in-the-loop AI (EU AI Act, responsible AI standards)
-- **Fajlovi:** `src/lib/ecc/instinct-engine.ts`, `/api/skills/evolve/route.ts`
-- **Testovi:** instinct s 0.9 confidence → kreira HumanApprovalRequest, ne direktno Skill
-- **Procjena:** 1 dan
 
 ---
 
@@ -342,26 +345,27 @@ Sve faze 0–4 su ✅ DONE. Nastavak rada ide po **Fazi 5 — Tehnički dug i ha
 ---
 
 ### 🟢 5.13 — API Key Scopes Dokumentacija
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** DEVELOPER EXPERIENCE
 - **Problem:** `agents:read`, `chat:write` scope-i postoje u kodu ali nigdje nisu dokumentovani
-- **Fix:** Dodati scopes tabelu u OpenAPI spec description + `/api/docs` stranicu
+- **Implementirano:**
+  - 11 scope-a dokumentovano u OpenAPI `info.description` (Markdown tabela)
+  - `BearerAuth` + `CookieAuth` securitySchemes registrovani via `registry.registerComponent()`
+  - Top-level `security: [BearerAuth, CookieAuth]` u generisanom dokumentu
+  - 15/15 testova prolazi (2 nova: securitySchemes + scopes tabela)
 - **Standard 2026:** Developer experience (DX) — zero guesswork API design
-- **Fajlovi:** `src/lib/openapi/spec.ts`, `src/app/api/docs/route.ts`
-- **Testovi:** openapi spec mora sadržavati scopes tabelu
-- **Procjena:** 1h
 
 ---
 
 ### 🟢 5.14 — CHANGELOG.md Automatizacija
-- **Status:** ⬜ TODO
+- **Status:** ✅ DONE (2026-04-03)
 - **Prioritet:** OPEN SOURCE TRACTION
 - **Problem:** GitHub posjetioci ne vide historiju razvoja, loš prvi utisak
-- **Fix:** `conventional-changelog` CLI, generisati iz git log, dodati u release workflow
+- **Implementirano:**
+  - `CHANGELOG.md` kreiran s verzijama 0.1.0 – 0.5.0 + Unreleased sekcijom
+  - Keep a Changelog format (Added/Changed/Fixed/Security kategorije)
+  - `"changelog"` script u `package.json` — appenda git log u CHANGELOG.md
 - **Standard 2026:** Conventional Commits standard, semantic versioning
-- **Fajlovi:** `CHANGELOG.md` (novi), `package.json` (changelog script)
-- **Testovi:** `pnpm changelog` mora generisati validan markdown
-- **Procjena:** 2h
 
 ---
 
@@ -380,7 +384,7 @@ Sesija 3 (vidljivost i pouzdanost): ✅ ZAVRŠENA 2026-04-03
 Sesija 4 (skaliranje): ✅ ZAVRŠENA 2026-04-03
   5.10 BullMQ + 5.12 Load Tests
 
-Sesija 5 (AI governance + DX):
+Sesija 5 (AI governance + DX): ✅ ZAVRŠENA 2026-04-03
   5.11 ECC Human Approval + 5.13 Scopes + 5.14 CHANGELOG
 ```
 
