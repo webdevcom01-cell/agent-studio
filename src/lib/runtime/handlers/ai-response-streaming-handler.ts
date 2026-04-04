@@ -156,6 +156,13 @@ export async function aiResponseStreamingHandler(
     }
     // ──────────────────────────────────────────────────────────────────────────
 
+    // ── Hot memory injection ─────────────────────────────────────────────
+    const hotMemory = context.variables["__hot_memory"];
+    if (typeof hotMemory === "string" && hotMemory.length > 0) {
+      effectiveSystemPrompt = `${hotMemory}\n\n${effectiveSystemPrompt}`;
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
     // ── Safety: check user input for injection ────────────────────────────
     if (latestUserMsg) {
       const inputCheck = await checkInputSafety(latestUserMsg, context.agentId, node.id);

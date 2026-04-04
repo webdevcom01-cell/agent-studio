@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { shouldCompact, compactContext } from "./context-compaction";
 import { createHooksFromFlowContent, emitHook } from "./hooks";
+import { injectHotMemoryIntoContext } from "@/lib/memory/hot-cold-tier";
 import type { FlowNode } from "@/types";
 
 /**
@@ -150,6 +151,9 @@ export async function executeFlow(
     const registry = createHooksFromFlowContent(context.flowContent);
     if (registry) context.hooks = registry;
   }
+
+  // Inject hot memory into context (fire-and-forget, never blocks flow)
+  await injectHotMemoryIntoContext(context);
 
   // Audit: flow execution start
   writeAuditLog({

@@ -9,7 +9,7 @@ import {
   Plus, Bot, MessageSquare, Database, Trash2, MoreVertical,
   Download, Upload, LogOut, BarChart3, Plug, ArrowRightLeft,
   Sun, Moon, Compass, Terminal, FlaskConical, ShieldCheck,
-  Sparkles, Loader2, Webhook, Shield, LayoutDashboard,
+  Sparkles, Loader2, Webhook, Shield, LayoutDashboard, Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -583,6 +583,18 @@ export default function DashboardPage() {
                     className="flex-1 h-7 text-xs font-normal"
                   >
                     <Link href={`/builder/${agent.id}`}>Edit Flow</Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    asChild
+                    className="flex-1 h-7 text-xs font-normal"
+                    title="Agent memory"
+                  >
+                    <Link href={`/memory/${agent.id}`}>
+                      <Brain className="size-3 mr-1" aria-hidden="true" />
+                      Memory
+                    </Link>
                   </Button>
                   <Button
                     size="sm"

@@ -12,6 +12,7 @@ import { findNextNode, findStartNode, SELF_ROUTING_NODES, resolveNextNodeId } fr
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { shouldCompact, compactContext } from "./context-compaction";
 import { createHooksFromFlowContent, emitHook } from "./hooks";
+import { injectHotMemoryIntoContext } from "@/lib/memory/hot-cold-tier";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
 import { parallelStreamingHandler } from "./handlers/parallel-streaming-handler";
@@ -121,6 +122,9 @@ export function executeFlowStreaming(
           const registry = createHooksFromFlowContent(context.flowContent);
           if (registry) context.hooks = registry;
         }
+
+        // Inject hot memory into context (fire-and-forget, never blocks flow)
+        await injectHotMemoryIntoContext(context);
 
         writeAuditLog({
           userId: context.userId,
