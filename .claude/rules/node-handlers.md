@@ -18,8 +18,8 @@ return {
   // Required: at least one message describing what happened
   messages: [{ role: 'assistant', content: 'Result description' }],
 
-  // Optional: ID of next node to execute (undefined = stop)
-  nextNodeId: node.data.nextNodeId as string | undefined,
+  // Required: ID of next node to execute (null = stop)
+  nextNodeId: node.data.nextNodeId as string | null,
 
   // Optional: variables to update in flow context
   updatedVariables: { myVar: 'value' },
@@ -36,7 +36,7 @@ EVERY handler must have a try/catch. NEVER throw from a handler — always retur
   logger.error('my-handler error', { nodeId: node.id, error });
   return {
     messages: [{ role: 'assistant', content: 'An error occurred in [node type] node.' }],
-    nextNodeId: undefined,
+    nextNodeId: null,
   };
 }
 ```

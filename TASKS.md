@@ -159,27 +159,25 @@ No dynamic task claiming or shared pool.
 
 **Tasks:**
 
-- [ ] B1.1 — Add `swarm` to `NodeType` union in `src/types/index.ts`
-- [ ] B1.2 — Create `src/lib/runtime/handlers/swarm-handler.ts`:
-  - Config: `tasks: string[]` (list of task descriptions), `workerCount: number` (1-10, default 3), `workerModel: string`, `mergeStrategy: "concat" | "summarize"`
-  - Implementation:
-    1. Parse task list from config or variable
-    2. Create task queue (array with status: pending/claimed/done)
-    3. Spawn N workers (similar to parallel handler branches)
-    4. Each worker: claim next pending task (atomic via mutex/index), execute via AI call, mark done
-    5. Workers continue until queue empty
-    6. Merge all results per mergeStrategy
-  - Safety: timeout per task (60s), overall timeout (300s), max tasks = 50
-- [ ] B1.3 — Register handler in `src/lib/runtime/handlers/index.ts`
-- [ ] B1.4 — Create display component `src/components/builder/nodes/swarm-node.tsx`
-- [ ] B1.5 — Add to node picker in `src/components/builder/node-picker.tsx`
-- [ ] B1.6 — Add property editor in `src/components/builder/property-panel.tsx`:
-  - Task list editor (add/remove/reorder)
-  - Worker count slider
-  - Model selector
-  - Merge strategy dropdown
-- [ ] B1.7 — Write unit tests (task claiming, concurrent workers, empty queue, timeout)
-- [ ] B1.8 — Update CLAUDE.md section 6 with swarm node description (node type docs)
+- [x] B1.1 — Add `swarm` to `NodeType` union in `src/types/index.ts` (56th type)
+  - Also added to `flow-content.ts` NODE_TYPES validator array
+- [x] B1.2 — Created `src/lib/runtime/handlers/swarm-handler.ts` (~350 lines):
+  - Config: `tasks: string[]`, `tasksVariable: string`, `workerCount: number` (1-10, default 3), `workerModel: string`, `mergeStrategy: "concat" | "summarize"`, `systemPrompt`, `taskContext`
+  - Task queue with atomic claiming (safe in single-threaded Node.js)
+  - N workers via `Promise.allSettled`, continue until queue empty or deadline
+  - Merge: concat (join results) or summarize (AI-powered synthesis)
+  - Routes to `done` or `failed` sourceHandle based on success rate
+  - Respects `__model_tier_override` and `__ecomode_enabled` from cost_monitor
+  - Safety: TASK_TIMEOUT_MS=60s, OVERALL_TIMEOUT_MS=300s, MAX_TASKS=50, MAX_WORKERS=10
+- [x] B1.3 — Registered handler in `src/lib/runtime/handlers/index.ts`
+- [x] B1.4 — Created `src/components/builder/nodes/swarm-node.tsx` (amber theme, Boxes icon)
+- [x] B1.5 — Added to node picker in `src/components/builder/node-picker.tsx` (ai category)
+- [x] B1.6 — Added property editor in `src/components/builder/property-panel.tsx`:
+  - Worker count, model selector, system prompt, task context, tasks variable, static task list editor, merge strategy, output variable
+  - Also registered in `flow-builder.tsx` NODE_TYPES map and OUTPUT_VAR_TYPES set
+- [x] B1.7 — 16 unit tests in `swarm-handler.test.ts`: empty tasks, string array, newline-separated, variable source, worker capping, MAX_TASKS, output variables, done/failed routing, model override, ecomode, error handling, empty task filtering
+  - Also updated `node-picker.test.tsx`: count 55→56, ai category 13→14, added Boxes mock
+- [x] B1.8 — Updated CLAUDE.md section 3 + 6 with swarm node (56 types, handler description)
 
 **Files to create/modify:**
 - `src/types/index.ts` (add to NodeType union)
@@ -300,12 +298,16 @@ Inspired by: memsearch (Zilliz), OpenClaw memory system, clawhip MEMORY.md + sha
 > not exportable. memsearch uses Markdown files as source of truth with vector index
 > as cache. OpenClaw uses MEMORY.md index + memory/ shards for hot/cold tiers.
 
-**Current state** (verified in code):
-- `AgentMemory` model: `key`, `value (Json)`, `category`, `importance`, `embedding`, `accessCount`
-- No hot/cold tier distinction
-- No markdown export
-- No human-editable UI
-- No context-window-friendly summary layer
+**Current state** (verified in code — kontrolni ček 2026-04-04):
+- `AgentMemory` model: `key`, `value (String)`, `category`, `importance`, `embedding (vector 1536)`, `accessCount`, `accessedAt`
+- Two fully-implemented handler nodes exist:
+  - `memory-write-handler.ts` (253 lines) — 5 merge strategies (replace, merge_object, deep_merge, append_array, increment), auto-eviction at 1000 limit, async embedding generation
+  - `memory-read-handler.ts` (300 lines) — 3 modes: key lookup, category filter, vector-semantic search with HNSW acceleration, fallback to text search
+- No hot/cold tier distinction (separate optimization layer needed)
+- No markdown export or import
+- No human-editable UI (no Memory tab/page exists)
+- No automatic memory injection into context before AI nodes — engine.ts does NOT load AgentMemory on flow start
+- HNSW index exists: `agentmemory_embedding_hnsw_idx` (vector_cosine_ops, m=16, ef_construction=64)
 
 **Tasks:**
 
@@ -409,10 +411,13 @@ Inspired by: memsearch (Zilliz), OpenClaw memory system, clawhip MEMORY.md + sha
 > bb25 uses Bayesian calibration to automatically balance semantic and keyword scores
 > without scale mismatch. Proven +1.0%p NDCG on SQuAD benchmark. Rust core.
 
-**Current state** (verified in code):
-- `search.ts` line 282-310: `reciprocalRankFusion()` with k=60, weights 0.7/0.3
-- Post-fusion: min-max normalization
-- Manual weight tuning per KB via `hybridAlpha` config field
+**Current state** (verified in code — kontrolni ček 2026-04-04):
+- `search.ts` line 282-289: `reciprocalRankFusion()` with k=60, default weights 0.5/0.5 in function signature
+- Weights overridden by `KnowledgeBase.hybridAlpha` (default 0.7 semantic / 0.3 keyword) — already configurable per-KB
+- Contextual Enrichment enabled → semantic weight auto-bumped to 0.8 (line 489)
+- Post-fusion: min-max normalization via `normalizeRRFScores()` (line 315-325)
+- `hybridAlpha` IS already used: `search.ts` line 491 reads from kbConfig
+- No `fusionStrategy` field yet — RRF is the only fusion strategy (Bayesian is future work)
 
 **Tasks:**
 
