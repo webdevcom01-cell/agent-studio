@@ -12,6 +12,7 @@ import { findNextNode, findStartNode, SELF_ROUTING_NODES, resolveNextNodeId } fr
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { shouldCompact, compactContext } from "./context-compaction";
 import { createHooksFromFlowContent, emitHook } from "./hooks";
+import { emitSessionEvent } from "./session-events";
 import { injectHotMemoryIntoContext } from "@/lib/memory/hot-cold-tier";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
@@ -135,6 +136,10 @@ export function executeFlowStreaming(
         }).catch(() => {});
 
         emitHook(context, "onFlowStart", {
+          meta: { hasUserMessage: !!userMessage, streaming: true },
+        });
+
+        emitSessionEvent(context, "session.started", {
           meta: { hasUserMessage: !!userMessage, streaming: true },
         });
 
@@ -276,6 +281,10 @@ export function executeFlowStreaming(
               emitHook(context, "onFlowError", {
                 nodeId: node.id, nodeType: node.type, error: errorMsg,
               });
+              emitSessionEvent(context, "session.failed", {
+                durationMs: Date.now() - flowStartMs, iterations,
+                error: errorMsg, meta: { nodeId: node.id, nodeType: node.type },
+              });
               logger.error("AI streaming handler error", error, { agentId: context.agentId, nodeId: node.id });
               nodesFailed++;
               try {
@@ -315,6 +324,10 @@ export function executeFlowStreaming(
               });
               emitHook(context, "onFlowError", {
                 nodeId: node.id, nodeType: node.type, error: errorMsg,
+              });
+              emitSessionEvent(context, "session.failed", {
+                durationMs: Date.now() - flowStartMs, iterations,
+                error: errorMsg, meta: { nodeId: node.id, nodeType: node.type },
               });
               logger.error("Parallel streaming handler error", error, { agentId: context.agentId, nodeId: node.id });
               nodesFailed++;
@@ -386,6 +399,10 @@ export function executeFlowStreaming(
               emitHook(context, "onFlowError", {
                 nodeId: node.id, nodeType: node.type, error: errorMsg,
               });
+              emitSessionEvent(context, "session.failed", {
+                durationMs: Date.now() - flowStartMs, iterations,
+                error: errorMsg, meta: { nodeId: node.id, nodeType: node.type },
+              });
               logger.error("Node handler error", error, { agentId: context.agentId, nodeType: node.type, nodeId: node.id });
               nodesFailed++;
               debugEmitNodeEnd(writer, context, node.id, "error", errDuration,
@@ -453,6 +470,11 @@ export function executeFlowStreaming(
             if (result.nextNodeId) {
               context.currentNodeId = result.nextNodeId;
             }
+            emitSessionEvent(context, "session.blocked", {
+              durationMs: Date.now() - flowStartMs,
+              iterations,
+              meta: { nodeId: node.id, nodeType: node.type },
+            });
             // Debug: waiting for input status on current node
             debugEmit(writer, context, {
               type: "debug_node_start",
@@ -489,6 +511,19 @@ export function executeFlowStreaming(
           allMessages.push(msg);
           try { writer.write({ type: "message", role: msg.role, content: msg.content }); } catch { /* stream closed */ }
           context.currentNodeId = null;
+          emitSessionEvent(context, "session.timeout", {
+            durationMs: Date.now() - flowStartMs,
+            iterations,
+          });
+        }
+
+        // Emit session.finished (timeout already emitted above when applicable)
+        if (!(iterations >= MAX_ITERATIONS) && !aborted) {
+          emitSessionEvent(context, "session.finished", {
+            durationMs: Date.now() - flowStartMs,
+            iterations,
+            meta: { messageCount: allMessages.length },
+          });
         }
 
         emitHook(context, "onFlowComplete", {

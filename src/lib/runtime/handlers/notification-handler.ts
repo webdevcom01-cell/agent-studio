@@ -1,10 +1,15 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { logger } from "@/lib/logger";
+import { getRenderer, getSink } from "@/lib/notifications";
+import type { NotificationInput, SinkConfig } from "@/lib/notifications";
 
 /**
  * Notification node — sends notifications via configured channels.
- * Supports multiple channels: webhook (Slack/Discord/Teams), in-app, and log.
+ * Supports renderer/sink pattern (Phase E2):
+ *   - Renderers: plain, discord, slack, markdown
+ *   - Sinks: webhook, in_app, log
+ *
  * Template resolution in title and message fields.
  */
 export const notificationHandler: NodeHandler = async (node, context) => {
@@ -14,6 +19,7 @@ export const notificationHandler: NodeHandler = async (node, context) => {
   const level = (node.data.level as string) ?? "info"; // info | warning | error | success
   const webhookUrl = (node.data.webhookUrl as string) ?? "";
   const outputVariable = (node.data.outputVariable as string) ?? "notification_result";
+  const rendererName = (node.data.renderer as string) ?? "plain";
 
   // Resolve templates
   const title = titleTemplate.trim()
@@ -36,48 +42,75 @@ export const notificationHandler: NodeHandler = async (node, context) => {
     };
   }
 
-  const notificationContent = title ? `${title}: ${message}` : message;
-
   try {
-    if (channel === "log") {
-      // Simple log-based notification
-      const logFn = level === "error" ? logger.error : logger.info;
-      if (level === "error") {
-        logFn(`[Notification] ${notificationContent}`, undefined, {
-          agentId: context.agentId,
-          level,
-        });
-      } else {
-        logFn(`[Notification] ${notificationContent}`, {
-          agentId: context.agentId,
-          level,
-        });
-      }
+    // Build notification input
+    const input: NotificationInput = {
+      title,
+      message,
+      level: (["info", "warning", "error", "success"].includes(level)
+        ? level
+        : "info") as NotificationInput["level"],
+      agentId: context.agentId,
+      timestamp: new Date().toISOString(),
+    };
 
-      return {
-        messages: [],
-        nextNodeId: null,
-        waitForInput: false,
-        updatedVariables: {
-          [outputVariable]: {
-            success: true,
-            channel: "log",
-            title,
-            message,
-            level,
-            sentAt: new Date().toISOString(),
-          },
-        },
-      };
-    }
+    // Render with selected renderer
+    const renderer = getRenderer(rendererName);
+    const rendered = renderer.render(input);
 
-    if (channel === "in_app") {
-      // In-app notification — store as a message for the chat UI
+    // Resolve webhook URL (same priority as before: variable > config > env)
+    const webhookUrlVariable = (node.data.webhookUrlVariable as string) ?? "";
+    const runtimeUrl = webhookUrlVariable
+      ? String(context.variables[webhookUrlVariable] ?? "")
+      : "";
+    const configUrl = webhookUrl.trim()
+      ? resolveTemplate(webhookUrl, context.variables)
+      : "";
+    const envUrl = process.env.NOTIFICATION_WEBHOOK_URL ?? "";
+    const resolvedUrl = runtimeUrl || configUrl || envUrl;
+
+    // Build sink config
+    const sinkConfig: SinkConfig = {
+      webhookUrl: resolvedUrl || undefined,
+      agentId: context.agentId,
+      timeoutMs: 15000,
+    };
+
+    // Check webhook URL requirement
+    if (channel === "webhook" && !resolvedUrl) {
       return {
         messages: [
           {
             role: "assistant",
-            content: `📋 **${title || "Notification"}**${message ? `\n${message}` : ""}`,
+            content: "Notification failed: no webhook URL configured. Set webhookUrlVariable, webhookUrl, or NOTIFICATION_WEBHOOK_URL env var.",
+          },
+        ],
+        nextNodeId: null,
+        waitForInput: false,
+        updatedVariables: {
+          [outputVariable]: { success: false, error: "No webhook URL" },
+        },
+      };
+    }
+
+    if (channel === "webhook") {
+      logger.info("Notification webhook URL resolved", {
+        agentId: context.agentId,
+        source: runtimeUrl ? "runtime_variable" : configUrl ? "node_config" : "env_fallback",
+      });
+    }
+
+    // Deliver via sink
+    const sink = getSink(channel);
+    const result = await sink.deliver(rendered, sinkConfig);
+
+    // For in_app, include the rendered text as an assistant message
+    if (channel === "in_app") {
+      return {
+        messages: [
+          {
+            role: "assistant",
+            content: rendered.text,
           },
         ],
         nextNodeId: null,
@@ -89,118 +122,32 @@ export const notificationHandler: NodeHandler = async (node, context) => {
             title,
             message,
             level,
-            sentAt: new Date().toISOString(),
+            renderer: rendererName,
+            sentAt: input.timestamp,
           },
         },
       };
     }
 
-    if (channel === "webhook") {
-      // URL resolution priority: runtime variable > node config > env fallback
-      const webhookUrlVariable = (node.data.webhookUrlVariable as string) ?? "";
-      const runtimeUrl = webhookUrlVariable
-        ? String(context.variables[webhookUrlVariable] ?? "")
-        : "";
-      const configUrl = webhookUrl.trim()
-        ? resolveTemplate(webhookUrl, context.variables)
-        : "";
-      const envUrl = process.env.NOTIFICATION_WEBHOOK_URL ?? "";
-
-      const resolvedUrl = runtimeUrl || configUrl || envUrl;
-
-      if (!resolvedUrl) {
-        return {
-          messages: [
-            {
-              role: "assistant",
-              content: "Notification failed: no webhook URL configured. Set webhookUrlVariable, webhookUrl, or NOTIFICATION_WEBHOOK_URL env var.",
-            },
-          ],
-          nextNodeId: null,
-          waitForInput: false,
-          updatedVariables: {
-            [outputVariable]: { success: false, error: "No webhook URL" },
-          },
-        };
-      }
-
-      logger.info("Notification webhook URL resolved", {
-        agentId: context.agentId,
-        source: runtimeUrl ? "runtime_variable" : configUrl ? "node_config" : "env_fallback",
-      });
-
-      // Format for common webhook platforms (Slack/Discord/Teams compatible)
-      const payload = {
-        text: notificationContent,
-        title,
-        message,
-        level,
-        agentId: context.agentId,
-        timestamp: new Date().toISOString(),
-      };
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      const response = await fetch(resolvedUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        logger.warn("Notification webhook returned error", {
-          agentId: context.agentId,
-          status: response.status,
-        });
-
-        return {
-          messages: [],
-          nextNodeId: null,
-          waitForInput: false,
-          updatedVariables: {
-            [outputVariable]: {
-              success: false,
-              channel: "webhook",
-              status: response.status,
-            },
-          },
-        };
-      }
-
-      logger.info("Notification sent via webhook", {
-        agentId: context.agentId,
-      });
-
-      return {
-        messages: [],
-        nextNodeId: null,
-        waitForInput: false,
-        updatedVariables: {
-          [outputVariable]: {
-            success: true,
-            channel: "webhook",
-            title,
-            level,
-            sentAt: new Date().toISOString(),
-          },
-        },
-      };
-    }
-
-    // Unknown channel
+    // For log and webhook — no visible message to the user
     return {
-      messages: [
-        {
-          role: "assistant",
-          content: `Notification failed: unknown channel "${channel}".`,
-        },
-      ],
+      messages: result.success
+        ? []
+        : [{ role: "assistant", content: `Notification delivery issue: ${result.error ?? "unknown"}` }],
       nextNodeId: null,
       waitForInput: false,
+      updatedVariables: {
+        [outputVariable]: {
+          success: result.success,
+          channel: result.channel,
+          title,
+          level,
+          renderer: rendererName,
+          sentAt: input.timestamp,
+          ...(result.status != null ? { status: result.status } : {}),
+          ...(result.error ? { error: result.error } : {}),
+        },
+      },
     };
   } catch (error) {
     logger.error("Notification failed", error, {

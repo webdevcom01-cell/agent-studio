@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { shouldCompact, compactContext } from "./context-compaction";
 import { createHooksFromFlowContent, emitHook } from "./hooks";
+import { emitSessionEvent } from "./session-events";
 import { injectHotMemoryIntoContext } from "@/lib/memory/hot-cold-tier";
 import type { FlowNode } from "@/types";
 
@@ -169,6 +170,12 @@ export async function executeFlow(
     meta: { hasUserMessage: !!userMessage, streaming: false },
   });
 
+  const flowStartMs = Date.now();
+
+  emitSessionEvent(context, "session.started", {
+    meta: { hasUserMessage: !!userMessage, streaming: false },
+  });
+
   while (context.currentNodeId && iterations < MAX_ITERATIONS) {
     iterations++;
 
@@ -236,6 +243,12 @@ export async function executeFlow(
         nodeType: node.type,
         error: errorMsg,
       });
+      emitSessionEvent(context, "session.failed", {
+        durationMs: Date.now() - flowStartMs,
+        iterations,
+        error: errorMsg,
+        meta: { nodeId: node.id, nodeType: node.type },
+      });
       logger.error("Node handler error", error, { agentId: context.agentId, nodeType: node.type, nodeId: node.id });
       allMessages.push({
         role: "assistant",
@@ -271,6 +284,11 @@ export async function executeFlow(
       if (result.nextNodeId) {
         context.currentNodeId = result.nextNodeId;
       }
+      emitSessionEvent(context, "session.blocked", {
+        durationMs: Date.now() - flowStartMs,
+        iterations,
+        meta: { nodeId: node.id, nodeType: node.type },
+      });
       await saveMessages(context.conversationId, allMessages);
       await saveContext(context);
       return { messages: allMessages, waitingForInput: true };
@@ -289,10 +307,23 @@ export async function executeFlow(
       content: "This conversation has reached its processing limit. Please start a new conversation.",
     });
     context.currentNodeId = null;
+    emitSessionEvent(context, "session.timeout", {
+      durationMs: Date.now() - flowStartMs,
+      iterations,
+    });
   }
 
   await saveMessages(context.conversationId, allMessages);
   await saveContext(context);
+
+  // Emit session.finished (timeout already emitted above when applicable)
+  if (!(iterations >= MAX_ITERATIONS)) {
+    emitSessionEvent(context, "session.finished", {
+      durationMs: Date.now() - flowStartMs,
+      iterations,
+      meta: { messageCount: allMessages.length },
+    });
+  }
 
   emitHook(context, "onFlowComplete", {
     meta: { iterations, messageCount: allMessages.length, streaming: false },

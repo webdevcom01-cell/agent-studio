@@ -15,6 +15,19 @@ export type FlowHookEventType =
   | "onPreCompact"
   | "onPersistentCap";
 
+// ---------------------------------------------------------------------------
+// Session Event types (Phase E1)
+// ---------------------------------------------------------------------------
+
+export type SessionEventType =
+  | "session.started"
+  | "session.finished"
+  | "session.failed"
+  | "session.timeout"
+  | "session.blocked"
+  | "session.verification_passed"
+  | "session.verification_failed";
+
 export interface FlowHookPayload {
   event: FlowHookEventType;
   agentId: string;

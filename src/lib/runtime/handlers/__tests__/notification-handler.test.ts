@@ -138,15 +138,16 @@ describe("notificationHandler", () => {
 
     it("resolves template variables", async () => {
       const node = makeNode({
+        channel: "in_app",
         title: "Alert for {{user}}",
         message: "Score: {{score}}",
       });
       const ctx = makeContext({ variables: { user: "Alice", score: "99" } });
       const result = await notificationHandler(node, ctx);
 
-      const notifResult = result.updatedVariables?.notification_result as Record<string, unknown>;
-      expect(notifResult.title).toBe("Alert for Alice");
-      expect(notifResult.message).toBe("Score: 99");
+      // In-app channel includes rendered text in messages
+      expect(result.messages[0].content).toContain("Alert for Alice");
+      expect(result.messages[0].content).toContain("Score: 99");
     });
 
     it("uses custom output variable", async () => {
@@ -156,11 +157,14 @@ describe("notificationHandler", () => {
       expect(result.updatedVariables?.my_notif).toBeDefined();
     });
 
-    it("returns error for unknown channel", async () => {
+    it("falls back to log sink for unknown channel", async () => {
       const node = makeNode({ channel: "sms" });
       const result = await notificationHandler(node, makeContext());
 
-      expect(result.messages[0].content).toContain('unknown channel "sms"');
+      // Unknown channel falls back to log sink (no visible error message)
+      const notifResult = result.updatedVariables?.notification_result as Record<string, unknown>;
+      expect(notifResult.success).toBe(true);
+      expect(notifResult.channel).toBe("log");
     });
 
     it("handles fetch errors gracefully", async () => {
@@ -172,7 +176,10 @@ describe("notificationHandler", () => {
       });
       const result = await notificationHandler(node, makeContext());
 
-      expect(result.messages[0].content).toContain("could not be sent");
+      // Webhook delivery error produces a delivery issue message
+      expect(result.messages[0].content).toContain("Notification delivery issue");
+      const notifResult = result.updatedVariables?.notification_result as Record<string, unknown>;
+      expect(notifResult.success).toBe(false);
     });
   });
 

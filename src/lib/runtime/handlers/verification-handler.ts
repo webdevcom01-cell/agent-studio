@@ -1,6 +1,7 @@
 import type { NodeHandler } from "../types";
 import { runVerificationCommands } from "../verification-commands";
 import type { CommandResult } from "../verification-commands";
+import { emitSessionEvent } from "../session-events";
 import { logger } from "@/lib/logger";
 
 const MAX_OVERALL_TIMEOUT_MS = 300_000; // 5 minutes total
@@ -106,6 +107,15 @@ export const verificationHandler: NodeHandler = async (node, context) => {
       failedCount,
       totalDurationMs,
     });
+
+    emitSessionEvent(
+      context,
+      result.allPassed ? "session.verification_passed" : "session.verification_failed",
+      {
+        durationMs: totalDurationMs,
+        meta: { passedCount, failedCount, checks: checks.length },
+      },
+    );
 
     return {
       messages: [

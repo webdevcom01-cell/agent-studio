@@ -105,6 +105,23 @@ const HOOK_EVENT_TYPES = [
   "onPersistentCap",
 ] as const;
 
+const SESSION_EVENT_TYPES = [
+  "session.started",
+  "session.finished",
+  "session.failed",
+  "session.timeout",
+  "session.blocked",
+  "session.verification_passed",
+  "session.verification_failed",
+] as const;
+
+const sessionNotificationsSchema = z.object({
+  events: z.array(z.enum(SESSION_EVENT_TYPES)).min(1).max(7),
+  channel: z.enum(["webhook", "in_app", "log"]),
+  webhookUrl: z.string().url().optional(),
+  format: z.enum(["plain", "discord", "slack"]).optional(),
+}).optional();
+
 export const flowContentSchema = z.object({
   nodes: z.array(flowNodeSchema).max(MAX_NODES),
   edges: z.array(flowEdgeSchema).max(MAX_EDGES),
@@ -112,6 +129,8 @@ export const flowContentSchema = z.object({
   // Lifecycle hooks — optional, no DB migration needed (stored in Flow.content JSON)
   hookWebhookUrls: z.array(z.string().url()).max(10).optional(),
   hookEvents: z.array(z.enum(HOOK_EVENT_TYPES)).optional(),
+  // Session notifications — optional (Phase E1)
+  sessionNotifications: sessionNotificationsSchema,
 });
 
 export type ValidatedFlowContent = z.infer<typeof flowContentSchema>;
