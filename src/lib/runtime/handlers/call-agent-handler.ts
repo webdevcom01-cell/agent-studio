@@ -186,6 +186,7 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
     resolvedInput[key] = resolveTemplate(value, context.variables);
   }
 
+  const providerOverride = (node.data.providerOverride as string) || "";
   const retryConfig = parseRetryConfig(node.data.retryConfig);
 
   // Retry loop: attempt 0 is the first try, then up to maxRetries additional attempts
@@ -205,7 +206,7 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
     const attemptResult = await executeCallAttempt(
       node, context, mode, targetAgentId, externalCardUrl,
       resolvedInput, outputVariable, timeoutSeconds, onError,
-      depth, callStack, traceId,
+      depth, callStack, traceId, providerOverride,
     );
 
     if (attemptResult.success) {
@@ -247,6 +248,7 @@ async function executeCallAttempt(
   depth: number,
   callStack: string[],
   traceId: string,
+  providerOverride?: string,
 ): Promise<{ success: boolean; result: import("../types").ExecutionResult; error?: unknown }> {
   const spanId = generateSpanId();
   const taskId = generateSpanId();
@@ -301,6 +303,7 @@ async function executeCallAttempt(
         callStack: [...callStack, targetAgentId!],
         traceId,
         timeoutSeconds,
+        providerOverride: providerOverride || undefined,
       });
       output = subResult.output;
     }
@@ -666,6 +669,7 @@ interface SubAgentParams {
   traceId: string;
   timeoutSeconds: number;
   executeFlowFn?: ExecuteFlowFn;
+  providerOverride?: string;
 }
 
 interface SubAgentResult {
@@ -701,7 +705,24 @@ async function executeSubAgent(params: SubAgentParams): Promise<SubAgentResult> 
     throw new Error(`Agent "${agent.name}" has no flow`);
   }
 
-  const flowContent = parseFlowContent(agent.flow.content);
+  let flowContent = parseFlowContent(agent.flow.content);
+
+  // Apply providerOverride — override model on all ai_response nodes in callee's flow
+  if (params.providerOverride) {
+    flowContent = {
+      ...flowContent,
+      nodes: flowContent.nodes.map((n) =>
+        n.type === "ai_response"
+          ? { ...n, data: { ...n.data, model: params.providerOverride } }
+          : n,
+      ),
+    };
+    logger.info("call_agent providerOverride applied", {
+      targetAgentId,
+      model: params.providerOverride,
+      nodesOverridden: flowContent.nodes.filter((n) => n.type === "ai_response").length,
+    });
+  }
 
   const conversation = await prisma.conversation.create({
     data: {

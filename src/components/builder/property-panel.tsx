@@ -717,6 +717,9 @@ export function PropertyPanel({
         {node.type === "swarm" && (
           <SwarmProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "verification" && (
+          <VerificationProperties data={data} update={update} variables={variables} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -782,6 +785,7 @@ const OUTPUT_VAR_TYPES = new Set([
   "plan_and_execute",
   "reflexive_loop",
   "swarm",
+  "verification",
 ]);
 
 /**
@@ -1631,6 +1635,27 @@ function CallAgentProperties({ data, update, variables = [], currentAgentId }: C
         >
           <option value="continue">Continue flow</option>
           <option value="stop">Stop flow</option>
+        </select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Provider Override</Label>
+        <p className="text-xs text-muted-foreground">
+          Override the AI model used in the target agent&apos;s ai_response nodes.
+        </p>
+        <select
+          value={(data.providerOverride as string) ?? ""}
+          onChange={(e) => update("providerOverride", e.target.value)}
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+        >
+          <option value="">Use target agent&apos;s default</option>
+          <option value="deepseek-chat">DeepSeek V3 (fast)</option>
+          <option value="gpt-4.1-mini">GPT-4.1 Mini (fast)</option>
+          <option value="gpt-4.1">GPT-4.1 (balanced)</option>
+          <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (balanced)</option>
+          <option value="claude-opus-4-6">Claude Opus 4.6 (powerful)</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash (fast)</option>
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro (powerful)</option>
         </select>
       </div>
 
@@ -6017,6 +6042,103 @@ function ParallelBranchesProperties({ data, update }: Omit<SubPanelProps, "varia
           onChange={(e) => update("timeoutSeconds", Number(e.target.value))}
           min={1}
           max={120}
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Verification ─────────────────────────────────────────────────────────
+
+interface VerificationCheck {
+  type: "build" | "test" | "lint" | "custom";
+  command: string;
+  label?: string;
+}
+
+function VerificationProperties({ data, update }: SubPanelProps) {
+  const checks = (data.checks as VerificationCheck[]) ?? [];
+
+  const addCheck = () => {
+    update("checks", [...checks, { type: "custom", command: "", label: "" }]);
+  };
+
+  const removeCheck = (idx: number) => {
+    update(
+      "checks",
+      checks.filter((_, i) => i !== idx),
+    );
+  };
+
+  const updateCheck = (idx: number, field: string, value: string) => {
+    const updated = checks.map((c, i) =>
+      i === idx ? { ...c, [field]: value } : c,
+    );
+    update("checks", updated);
+  };
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Verification Checks</Label>
+        <p className="text-xs text-muted-foreground">
+          Commands to run. All must pass (exit 0) to route to &quot;passed&quot;.
+        </p>
+
+        <div className="space-y-3">
+          {checks.map((check, idx) => (
+            <div key={idx} className="space-y-1.5 rounded-md border p-2">
+              <div className="flex items-center gap-2">
+                <Select
+                  value={check.type}
+                  onValueChange={(v) => updateCheck(idx, "type", v)}
+                >
+                  <SelectTrigger className="w-24 h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="build">Build</SelectItem>
+                    <SelectItem value="test">Test</SelectItem>
+                    <SelectItem value="lint">Lint</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  className="h-7 text-xs flex-1"
+                  placeholder="Label (optional)"
+                  value={check.label ?? ""}
+                  onChange={(e) => updateCheck(idx, "label", e.target.value)}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="size-7 p-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => removeCheck(idx)}
+                >
+                  ×
+                </Button>
+              </div>
+              <Input
+                className="h-7 text-xs font-mono"
+                placeholder="e.g. npm test, eslint src/, tsc --noEmit"
+                value={check.command}
+                onChange={(e) => updateCheck(idx, "command", e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+
+        <Button variant="outline" size="sm" className="w-full" onClick={addCheck}>
+          + Add Check
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "verificationResults"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="verificationResults"
         />
       </div>
     </>

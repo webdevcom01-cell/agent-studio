@@ -1020,4 +1020,115 @@ Use emoji-coded severity: 🚫 Critical, ⚠️ High, 💛 Medium, ℹ️ Low`,
     ],
     variables: [],
   },
+
+  // ── Verification Pipeline ──────────────────────────────────────────────
+
+  "verification-pipeline": {
+    nodes: [
+      {
+        id: "msg_in",
+        type: "message",
+        position: pos(0),
+        data: { label: "User Input", message: "What would you like me to build?" },
+      },
+      {
+        id: "generate",
+        type: "ai_response",
+        position: pos(1),
+        data: {
+          label: "Generate Code",
+          model: "deepseek-chat",
+          systemPrompt: "You are a code generator. Produce clean, tested code based on the user request.",
+          outputVariable: "generated_code",
+        },
+      },
+      {
+        id: "verify",
+        type: "verification",
+        position: pos(2),
+        data: {
+          label: "Run Checks",
+          checks: [
+            { type: "build", command: "tsc --noEmit", label: "TypeScript" },
+            { type: "lint", command: "eslint src/", label: "Lint" },
+            { type: "test", command: "npm test", label: "Tests" },
+          ],
+          outputVariable: "verificationResults",
+        },
+      },
+      {
+        id: "msg_pass",
+        type: "message",
+        position: ppos(3, 0),
+        data: { label: "Success", message: "All checks passed! Code is ready." },
+      },
+      {
+        id: "msg_fail",
+        type: "message",
+        position: ppos(3, 1),
+        data: { label: "Failed", message: "Some checks failed. Review the results: {{verificationResults}}" },
+      },
+    ],
+    edges: [
+      edge("msg_in", "generate"),
+      edge("generate", "verify"),
+      { id: "e_verify_pass", source: "verify", target: "msg_pass", sourceHandle: "passed" },
+      { id: "e_verify_fail", source: "verify", target: "msg_fail", sourceHandle: "failed" },
+    ],
+    variables: [],
+  },
+
+  // ── Cross-Provider Synthesis ───────────────────────────────────────────
+
+  "cross-provider-synthesis": {
+    nodes: [
+      {
+        id: "msg_in",
+        type: "message",
+        position: pos(0),
+        data: { label: "User Input", message: "What would you like analyzed?" },
+      },
+      {
+        id: "ai_deepseek",
+        type: "ai_response",
+        position: ppos(1, -1),
+        data: {
+          label: "DeepSeek Analysis",
+          model: "deepseek-chat",
+          systemPrompt: "Analyze the user request from a technical and analytical perspective. Be thorough and precise.",
+          outputVariable: "deepseek_result",
+        },
+      },
+      {
+        id: "ai_openai",
+        type: "ai_response",
+        position: ppos(1, 1),
+        data: {
+          label: "OpenAI Analysis",
+          model: "gpt-4.1-mini",
+          systemPrompt: "Analyze the user request from a creative and strategic perspective. Offer unique insights.",
+          outputVariable: "openai_result",
+        },
+      },
+      {
+        id: "synthesize",
+        type: "ai_response",
+        position: pos(2),
+        data: {
+          label: "Synthesize Results",
+          model: "deepseek-chat",
+          systemPrompt:
+            "You are a synthesis expert. Combine these two analyses into a comprehensive response:\n\nAnalysis A: {{deepseek_result}}\n\nAnalysis B: {{openai_result}}\n\nProduce a unified, balanced answer that captures the best of both perspectives.",
+          outputVariable: "synthesized_result",
+        },
+      },
+    ],
+    edges: [
+      edge("msg_in", "ai_deepseek"),
+      edge("msg_in", "ai_openai"),
+      edge("ai_deepseek", "synthesize"),
+      edge("ai_openai", "synthesize"),
+    ],
+    variables: [],
+  },
 };

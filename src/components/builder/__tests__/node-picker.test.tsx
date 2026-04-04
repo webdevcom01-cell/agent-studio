@@ -123,6 +123,7 @@ vi.mock("lucide-react", () => {
     "PlayCircle",
     "ShieldCheck",
     "Terminal",
+    "CircleCheckBig",
   ];
   const mocks: Record<string, unknown> = {};
   for (const name of icons) {
@@ -160,8 +161,8 @@ describe("NodePicker", () => {
 
   // ── Node definitions completeness ─────────────────────────────────────
 
-  it("has exactly 56 node definitions", () => {
-    expect(NODE_DEFINITIONS.length).toBe(56);
+  it("has exactly 57 node definitions", () => {
+    expect(NODE_DEFINITIONS.length).toBe(57);
   });
 
   it("every node has a usageExample", () => {
@@ -225,7 +226,7 @@ describe("NodePicker", () => {
     expect(counts.logic).toBe(13);
     expect(counts.integrations).toBe(11);
     expect(counts.messaging).toBe(6);
-    expect(counts.utilities).toBe(7);
+    expect(counts.utilities).toBe(8);
   });
 
   // ── Node rendering per category ───────────────────────────────────────

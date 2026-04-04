@@ -31,6 +31,7 @@ export const SELF_ROUTING_NODES = new Set([
   "ab_test",
   "semantic_router",
   "cache",
+  "verification",
 ]);
 
 /**

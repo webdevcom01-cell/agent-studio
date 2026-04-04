@@ -1,6 +1,7 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { emitHook } from "../hooks";
+import { runVerificationCommands } from "../verification-commands";
 import { logger } from "@/lib/logger";
 
 interface EvalCriterion {
@@ -24,109 +25,6 @@ const MAX_ITERATIONS = 5;
 const MAX_PERSISTENT_ITERATIONS = 20;
 const DEFAULT_PASSING_SCORE = 7;
 const DEFAULT_MAX_TOKENS = 2000;
-
-/**
- * Whitelist of allowed command prefixes for verification commands.
- * Only common build/test/lint tools are permitted.
- */
-const ALLOWED_COMMAND_PREFIXES = /^(npm|npx|yarn|pnpm|python|pytest|tsc|eslint|jest|vitest|cargo|go|make|dotnet|ruby|bundle|mix|gradle|mvn)\b/;
-
-/**
- * Shell metacharacters that indicate command chaining/injection.
- * These are blocked to prevent abuse via verification commands.
- */
-const SHELL_METACHARACTERS = /[;&|`$(){}<>!#]/;
-
-/**
- * Validate and sanitize a verification command.
- * Returns null if the command is not allowed.
- */
-function validateCommand(command: string): string | null {
-  const trimmed = command.trim();
-  if (!trimmed) return null;
-
-  // Block shell metacharacters (prevents && rm -rf, pipes, subshells, etc.)
-  if (SHELL_METACHARACTERS.test(trimmed)) {
-    logger.warn("Verification command blocked: shell metacharacters detected", {
-      command: trimmed,
-    });
-    return null;
-  }
-
-  // Must start with a whitelisted command
-  if (!ALLOWED_COMMAND_PREFIXES.test(trimmed)) {
-    logger.warn("Verification command blocked: not in whitelist", {
-      command: trimmed,
-    });
-    return null;
-  }
-
-  return trimmed;
-}
-
-/**
- * Run verification commands using child_process.execFile for safety.
- * Returns { allPassed, output } — output includes stdout/stderr of each command.
- *
- * Uses execFile (not exec) to avoid shell interpretation.
- * Each command gets a 60s timeout.
- */
-async function runVerificationCommands(
-  commands: string[],
-  agentId: string,
-): Promise<{ allPassed: boolean; output: string }> {
-  const { execFile } = await import("node:child_process");
-  const { promisify } = await import("node:util");
-  const execFileAsync = promisify(execFile);
-
-  const results: string[] = [];
-  let allPassed = true;
-
-  for (const raw of commands) {
-    const validated = validateCommand(raw);
-    if (!validated) {
-      results.push(`⛔ BLOCKED: "${raw}" — command not allowed`);
-      allPassed = false;
-      continue;
-    }
-
-    // Split command into executable + args for execFile
-    const parts = validated.split(/\s+/);
-    const cmd = parts[0];
-    const args = parts.slice(1);
-
-    try {
-      const { stdout, stderr } = await execFileAsync(cmd, args, {
-        timeout: 60_000,
-        maxBuffer: 1024 * 512, // 512KB
-        env: { ...process.env, CI: "true", FORCE_COLOR: "0" },
-      });
-
-      const output = (stdout + (stderr ? `\nstderr: ${stderr}` : "")).trim();
-      results.push(`✅ ${validated}\n${output.slice(0, 2000)}`);
-
-      logger.info("Verification command passed", {
-        agentId,
-        command: validated,
-      });
-    } catch (error: unknown) {
-      allPassed = false;
-      const errMsg =
-        error instanceof Error ? error.message : String(error);
-      results.push(
-        `❌ ${validated}\n${errMsg.slice(0, 2000)}`,
-      );
-
-      logger.warn("Verification command failed", {
-        agentId,
-        command: validated,
-        error: errMsg.slice(0, 500),
-      });
-    }
-  }
-
-  return { allPassed, output: results.join("\n\n") };
-}
 
 /**
  * reflexive_loop — Self-correcting node that generates output, evaluates quality,

@@ -56,6 +56,7 @@ import {
   ShieldCheck,
   Terminal,
   Boxes,
+  CircleCheckBig,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -1173,6 +1174,22 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       tasks: [],
       tasksVariable: "",
       outputVariable: "swarm_result",
+    },
+  },
+  {
+    type: "verification",
+    label: "Verification",
+    description:
+      "Run build/test/lint/custom commands and route to passed or failed",
+    usageExample:
+      "After code generation, run npm test + eslint to verify correctness before deploying",
+    icon: CircleCheckBig,
+    color: "green",
+    category: "utilities",
+    defaultData: {
+      label: "Verification",
+      checks: [],
+      outputVariable: "verificationResults",
     },
   },
 ];
