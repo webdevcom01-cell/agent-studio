@@ -66,7 +66,11 @@ CMD ["npx", "tsx", "src/lib/queue/worker.ts"]
 # ── Stage 5: Production runner (LAST — Railway builds this stage) ─────────────
 FROM node:20-alpine AS runner
 
-RUN apk add --no-cache curl
+# Install LSP server binaries for the lsp_query node (Phase F1)
+# typescript-language-server handles TypeScript + JavaScript
+# pyright-langserver (via pyright) handles Python
+RUN apk add --no-cache curl python3 && \
+    npm install -g typescript typescript-language-server pyright --no-fund --no-audit
 
 WORKDIR /app
 

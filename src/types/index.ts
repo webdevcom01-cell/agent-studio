@@ -87,4 +87,5 @@ export type NodeType =
   | "reflexive_loop"
   | "swarm"
   | "verification"
-  | "ast_transform";
+  | "ast_transform"
+  | "lsp_query";

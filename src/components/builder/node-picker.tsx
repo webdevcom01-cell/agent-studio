@@ -58,6 +58,7 @@ import {
   Boxes,
   CircleCheckBig,
   Braces,
+  FileSearch,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -1210,6 +1211,26 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       language: "typescript",
       replacement: "",
       outputVariable: "ast_result",
+    },
+  },
+  {
+    type: "lsp_query",
+    label: "LSP Query",
+    description:
+      "Query a Language Server for hover info, definitions, completions, or diagnostics",
+    usageExample:
+      "Get TypeScript type info at cursor position or check for type errors in generated code",
+    icon: FileSearch,
+    color: "cyan",
+    category: "utilities",
+    defaultData: {
+      label: "LSP Query",
+      operation: "hover",
+      source: "",
+      language: "typescript",
+      line: 0,
+      character: 0,
+      outputVariable: "lsp_result",
     },
   },
 ];

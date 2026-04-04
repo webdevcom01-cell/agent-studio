@@ -723,6 +723,9 @@ export function PropertyPanel({
         {node.type === "ast_transform" && (
           <AstTransformProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "lsp_query" && (
+          <LspQueryProperties data={data} update={update} variables={variables} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -790,6 +793,7 @@ const OUTPUT_VAR_TYPES = new Set([
   "swarm",
   "verification",
   "ast_transform",
+  "lsp_query",
 ]);
 
 /**
@@ -6237,6 +6241,107 @@ function AstTransformProperties({ data, update }: SubPanelProps) {
         />
         <p className="text-xs text-muted-foreground">
           Stores <code>{"{ available, matches, transformed, error? }"}</code>
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ─── LspQueryProperties ───────────────────────────────────────────────────────
+
+const LSP_OPERATIONS = ["hover", "definition", "completion", "diagnostics"] as const;
+const LSP_LANGUAGES = ["typescript", "javascript", "python"] as const;
+
+function LspQueryProperties({ data, update }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Language</Label>
+        <Select
+          value={(data.language as string) ?? "typescript"}
+          onValueChange={(v) => update("language", v)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LSP_LANGUAGES.map((l) => (
+              <SelectItem key={l} value={l}>
+                {l}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Operation</Label>
+        <Select
+          value={(data.operation as string) ?? "hover"}
+          onValueChange={(v) => update("operation", v)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LSP_OPERATIONS.map((op) => (
+              <SelectItem key={op} value={op}>
+                {op}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          hover / definition / completion require line + character. diagnostics analyzes the whole file.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Source Code</Label>
+        <p className="text-xs text-muted-foreground">
+          Code to analyze. Use <code className="text-cyan-400">{"{{variable}}"}</code> to reference a flow variable.
+        </p>
+        <Textarea
+          className="font-mono text-xs"
+          rows={6}
+          placeholder="{{generated_code}}"
+          value={(data.source as string) ?? ""}
+          onChange={(e) => update("source", e.target.value)}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <Label>Line (0-based)</Label>
+          <Input
+            type="number"
+            min={0}
+            value={typeof data.line === "number" ? data.line : 0}
+            onChange={(e) => update("line", parseInt(e.target.value, 10) || 0)}
+            placeholder="0"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Character (0-based)</Label>
+          <Input
+            type="number"
+            min={0}
+            value={typeof data.character === "number" ? data.character : 0}
+            onChange={(e) => update("character", parseInt(e.target.value, 10) || 0)}
+            placeholder="0"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "lsp_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="lsp_result"
+        />
+        <p className="text-xs text-muted-foreground">
+          Stores <code>{"{ available, operation, result, error? }"}</code>
         </p>
       </div>
     </>

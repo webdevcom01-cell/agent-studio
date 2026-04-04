@@ -57,6 +57,7 @@ import { reflexiveLoopHandler } from "./reflexive-loop-handler";
 import { swarmHandler } from "./swarm-handler";
 import { verificationHandler } from "./verification-handler";
 import { astTransformHandler } from "./ast-transform-handler";
+import { lspQueryHandler } from "./lsp-query-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -117,6 +118,7 @@ const handlers: Record<string, NodeHandler> = {
   swarm: swarmHandler,
   verification: verificationHandler,
   ast_transform: astTransformHandler,
+  lsp_query: lspQueryHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

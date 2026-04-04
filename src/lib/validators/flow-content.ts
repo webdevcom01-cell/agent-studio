@@ -60,6 +60,7 @@ const NODE_TYPES = [
   "swarm",
   "verification",
   "ast_transform",
+  "lsp_query",
 ] as const;
 
 const VARIABLE_TYPES = ["string", "number", "boolean", "object"] as const;
