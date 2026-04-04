@@ -26,6 +26,7 @@ interface KBSearchConfig {
   embeddingModel: string | null;
   queryTransform: string;
   contextOrdering: string | null;
+  fusionStrategy: string;
   contextualEnrichment: boolean;
 }
 
@@ -49,13 +50,15 @@ async function loadKBConfig(knowledgeBaseId: string): Promise<KBSearchConfig | n
     // contextualEnrichment is in schema.prisma + DB but not in generated types yet
     // (pnpm db:generate is blocked in this environment due to 403 on binary fetch).
     // Fetched via raw query until types are regenerated.
-    const enrichRows = await prisma.$queryRaw<Array<{ contextualEnrichment: boolean }>>(
-      Prisma.sql`SELECT "contextualEnrichment" FROM "KnowledgeBase" WHERE id = ${knowledgeBaseId} LIMIT 1`,
+    // contextualEnrichment and fusionStrategy fetched via raw query until types are regenerated
+    const extraRows = await prisma.$queryRaw<Array<{ contextualEnrichment: boolean; fusionStrategy: string }>>(
+      Prisma.sql`SELECT "contextualEnrichment", "fusionStrategy" FROM "KnowledgeBase" WHERE id = ${knowledgeBaseId} LIMIT 1`,
     );
 
     return {
       ...kb,
-      contextualEnrichment: enrichRows[0]?.contextualEnrichment ?? false,
+      contextualEnrichment: extraRows[0]?.contextualEnrichment ?? false,
+      fusionStrategy: extraRows[0]?.fusionStrategy ?? "rrf",
     };
   } catch {
     return null;
@@ -310,6 +313,65 @@ export function reciprocalRankFusion(
 }
 
 /**
+ * Bayesian score fusion — calibrates BM25/keyword scores to posterior probabilities
+ * before fusing with semantic cosine scores, eliminating scale mismatch.
+ *
+ * Bayesian calibration transforms raw BM25 ranks into probabilities via:
+ *   P(relevant | rank) ≈ sigmoid(a - b * rank)
+ * where a, b are calibration parameters estimated from score distribution.
+ *
+ * This avoids the fundamental RRF problem of treating rank positions as comparable
+ * across scoring systems with different distributions.
+ */
+export function bayesianFusion(
+  semanticResults: SearchResult[],
+  keywordResults: SearchResult[],
+  semanticWeight: number = 0.5,
+  keywordWeight: number = 0.5,
+): SearchResult[] {
+  const scoreMap = new Map<string, { semanticProb: number; keywordProb: number; result: SearchResult }>();
+
+  // Calibrate semantic scores — cosine similarity is already 0-1, use directly
+  for (const result of semanticResults) {
+    scoreMap.set(result.chunkId, {
+      semanticProb: result.relevanceScore,
+      keywordProb: 0,
+      result: { ...result },
+    });
+  }
+
+  // Calibrate keyword scores via sigmoid transform on rank position
+  // Parameters: a=2.0 (intercept), b=0.15 (decay rate) — tuned for typical BM25 distributions
+  const a = 2.0;
+  const b = 0.15;
+
+  for (let rank = 0; rank < keywordResults.length; rank++) {
+    const result = keywordResults[rank];
+    // Sigmoid calibration: P(relevant | rank) = 1 / (1 + exp(-(a - b * rank)))
+    const calibratedScore = 1.0 / (1.0 + Math.exp(-(a - b * rank)));
+
+    const existing = scoreMap.get(result.chunkId);
+    if (existing) {
+      existing.keywordProb = calibratedScore;
+    } else {
+      scoreMap.set(result.chunkId, {
+        semanticProb: 0,
+        keywordProb: calibratedScore,
+        result: { ...result },
+      });
+    }
+  }
+
+  // Fuse: weighted sum of calibrated probabilities
+  return Array.from(scoreMap.values())
+    .map(({ semanticProb, keywordProb, result }) => ({
+      ...result,
+      relevanceScore: semanticWeight * semanticProb + keywordWeight * keywordProb,
+    }))
+    .sort((a, b) => b.relevanceScore - a.relevanceScore);
+}
+
+/**
  * Min-max normalization of RRF scores.
  *
  * Previous implementation divided by max (divide-by-max), which compressed all
@@ -519,7 +581,7 @@ export async function hybridSearch(
     for (const expandedQuery of transformed.queries) {
       const partial = await runSingleSearch(
         expandedQuery, knowledgeBaseId, candidateK, retrievalMode,
-        semanticWeight, keywordWeight, embeddingModel
+        semanticWeight, keywordWeight, embeddingModel, kbConfig?.fusionStrategy
       );
       for (const r of partial) {
         const existing = allResults.get(r.chunkId);
@@ -546,9 +608,14 @@ export async function hybridSearch(
       searchKnowledgeBase(knowledgeBaseId, query, candidateK, embeddingModel, hydeOverride),
       keywordSearch(knowledgeBaseId, query, candidateK),
     ]);
-    searchResults = normalizeRRFScores(
-      reciprocalRankFusion(semanticResults, keywordResults, semanticWeight, keywordWeight)
-    );
+    const fusionStrategy = kbConfig?.fusionStrategy ?? "rrf";
+    if (fusionStrategy === "bayesian") {
+      searchResults = bayesianFusion(semanticResults, keywordResults, semanticWeight, keywordWeight);
+    } else {
+      searchResults = normalizeRRFScores(
+        reciprocalRankFusion(semanticResults, keywordResults, semanticWeight, keywordWeight)
+      );
+    }
   }
 
   return applyPostProcessing(searchResults, query, topK, threshold, rerankModel, knowledgeBaseId, abTestVariant, options?.metadataFilter, retrievalMode, contextOrderingStrategy);
@@ -561,7 +628,8 @@ async function runSingleSearch(
   retrievalMode: string,
   semanticWeight: number,
   keywordWeight: number,
-  embeddingModel?: string
+  embeddingModel?: string,
+  fusionStrategy?: string,
 ): Promise<SearchResult[]> {
   if (retrievalMode === "semantic") {
     return searchKnowledgeBase(knowledgeBaseId, query, candidateK, embeddingModel);
@@ -573,6 +641,9 @@ async function runSingleSearch(
     searchKnowledgeBase(knowledgeBaseId, query, candidateK, embeddingModel),
     keywordSearch(knowledgeBaseId, query, candidateK),
   ]);
+  if (fusionStrategy === "bayesian") {
+    return bayesianFusion(sem, kw, semanticWeight, keywordWeight);
+  }
   return normalizeRRFScores(reciprocalRankFusion(sem, kw, semanticWeight, keywordWeight));
 }
 

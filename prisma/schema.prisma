@@ -183,6 +183,7 @@ model KnowledgeBase {
   hybridAlpha         Float     @default(0.7)
   maxChunks           Int       @default(500)
   contextOrdering         String    @default("relevance")
+  fusionStrategy          String    @default("rrf") // rrf | bayesian
   migrationStatus         String?
   processingProgress      Json?
   // Anthropic Contextual Retrieval — prepend LLM-generated context to each chunk during ingest
@@ -965,14 +966,16 @@ model Skill {
   tags         String[]               @default([])
   category     String?
   language     String?
-  eccOrigin    Boolean                @default(true)
-  permissions  AgentSkillPermission[]
-  instincts    Instinct[]
-  createdAt    DateTime               @default(now())
-  updatedAt    DateTime               @updatedAt
+  eccOrigin        Boolean                @default(true)
+  compositionLayer String                 @default("execution") // guarantee | enhancement | execution
+  permissions      AgentSkillPermission[]
+  instincts        Instinct[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
 
   @@index([slug])
   @@index([language])
+  @@index([compositionLayer])
 }
 
 enum AccessLevel {

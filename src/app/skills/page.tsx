@@ -18,6 +18,7 @@ interface SkillSummary {
   category: string | null;
   language: string | null;
   eccOrigin: boolean;
+  compositionLayer: string;
   createdAt: string;
 }
 
@@ -291,6 +292,18 @@ function SkillCard({ skill }: { skill: SkillSummary }): React.JSX.Element {
         {skill.category && (
           <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
             {skill.category}
+          </Badge>
+        )}
+        {skill.compositionLayer && skill.compositionLayer !== "execution" && (
+          <Badge
+            variant="secondary"
+            className={`text-[10px] px-1.5 py-0 ${
+              skill.compositionLayer === "guarantee"
+                ? "bg-red-900/40 text-red-300 border-red-800"
+                : "bg-sky-900/40 text-sky-300 border-sky-800"
+            }`}
+          >
+            {skill.compositionLayer}
           </Badge>
         )}
         {skill.tags.slice(0, 3).map((tag) => (

@@ -46,6 +46,7 @@ export const kbConfigUpdateSchema = z.object({
   hybridAlpha: z.number().min(0).max(1).optional(),
   maxChunks: z.number().int().min(50).max(5000).optional(),
   contextOrdering: z.enum(["relevance", "lost_in_middle", "chronological", "diversity"]).optional(),
+  fusionStrategy: z.enum(["rrf", "bayesian"]).optional(),
 });
 
 export const kbConfigResponseSchema = z.object({
@@ -60,6 +61,7 @@ export const kbConfigResponseSchema = z.object({
   hybridAlpha: z.number().default(0.7),
   maxChunks: z.number().int().default(500),
   contextOrdering: z.string().default("relevance"),
+  fusionStrategy: z.string().default("rrf"),
 });
 
 export type ChunkingStrategy = z.infer<typeof ChunkingStrategySchema>;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
@@ -70,10 +71,24 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       }),
     ]);
 
+    // compositionLayer is in schema.prisma + DB but not in generated types yet.
+    // Fetched via raw query and merged into skill objects.
+    const skillIds = skills.map((s) => s.id);
+    const layerRows = skillIds.length > 0
+      ? await prisma.$queryRaw<Array<{ id: string; compositionLayer: string }>>(
+          Prisma.sql`SELECT id, "compositionLayer" FROM "Skill" WHERE id = ANY(${skillIds}::text[])`,
+        )
+      : [];
+    const layerMap = new Map(layerRows.map((r) => [r.id, r.compositionLayer]));
+    const augmentedSkills = skills.map((s) => ({
+      ...s,
+      compositionLayer: layerMap.get(s.id) ?? "execution",
+    }));
+
     return NextResponse.json({
       success: true,
       data: {
-        skills,
+        skills: augmentedSkills,
         pagination: {
           page,
           pageSize,

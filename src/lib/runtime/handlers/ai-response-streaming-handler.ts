@@ -8,6 +8,7 @@ import { traceGenAI } from "@/lib/observability/tracer";
 import { recordChatLatency, recordTokenUsage } from "@/lib/observability/metrics";
 import { injectRAGContext } from "@/lib/knowledge/rag-inject";
 import { reformulateWithHistory } from "@/lib/knowledge/query-reformulation";
+import { composeSkillPipeline, formatSkillPipelineForPrompt } from "@/lib/ecc/skill-composer";
 import type { ExecutionResult, RuntimeContext, StreamWriter } from "../types";
 import { debugEmit } from "../types";
 import type { FlowNode } from "@/types";
@@ -160,6 +161,18 @@ export async function aiResponseStreamingHandler(
     const hotMemory = context.variables["__hot_memory"];
     if (typeof hotMemory === "string" && hotMemory.length > 0) {
       effectiveSystemPrompt = `${hotMemory}\n\n${effectiveSystemPrompt}`;
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
+    // ── Skill composition injection ──────────────────────────────────────
+    try {
+      const pipeline = await composeSkillPipeline(context.agentId);
+      if (pipeline.length > 0) {
+        const skillBlock = formatSkillPipelineForPrompt(pipeline);
+        effectiveSystemPrompt = `${skillBlock}\n\n${effectiveSystemPrompt}`;
+      }
+    } catch {
+      // Skill composition failure is non-fatal
     }
     // ──────────────────────────────────────────────────────────────────────────
 
