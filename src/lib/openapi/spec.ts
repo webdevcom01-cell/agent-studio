@@ -96,10 +96,6 @@ export function generateOpenApiSpec(): OpenAPIObject {
         url: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
         description: "Current environment",
       },
-      {
-        url: "https://agent-studio-production-c43e.up.railway.app",
-        description: "Production (Railway)",
-      },
     ],
     tags: [
       { name: "System",       description: "Health and observability" },

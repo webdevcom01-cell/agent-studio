@@ -99,3 +99,8 @@ top_story_*.md
 /github-professional-cleanup-plan.md
 test-*.ts
 !src/**/test-*.ts
+
+# Operational/one-off scripts — must never be committed
+deploy-fixes.sh
+fix-flow-nodes.sql
+fix-models.cjs

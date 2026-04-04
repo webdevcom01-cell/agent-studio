@@ -26,6 +26,22 @@ export async function register(): Promise<void> {
     });
   }
 
+  // ── Warn about security-critical vars that are optional locally but required in prod ──
+  if (process.env.NODE_ENV === "production") {
+    if (!process.env.ADMIN_USER_IDS) {
+      logger.error(
+        "ADMIN_USER_IDS is not set — any authenticated user has admin access. Set this in Railway environment variables.",
+        { hint: "ADMIN_USER_IDS=userId1,userId2" },
+      );
+    }
+    if (!process.env.CRON_SECRET) {
+      logger.error(
+        "CRON_SECRET is not set — cron endpoints are unprotected. Set this in Railway environment variables.",
+        { hint: "Generate with: openssl rand -base64 32" },
+      );
+    }
+  }
+
   // ── Start metrics flusher if OTLP endpoint is configured ──────────────────
   const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
   const serviceName = process.env.OTEL_SERVICE_NAME ?? "agent-studio";

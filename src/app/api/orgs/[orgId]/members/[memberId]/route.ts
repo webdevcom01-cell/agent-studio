@@ -16,34 +16,42 @@ export async function DELETE(
   const authResult = await requireOrgAdmin(orgId);
   if (isAuthError(authResult)) return authResult;
 
-  const member = await prisma.organizationMember.findUnique({
-    where: { id: memberId },
-    select: { userId: true, role: true, organizationId: true },
-  });
+  try {
+    const member = await prisma.organizationMember.findUnique({
+      where: { id: memberId },
+      select: { userId: true, role: true, organizationId: true },
+    });
 
-  if (!member || member.organizationId !== orgId) {
+    if (!member || member.organizationId !== orgId) {
+      return NextResponse.json(
+        { success: false, error: "Member not found" },
+        { status: 404 },
+      );
+    }
+
+    if (member.role === "OWNER") {
+      return NextResponse.json(
+        { success: false, error: "Cannot remove the organization owner" },
+        { status: 403 },
+      );
+    }
+
+    await prisma.organizationMember.delete({
+      where: { id: memberId },
+    });
+
+    logger.info("Member removed from organization", {
+      orgId,
+      memberId,
+      removedUserId: member.userId,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    logger.error("Failed to remove organization member", { orgId, memberId, error });
     return NextResponse.json(
-      { success: false, error: "Member not found" },
-      { status: 404 },
+      { success: false, error: "Failed to remove member" },
+      { status: 500 },
     );
   }
-
-  if (member.role === "OWNER") {
-    return NextResponse.json(
-      { success: false, error: "Cannot remove the organization owner" },
-      { status: 403 },
-    );
-  }
-
-  await prisma.organizationMember.delete({
-    where: { id: memberId },
-  });
-
-  logger.info("Member removed from organization", {
-    orgId,
-    memberId,
-    removedUserId: member.userId,
-  });
-
-  return NextResponse.json({ success: true });
 }

@@ -16,72 +16,80 @@ export async function POST(
 
   const { token } = await params;
 
-  const invitation = await prisma.invitation.findUnique({
-    where: { token },
-    include: { organization: { select: { name: true } } },
-  });
+  try {
+    const invitation = await prisma.invitation.findUnique({
+      where: { token },
+      include: { organization: { select: { name: true } } },
+    });
 
-  if (!invitation) {
-    return NextResponse.json(
-      { success: false, error: "Invitation not found" },
-      { status: 404 },
-    );
-  }
+    if (!invitation) {
+      return NextResponse.json(
+        { success: false, error: "Invitation not found" },
+        { status: 404 },
+      );
+    }
 
-  if (invitation.acceptedAt) {
-    return NextResponse.json(
-      { success: false, error: "Invitation already accepted" },
-      { status: 409 },
-    );
-  }
+    if (invitation.acceptedAt) {
+      return NextResponse.json(
+        { success: false, error: "Invitation already accepted" },
+        { status: 409 },
+      );
+    }
 
-  if (invitation.expiresAt < new Date()) {
-    return NextResponse.json(
-      { success: false, error: "Invitation has expired" },
-      { status: 410 },
-    );
-  }
+    if (invitation.expiresAt < new Date()) {
+      return NextResponse.json(
+        { success: false, error: "Invitation has expired" },
+        { status: 410 },
+      );
+    }
 
-  // Verify the authenticated user matches the invited email
-  const user = await prisma.user.findUnique({
-    where: { id: authResult.userId },
-    select: { email: true },
-  });
+    // Verify the authenticated user matches the invited email
+    const user = await prisma.user.findUnique({
+      where: { id: authResult.userId },
+      select: { email: true },
+    });
 
-  if (user?.email !== invitation.email) {
-    return NextResponse.json(
-      { success: false, error: "This invitation was sent to a different email address" },
-      { status: 403 },
-    );
-  }
+    if (user?.email !== invitation.email) {
+      return NextResponse.json(
+        { success: false, error: "This invitation was sent to a different email address" },
+        { status: 403 },
+      );
+    }
 
-  // Create membership + mark invitation accepted in a transaction
-  await prisma.$transaction([
-    prisma.organizationMember.create({
+    // Create membership + mark invitation accepted in a transaction
+    await prisma.$transaction([
+      prisma.organizationMember.create({
+        data: {
+          userId: authResult.userId,
+          organizationId: invitation.organizationId,
+          role: invitation.role,
+        },
+      }),
+      prisma.invitation.update({
+        where: { id: invitation.id },
+        data: { acceptedAt: new Date() },
+      }),
+    ]);
+
+    logger.info("Invitation accepted", {
+      userId: authResult.userId,
+      orgId: invitation.organizationId,
+      role: invitation.role,
+    });
+
+    return NextResponse.json({
+      success: true,
       data: {
-        userId: authResult.userId,
         organizationId: invitation.organizationId,
+        organizationName: invitation.organization.name,
         role: invitation.role,
       },
-    }),
-    prisma.invitation.update({
-      where: { id: invitation.id },
-      data: { acceptedAt: new Date() },
-    }),
-  ]);
-
-  logger.info("Invitation accepted", {
-    userId: authResult.userId,
-    orgId: invitation.organizationId,
-    role: invitation.role,
-  });
-
-  return NextResponse.json({
-    success: true,
-    data: {
-      organizationId: invitation.organizationId,
-      organizationName: invitation.organization.name,
-      role: invitation.role,
-    },
-  });
+    });
+  } catch (error) {
+    logger.error("Failed to accept invitation", { userId: authResult.userId, error });
+    return NextResponse.json(
+      { success: false, error: "Failed to accept invitation" },
+      { status: 500 },
+    );
+  }
 }

@@ -3,6 +3,7 @@ import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { prismaRead } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
+import { logger } from "@/lib/logger";
 
 const SENSITIVE_NUMBER_PATTERN = /\d{4,}/;
 const MAX_MESSAGE_LENGTH = 60;
@@ -115,6 +116,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  try {
   const userId = authResult.userId;
   const periodParam = request.nextUrl.searchParams.get("period") ?? "30d";
   const period: PeriodOption = isValidPeriod(periodParam) ? periodParam : "30d";
@@ -519,4 +521,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     },
   });
+  } catch (error) {
+    logger.error("Analytics fetch failed", { userId: authResult.userId, error });
+    return NextResponse.json(
+      { success: false, error: "Analytics fetch failed" },
+      { status: 500 },
+    );
+  }
 }
