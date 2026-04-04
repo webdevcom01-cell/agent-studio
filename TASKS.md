@@ -311,41 +311,31 @@ Inspired by: memsearch (Zilliz), OpenClaw memory system, clawhip MEMORY.md + sha
 
 **Tasks:**
 
-- [ ] C1.1 — Create `src/lib/memory/markdown-export.ts`:
-  - `exportAgentMemoryAsMarkdown(agentId)` — generates MEMORY.md index:
-    ```markdown
-    # Agent Memory — {agentName}
-    ## Hot (recently accessed, high importance)
-    - **{key}**: {summary} (importance: {importance}, accessed: {accessedAt})
-    ## Categories
-    ### general
-    - {key}: {truncated value}
-    ### context_compaction
-    - {key}: {summary}
-    ```
-  - `exportMemoryShards(agentId)` — generates per-category shard files
-- [ ] C1.2 — Create `src/lib/memory/hot-cold-tier.ts`:
-  - `getHotMemories(agentId, limit=10)` — top N by: importance x recencyScore x accessFrequency
-  - `getColdMemories(agentId, query)` — semantic search in pgvector for relevant cold memories
-  - `injectHotMemoryIntoContext(context)` — prepend hot memory summary as system message
-  - Hot memory = accessed in last 24h OR importance > 0.8 OR accessCount > 10
-  - Cold memory = everything else
-- [ ] C1.3 — Integrate hot memory injection into engine.ts and engine-streaming.ts:
-  - Before first AI node executes, inject hot memory summary into context
-  - This gives the agent "always-on" memory without loading everything
-- [ ] C1.4 — Create Memory UI tab on agent page (like Knowledge Base):
-  - List all memories with key, value preview, importance, category, lastAccessed
-  - Edit button: inline edit of value field
-  - Delete button with confirmation
-  - Export as Markdown button
-  - Import from Markdown (parse MEMORY.md format back into AgentMemory records)
-- [ ] C1.5 — API routes:
-  - `GET /api/agents/[agentId]/memory` — list all memories (paginated)
-  - `PATCH /api/agents/[agentId]/memory/[memoryId]` — edit value/importance/category
-  - `DELETE /api/agents/[agentId]/memory/[memoryId]` — delete single memory
-  - `GET /api/agents/[agentId]/memory/export` — download MEMORY.md
-  - `POST /api/agents/[agentId]/memory/import` — upload and parse MEMORY.md
-- [ ] C1.6 — Write tests for markdown export/import roundtrip, hot/cold tier selection
+- [x] C1.1 — Created `src/lib/memory/markdown-export.ts`:
+  - `exportAgentMemoryAsMarkdown(agentId)` — MEMORY.md with hot section + per-category grouping
+  - `exportMemoryShards(agentId)` — per-category shard files (Map<filename, content>)
+  - `parseMemoryMarkdown(markdown)` — parses `- **key** [category]: value _(importance: 0.95, accessed: 2h ago)_` format
+  - `importMemoryFromMarkdown(agentId, markdown)` — upserts parsed entries, returns { imported, skipped }
+- [x] C1.2 — Created `src/lib/memory/hot-cold-tier.ts`:
+  - `getHotMemories(agentId, limit=10)` — composite score: importance×0.4 + recency×0.35 + frequency×0.25
+  - `getColdMemories(agentId, query)` — HNSW vector search, 0.3 similarity threshold
+  - `injectHotMemoryIntoContext(context)` — sets `__hot_memory` variable, swallows errors
+  - `formatHotMemoryForContext(memories)` — markdown list under "## Agent Memory (active context)"
+  - Hot criteria: accessed in 24h OR importance > 0.8 OR accessCount > 10
+- [x] C1.3 — Integrated hot memory injection into engine.ts and engine-streaming.ts:
+  - `injectHotMemoryIntoContext(context)` called before first node, after hooks init
+  - `__hot_memory` consumed by ai-response handlers, prepended to effectiveSystemPrompt
+- [x] C1.4 — Created Memory UI at `/memory/[agentId]` page:
+  - SWR data fetching, search filter, category filter, edit/delete dialogs
+  - Hot memories: Flame icon + amber styling; Cold: Snowflake icon + blue
+  - Export/Import buttons, Memory link on agent cards (Brain icon)
+- [x] C1.5 — API routes:
+  - `GET /api/agents/[agentId]/memory` — paginated list with category filter + sort
+  - `PATCH /api/agents/[agentId]/memory/[memoryId]` — edit value/category/importance
+  - `DELETE /api/agents/[agentId]/memory/[memoryId]` — delete with ownership check
+  - `GET /api/agents/[agentId]/memory/export` — MEMORY.md download
+  - `POST /api/agents/[agentId]/memory/import` — parse + upsert, 1MB limit
+- [x] C1.6 — Tests: 32 tests (16 hot-cold-tier + 16 markdown-export), all passing
 
 **Files to create/modify:**
 - `src/lib/memory/markdown-export.ts` (NEW)
@@ -375,24 +365,19 @@ Inspired by: memsearch (Zilliz), OpenClaw memory system, clawhip MEMORY.md + sha
 
 **Tasks:**
 
-- [ ] C2.1 — Add `compositionLayer` field to Skill model:
-  - `compositionLayer: "guarantee" | "enhancement" | "execution"` (default: "execution")
-  - Guarantee: always runs first (security-check, guardrails, pii-detector)
-  - Enhancement: runs after guarantee, before execution (performance-monitor, mem-check)
-  - Execution: primary task skill (autopilot, ralph, team)
-- [ ] C2.2 — Create `src/lib/ecc/skill-composer.ts`:
-  - `composeSkillPipeline(agentId, taskSkillId)` — returns ordered skill list:
-    1. All guarantee-layer skills the agent has access to
-    2. Enhancement-layer skills matching task context
-    3. The requested execution-layer skill
-  - Skills within each layer ordered by priority/importance
-- [ ] C2.3 — Integrate skill composition into AI response handler:
-  - Before main AI call, inject guarantee-layer skill instructions into system prompt
-  - Append enhancement-layer context
-  - Main execution skill becomes the primary instruction
-- [ ] C2.4 — Update Skills Browser UI to show composition layer badge
-- [ ] C2.5 — Prisma migration: add `compositionLayer String @default("execution")` to Skill model
-- [ ] C2.6 — Write tests for composition ordering and layer enforcement
+- [x] C2.1 — Added `compositionLayer String @default("execution")` + `@@index([compositionLayer])` to Skill model
+- [x] C2.2 — Created `src/lib/ecc/skill-composer.ts`:
+  - `composeSkillPipeline(agentId, taskSkillId?)` — raw SQL query (compositionLayer not in generated types), orders guarantee → enhancement → execution, then by name
+  - `formatSkillPipelineForPrompt(skills)` — XML `<skill_pipeline>` with per-layer sections, 2000-char truncation
+  - `getGuaranteeSkills(agentId)` — lightweight guarantee-only call
+  - `validateLayer(raw)` — defaults unknown to "execution"
+- [x] C2.3 — Integrated skill composition into both AI response handlers:
+  - Skill pipeline injected between hot memory and safety check in effectiveSystemPrompt
+  - Non-fatal: composition failure is caught and logged, never blocks AI call
+- [x] C2.4 — Skills Browser UI: composition layer badge (red=guarantee, blue=enhancement, hidden for execution)
+  - Skills API augmented with compositionLayer via raw SQL + merge (generated types pending)
+- [x] C2.5 — Prisma schema updated (applied via `pnpm db:push`)
+- [x] C2.6 — Tests: 16 tests in `skill-composer.test.ts` (pipeline ordering, layer enforcement, formatting, truncation, error handling, validateLayer)
 
 **Files to create/modify:**
 - `prisma/schema.prisma` (add compositionLayer to Skill model)
@@ -421,21 +406,18 @@ Inspired by: memsearch (Zilliz), OpenClaw memory system, clawhip MEMORY.md + sha
 
 **Tasks:**
 
-- [ ] C3.1 — Research bb25 integration options:
-  - Option A: Call bb25 via Python subprocess (pip install bb25, Rust core)
-  - Option B: Port Bayesian calibration logic to TypeScript
-  - Option C: Use bb25 as MCP tool (FastMCP wrapper)
-  - Decision: TBD after benchmarking on our data
-- [ ] C3.2 — Add `fusionStrategy` config to KnowledgeBase model:
-  - `fusionStrategy: "rrf" | "bayesian"` (default: "rrf" = current behavior)
-  - When "bayesian": use bb25 for score calibration before fusion
-- [ ] C3.3 — Implement bayesian fusion in `search.ts`:
-  - Replace `reciprocalRankFusion()` with `bayesianFusion()` when configured
-  - Bayesian calibration: transform raw BM25 scores to posterior probabilities
-  - Fuse calibrated BM25 probabilities with vector cosine scores (natural blend, no scale mismatch)
-- [ ] C3.4 — Benchmark: run hybrid search on 20 test queries with RRF vs Bayesian
-  - Measure: NDCG, MRR, P@5, latency
-- [ ] C3.5 — Write tests for bayesian fusion (score calibration, edge cases)
+- [x] C3.1 — Decision: Option B — ported Bayesian calibration to TypeScript (no Python subprocess needed)
+  - Sigmoid transform: `P(relevant | rank) = 1 / (1 + exp(-(a - b * rank)))` with a=2.0, b=0.15
+  - Tuned for typical BM25 rank distributions, graceful decay at high ranks
+- [x] C3.2 — Added `fusionStrategy String @default("rrf")` to KnowledgeBase model:
+  - Added to `kbConfigUpdateSchema` and `kbConfigResponseSchema` in `src/lib/schemas/kb-config.ts`
+  - Fetched via raw SQL in `loadKBConfig()` (generated types pending)
+- [x] C3.3 — Implemented `bayesianFusion()` in `search.ts`:
+  - Sigmoid calibration of BM25 rank → posterior probability (0-1 range, no normalization needed)
+  - Weighted sum fusion: `semanticWeight * cosineScore + keywordWeight * calibratedKeywordScore`
+  - Activated when `kbConfig.fusionStrategy === "bayesian"`, applied in both `hybridSearch()` and `runSingleSearch()`
+- [ ] C3.4 — Benchmark: deferred (requires production data for meaningful NDCG/MRR comparison)
+- [x] C3.5 — Tests: 11 tests in `bayesian-fusion.test.ts` (empty inputs, merge, sigmoid decay, weights, metadata preservation)
 
 **Files to modify:**
 - `src/lib/knowledge/search.ts`
@@ -455,28 +437,60 @@ Inspired by: OMC verification protocol, OMC `omc ask` cross-provider delegation.
 
 > **Gap**: `reflexive_loop` evaluator is AI-only — never runs build/test/lint commands.
 > OMC verifier runs: BUILD, TEST, LINT, FUNCTIONALITY, ARCHITECT review, ERROR_FREE.
+>
+> **Kontrolni ček (2026-04-04):**
+> - TASKS.md originally specified "run each command via sandbox (code_interpreter or python_code handler)"
+>   but both sandboxes block os/subprocess imports. `execFile` with whitelist is the correct approach,
+>   identical to A3.2's design deviation.
+> - `ShieldCheck` icon is already used by `guardrails` node — use `CircleCheckBig` instead.
+> - `validateCommand()` and `runVerificationCommands()` in reflexive-loop-handler.ts are private.
+>   Must extract to shared module before D1.1 can import them.
 
 **Tasks:**
 
+- [ ] D0 — **PREREQUISITE**: Extract `validateCommand()` + `runVerificationCommands()` from
+  `reflexive-loop-handler.ts` → `src/lib/runtime/verification-commands.ts` (shared module).
+  Both `reflexive-loop-handler.ts` and new `verification-handler.ts` import from shared module.
 - [ ] D1.1 — Create `src/lib/runtime/handlers/verification-handler.ts`:
   - New node type: `verification`
-  - Config: `checks: Array<{ type: "build" | "test" | "lint" | "custom", command: string }>`
-  - Execution: run each command via sandbox (code_interpreter or python_code handler)
-  - Result: all must pass (exit code 0) -> route to "passed" sourceHandle
-  - Any failure -> route to "failed" sourceHandle with error output
-- [ ] D1.2 — Add `verification` to NodeType union and register handler
-- [ ] D1.3 — Create display component `src/components/builder/nodes/verification-node.tsx`
-- [ ] D1.4 — Add to node picker and property panel
-- [ ] D1.5 — Create starter flow template: "verification-pipeline" (executor -> verification -> end/retry)
-- [ ] D1.6 — Write tests for verification (all pass, one fails, command timeout)
+  - Config: `checks: Array<{ type: "build" | "test" | "lint" | "custom", command: string, label?: string }>`
+  - Execution: `execFile` + whitelist (imports from `verification-commands.ts`)
+  - Per-check timeout: 60s, overall timeout: 300s
+  - Output variable: `verificationResults: Array<{ type, command, label, exitCode, output, durationMs }>`
+  - Routes: `findNextNode(context, node.id, "passed")` or `findNextNode(context, node.id, "failed")`
+  - **Design deviation**: Uses `execFile` (not sandbox) — same rationale as A3.2
+- [ ] D1.2 — Register `verification` node type:
+  - `src/types/index.ts` → add `"verification"` to NodeType union
+  - `src/lib/validators/flow-content.ts` → add to NODE_TYPES array
+  - `src/lib/runtime/handlers/index.ts` → register handler
+  - `src/components/builder/flow-builder.tsx` → add to NODE_TYPES map
+  - Do NOT add to SELF_ROUTING_NODES (uses sourceHandles via findNextNode)
+- [ ] D1.3 — Create `src/components/builder/nodes/verification-node.tsx`:
+  - Icon: `CircleCheckBig` (NOT ShieldCheck — already used by guardrails)
+  - Theme: green (`bg-green-950 border-green-600`)
+  - Shows: list of checks with type badges
+- [ ] D1.4 — Add to node picker + property panel:
+  - Node picker: category `"utilities"` (alongside guardrails), count 56→57
+  - Property panel: checks CRUD (add/remove/edit rows), command + label input
+  - OUTPUT_VAR_TYPES: add `"verification"`
+  - Mock `CircleCheckBig` in `node-picker.test.tsx`, update counts
+- [ ] D1.5 — Starter flow template `"verification-pipeline"` in `src/data/starter-flows.ts`:
+  - `ai_response` → `verification` (checks: npm run build, npm run test) → passed: end / failed: ai_response (fix)
+- [ ] D1.6 — Tests:
+  - `src/lib/runtime/__tests__/verification-commands.test.ts` — shared module (whitelist, metachar blocking)
+  - `src/lib/runtime/handlers/__tests__/verification-handler.test.ts` — handler (all pass → passed, one fail → failed, timeout, empty checks → passed, output variable)
 
 **Files to create/modify:**
+- `src/lib/runtime/verification-commands.ts` (NEW — extracted from reflexive-loop-handler)
+- `src/lib/runtime/handlers/reflexive-loop-handler.ts` (MODIFIED — import from shared module)
 - `src/lib/runtime/handlers/verification-handler.ts` (NEW)
 - `src/types/index.ts` (add to NodeType union)
+- `src/lib/validators/flow-content.ts` (add to NODE_TYPES)
 - `src/lib/runtime/handlers/index.ts` (register)
+- `src/components/builder/flow-builder.tsx` (add to NODE_TYPES map)
 - `src/components/builder/nodes/verification-node.tsx` (NEW)
-- `src/components/builder/node-picker.tsx`
-- `src/components/builder/property-panel.tsx`
+- `src/components/builder/node-picker.tsx` (add node definition)
+- `src/components/builder/property-panel.tsx` (add property editor)
 - `src/data/starter-flows.ts` (new template)
 
 **Estimated effort:** Medium (2-3 days)
@@ -490,16 +504,37 @@ Inspired by: OMC verification protocol, OMC `omc ask` cross-provider delegation.
 > provider ecosystem. OMC's `omc ask` sends tasks to Claude, Codex, and Gemini
 > separately and synthesizes results. OMC's `ccg` skill fans out to Codex+Gemini
 > with Claude synthesizing.
+>
+> **Kontrolni ček (2026-04-04):**
+> - `providerOverride` must be applied to CALLEE's FlowContent.nodes (not caller's).
+>   Mechanism: same as `evalModelOverride` in chat route.ts lines 209-215 — override
+>   `data.model` on all `ai_response` nodes in-memory before sub-engine execution.
+>   call-agent-handler.ts already loads callee FlowContent via `parseFlowContent()`.
+> - Starter flow should use `ai_response` nodes with different `data.model` values
+>   (not `call_agent` — would require pre-existing agents). Works out-of-the-box.
+> - Provider availability: `getModel(providerOverride)` throws if API key missing.
+>   Handler must catch and fall back to callee's original model.
 
 **Tasks:**
 
 - [ ] D2.1 — Add `providerOverride` option to `call_agent` handler:
-  - When set, the called agent uses a different model/provider than its default
-  - Example: Agent A (DeepSeek) calls Agent B with providerOverride="claude-sonnet-4-6"
-- [ ] D2.2 — Create `cross-provider` starter flow template:
-  - Input -> parallel[Agent-Claude, Agent-DeepSeek, Agent-Gemini] -> AI synthesizer -> output
-- [ ] D2.3 — Update property panel to show provider badge per agent in parallel node config
-- [ ] D2.4 — Write tests for cross-provider call (mock different providers)
+  - New config field: `providerOverride?: string` (model ID)
+  - In internal mode: after loading calleeFlowContent, override `data.model` on all
+    `ai_response` nodes in-memory (identical to chat route.ts evalModelOverride logic)
+  - Log audit with `providerOverride` value for traceability
+  - Graceful fallback: if providerOverride model unavailable, log warning and use original
+- [ ] D2.2 — Create `"cross-provider-synthesis"` starter flow in `src/data/starter-flows.ts`:
+  - `message` → `parallel` (3 branches, each `ai_response` with different model: claude-sonnet-4-6,
+    deepseek-chat, gemini-2.5-flash) → `ai_response` (synthesizer, merges outputs) → `end`
+  - No `call_agent` dependency — works without pre-existing agents
+- [ ] D2.3 — Property panel: add `Provider Override` select to `call_agent` node editor:
+  - Model dropdown (nullable — "Use agent default" option)
+  - Provider badge shown next to selected agent when providerOverride is set
+- [ ] D2.4 — Tests in `src/lib/runtime/handlers/__tests__/cross-provider.test.ts`:
+  - providerOverride applied to callee's ai_response nodes
+  - Without providerOverride — original model unchanged
+  - Override does not persist to DB
+  - Fallback when override model unavailable (missing API key)
 
 **Files to modify:**
 - `src/lib/runtime/handlers/call-agent-handler.ts`
@@ -585,27 +620,58 @@ Inspired by: clawhip typed event pipeline, renderer/sink split, session.* events
 
 ## FAZA F — Advanced Capabilities (P3 — Long Term)
 
-### F1. LSP Integration for Code-Aware Agents
+> **Redosled implementacije:** F3 → F2 → F1 (najlakše → najteže, sve tri su međusobno nezavisne)
+> **Kontrolni ček datum:** 2026-04-04 — sve pretpostavke verifikovane čitanjem koda
 
-> **Gap**: No Language Server Protocol support. OMC has real LSP integration with
-> 15s timeout for semantic analysis, go-to-definition, find-references, rename-symbol.
+---
+
+### F3. Dynamic Skill Injection (Context-Aware)
+
+> **Gap**: ECC skills are loaded statically via `composeSkillPipeline()` (C2.3).
+> claw-code/clawhip approach: auto-detect which skill is relevant for the current
+> task and inject ONLY that skill. Reduces context bloat dramatically.
+>
+> **Kontrolni ček (2026-04-04):**
+> - `Skill` model has NO embedding field — cache embeddings in memory + Redis,
+>   key prefix `"skill-emb:"`, TTL 600s (same pattern as `embedding-cache.ts`).
+> - `generateEmbedding(text)` from `embeddings.ts` is directly reusable for single strings.
+> - `cosineSimilarity(a, b)` from `src/lib/evals/semantic.ts` is exported and handles
+>   all edge cases — directly reusable, no duplication needed.
+> - C2.3 `composeSkillPipeline()` is called WITHOUT any `isECCEnabled()` guard in BOTH
+>   ai-response handlers. F3 must REPLACE step 5 (skill composition), not add a new step.
+>   Logic: `if (isECCEnabled() && routedSkills.length > 0)` → use dynamic;
+>   else → fall back to `composeSkillPipeline()` (C2.3 static pipeline).
+> - Injection point is step 5 in system prompt assembly (after hot memory).
+> - `acquireEmbeddingSemaphore()` must be respected — batch skill embeddings
+>   sequentially on first load, NOT Promise.all for 60 skills simultaneously.
+> - Scope: ONLY `ai-response-handler.ts` and `ai-response-streaming-handler.ts`.
 
 **Tasks:**
 
-- [ ] F1.1 — Research: evaluate LSP client libraries for Node.js (vscode-languageclient, etc.)
-- [ ] F1.2 — Create `src/lib/lsp/client.ts`:
-  - `startLSPServer(language, workspacePath)` — launch tsserver or pylsp
-  - `getDefinition(file, position)` — go-to-definition
-  - `getReferences(file, position)` — find-references
-  - `getDiagnostics(file)` — get errors/warnings
-- [ ] F1.3 — Create `lsp_query` node type:
-  - Input: file path, symbol name, operation type
-  - Output: definition location, reference list, or diagnostics
-- [ ] F1.4 — Integrate LSP context into ai_response system prompt for code-aware agents
-- [ ] F1.5 — Write tests with mock LSP server
+- [ ] F3.1 — Create `src/lib/ecc/skill-router.ts`:
+  - `getCachedSkillEmbedding(skillId, description)` → `number[]` — in-memory Map + Redis 600s TTL
+  - `routeToSkill(prompt, agentId, topN=3)` → `Promise<Skill[]>` — cosine similarity, threshold 0.35
+  - `invalidateSkillCache(skillId)` — call on skill update/delete
+  - Uses `generateEmbedding()` from `embeddings.ts`, `cosineSimilarity()` from `semantic.ts`
+  - Respects `acquireEmbeddingSemaphore()` / `releaseEmbeddingSemaphore()` for batch init
+  - Guard: `isECCEnabled()` returns `[]` immediately when ECC disabled
+- [ ] F3.2 — Integrate into both ai-response handlers (step 5 replacement):
+  - `if (isECCEnabled() && routedSkills.length > 0)` → inject routed skills
+  - else → fall back to `composeSkillPipeline()` (non-breaking, C2.3 preserved)
+  - Non-fatal: router error always falls back to static, never blocks AI call
+- [ ] F3.3 — Tests (12 tests):
+  - `src/lib/ecc/__tests__/skill-router.test.ts` — cache hit/miss, cosine threshold, topN,
+    ECC disabled → `[]`, error swallowing, semaphore, invalidation
+  - `src/lib/ecc/__tests__/skill-router-integration.test.ts` — handler uses routed skills,
+    fallback to static composition on empty result, no injection when ECC off
 
-**Estimated effort:** High (7-10 days)
-**Impact:** ENORMOUS for developer agents — semantic code understanding
+**Files to create/modify:**
+- `src/lib/ecc/skill-router.ts` (NEW)
+- `src/lib/runtime/handlers/ai-response-handler.ts` (replace step 5)
+- `src/lib/runtime/handlers/ai-response-streaming-handler.ts` (replace step 5)
+
+**Estimated effort:** Medium (2-3 days)
+**Impact:** Less context bloat, more relevant skill context — quality + cost improvement
 
 ---
 
@@ -613,45 +679,152 @@ Inspired by: clawhip typed event pipeline, renderer/sink split, session.* events
 
 > **Gap**: No AST-level code analysis. OMC integrates ast-grep for precise
 > pattern matching and refactoring via syntax trees.
+>
+> **Kontrolni ček (2026-04-04):**
+> - `code-interpreter-handler.ts` has NO `mode` field — safe to add
+>   `"eval" | "ast_match" | "ast_replace"` with default `"eval"` (existing behavior unchanged).
+> - `GitBranch` icon is TAKEN (Logic category + 2 node definitions). Use `Braces` for `ast_transform`.
+> - `Code2` icon is TAKEN (1 node). `Braces`, `TreePine`, `FileCode` are all free.
+> - `code_interpreter` is NOT in `OUTPUT_VAR_TYPES` set — existing bug. Fix alongside F2 work.
+> - `@ast-grep/napi` is a Rust native addon — use dynamic `import()` with try/catch,
+>   never top-level require. Graceful fallback: return `[]` / original code if unavailable.
+> - `ast_transform` is NOT self-routing — standard `nextNodeId`, NOT in `SELF_ROUTING_NODES`.
+> - Node count baseline: **57** (verified). `ast_transform` = node **58**.
 
 **Tasks:**
 
-- [ ] F2.1 — Add `@ast-grep/napi` package (Node.js bindings)
+- [ ] F2.1 — Add `@ast-grep/napi` as optional dependency (`pnpm add @ast-grep/napi`)
 - [ ] F2.2 — Create `src/lib/ast/pattern-matcher.ts`:
-  - `matchPattern(code, pattern, language)` — find AST matches
-  - `replacePattern(code, pattern, replacement, language)` — AST-based refactoring
-- [ ] F2.3 — Integrate into `code_interpreter` handler as optional AST mode
-- [ ] F2.4 — Write tests for pattern matching and replacement
+  - `loadAstGrep()` → module | null — dynamic import, try/catch, logger.warn on fail
+  - `isAstGrepAvailable()` → boolean
+  - `matchPattern(code, pattern, language: SgLang)` → `AstMatch[]` — graceful `[]` if unavailable
+  - `replacePattern(code, pattern, replacement, language)` → string — returns original if unavailable
+  - `getSupportedLanguages()` → `SgLang[]`
+  - `SgLang = "TypeScript" | "JavaScript" | "Python" | "Rust" | "Go" | "Java" | "Css" | "Html"`
+  - `AstMatch = { text, range: { start, end }, metaVariables: Record<string,string> }`
+- [ ] F2.3 — Extend `code-interpreter-handler.ts`:
+  - New `mode` field: `"eval" | "ast_match" | "ast_replace"` (default `"eval"`)
+  - New fields: `pattern?: string`, `replacement?: string`, `language?: SgLang`
+  - `ast_match` output: `{ matches: AstMatch[], count: number }`
+  - `ast_replace` output: `{ result: string, originalLength: number, newLength: number }`
+  - Fallback: if ast-grep unavailable and mode != `"eval"` → return warning in output
+- [ ] F2.4 — Create `ast_transform` node type (58th):
+  - Config: `operation: "match" | "replace"`, `pattern`, `replacement?`, `language`,
+    `inputVariable`, `outputVariable`
+  - Icon: `Braces` (FREE — verified), theme: purple (`bg-purple-950 border-purple-600`)
+  - Register in: `types/index.ts`, `flow-content.ts`, `handlers/index.ts`, `flow-builder.tsx`
+  - NOT in `SELF_ROUTING_NODES`
+  - Add `"ast_transform"` to `OUTPUT_VAR_TYPES`; also add missing `"code_interpreter"` (bug fix)
+- [ ] F2.5 — Update node picker + property panel + tests:
+  - `node-picker.tsx`: add `ast_transform` to utilities (57→58, utilities 8→9, import `Braces`)
+  - `property-panel.tsx`: `AstTransformProperties` + `mode/pattern/replacement` for code_interpreter
+  - `node-picker.test.tsx`: count 57→58, add `"Braces"` to lucide mock (55→56 icons)
+- [ ] F2.6 — Tests (20 tests):
+  - `src/lib/ast/__tests__/pattern-matcher.test.ts` — match/replace, graceful unavailable,
+    metaVariables capture, all language enum values, empty input, invalid pattern
+  - `src/lib/runtime/handlers/__tests__/ast-transform-handler.test.ts` — match/replace operations,
+    inputVariable resolution, outputVariable set, error never throws
+
+**Files to create/modify:**
+- `src/lib/ast/pattern-matcher.ts` (NEW)
+- `src/lib/runtime/handlers/ast-transform-handler.ts` (NEW)
+- `src/lib/runtime/handlers/code-interpreter-handler.ts` (add mode field)
+- `src/types/index.ts` (add `"ast_transform"`)
+- `src/lib/validators/flow-content.ts` (add to NODE_TYPES array)
+- `src/lib/runtime/handlers/index.ts` (register handler)
+- `src/components/builder/nodes/ast-transform-node.tsx` (NEW — Braces icon, purple)
+- `src/components/builder/flow-builder.tsx` (add to NODE_TYPES map)
+- `src/components/builder/node-picker.tsx` (count 57→58, Braces import)
+- `src/components/builder/property-panel.tsx` (AstTransformProperties, OUTPUT_VAR_TYPES fix)
+- `src/components/builder/__tests__/node-picker.test.tsx` (count 57→58, Braces mock)
 
 **Estimated effort:** Medium (3-4 days)
 **Impact:** Precise code transformations — quality improvement for code agents
 
 ---
 
-### F3. Dynamic Skill Injection (Context-Aware)
+### F1. LSP Integration for Code-Aware Agents
 
-> **Gap**: ECC skills are loaded statically. claw-code/clawhip approach: auto-detect
-> which skill is relevant for the current task and inject ONLY that skill into
-> the agent's context. Reduces context bloat dramatically.
+> **Gap**: No Language Server Protocol support. OMC has real LSP integration with
+> 15s timeout for semantic analysis, go-to-definition, find-references, rename-symbol.
+>
+> **Kontrolni ček (2026-04-04):**
+> - Use `typescript-language-server` (standard LSP over stdio, wraps tsserver).
+>   NOT `tsserver` directly (non-standard protocol).
+>   NOT `vscode-languageclient` (designed for VS Code extension context, not Node standalone).
+>   Package for types: `vscode-languageserver-protocol` (LSP message types only).
+> - Railway uses Dockerfile builder (`railway.toml: builder = "DOCKERFILE"`).
+>   Add `typescript-language-server` to Dockerfile RUN step.
+>   `nixpacks.toml` is NOT active when Dockerfile builder is used.
+> - LSP pool: MAX_LSP_CONNECTIONS = **3** (NOT 5 — tsserver uses 200-500MB RAM each).
+>   Idle TTL = 300s. Cleanup interval = 30s (more aggressive than MCP's 60s — LSP is expensive).
+>   Pattern: replicate `src/lib/mcp/pool.ts` (LRU, dead detection, SIGTERM shutdown, Redis tracking).
+> - `spawn` for persistent stdio process — same pattern as `cli-session-manager.ts`.
+> - LSP `initialize` handshake timeout: **30s** (not 15s — tsserver is slow on cold start).
+>   Operation timeout: 15s per request. Cache initialized connection in pool.
+> - Security: `validateWorkspacePath(path, agentId)` — only `/tmp/agent-{agentId}/` allowed,
+>   block `..` path traversal. Analogous to `validateExternalUrlWithDNS()` for file system.
+> - `Code2` icon is TAKEN. Use `FileSearch` for `lsp_query` (FREE — verified).
+> - `lsp_query` NOT in `SELF_ROUTING_NODES` — standard nextNodeId routing.
+> - Node count: depends on F2. If F2 done first: `lsp_query` = 59th. Standalone: 58th.
+> - MVP scope: TypeScript/JavaScript only. Python (pylsp) = future work.
 
 **Tasks:**
 
-- [ ] F3.1 — Create `src/lib/ecc/skill-router.ts`:
-  - `routeToSkill(taskDescription, availableSkills)` — semantic similarity match
-  - Use embedding comparison (reuse KB embeddings infrastructure)
-  - Return top-N relevant skills (default N=3)
-- [ ] F3.2 — Integrate into ai_response handler:
-  - Before AI call, run skill router on the current task/prompt
-  - Inject only matched skill content into system prompt
-  - Track which skills were injected for audit
-- [ ] F3.3 — Write tests for skill routing accuracy
+- [ ] F1.1 — Package setup + Dockerfile:
+  - `pnpm add vscode-languageserver-protocol`
+  - Add `RUN npm install -g typescript-language-server typescript` to Dockerfile
+- [ ] F1.2 — Create LSP infrastructure (`src/lib/lsp/`):
+  - `src/lib/lsp/types.ts` — LSP type re-exports + local interfaces (`LSPConnection`, `LSPQueryResult`)
+  - `src/lib/lsp/pool.ts` — `LSPConnectionPool`: MAX=3, TTL=300s, cleanup=30s, LRU eviction,
+    SIGTERM graceful shutdown, dead connection detection. Pattern: `src/lib/mcp/pool.ts`.
+  - `src/lib/lsp/client.ts`:
+    - `startLSPServer(agentId, workspacePath)` — spawn `typescript-language-server --stdio`,
+      `initialize` with 30s timeout, store in pool
+    - `getDefinition(agentId, file, line, character)` → `Location[]` — 15s timeout
+    - `getReferences(agentId, file, line, character)` → `Location[]` — 15s timeout
+    - `getDiagnostics(agentId, file, content)` → `Diagnostic[]` — 15s timeout
+    - `hoverInfo(agentId, file, line, character)` → `string` — 15s timeout
+    - `stopLSPServer(agentId)` — evict from pool
+    - `validateWorkspacePath(path, agentId)` — security guard
+- [ ] F1.3 — Create `lsp_query` node type (58th or 59th — current+1):
+  - Config: `operation: "definition" | "references" | "diagnostics" | "hover"`,
+    `fileVariable`, `contentVariable?`, `lineVariable?`, `characterVariable?`, `outputVariable`
+  - Icon: `FileSearch` (FREE — verified), theme: violet (`bg-violet-950 border-violet-600`)
+  - Sets `__lsp_context` variable with formatted LSP result
+  - Register in: `types/index.ts`, `flow-content.ts`, `handlers/index.ts`, `flow-builder.tsx`
+  - NOT in `SELF_ROUTING_NODES`; add `"lsp_query"` to `OUTPUT_VAR_TYPES`
+- [ ] F1.4 — Integrate LSP context into ai_response handlers:
+  - Check `context.variables["__lsp_context"]` — if set, prepend `<lsp_context>...</lsp_context>`
+  - Non-fatal: missing variable → no change to prompt
+- [ ] F1.5 — Update node picker + property panel + tests:
+  - `node-picker.tsx`: add `lsp_query` to utilities (count +1, import `FileSearch`)
+  - `property-panel.tsx`: `LSPQueryProperties` component
+  - `node-picker.test.tsx`: count +1, add `"FileSearch"` to lucide mock (+1 icon)
+- [ ] F1.6 — Tests (25 tests):
+  - `src/lib/lsp/__tests__/client.test.ts` — mock LSP server over stdio: initialize handshake,
+    all 4 operations, 15s timeout enforcement, pool LRU eviction, dead connection cleanup,
+    validateWorkspacePath blocks `..` traversal
+  - `src/lib/runtime/handlers/__tests__/lsp-query-handler.test.ts` — all 4 operations,
+    missing variables graceful fallback, `__lsp_context` set correctly, handler never throws
 
 **Files to create/modify:**
-- `src/lib/ecc/skill-router.ts` (NEW)
-- `src/lib/runtime/handlers/ai-response-handler.ts`
+- `src/lib/lsp/types.ts` (NEW)
+- `src/lib/lsp/pool.ts` (NEW)
+- `src/lib/lsp/client.ts` (NEW)
+- `src/lib/runtime/handlers/lsp-query-handler.ts` (NEW)
+- `src/types/index.ts` (add `"lsp_query"`)
+- `src/lib/validators/flow-content.ts` (add to NODE_TYPES)
+- `src/lib/runtime/handlers/index.ts` (register)
+- `src/components/builder/nodes/lsp-query-node.tsx` (NEW — FileSearch icon, violet)
+- `src/components/builder/flow-builder.tsx` (add to NODE_TYPES map)
+- `src/components/builder/node-picker.tsx` (count +1, FileSearch import)
+- `src/components/builder/property-panel.tsx` (LSPQueryProperties, OUTPUT_VAR_TYPES)
+- `src/components/builder/__tests__/node-picker.test.tsx` (count +1, FileSearch mock)
+- `Dockerfile` (add typescript-language-server RUN step)
 
-**Estimated effort:** Medium (2-3 days)
-**Impact:** Less context bloat, more relevant skill context — quality + cost improvement
+**Estimated effort:** High (7-10 days)
+**Impact:** ENORMOUS for developer agents — semantic code understanding
 
 ---
 

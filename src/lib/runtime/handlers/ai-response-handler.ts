@@ -9,6 +9,7 @@ import { recordChatLatency, recordTokenUsage } from "@/lib/observability/metrics
 import { injectRAGContext } from "@/lib/knowledge/rag-inject";
 import { reformulateWithHistory } from "@/lib/knowledge/query-reformulation";
 import { composeSkillPipeline, formatSkillPipelineForPrompt } from "@/lib/ecc/skill-composer";
+import { routeToSkill, formatRoutedSkillsForPrompt } from "@/lib/ecc/skill-router";
 import type { NodeHandler } from "../types";
 import { emitHook } from "../hooks";
 import { resolveTemplate } from "../template";
@@ -163,17 +164,28 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     }
     // ──────────────────────────────────────────────────────────────────────────
 
-    // ── Skill composition injection ──────────────────────────────────────
-    // Load 3-layer skill pipeline (guarantee → enhancement → execution)
-    // and prepend to system prompt so guarantee skills always apply.
+    // ── Skill injection: dynamic router (F3) → static C2.3 fallback ─────
+    // Try ECC dynamic skill routing first (embedding similarity, threshold 0.35).
+    // Falls back to 3-layer C2.3 composition when ECC is disabled or no skills
+    // match the current prompt.
     try {
-      const pipeline = await composeSkillPipeline(context.agentId);
-      if (pipeline.length > 0) {
-        const skillBlock = formatSkillPipelineForPrompt(pipeline);
+      const routedSkills = await routeToSkill(
+        latestUserMsg || prompt,
+        context.agentId,
+      );
+      if (routedSkills.length > 0) {
+        const skillBlock = formatRoutedSkillsForPrompt(routedSkills);
         effectiveSystemPrompt = `${skillBlock}\n\n${effectiveSystemPrompt}`;
+      } else {
+        // ECC disabled or no matching skills — fall back to C2.3 static pipeline
+        const pipeline = await composeSkillPipeline(context.agentId);
+        if (pipeline.length > 0) {
+          const skillBlock = formatSkillPipelineForPrompt(pipeline);
+          effectiveSystemPrompt = `${skillBlock}\n\n${effectiveSystemPrompt}`;
+        }
       }
     } catch {
-      // Skill composition failure is non-fatal
+      // Skill injection failure is non-fatal
     }
     // ──────────────────────────────────────────────────────────────────────────
 
