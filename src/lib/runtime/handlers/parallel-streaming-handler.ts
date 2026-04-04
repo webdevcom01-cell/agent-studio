@@ -5,7 +5,7 @@ import { aiResponseStreamingHandler } from "./ai-response-streaming-handler";
 import { logger } from "@/lib/logger";
 import type { FlowNode } from "@/types";
 
-const MAX_BRANCHES = 5;
+const MAX_BRANCHES = 10;
 
 interface BranchConfig {
   branchId: string;
@@ -34,7 +34,7 @@ async function executeBranchStreaming(
   writer: StreamWriter
 ): Promise<{ messages: OutputMessage[]; variables: Record<string, unknown> }> {
   const messages: OutputMessage[] = [];
-  const branchVariables = { ...context.variables };
+  const branchVariables = structuredClone(context.variables) as Record<string, unknown>;
   const nodeMap = new Map(context.flowContent.nodes.map((n) => [n.id, n]));
   const MAX_BRANCH_ITERATIONS = 25;
   let iterations = 0;

@@ -1,5 +1,6 @@
 import { streamText, stepCountIs } from "ai";
-import { getModel, DEFAULT_MODEL } from "@/lib/ai";
+import { getModel, getModelByTier, DEFAULT_MODEL } from "@/lib/ai";
+import { classifyTaskComplexity, complexityToTier } from "@/lib/cost/ecomode";
 import { logger } from "@/lib/logger";
 import { getMCPToolsForAgent } from "@/lib/mcp/client";
 import { getAgentToolsForAgent, type AgentToolContext } from "@/lib/agents/agent-tools";
@@ -70,7 +71,13 @@ export async function aiResponseStreamingHandler(
     (node.data.prompt as string) ?? "",
     context.variables
   );
-  const modelId = (node.data.model as string) ?? DEFAULT_MODEL;
+  const explicitModel = node.data.model as string | undefined;
+  const tierOverride = context.variables.__model_tier_override as
+    | "fast"
+    | "balanced"
+    | "powerful"
+    | undefined;
+  const modelId = explicitModel ?? DEFAULT_MODEL;
   const temperature = (node.data.temperature as number) ?? 0.7;
   const maxTokens = (node.data.maxTokens as number) ?? 4000;
   const outputVariable = (node.data.outputVariable as string) ?? "";
@@ -79,7 +86,32 @@ export async function aiResponseStreamingHandler(
   const enableRAG = (node.data.enableRAG as boolean) ?? true;
 
   try {
-    const model = getModel(modelId);
+    // Model selection: explicit node model > ecomode classify > tier override > default
+    const ecomodeEnabled = context.variables.__ecomode_enabled === true;
+    let resolvedModel: ReturnType<typeof getModel>;
+
+    if (explicitModel) {
+      // User explicitly chose a model — always respect it
+      resolvedModel = getModel(explicitModel);
+    } else if (ecomodeEnabled) {
+      // Ecomode: classify task complexity and pick cheapest capable model
+      const classifyModel = getModelByTier("fast");
+      const complexity = await classifyTaskComplexity(prompt, classifyModel);
+      const tier = complexityToTier(complexity);
+      resolvedModel = getModelByTier(tier);
+      logger.info("Ecomode model selection", {
+        agentId: context.agentId,
+        nodeId: node.id,
+        complexity,
+        tier,
+      });
+    } else if (tierOverride) {
+      // Cost monitor adaptive tier override
+      resolvedModel = getModelByTier(tierOverride);
+    } else {
+      resolvedModel = getModel(modelId);
+    }
+    const model = resolvedModel;
 
     const historyMessages = context.messageHistory.slice(-20).map((m) => ({
       role: m.role as "user" | "assistant" | "system",

@@ -191,6 +191,31 @@ export const costMonitorHandler: NodeHandler = async (node, context) => {
     };
   }
 
+  // Ecomode: enable per-task complexity classification for downstream AI nodes
+  if (mode === "ecomode") {
+    logger.info("Ecomode enabled", {
+      agentId: context.agentId,
+      budgetPercent: (state.budgetPercent * 100).toFixed(0) + "%",
+    });
+
+    return {
+      messages: [
+        {
+          role: "assistant" as const,
+          content: `Ecomode active: AI nodes will auto-select cheapest capable model per task. Budget: ${(state.budgetPercent * 100).toFixed(0)}% used.`,
+        },
+      ],
+      nextNodeId: null,
+      waitForInput: false,
+      updatedVariables: {
+        ...context.variables,
+        [getTrackingVariable(trackingVariable)]: state,
+        [outputVariable]: { ...output, ecomode: true },
+        __ecomode_enabled: true,
+      },
+    };
+  }
+
   // Monitor mode or budget not yet exceeded: pass through
   return {
     messages: [],

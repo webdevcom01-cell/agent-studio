@@ -228,12 +228,12 @@ describe("parallel-handler", () => {
   });
 
   describe("safety limits", () => {
-    it("should cap at MAX_BRANCHES (5)", async () => {
+    it("should cap at MAX_BRANCHES (10)", async () => {
       const ctx = makeContext({
         flowContent: {
           nodes: [
             { id: "parallel-1", type: "parallel", position: { x: 0, y: 0 }, data: {} },
-            ...Array.from({ length: 7 }, (_, i) => ({
+            ...Array.from({ length: 12 }, (_, i) => ({
               id: `msg-${i}`,
               type: "message" as const,
               position: { x: i * 100, y: 100 },
@@ -242,7 +242,7 @@ describe("parallel-handler", () => {
             { id: "next-1", type: "message", position: { x: 0, y: 200 }, data: {} },
           ],
           edges: [
-            ...Array.from({ length: 7 }, (_, i) => ({
+            ...Array.from({ length: 12 }, (_, i) => ({
               id: `e-${i}`,
               source: "parallel-1",
               target: `msg-${i}`,
@@ -255,7 +255,7 @@ describe("parallel-handler", () => {
       });
 
       const node = makeParallelNode({
-        branches: Array.from({ length: 7 }, (_, i) => ({
+        branches: Array.from({ length: 12 }, (_, i) => ({
           branchId: `b-${i}`,
           label: `Branch ${i}`,
           outputVariable: `result_${i}`,
@@ -264,11 +264,11 @@ describe("parallel-handler", () => {
 
       const result = await parallelHandler(node, ctx);
 
-      // Should still complete, but only first 5 branches are executed
+      // Should still complete, but only first 10 branches are executed
       expect(result.nextNodeId).toBe("next-1");
 
       const overall = result.updatedVariables?.["__parallel_result"] as Record<string, unknown>;
-      expect(overall.totalBranches).toBe(5);
+      expect(overall.totalBranches).toBe(10);
     });
   });
 

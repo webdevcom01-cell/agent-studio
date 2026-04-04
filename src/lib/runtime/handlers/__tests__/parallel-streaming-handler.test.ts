@@ -358,8 +358,8 @@ describe("parallelStreamingHandler", () => {
     expect(hasTimeout || hasCompletion).toBe(true);
   });
 
-  it("limits branches to MAX_BRANCHES (5)", async () => {
-    const manyBranches = Array.from({ length: 8 }, (_, i) => ({
+  it("limits branches to MAX_BRANCHES (10)", async () => {
+    const manyBranches = Array.from({ length: 13 }, (_, i) => ({
       branchId: `branch_${i}`,
       label: `Branch ${i}`,
       outputVariable: `out_${i}`,
@@ -369,14 +369,14 @@ describe("parallelStreamingHandler", () => {
       flowContent: {
         nodes: [
           { id: "parallel-1", type: "parallel", position: { x: 0, y: 0 }, data: { label: "P" } },
-          ...Array.from({ length: 8 }, (_, i) => ({
+          ...Array.from({ length: 13 }, (_, i) => ({
             id: `node-${i}`,
             type: "message" as const,
             position: { x: 0, y: 0 },
             data: { label: `N${i}` },
           })),
         ],
-        edges: Array.from({ length: 8 }, (_, i) => ({
+        edges: Array.from({ length: 13 }, (_, i) => ({
           id: `e${i}`,
           source: "parallel-1",
           target: `node-${i}`,
@@ -396,8 +396,8 @@ describe("parallelStreamingHandler", () => {
     const writer = makeWriter();
     const result = await parallelStreamingHandler(node, ctx, writer);
 
-    // Only 5 branches should execute (MAX_BRANCHES)
+    // Only 10 branches should execute (MAX_BRANCHES)
     const parallelResult = result.updatedVariables?.__parallel_result as Record<string, unknown>;
-    expect(parallelResult.totalBranches).toBe(5);
+    expect(parallelResult.totalBranches).toBe(10);
   });
 });

@@ -179,52 +179,59 @@ No dynamic task claiming or shared pool.
   - Model selector
   - Merge strategy dropdown
 - [ ] B1.7 — Write unit tests (task claiming, concurrent workers, empty queue, timeout)
-- [ ] B1.8 — Add swarm node to node type documentation
+- [ ] B1.8 — Update CLAUDE.md section 6 with swarm node description (node type docs)
 
 **Files to create/modify:**
 - `src/types/index.ts` (add to NodeType union)
+- `src/lib/validators/flow-content.ts` (add `"swarm"` to NODE_TYPES array — **kontrolni ček addition**)
 - `src/lib/runtime/handlers/swarm-handler.ts` (NEW)
 - `src/lib/runtime/handlers/index.ts` (register)
 - `src/components/builder/nodes/swarm-node.tsx` (NEW)
+- `src/components/builder/flow-builder.tsx` (import + register in NODE_TYPES map — **kontrolni ček addition**)
 - `src/components/builder/node-picker.tsx`
 - `src/components/builder/property-panel.tsx`
 
-**Estimated effort:** High (4-6 days)
+> **Note (kontrolni ček):** swarm is NOT self-routing — uses default edge after completion.
+> Do NOT add to SELF_ROUTING_NODES in engine.ts.
+
+**Estimated effort:** High (3-4 days)
 **Impact:** Enables sprint-backlog-style parallel work — major new orchestration pattern
 
 ---
 
-### B2. Enhanced `parallel` Node — Worker Pool + Context Isolation
+### B2. Enhanced `parallel` Node — Context Isolation Fix
 
 > **Gap**: `parallel-handler.ts` line 35 uses shallow copy `{ ...context.variables }`.
-> Branches share the messageHistory reference. OMC Ultrapilot uses full context isolation
-> per worker with worktree-style independence.
+> Nested objects (arrays, sub-objects) in variables are shared between branches — branch A
+> can mutate branch B's data. OMC Ultrapilot uses full context isolation per worker.
+>
+> **Kontrolni ček correction**: messageHistory already uses spread `[...context.messageHistory]`
+> (line 80) which is sufficient for {role,content} string objects. The real bug is ONLY
+> in variables shallow copy. `structuredClone()` is the fix (Node 18+, handles Date/RegExp/Map).
 
 **Current state** (verified in code):
-- MAX_BRANCHES = 5 (hardcoded at line 4)
-- Branch context: `{ ...context, variables: { ...context.variables } }` (shallow copy)
-- messageHistory is shared by reference — branches can see each other's messages
-- Fixed branch assignment (no dynamic worker pool)
+- MAX_BRANCHES = 5 (hardcoded at line 4 in BOTH parallel-handler.ts AND parallel-streaming-handler.ts)
+- Branch context: `{ ...context, variables: { ...context.variables } }` (shallow copy — BUG)
+- messageHistory: `[...context.messageHistory]` (spread copy — OK, strings only)
 
 **Tasks:**
 
-- [ ] B2.1 — Deep-copy messageHistory per branch:
-  - Change branch context creation (line ~76-81) to deep-copy messageHistory
-  - Each branch gets independent message accumulation
-  - Merge strategy determines how branch messages combine after completion
-- [ ] B2.2 — Add worker pool mode to parallel node:
-  - New config: `mode: "branches" | "workers"` (default: "branches" = current)
-  - Workers mode: N workers execute the same sub-flow with different inputs
-  - Input mapping: `workerInputs: Array<Record<string, unknown>>` — each worker gets one input set
-- [ ] B2.3 — Increase MAX_BRANCHES to 10 (configurable per node, default 5)
-- [ ] B2.4 — Write tests for context isolation (branch A writes variable, branch B doesn't see it)
+- [x] B2.1 — Deep-copy variables with `structuredClone()` in both handlers:
+  - `parallel-handler.ts` line 35: `{ ...context.variables }` → `structuredClone(context.variables)`
+  - `parallel-streaming-handler.ts` line 37: same fix
+  - structuredClone handles: nested objects, arrays, Date, RegExp, Map, Set
+  - structuredClone throws on functions — context.variables should never contain functions (verified)
+- [x] B2.3 — Increase MAX_BRANCHES from 5 to 10 in BOTH handlers (line 4 and line 8)
+  - Also updated existing tests: parallel-handler.test.ts (12 branches → expect 10), parallel-streaming-handler.test.ts (13 branches → expect 10)
+- [x] B2.4 — Write tests for context isolation (branch A writes nested variable, branch B doesn't see it)
+  - 6 tests in `parallel-context-isolation.test.ts`: variable isolation, original untouched, deep nested, arrays, MAX_BRANCHES=10, Date isolation
 
 **Files to modify:**
-- `src/lib/runtime/handlers/parallel-handler.ts`
-- `src/lib/runtime/handlers/parallel-streaming-handler.ts`
+- `src/lib/runtime/handlers/parallel-handler.ts` (structuredClone + MAX_BRANCHES)
+- `src/lib/runtime/handlers/parallel-streaming-handler.ts` (structuredClone + MAX_BRANCHES)
 
-**Estimated effort:** Medium (2-3 days)
-**Impact:** Prevents context pollution between parallel branches — correctness improvement
+**Estimated effort:** Low (0.5 day)
+**Impact:** Prevents context pollution between parallel branches — correctness bug fix
 
 ---
 
@@ -233,27 +240,53 @@ No dynamic task claiming or shared pool.
 > **Gap**: cost_monitor adaptive mode already has tier downgrade at 60/80/95%.
 > OMC Ecomode additionally routes each sub-task to the cheapest capable model
 > automatically, achieving 30-50% token savings.
+>
+> **Kontrolni ček correction (CRITICAL)**: `__model_tier_override` is SET by cost-monitor
+> adaptive mode but NEVER READ by ai-response handlers! Both ai-response-handler.ts and
+> ai-response-streaming-handler.ts use `(node.data.model as string) ?? DEFAULT_MODEL` and
+> completely ignore `__model_tier_override`. Only plan_and_execute reads it. This means
+> adaptive mode currently has NO EFFECT on regular ai_response nodes. Fix required as
+> prerequisite before ecomode can work.
+>
+> **Kontrolni ček correction #2**: ecomode classify call should use fastest model (haiku/groq),
+> not DEFAULT_MODEL, to minimize latency overhead.
+>
+> **Kontrolni ček correction #3**: scope is ai_response only. Other AI handlers (ai_classify,
+> ai_extract, ai_summarize) are specialized and already use cheap models.
 
 **Current state** (verified in code):
 - Adaptive mode: Tier 1 (60%) -> balanced, Tier 2 (80%) -> fast, Tier 3 (95%) -> block/fast
 - Sets `__model_tier_override` variable for downstream nodes
-- This already exists and works well
+- **BUG**: ai-response handlers do NOT read `__model_tier_override` — only plan_and_execute does
 
 **Tasks:**
 
-- [ ] B3.1 — Add `ecomode` to cost_monitor modes (alongside monitor/budget/alert/adaptive/enforce):
-  - In ecomode: before each AI node, classify task complexity (simple/moderate/complex) using a cheap 1-shot call
-  - Route to cheapest model that can handle that complexity tier
-  - Log savings per node for dashboard analytics
-- [ ] B3.2 — Add per-task model selection log to cost tracking output:
-  - Track `{ nodeId, taskComplexity, modelUsed, tokensSaved }` per node
-- [ ] B3.3 — Write tests for ecomode routing (simple task -> haiku, complex task -> opus)
+- [x] B3.0 — **PREREQUISITE**: Add `__model_tier_override` reading to BOTH ai-response handlers:
+  - Added `getModelByTier` import + model selection cascade: explicit model > ecomode > tier override > default
+  - Same logic in both ai-response-handler.ts and ai-response-streaming-handler.ts
+  - Fixes existing adaptive mode bug: `__model_tier_override` now actually affects ai_response nodes
+- [x] B3.1 — Add `ecomode` to cost_monitor modes (alongside monitor/budget/alert/adaptive/enforce):
+  - Sets `__ecomode_enabled = true` in context variables
+  - ai-response handlers check this flag and call `classifyTaskComplexity()` before model selection
+  - Uses fastest available model via `getModelByTier("fast")` for classify call
+- [x] B3.2 — Created `src/lib/cost/ecomode.ts`:
+  - `classifyTaskComplexity(prompt, model)` → "simple" | "moderate" | "complex"
+  - `complexityToTier()` maps to fast/balanced/powerful
+  - In-memory cache: hash(prompt first 200 chars) → tier, 5 min TTL, max 500 entries
+  - Graceful fallback: LLM failure → "moderate"
+- [ ] B3.3 — Add per-task model selection log to cost tracking output:
+  - Track `{ nodeId, taskComplexity, modelUsed, tokensSaved }` per node *(deferred — needs token pricing integration)*
+- [x] B3.4 — Write tests for ecomode routing and __model_tier_override fix
+  - 15 tests: ecomode.test.ts (11 — classify, cache, tier mapping), ecomode-integration.test.ts (4 — cost-monitor modes)
 
 **Files to modify:**
-- `src/lib/runtime/handlers/cost-monitor-handler.ts`
+- `src/lib/runtime/handlers/ai-response-handler.ts` (read __model_tier_override)
+- `src/lib/runtime/handlers/ai-response-streaming-handler.ts` (read __model_tier_override)
+- `src/lib/runtime/handlers/cost-monitor-handler.ts` (add ecomode)
+- `src/lib/cost/ecomode.ts` (NEW — classify helper)
 
-**Estimated effort:** Low-Medium (1-2 days)
-**Impact:** 30-50% token cost reduction — significant for production workloads
+**Estimated effort:** Medium (2 days)
+**Impact:** 30-50% token cost reduction + fixes existing adaptive mode bug
 
 ---
 
