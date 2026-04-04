@@ -98,6 +98,7 @@ const HOOK_EVENT_TYPES = [
   "beforeToolCall",
   "afterToolCall",
   "onPreCompact",
+  "onPersistentCap",
 ] as const;
 
 export const flowContentSchema = z.object({

@@ -12,7 +12,8 @@ export type FlowHookEventType =
   | "afterNodeExecute"
   | "beforeToolCall"
   | "afterToolCall"
-  | "onPreCompact";
+  | "onPreCompact"
+  | "onPersistentCap";
 
 export interface FlowHookPayload {
   event: FlowHookEventType;

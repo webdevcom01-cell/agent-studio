@@ -156,8 +156,15 @@ export function executeFlowStreaming(
           }
 
           const visitCount = visitedNodes.get(node.id) ?? 0;
-          // Loop nodes need higher visit threshold since they intentionally revisit
-          const maxVisitsForNode = node.type === "loop" ? 110 : MAX_NODE_VISITS;
+          // Loop and reflexive_loop nodes need higher visit threshold since they intentionally revisit.
+          // In persistent mode, end nodes also get a higher threshold to allow re-routing.
+          const isPersistentMode = context.variables.__persistent_mode === true;
+          const maxVisitsForNode =
+            node.type === "loop" || node.type === "reflexive_loop"
+              ? 110
+              : node.type === "end" && isPersistentMode
+                ? 25
+                : MAX_NODE_VISITS;
           if (visitCount > maxVisitsForNode) {
             const msg: OutputMessage = {
               role: "assistant",

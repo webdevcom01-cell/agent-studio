@@ -112,24 +112,32 @@ Inspired by: claw-code hook DAG, OMC 11 lifecycle events, clawhip event pipeline
 
 **Tasks:**
 
-- [ ] A3.1 — Add `persistent` mode to `reflexive_loop` node config:
+- [x] A3.1 — Added `persistent` mode to `reflexive_loop` node config:
   - `mode: "bounded" | "persistent"` (default: "bounded" = current behavior)
-  - In persistent mode: max iterations raised to 20 (safety cap), but primary exit is verifier pass
-- [ ] A3.2 — Add verification commands to evaluator step:
+  - In persistent mode: max iterations raised to 20 (MAX_PERSISTENT_ITERATIONS), primary exit is verifier pass
+- [x] A3.2 — Added verification commands to evaluator step:
   - New config field: `verificationCommands: string[]` (e.g., ["npm run build", "npm run test", "npm run lint"])
-  - After AI evaluation, if commands configured, run them via `python_code` or `code_interpreter` sandbox
+  - After AI evaluation passes, if commands configured, runs them via `child_process.execFile` (NOT sandbox — see note below)
   - All commands must pass (exit code 0) for the verifier to approve
-  - Command output appended to evaluator context
-- [ ] A3.3 — Add `persistent-mode` check to `end` node handler:
-  - If flow has `__persistent_mode = true` variable, `end` node checks verifier status
-  - If verifier has not confirmed, route back to the generating node instead of terminating
-- [ ] A3.4 — Emit `session.blocked` hook event when persistent loop is waiting for verification
-- [ ] A3.5 — Write unit tests for persistent mode (verifier pass, verifier fail, safety cap reached)
+  - Command output appended to evaluator feedback for next iteration
+  - **Security**: whitelist regex for command prefixes, shell metacharacter blocking, 60s timeout, execFile (no shell)
+  - **Design deviation**: TASKS.md originally specified `python_code` or `code_interpreter` sandbox, but both block `os`/`subprocess` imports. `execFile` with whitelist + metacharacter blocking is safer than `exec` and sufficient for build/test/lint commands.
+- [x] A3.3 — Added `persistent-mode` check to `end` node handler:
+  - If `__persistent_mode = true` and `__verifier_confirmed = false`, routes back to `__persistent_return_node`
+  - Updated maxVisits in both `engine.ts` and `engine-streaming.ts`: `reflexive_loop` gets 110 (like `loop`), `end` gets 25 when persistent
+- [x] A3.4 — Emit `onPersistentCap` hook event when persistent loop exhausts iteration cap
+  - Renamed from `session.blocked` to `onPersistentCap` for camelCase consistency with existing hook events
+- [x] A3.5 — 16 unit tests for persistent mode (bounded defaults, persistent variables, cleanup on pass/fail/error, verification command filtering, end-handler routing)
+- [x] A3.6 — Persistent state cleanup: `__persistent_mode`, `__verifier_confirmed`, `__persistent_return_node` cleaned up in updatedVariables on all exit paths (passed, failed, error)
 
-**Files to modify:**
-- `src/lib/runtime/handlers/reflexive-loop-handler.ts`
-- `src/lib/runtime/handlers/end-handler.ts`
-- `src/types/index.ts` (add persistent mode config to reflexive_loop node data)
+**Files modified:**
+- `src/lib/runtime/handlers/reflexive-loop-handler.ts` — persistent mode, verification commands, variable cleanup
+- `src/lib/runtime/handlers/end-handler.ts` — persistent routing back to reflexive_loop
+- `src/lib/runtime/engine.ts` — maxVisits for reflexive_loop + persistent end
+- `src/lib/runtime/engine-streaming.ts` — same maxVisits update
+- `src/lib/runtime/types.ts` — added `onPersistentCap` to FlowHookEventType
+- `src/lib/validators/flow-content.ts` — added `onPersistentCap` to Zod HOOK_EVENT_TYPES
+- `src/lib/runtime/handlers/__tests__/persistent-mode.test.ts` (NEW — 16 tests)
 
 **Estimated effort:** Medium (2-3 days)
 **Impact:** Enables production-grade autonomous workflows that self-verify

@@ -1,5 +1,6 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
+import { emitHook } from "../hooks";
 import { logger } from "@/lib/logger";
 
 interface EvalCriterion {
@@ -15,11 +16,117 @@ interface IterationRecord {
   feedback: string;
   model: string;
   durationMs: number;
+  verificationPassed?: boolean;
+  verificationOutput?: string;
 }
 
 const MAX_ITERATIONS = 5;
+const MAX_PERSISTENT_ITERATIONS = 20;
 const DEFAULT_PASSING_SCORE = 7;
 const DEFAULT_MAX_TOKENS = 2000;
+
+/**
+ * Whitelist of allowed command prefixes for verification commands.
+ * Only common build/test/lint tools are permitted.
+ */
+const ALLOWED_COMMAND_PREFIXES = /^(npm|npx|yarn|pnpm|python|pytest|tsc|eslint|jest|vitest|cargo|go|make|dotnet|ruby|bundle|mix|gradle|mvn)\b/;
+
+/**
+ * Shell metacharacters that indicate command chaining/injection.
+ * These are blocked to prevent abuse via verification commands.
+ */
+const SHELL_METACHARACTERS = /[;&|`$(){}<>!#]/;
+
+/**
+ * Validate and sanitize a verification command.
+ * Returns null if the command is not allowed.
+ */
+function validateCommand(command: string): string | null {
+  const trimmed = command.trim();
+  if (!trimmed) return null;
+
+  // Block shell metacharacters (prevents && rm -rf, pipes, subshells, etc.)
+  if (SHELL_METACHARACTERS.test(trimmed)) {
+    logger.warn("Verification command blocked: shell metacharacters detected", {
+      command: trimmed,
+    });
+    return null;
+  }
+
+  // Must start with a whitelisted command
+  if (!ALLOWED_COMMAND_PREFIXES.test(trimmed)) {
+    logger.warn("Verification command blocked: not in whitelist", {
+      command: trimmed,
+    });
+    return null;
+  }
+
+  return trimmed;
+}
+
+/**
+ * Run verification commands using child_process.execFile for safety.
+ * Returns { allPassed, output } — output includes stdout/stderr of each command.
+ *
+ * Uses execFile (not exec) to avoid shell interpretation.
+ * Each command gets a 60s timeout.
+ */
+async function runVerificationCommands(
+  commands: string[],
+  agentId: string,
+): Promise<{ allPassed: boolean; output: string }> {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const execFileAsync = promisify(execFile);
+
+  const results: string[] = [];
+  let allPassed = true;
+
+  for (const raw of commands) {
+    const validated = validateCommand(raw);
+    if (!validated) {
+      results.push(`⛔ BLOCKED: "${raw}" — command not allowed`);
+      allPassed = false;
+      continue;
+    }
+
+    // Split command into executable + args for execFile
+    const parts = validated.split(/\s+/);
+    const cmd = parts[0];
+    const args = parts.slice(1);
+
+    try {
+      const { stdout, stderr } = await execFileAsync(cmd, args, {
+        timeout: 60_000,
+        maxBuffer: 1024 * 512, // 512KB
+        env: { ...process.env, CI: "true", FORCE_COLOR: "0" },
+      });
+
+      const output = (stdout + (stderr ? `\nstderr: ${stderr}` : "")).trim();
+      results.push(`✅ ${validated}\n${output.slice(0, 2000)}`);
+
+      logger.info("Verification command passed", {
+        agentId,
+        command: validated,
+      });
+    } catch (error: unknown) {
+      allPassed = false;
+      const errMsg =
+        error instanceof Error ? error.message : String(error);
+      results.push(
+        `❌ ${validated}\n${errMsg.slice(0, 2000)}`,
+      );
+
+      logger.warn("Verification command failed", {
+        agentId,
+        command: validated,
+        error: errMsg.slice(0, 500),
+      });
+    }
+  }
+
+  return { allPassed, output: results.join("\n\n") };
+}
 
 /**
  * reflexive_loop — Self-correcting node that generates output, evaluates quality,
@@ -27,12 +134,19 @@ const DEFAULT_MAX_TOKENS = 2000;
  *
  * Combines ai_response + evaluator + retry into a single composable node.
  * Routes to "passed" on quality pass, "failed" on max iterations exhausted.
+ *
+ * Supports two modes:
+ * - "bounded" (default): max 5 iterations, AI-only evaluation
+ * - "persistent": max 20 iterations, optional verification commands (build/test/lint),
+ *   sets __persistent_mode context variables so end-handler routes back until verified
  */
 export const reflexiveLoopHandler: NodeHandler = async (node, context) => {
   const executorModel = (node.data.executorModel as string) || "deepseek-chat";
   const evaluatorModel = (node.data.evaluatorModel as string) || "deepseek-chat";
+  const mode = (node.data.mode as string) === "persistent" ? "persistent" : "bounded";
+  const iterationCap = mode === "persistent" ? MAX_PERSISTENT_ITERATIONS : MAX_ITERATIONS;
   const maxIterations = Math.min(
-    MAX_ITERATIONS,
+    iterationCap,
     Math.max(1, Number(node.data.maxIterations) || 3),
   );
   const passingScore = Math.min(
@@ -43,6 +157,14 @@ export const reflexiveLoopHandler: NodeHandler = async (node, context) => {
   const includeHistory = node.data.includeHistory !== false;
   const outputVariable =
     (node.data.outputVariable as string) || "reflexive_result";
+
+  // Persistent mode: verification commands (optional)
+  const verificationCommands =
+    mode === "persistent"
+      ? ((node.data.verificationCommands as string[]) ?? []).filter(
+          (c) => typeof c === "string" && c.trim(),
+        )
+      : [];
 
   // Resolve task input
   const inputVar = (node.data.inputVariable as string) || "";
@@ -74,6 +196,13 @@ export const reflexiveLoopHandler: NodeHandler = async (node, context) => {
     };
   }
 
+  // In persistent mode, set context variables for end-handler routing
+  if (mode === "persistent") {
+    context.variables.__persistent_mode = true;
+    context.variables.__persistent_return_node = node.id;
+    context.variables.__verifier_confirmed = false;
+  }
+
   try {
     const { getModel } = await import("@/lib/ai");
     const { generateText } = await import("ai");
@@ -98,7 +227,11 @@ export const reflexiveLoopHandler: NodeHandler = async (node, context) => {
         const historyText = trajectory
           .map(
             (t) =>
-              `--- Attempt ${t.iteration} (score: ${t.score}/10) ---\nOutput: ${t.output}\nFeedback: ${t.feedback}`,
+              `--- Attempt ${t.iteration} (score: ${t.score}/10) ---\nOutput: ${t.output}\nFeedback: ${t.feedback}${
+                t.verificationOutput
+                  ? `\nVerification: ${t.verificationPassed ? "PASSED" : "FAILED"}\n${t.verificationOutput}`
+                  : ""
+              }`,
           )
           .join("\n\n");
 
@@ -180,6 +313,29 @@ Respond in valid JSON only, no markdown. Format:
         feedback = "Evaluation parse failed — retrying.";
       }
 
+      // ── Verification commands (persistent mode only) ──────────────────
+      let verificationPassed: boolean | undefined;
+      let verificationOutput: string | undefined;
+
+      if (
+        score >= passingScore &&
+        mode === "persistent" &&
+        verificationCommands.length > 0
+      ) {
+        const verifyResult = await runVerificationCommands(
+          verificationCommands,
+          context.agentId,
+        );
+        verificationPassed = verifyResult.allPassed;
+        verificationOutput = verifyResult.output;
+
+        if (!verifyResult.allPassed) {
+          // Override score — verification failure means we need another iteration
+          score = Math.min(score, passingScore - 1);
+          feedback = `AI evaluation passed (${score}/10) but verification commands failed:\n${verifyResult.output}\n\nOriginal feedback: ${feedback}`;
+        }
+      }
+
       currentScore = score;
       const iterDurationMs = Math.round(performance.now() - iterStart);
 
@@ -190,6 +346,8 @@ Respond in valid JSON only, no markdown. Format:
         feedback,
         model: executorModel,
         durationMs: iterDurationMs,
+        verificationPassed,
+        verificationOutput,
       });
 
       logger.info("Reflexive loop iteration", {
@@ -197,6 +355,8 @@ Respond in valid JSON only, no markdown. Format:
         iteration,
         score,
         passingScore,
+        mode,
+        verificationPassed,
         durationMs: iterDurationMs,
       });
 
@@ -205,6 +365,29 @@ Respond in valid JSON only, no markdown. Format:
         break;
       }
     }
+
+    // Safety cap reached in persistent mode — emit hook
+    if (!passed && mode === "persistent") {
+      emitHook(context, "onPersistentCap", {
+        nodeId: node.id,
+        nodeType: node.type,
+        meta: {
+          iterations: trajectory.length,
+          lastScore: currentScore,
+          passingScore,
+        },
+      });
+    }
+
+    // Clean up persistent state variables on exit (both passed and failed)
+    const persistentCleanup: Record<string, unknown> =
+      mode === "persistent"
+        ? {
+            __persistent_mode: false,
+            __verifier_confirmed: passed,
+            __persistent_return_node: null,
+          }
+        : {};
 
     const improved =
       trajectory.length > 1 &&
@@ -227,13 +410,25 @@ Respond in valid JSON only, no markdown. Format:
           passed,
           improved,
           trajectory,
+          mode,
         },
+        ...persistentCleanup,
       },
     };
   } catch (error) {
     logger.error("Reflexive loop failed", error, {
       agentId: context.agentId,
     });
+
+    // Clean up persistent state on error too
+    const persistentCleanup: Record<string, unknown> =
+      mode === "persistent"
+        ? {
+            __persistent_mode: false,
+            __verifier_confirmed: false,
+            __persistent_return_node: null,
+          }
+        : {};
 
     return {
       messages: [
@@ -250,6 +445,7 @@ Respond in valid JSON only, no markdown. Format:
           error: error instanceof Error ? error.message : "Unknown error",
           success: false,
         },
+        ...persistentCleanup,
       },
     };
   }

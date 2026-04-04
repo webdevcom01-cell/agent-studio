@@ -179,8 +179,15 @@ export async function executeFlow(
     }
 
     const visitCount = visitedNodes.get(node.id) ?? 0;
-    // Loop nodes need higher visit threshold since they intentionally revisit
-    const maxVisits = node.type === "loop" ? 110 : 5;
+    // Loop and reflexive_loop nodes need higher visit threshold since they intentionally revisit.
+    // In persistent mode, end nodes also get a higher threshold to allow re-routing.
+    const isPersistent = context.variables.__persistent_mode === true;
+    const maxVisits =
+      node.type === "loop" || node.type === "reflexive_loop"
+        ? 110
+        : node.type === "end" && isPersistent
+          ? 25
+          : 5;
     if (visitCount > maxVisits) {
       logger.warn("Circular flow detected", { nodeId: node.id, agentId: context.agentId, visitCount });
       allMessages.push({
