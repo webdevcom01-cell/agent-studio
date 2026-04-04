@@ -714,6 +714,9 @@ export function PropertyPanel({
         {node.type === "reflexive_loop" && (
           <ReflexiveLoopProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "swarm" && (
+          <SwarmProperties data={data} update={update} variables={variables} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -778,6 +781,7 @@ const OUTPUT_VAR_TYPES = new Set([
   "browser_action",
   "plan_and_execute",
   "reflexive_loop",
+  "swarm",
 ]);
 
 /**
@@ -5779,6 +5783,135 @@ function ReflexiveLoopProperties({ data, update, variables = [] }: SubPanelProps
           value={(data.outputVariable as string) ?? "reflexive_result"}
           onChange={(e) => update("outputVariable", e.target.value)}
           placeholder="reflexive_result"
+        />
+      </div>
+    </>
+  );
+}
+
+// ── Swarm ────────────────────────────────────────────────────────────────
+
+function SwarmProperties({ data, update, variables = [] }: SubPanelProps) {
+  const tasks = (data.tasks as string[]) ?? [];
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Worker Count</Label>
+        <Input
+          type="number"
+          value={(data.workerCount as number) ?? 3}
+          onChange={(e) => update("workerCount", Number(e.target.value))}
+          min={1}
+          max={10}
+        />
+        <p className="text-xs text-muted-foreground">Concurrent workers (1-10)</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Worker Model</Label>
+        <Select
+          value={(data.workerModel as string) ?? ""}
+          onValueChange={(val) => update("workerModel", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue placeholder="Default model" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Default</SelectItem>
+            {ALL_MODELS.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name} ({m.tier})</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>System Prompt</Label>
+        <Textarea
+          value={(data.systemPrompt as string) ?? "You are a helpful assistant completing assigned tasks."}
+          onChange={(e) => update("systemPrompt", e.target.value)}
+          rows={3}
+          className="text-xs"
+          placeholder="Instructions for workers..."
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Task Context</Label>
+        <Textarea
+          value={(data.taskContext as string) ?? ""}
+          onChange={(e) => update("taskContext", e.target.value)}
+          rows={2}
+          className="text-xs"
+          placeholder="Shared context prepended to each task..."
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Tasks Variable</Label>
+        <VariableInput
+          value={(data.tasksVariable as string) ?? ""}
+          onChange={(val) => update("tasksVariable", val)}
+          variables={variables}
+          placeholder="variable_with_task_list"
+        />
+        <p className="text-xs text-muted-foreground">Variable containing task array or newline-separated text</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Static Tasks ({tasks.length})</Label>
+        {tasks.map((t: string, i: number) => (
+          <div key={i} className="flex items-center gap-1">
+            <Input
+              value={t}
+              onChange={(e) => {
+                const updated = [...tasks];
+                updated[i] = e.target.value;
+                update("tasks", updated);
+              }}
+              className="text-xs"
+              placeholder={`Task ${i + 1}`}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 shrink-0 text-xs text-destructive"
+              onClick={() => update("tasks", tasks.filter((_: string, j: number) => j !== i))}
+            >
+              ×
+            </Button>
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-xs"
+          onClick={() => update("tasks", [...tasks, ""])}
+        >
+          + Add Task
+        </Button>
+        <p className="text-xs text-muted-foreground">Tasks variable takes priority over static tasks</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Merge Strategy</Label>
+        <Select
+          value={(data.mergeStrategy as string) ?? "concat"}
+          onValueChange={(val) => update("mergeStrategy", val)}
+        >
+          <SelectTrigger className="w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="concat">Concat (append results)</SelectItem>
+            <SelectItem value="summarize">Summarize (AI synthesis)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "swarm_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="swarm_result"
         />
       </div>
     </>

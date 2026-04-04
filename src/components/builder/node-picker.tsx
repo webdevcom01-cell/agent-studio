@@ -55,6 +55,7 @@ import {
   PlayCircle,
   ShieldCheck,
   Terminal,
+  Boxes,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -1150,6 +1151,28 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       systemPrompt: "",
       maxTokens: 2000,
       outputVariable: "reflexive_result",
+    },
+  },
+  {
+    type: "swarm",
+    label: "Swarm",
+    description:
+      "Shared task pool with N workers pulling tasks dynamically — unlike parallel's fixed branches",
+    usageExample:
+      "Process a list of URLs, documents, or queries in parallel with automatic work-stealing",
+    icon: Boxes,
+    color: "amber",
+    category: "ai",
+    defaultData: {
+      label: "Swarm",
+      workerCount: 3,
+      workerModel: "",
+      mergeStrategy: "concat",
+      systemPrompt: "You are a helpful assistant completing assigned tasks.",
+      taskContext: "",
+      tasks: [],
+      tasksVariable: "",
+      outputVariable: "swarm_result",
     },
   },
 ];

@@ -54,6 +54,7 @@ import { codeInterpreterHandler } from "./code-interpreter-handler";
 import { trajectoryEvaluatorHandler } from "./trajectory-evaluator-handler";
 import { planAndExecuteHandler } from "./plan-and-execute-handler";
 import { reflexiveLoopHandler } from "./reflexive-loop-handler";
+import { swarmHandler } from "./swarm-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -111,6 +112,7 @@ const handlers: Record<string, NodeHandler> = {
   trajectory_evaluator: trajectoryEvaluatorHandler,
   plan_and_execute: planAndExecuteHandler,
   reflexive_loop: reflexiveLoopHandler,
+  swarm: swarmHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

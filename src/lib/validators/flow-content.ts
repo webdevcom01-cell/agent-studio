@@ -57,6 +57,7 @@ const NODE_TYPES = [
   "trajectory_evaluator",
   "plan_and_execute",
   "reflexive_loop",
+  "swarm",
 ] as const;
 
 const VARIABLE_TYPES = ["string", "number", "boolean", "object"] as const;

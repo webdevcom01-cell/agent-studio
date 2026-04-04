@@ -84,4 +84,5 @@ export type NodeType =
   | "code_interpreter"
   | "trajectory_evaluator"
   | "plan_and_execute"
-  | "reflexive_loop";
+  | "reflexive_loop"
+  | "swarm";

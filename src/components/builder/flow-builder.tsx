@@ -82,6 +82,7 @@ import { CodeInterpreterNode } from "./nodes/code-interpreter-node";
 import { TrajectoryEvaluatorNode } from "./nodes/trajectory-evaluator-node";
 import { PlanAndExecuteNode } from "./nodes/plan-and-execute-node";
 import { ReflexiveLoopNode } from "./nodes/reflexive-loop-node";
+import { SwarmNode } from "./nodes/swarm-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -155,6 +156,7 @@ const NODE_TYPES: NodeTypes = {
   trajectory_evaluator: TrajectoryEvaluatorNode,
   plan_and_execute: PlanAndExecuteNode,
   reflexive_loop: ReflexiveLoopNode,
+  swarm: SwarmNode,
 };
 
 // Debug-wrapped versions of all node types (stable reference, created once)
