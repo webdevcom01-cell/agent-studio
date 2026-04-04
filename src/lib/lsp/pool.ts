@@ -14,12 +14,41 @@
  *   spawns a fresh one on the next request.
  */
 
+import path from "node:path";
 import { logger } from "@/lib/logger";
 import { LspClient } from "./lsp-client";
 import type { LspLanguage } from "./types";
 import { LSP_SERVER_CONFIGS } from "./types";
 
 export const MAX_LSP_CONNECTIONS = 3;
+
+/** Allowed root prefixes for LSP workspace URIs. */
+const ALLOWED_ROOT_PREFIXES = ["/tmp/", "/tmp/agent-"];
+
+/**
+ * Validates that the given rootUri is a safe path for LSP to use as its
+ * workspace root.  Blocks directory traversal and access outside /tmp/.
+ *
+ * @returns The normalised rootUri (file:// scheme) or throws.
+ */
+export function validateWorkspacePath(rootUri: string): string {
+  // Strip file:// prefix to get raw path
+  const rawPath = rootUri.startsWith("file://") ? rootUri.slice(7) : rootUri;
+  const normalised = path.resolve("/", rawPath);
+
+  // Block traversal (.. in path that escapes /tmp)
+  if (normalised !== rawPath && rawPath.includes("..")) {
+    throw new Error(`LSP workspace path traversal blocked: ${rawPath}`);
+  }
+
+  // Must be /tmp or start with /tmp/
+  const allowed = normalised === "/tmp" || ALLOWED_ROOT_PREFIXES.some((prefix) => normalised.startsWith(prefix));
+  if (!allowed) {
+    throw new Error(`LSP workspace path outside allowed roots: ${normalised}`);
+  }
+
+  return `file://${normalised}`;
+}
 
 interface PoolEntry {
   client: LspClient;
@@ -41,6 +70,9 @@ export async function acquireLspClient(
   language: LspLanguage,
   rootUri = "file:///tmp",
 ): Promise<LspClient> {
+  // Validate workspace path before using it
+  const safeRootUri = validateWorkspacePath(rootUri);
+
   // Return existing live client
   const existing = pool.get(language);
   if (existing && !existing.client.closed) {
@@ -71,7 +103,7 @@ export async function acquireLspClient(
   const client = new LspClient(config);
 
   try {
-    await client.initialize(rootUri);
+    await client.initialize(safeRootUri);
   } catch (err) {
     client.shutdown().catch(() => undefined);
     throw err;

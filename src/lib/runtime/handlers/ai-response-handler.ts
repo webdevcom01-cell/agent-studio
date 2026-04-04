@@ -189,6 +189,17 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     }
     // ──────────────────────────────────────────────────────────────────────────
 
+    // ── LSP context injection (F1.4): prepend type/diagnostic info ─────────
+    try {
+      const lspContext = context.variables["__lsp_context"];
+      if (lspContext && typeof lspContext === "string" && lspContext.trim()) {
+        effectiveSystemPrompt = `<lsp_context>\n${lspContext.trim()}\n</lsp_context>\n\n${effectiveSystemPrompt}`;
+      }
+    } catch {
+      // LSP context injection failure is non-fatal
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
     // ── Safety: check user input for injection ────────────────────────────
     if (latestUserMsg) {
       const inputCheck = await checkInputSafety(latestUserMsg, context.agentId, node.id);

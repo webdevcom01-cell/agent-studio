@@ -794,6 +794,7 @@ const OUTPUT_VAR_TYPES = new Set([
   "verification",
   "ast_transform",
   "lsp_query",
+  "code_interpreter",
 ]);
 
 /**
