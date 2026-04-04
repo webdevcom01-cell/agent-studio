@@ -14,6 +14,7 @@ vi.mock("ai", () => ({
 vi.mock("@/lib/ai", () => ({
   getModel: vi.fn(() => "mock-model"),
   getModelByTier: vi.fn((tier: string) => `mock-${tier}-model`),
+  getModelIdByTier: vi.fn((tier: string) => `deepseek-${tier}`),
 }));
 
 vi.mock("@/lib/logger", () => ({

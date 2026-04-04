@@ -20,7 +20,12 @@ interface SubTaskResult {
   id: string;
   description: string;
   complexity: "simple" | "moderate" | "complex";
+  /** Resolved model ID (e.g. "deepseek-chat"), logged and stored for observability */
   model: string;
+  /** The tier that was selected (may differ from natural tier when cost monitor overrides) */
+  tier: "fast" | "balanced" | "powerful" | "error";
+  /** Whether the natural complexity tier was overridden by cost monitor */
+  tierOverridden: boolean;
   output: string;
   durationMs: number;
   success: boolean;
@@ -78,7 +83,7 @@ export const planAndExecuteHandler: NodeHandler = async (node, context) => {
   }
 
   try {
-    const { getModel, getModelByTier } = await import("@/lib/ai");
+    const { getModel, getModelByTier, getModelIdByTier } = await import("@/lib/ai");
     const { generateObject, generateText } = await import("ai");
     const { z } = await import("zod");
 
@@ -138,16 +143,36 @@ Rules:
 
     async function executeSubTask(subtask: SubTask): Promise<SubTaskResult> {
       const start = performance.now();
-      try {
-        // Select model based on complexity tier (with cost monitor override)
-        const effectiveTier = tierOverride
-          ? (tierOverride as "fast" | "balanced" | "powerful")
-          : subtask.complexity === "simple"
-            ? "fast"
-            : subtask.complexity === "moderate"
-              ? "balanced"
-              : "powerful";
 
+      // Natural tier based on subtask complexity
+      const naturalTier: "fast" | "balanced" | "powerful" =
+        subtask.complexity === "simple"
+          ? "fast"
+          : subtask.complexity === "moderate"
+            ? "balanced"
+            : "powerful";
+
+      // Effective tier: cost monitor override takes precedence
+      const effectiveTier: "fast" | "balanced" | "powerful" = tierOverride
+        ? (tierOverride as "fast" | "balanced" | "powerful")
+        : naturalTier;
+
+      const tierOverridden = tierOverride !== undefined && effectiveTier !== naturalTier;
+
+      // Resolve actual model ID for logging and result storage
+      const selectedModelId = getModelIdByTier(effectiveTier);
+
+      logger.info("Plan-and-Execute: subtask starting", {
+        agentId: context.agentId,
+        subtaskId: subtask.id,
+        complexity: subtask.complexity,
+        naturalTier,
+        effectiveTier,
+        tierOverridden,
+        modelId: selectedModelId,
+      });
+
+      try {
         const model = getModelByTier(effectiveTier);
 
         const { text } = await generateText({
@@ -158,25 +183,50 @@ Rules:
           abortSignal: AbortSignal.timeout(timeoutPerSubtask),
         });
 
+        const durationMs = Math.round(performance.now() - start);
+
+        logger.info("Plan-and-Execute: subtask complete", {
+          agentId: context.agentId,
+          subtaskId: subtask.id,
+          modelId: selectedModelId,
+          durationMs,
+          success: true,
+        });
+
         return {
           id: subtask.id,
           description: subtask.description,
           complexity: subtask.complexity,
-          model: effectiveTier,
+          model: selectedModelId,
+          tier: effectiveTier,
+          tierOverridden,
           output: text,
-          durationMs: Math.round(performance.now() - start),
+          durationMs,
           success: true,
         };
       } catch (error) {
+        const durationMs = Math.round(performance.now() - start);
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+
+        logger.warn("Plan-and-Execute: subtask failed", {
+          agentId: context.agentId,
+          subtaskId: subtask.id,
+          modelId: selectedModelId,
+          durationMs,
+          error: errorMsg,
+        });
+
         return {
           id: subtask.id,
           description: subtask.description,
           complexity: subtask.complexity,
-          model: "error",
+          model: selectedModelId,
+          tier: effectiveTier,
+          tierOverridden,
           output: "",
-          durationMs: Math.round(performance.now() - start),
+          durationMs,
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: errorMsg,
         };
       }
     }
@@ -196,7 +246,9 @@ Rules:
               id: `batch_error_${i}`,
               description: "Batch execution failed",
               complexity: "simple",
-              model: "error",
+              model: "unknown",
+              tier: "fast" as const,
+              tierOverridden: false,
               output: "",
               durationMs: 0,
               success: false,
@@ -215,6 +267,24 @@ Rules:
 
     const successCount = results.filter((r) => r.success).length;
     const totalDurationMs = results.reduce((sum, r) => sum + r.durationMs, 0);
+
+    // Log model distribution summary for observability
+    const modelDistribution: Record<string, number> = {};
+    for (const r of results) {
+      modelDistribution[r.model] = (modelDistribution[r.model] ?? 0) + 1;
+    }
+    const overriddenCount = results.filter((r) => r.tierOverridden).length;
+    logger.info("Plan-and-Execute: execution summary", {
+      agentId: context.agentId,
+      totalSubtasks: results.length,
+      succeeded: successCount,
+      failed: results.length - successCount,
+      totalDurationMs: Math.round(totalDurationMs),
+      strategy,
+      modelDistribution,
+      tierOverrideActive: !!tierOverride,
+      subtasksTierOverridden: overriddenCount,
+    });
 
     // ── Step 3: Synthesize (optional) ──────────────────────────────────────
     let finalOutput = "";
@@ -269,6 +339,9 @@ Now synthesize a coherent, complete final answer that addresses the original goa
             planDurationMs: Math.round(planDurationMs),
             executionDurationMs: Math.round(totalDurationMs),
             strategy,
+            modelDistribution,
+            tierOverrideActive: !!tierOverride,
+            subtasksTierOverridden: overriddenCount,
           },
         },
       },

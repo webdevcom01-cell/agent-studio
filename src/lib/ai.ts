@@ -174,6 +174,35 @@ export function getModelByTier(
 }
 
 /**
+ * Resolve the model ID string for a given tier (same selection logic as getModelByTier).
+ * Useful when callers need to log or store the resolved model ID without calling getModel().
+ */
+export function getModelIdByTier(
+  tier: "fast" | "balanced" | "powerful",
+  preferredProvider?: string,
+): string {
+  const env = getEnv();
+  const candidates = getModelsByTier(tier);
+
+  if (preferredProvider) {
+    const preferred = candidates.find(
+      (m) =>
+        m.provider === preferredProvider &&
+        (!m.envKey || !!env[m.envKey as keyof typeof env]),
+    );
+    if (preferred) return preferred.id;
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate.envKey || !!env[candidate.envKey as keyof typeof env]) {
+      return candidate.id;
+    }
+  }
+
+  return DEFAULT_MODEL;
+}
+
+/**
  * Get a fallback chain of model IDs for a given model.
  * Filters to only include models with configured API keys.
  * Used by plan-and-execute and reflexive loop for automatic model failover.

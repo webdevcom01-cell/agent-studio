@@ -4,12 +4,12 @@
  * Typed lifecycle events emitted at key flow execution milestones.
  * Inspired by clawhip's session.* event pipeline.
  *
- * Events are emitted via the existing FlowHookRegistry (Phase A hooks)
- * and can trigger notifications via configurable sessionNotifications.
+ * Events are delivered via sessionNotifications config (webhook/in_app/log).
+ * Session events are independent of the FlowHookRegistry (Phase A hooks).
  */
 
 import { logger } from "@/lib/logger";
-import type { RuntimeContext, FlowHookPayload } from "./types";
+import type { RuntimeContext } from "./types";
 
 // ---------------------------------------------------------------------------
 // Session Event Types
@@ -89,24 +89,6 @@ export function emitSessionEvent(
       timestamp: Date.now(),
       ...extra,
     };
-
-    // Emit through existing hook registry if available
-    if (context.hooks) {
-      const hookPayload: FlowHookPayload = {
-        event: "onFlowStart", // we piggyback on the hook system's emit
-        agentId: payload.agentId,
-        conversationId: payload.conversationId,
-        timestamp: payload.timestamp,
-        meta: {
-          sessionEvent: payload.event,
-          ...payload.meta,
-          ...(payload.durationMs != null ? { durationMs: payload.durationMs } : {}),
-          ...(payload.iterations != null ? { iterations: payload.iterations } : {}),
-          ...(payload.error ? { error: payload.error } : {}),
-        },
-      };
-      context.hooks.emit(hookPayload);
-    }
 
     // Deliver session notifications if configured
     const config = getSessionNotificationConfig(context);
