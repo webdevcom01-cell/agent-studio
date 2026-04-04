@@ -1131,4 +1131,5 @@ Use emoji-coded severity: 🚫 Critical, ⚠️ High, 💛 Medium, ℹ️ Low`,
     ],
     variables: [],
   },
+
 };
