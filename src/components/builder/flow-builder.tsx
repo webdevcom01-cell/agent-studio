@@ -84,6 +84,7 @@ import { PlanAndExecuteNode } from "./nodes/plan-and-execute-node";
 import { ReflexiveLoopNode } from "./nodes/reflexive-loop-node";
 import { SwarmNode } from "./nodes/swarm-node";
 import { VerificationNode } from "./nodes/verification-node";
+import { AstTransformNode } from "./nodes/ast-transform-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -159,6 +160,7 @@ const NODE_TYPES: NodeTypes = {
   reflexive_loop: ReflexiveLoopNode,
   swarm: SwarmNode,
   verification: VerificationNode,
+  ast_transform: AstTransformNode,
 };
 
 // Debug-wrapped versions of all node types (stable reference, created once)

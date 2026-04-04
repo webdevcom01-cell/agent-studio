@@ -86,4 +86,5 @@ export type NodeType =
   | "plan_and_execute"
   | "reflexive_loop"
   | "swarm"
-  | "verification";
+  | "verification"
+  | "ast_transform";

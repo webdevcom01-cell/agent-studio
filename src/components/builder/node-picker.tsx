@@ -57,6 +57,7 @@ import {
   Terminal,
   Boxes,
   CircleCheckBig,
+  Braces,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -1190,6 +1191,25 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       label: "Verification",
       checks: [],
       outputVariable: "verificationResults",
+    },
+  },
+  {
+    type: "ast_transform",
+    label: "AST Transform",
+    description:
+      "Structural code search & refactor using AST-grep patterns (TypeScript, Python, Rust, Go, Java)",
+    usageExample:
+      "Find all console.log() calls in generated code and replace with logger.info()",
+    icon: Braces,
+    color: "violet",
+    category: "utilities",
+    defaultData: {
+      label: "AST Transform",
+      source: "",
+      pattern: "",
+      language: "typescript",
+      replacement: "",
+      outputVariable: "ast_result",
     },
   },
 ];

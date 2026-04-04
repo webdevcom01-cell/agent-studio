@@ -32,6 +32,7 @@
     "knip:ci": "npx knip@5 --reporter compact --no-exit-code"
   },
   "dependencies": {
+    "@ast-grep/napi": "^0.38.0",
     "@ai-sdk/anthropic": "^3.0.58",
     "@ai-sdk/deepseek": "^2.0.24",
     "@ai-sdk/google": "^3.0.43",

@@ -56,6 +56,7 @@ import { planAndExecuteHandler } from "./plan-and-execute-handler";
 import { reflexiveLoopHandler } from "./reflexive-loop-handler";
 import { swarmHandler } from "./swarm-handler";
 import { verificationHandler } from "./verification-handler";
+import { astTransformHandler } from "./ast-transform-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -115,6 +116,7 @@ const handlers: Record<string, NodeHandler> = {
   reflexive_loop: reflexiveLoopHandler,
   swarm: swarmHandler,
   verification: verificationHandler,
+  ast_transform: astTransformHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

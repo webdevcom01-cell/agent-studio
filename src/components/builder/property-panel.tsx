@@ -720,6 +720,9 @@ export function PropertyPanel({
         {node.type === "verification" && (
           <VerificationProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "ast_transform" && (
+          <AstTransformProperties data={data} update={update} variables={variables} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -786,6 +789,7 @@ const OUTPUT_VAR_TYPES = new Set([
   "reflexive_loop",
   "swarm",
   "verification",
+  "ast_transform",
 ]);
 
 /**
@@ -6140,6 +6144,100 @@ function VerificationProperties({ data, update }: SubPanelProps) {
           onChange={(e) => update("outputVariable", e.target.value)}
           placeholder="verificationResults"
         />
+      </div>
+    </>
+  );
+}
+
+// ─── AstTransformProperties ───────────────────────────────────────────────────
+
+const AST_LANGUAGES = [
+  "typescript",
+  "tsx",
+  "javascript",
+  "jsx",
+  "python",
+  "rust",
+  "go",
+  "java",
+  "c",
+  "cpp",
+] as const;
+
+function AstTransformProperties({ data, update }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Language</Label>
+        <Select
+          value={(data.language as string) ?? "typescript"}
+          onValueChange={(v) => update("language", v)}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {AST_LANGUAGES.map((l) => (
+              <SelectItem key={l} value={l}>
+                {l}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Source Code</Label>
+        <p className="text-xs text-muted-foreground">
+          Code to search. Use <code className="text-violet-400">{"{{variable}}"}</code> to reference a flow variable.
+        </p>
+        <Textarea
+          className="font-mono text-xs"
+          rows={6}
+          placeholder="{{generated_code}}"
+          value={(data.source as string) ?? ""}
+          onChange={(e) => update("source", e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Pattern</Label>
+        <p className="text-xs text-muted-foreground">
+          AST-grep structural pattern. Use <code className="text-violet-400">$NAME</code> for captures.
+        </p>
+        <Textarea
+          className="font-mono text-xs"
+          rows={3}
+          placeholder="console.log($ARG)"
+          value={(data.pattern as string) ?? ""}
+          onChange={(e) => update("pattern", e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Replacement (optional)</Label>
+        <p className="text-xs text-muted-foreground">
+          Leave blank for search-only. Use <code className="text-violet-400">$CAPTURE_NAME</code> tokens.
+        </p>
+        <Textarea
+          className="font-mono text-xs"
+          rows={2}
+          placeholder="logger.info($ARG)"
+          value={(data.replacement as string) ?? ""}
+          onChange={(e) => update("replacement", e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "ast_result"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="ast_result"
+        />
+        <p className="text-xs text-muted-foreground">
+          Stores <code>{"{ available, matches, transformed, error? }"}</code>
+        </p>
       </div>
     </>
   );

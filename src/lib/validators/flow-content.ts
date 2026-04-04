@@ -59,6 +59,7 @@ const NODE_TYPES = [
   "reflexive_loop",
   "swarm",
   "verification",
+  "ast_transform",
 ] as const;
 
 const VARIABLE_TYPES = ["string", "number", "boolean", "object"] as const;
