@@ -24,7 +24,7 @@ export function MemoryReadNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-foreground dark:bg-muted/20 dark:text-muted-foreground">
           <HardDriveDownload className="size-4" />
         </div>
         <span className="text-sm font-medium">{(data.label as string) || "Memory Read"}</span>
@@ -45,7 +45,7 @@ export function MemoryReadNode({ data, selected }: NodeProps) {
           </p>
         ) : null}
         {mode === "search" && (
-          <p className="text-cyan-600 dark:text-cyan-400">vector search</p>
+          <p className="text-muted-foreground dark:text-muted-foreground">vector search</p>
         )}
         <p>
           → <span className="font-mono text-foreground">{outputVariable}</span>

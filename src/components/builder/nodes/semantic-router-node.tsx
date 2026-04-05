@@ -26,7 +26,7 @@ function SemanticRouterNodeComponent({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-foreground dark:bg-muted/20 dark:text-foreground/60">
           <Compass className="size-4" />
         </div>
         <span className="text-sm font-medium">
@@ -45,7 +45,7 @@ function SemanticRouterNodeComponent({ data, selected }: NodeProps) {
             {routes.map((r) => (
               <span
                 key={r.id}
-                className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                className="rounded bg-muted/20 px-1.5 py-0.5 text-[10px] text-foreground dark:bg-muted/20 dark:text-foreground/60"
               >
                 {r.label || r.id}
               </span>

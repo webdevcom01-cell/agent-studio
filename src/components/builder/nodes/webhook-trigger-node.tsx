@@ -88,18 +88,18 @@ function WebhookTriggerNodeComponent({ data, id, selected }: NodeProps) {
         <div className="flex items-center gap-1 flex-wrap">
           {stats !== null ? (
             stats.enabled ? (
-              <span className="inline-flex items-center gap-0.5 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">
+              <span className="inline-flex items-center gap-0.5 rounded bg-muted/20 px-1.5 py-0.5 text-[10px] font-medium text-foreground dark:bg-muted/20 dark:text-foreground/60">
                 <CheckCircle className="size-2.5" />
                 Active
               </span>
             ) : (
-              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+              <span className="inline-flex items-center gap-0.5 rounded bg-muted/20 px-1.5 py-0.5 text-[10px] font-medium text-foreground dark:bg-muted/20 dark:text-muted-foreground">
                 <PauseCircle className="size-2.5" />
                 Disabled
               </span>
             )
           ) : (
-            <span className="inline-flex items-center gap-0.5 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            <span className="inline-flex items-center gap-0.5 rounded bg-muted/20 px-1.5 py-0.5 text-[10px] text-muted-foreground/60 dark:bg-muted dark:text-muted-foreground">
               Not deployed
             </span>
           )}
@@ -109,7 +109,7 @@ function WebhookTriggerNodeComponent({ data, id, selected }: NodeProps) {
             <button
               onClick={copyTriggerUrl}
               title="Copy trigger URL"
-              className="inline-flex items-center gap-0.5 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 transition-colors"
+              className="inline-flex items-center gap-0.5 rounded bg-muted/20 px-1.5 py-0.5 text-[10px] text-muted-foreground/40 hover:bg-muted dark:bg-muted dark:text-foreground/80 transition-colors"
             >
               <Copy className="size-2.5" />
               {copied ? "Copied!" : "URL"}
@@ -122,7 +122,7 @@ function WebhookTriggerNodeComponent({ data, id, selected }: NodeProps) {
           <p className="text-[10px] text-muted-foreground">
             {stats.triggerCount} trigger{stats.triggerCount !== 1 ? "s" : ""}
             {stats.failureCount > 0 && (
-              <span className="text-red-400"> · {stats.failureCount} failed</span>
+              <span className="text-destructive"> · {stats.failureCount} failed</span>
             )}
             {stats.lastTriggeredAt && (
               <span> · {formatRelative(stats.lastTriggeredAt)}</span>

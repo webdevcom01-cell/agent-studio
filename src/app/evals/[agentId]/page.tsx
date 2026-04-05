@@ -143,29 +143,29 @@ function CreateSuiteDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="bg-zinc-900 border-zinc-700">
+      <DialogContent className="bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-white">New Eval Suite</DialogTitle>
+          <DialogTitle className="text-foreground">New Eval Suite</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label className="text-zinc-300">Suite Name</Label>
+            <Label className="text-foreground">Suite Name</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Smoke Tests, Regression Suite"
-              className="bg-zinc-800 border-zinc-600 text-white"
+              className="bg-muted border-border text-foreground"
               onKeyDown={(e) => e.key === "Enter" && handleCreate()}
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-zinc-300">Description <span className="text-zinc-500">(optional)</span></Label>
+            <Label className="text-foreground">Description <span className="text-muted-foreground/60">(optional)</span></Label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What does this suite test?"
               rows={2}
-              className="bg-zinc-800 border-zinc-600 text-white resize-none"
+              className="bg-muted border-border text-foreground resize-none"
             />
           </div>
           {/* Run on deploy toggle */}
@@ -176,30 +176,30 @@ function CreateSuiteDialog({
               tabIndex={0}
               onClick={() => setRunOnDeploy((v) => !v)}
               onKeyDown={(e) => (e.key === " " || e.key === "Enter") && setRunOnDeploy((v) => !v)}
-              className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 ${
-                runOnDeploy ? "bg-violet-600" : "bg-zinc-700"
+              className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${
+                runOnDeploy ? "bg-foreground" : "bg-muted/60"
               }`}
             >
               <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                className={`absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow transition-transform ${
                   runOnDeploy ? "translate-x-4" : "translate-x-0"
                 }`}
               />
             </div>
             <div>
-              <p className="text-sm text-zinc-300 font-medium">Run on deploy</p>
-              <p className="text-xs text-zinc-500">Automatically run this suite when the agent flow is deployed</p>
+              <p className="text-sm text-foreground font-medium">Run on deploy</p>
+              <p className="text-xs text-muted-foreground/60">Automatically run this suite when the agent flow is deployed</p>
             </div>
           </label>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} className="border-zinc-600 text-zinc-300">
+          <Button variant="outline" onClick={onClose} className="border-border text-foreground">
             Cancel
           </Button>
           <Button
             onClick={handleCreate}
             disabled={!name.trim() || isCreating}
-            className="bg-violet-600 hover:bg-violet-500 text-white"
+            className="bg-foreground hover:bg-foreground/90 text-foreground"
           >
             {isCreating ? "Creating..." : "Create Suite"}
           </Button>
@@ -212,9 +212,9 @@ function CreateSuiteDialog({
 // ─── Score badge ──────────────────────────────────────────────────────────────
 
 function ScoreBadge({ score }: { score: number | null | undefined }) {
-  if (score == null) return <span className="text-xs text-zinc-500">No runs</span>;
+  if (score == null) return <span className="text-xs text-muted-foreground/60">No runs</span>;
   const pct = Math.round(score * 100);
-  const color = pct >= 80 ? "text-emerald-400" : pct >= 50 ? "text-yellow-400" : "text-red-400";
+  const color = pct >= 80 ? "text-foreground/60" : pct >= 50 ? "text-muted-foreground" : "text-destructive";
   return <span className={`text-sm font-mono font-semibold ${color}`}>{pct}%</span>;
 }
 
@@ -505,93 +505,91 @@ export default function EvalsPage({ params }: PageProps) {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
-      {/* Top bar */}
-      <div className="border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Page header */}
+      <div className="flex h-[52px] shrink-0 items-center gap-1 border-b border-border px-3">
           <div className="flex items-center gap-3">
-            <Link href="/" className="text-zinc-400 hover:text-white transition-colors">
-              <ArrowLeft className="w-4 h-4" />
+            <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="size-4" />
             </Link>
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-zinc-500">{agentName || agentId}</span>
-              <span className="text-zinc-600">/</span>
-              <span className="text-white font-medium flex items-center gap-1.5">
-                <FlaskConical className="w-4 h-4 text-violet-400" />
+              <span className="text-muted-foreground/60">{agentName || agentId}</span>
+              <span className="text-muted-foreground/40">/</span>
+              <span className="text-foreground font-medium flex items-center gap-1.5">
+                <FlaskConical className="size-4 text-muted-foreground" />
                 Evals
               </span>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Link href="/evals/standards" title="Eval Standards">
-              <Button size="sm" variant="ghost" className="text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 gap-1.5">
-                <ShieldCheck className="w-4 h-4" />
+              <Button size="sm" variant="ghost" className="text-muted-foreground/60 hover:text-foreground/90 hover:bg-muted gap-1.5">
+                <ShieldCheck className="size-4" />
                 <span className="hidden sm:inline">Standards</span>
               </Button>
             </Link>
             <Link href={`/builder/${agentId}`}>
-              <Button size="sm" variant="outline" className="border-zinc-700 text-zinc-400 hover:bg-zinc-800">
-                <Settings2 className="w-4 h-4 mr-1.5" /> Flow Builder
+              <Button size="sm" variant="outline" className="border-border text-muted-foreground hover:bg-muted">
+                <Settings2 className="size-4 mr-1.5" /> Flow Builder
               </Button>
             </Link>
             <Link href={`/chat/${agentId}`}>
-              <Button size="sm" variant="outline" className="border-zinc-700 text-zinc-400 hover:bg-zinc-800">
+              <Button size="sm" variant="outline" className="border-border text-muted-foreground hover:bg-muted">
                 Chat
               </Button>
             </Link>
           </div>
-        </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6 flex gap-6">
+      <div className="flex flex-1 overflow-hidden px-4 py-4 gap-6">
 
         {/* ── Left sidebar: suite list ── */}
-        <div className="w-60 shrink-0 space-y-2">
+        <div className="w-56 shrink-0 space-y-2 overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-zinc-300">Eval Suites</h2>
+            <h2 className="text-sm font-semibold text-foreground">Eval Suites</h2>
             <div className="flex items-center gap-1">
               <Button
                 size="sm"
                 variant="ghost"
                 title="Generate with AI"
-                className="h-7 w-7 p-0 text-violet-400 hover:text-violet-300 hover:bg-zinc-800"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted"
                 onClick={() => setShowGenerateDialog(true)}
               >
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="size-4" />
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
                 title="Create manually"
-                className="h-7 w-7 p-0 text-zinc-500 hover:text-white hover:bg-zinc-800"
+                className="h-7 w-7 p-0 text-muted-foreground/60 hover:text-foreground hover:bg-muted"
                 onClick={() => setShowCreateDialog(true)}
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="size-4" />
               </Button>
             </div>
           </div>
 
           {isLoadingSuites ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-5 h-5 animate-spin text-zinc-600" />
+              <Loader2 className="size-5 animate-spin text-muted-foreground/40" />
             </div>
           ) : suites.length === 0 ? (
             <div className="text-center py-8 space-y-2">
-              <p className="text-zinc-500 text-xs">No suites yet</p>
+              <p className="text-muted-foreground/60 text-xs">No suites yet</p>
               <Button
                 size="sm"
-                className="mt-2 bg-violet-600 hover:bg-violet-700 text-white text-xs w-full"
+                className="mt-2 bg-foreground hover:bg-foreground/90 text-foreground text-xs w-full"
                 onClick={() => setShowGenerateDialog(true)}
               >
-                <Sparkles className="w-3.5 h-3.5 mr-1" /> Generate with AI
+                <Sparkles className="size-3.5 mr-1" /> Generate with AI
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                className="border-zinc-700 text-zinc-400 hover:bg-zinc-800 text-xs w-full"
+                className="border-border text-muted-foreground hover:bg-muted text-xs w-full"
                 onClick={() => setShowCreateDialog(true)}
               >
-                <Plus className="w-3.5 h-3.5 mr-1" /> Create Manually
+                <Plus className="size-3.5 mr-1" /> Create Manually
               </Button>
             </div>
           ) : (
@@ -601,23 +599,23 @@ export default function EvalsPage({ params }: PageProps) {
                 onClick={() => setActiveSuiteId(suite.id)}
                 className={`group relative rounded-lg px-3 py-2.5 cursor-pointer transition-colors border ${
                   activeSuiteId === suite.id
-                    ? "bg-violet-600/20 border-violet-500/40 text-white"
-                    : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
+                    ? "bg-foreground/20 border-border text-foreground"
+                    : "bg-card border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground/90"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      {suite.isDefault && <Star className="w-3 h-3 text-yellow-400 shrink-0" />}
+                      {suite.isDefault && <Star className="w-3 h-3 text-muted-foreground shrink-0" />}
                       {suite.runOnDeploy && (
-                        <Rocket className="w-3 h-3 text-violet-400 shrink-0" aria-label="Runs on deploy" />
+                        <Rocket className="w-3 h-3 text-muted-foreground shrink-0" aria-label="Runs on deploy" />
                       )}
                       {suite.scheduleEnabled && (
-                        <Clock className="w-3 h-3 text-amber-400 shrink-0" aria-label="Scheduled" />
+                        <Clock className="w-3 h-3 text-muted-foreground shrink-0" aria-label="Scheduled" />
                       )}
                       <p className="text-sm font-medium truncate">{suite.name}</p>
                     </div>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-muted-foreground/60 mt-0.5">
                       {suite.testCaseCount} case{suite.testCaseCount !== 1 ? "s" : ""}
                       {" · "}
                       <ScoreBadge score={suite.lastRun?.score} />
@@ -629,40 +627,40 @@ export default function EvalsPage({ params }: PageProps) {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-white hover:bg-zinc-700"
+                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground/60 hover:text-foreground hover:bg-muted/60"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <MoreVertical className="w-3.5 h-3.5" />
+                        <MoreVertical className="size-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-zinc-800 border-zinc-700">
+                    <DropdownMenuContent align="end" className="bg-muted border-border">
                       {!suite.isDefault && (
                         <DropdownMenuItem
-                          className="text-zinc-300 hover:bg-zinc-700 cursor-pointer text-xs gap-2"
+                          className="text-foreground hover:bg-muted/60 cursor-pointer text-xs gap-2"
                           onClick={(e) => { e.stopPropagation(); handleSetDefault(suite.id); }}
                         >
-                          <Star className="w-3.5 h-3.5 text-yellow-400" /> Set as Default
+                          <Star className="size-3.5 text-muted-foreground" /> Set as Default
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem
-                        className="text-zinc-300 hover:bg-zinc-700 cursor-pointer text-xs gap-2"
+                        className="text-foreground hover:bg-muted/60 cursor-pointer text-xs gap-2"
                         onClick={(e) => { e.stopPropagation(); handleToggleRunOnDeploy(suite.id, suite.runOnDeploy); }}
                       >
-                        <Rocket className="w-3.5 h-3.5 text-violet-400" />
+                        <Rocket className="size-3.5 text-muted-foreground" />
                         {suite.runOnDeploy ? "Disable auto-run on deploy" : "Run on deploy"}
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        className="text-zinc-300 hover:bg-zinc-700 cursor-pointer text-xs gap-2"
+                        className="text-foreground hover:bg-muted/60 cursor-pointer text-xs gap-2"
                         onClick={(e) => { e.stopPropagation(); setActiveSuiteId(suite.id); openScheduleDialog(suite); }}
                       >
-                        <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        <Clock className="size-3.5 text-muted-foreground" />
                         {suite.scheduleEnabled ? "Edit schedule" : "Schedule runs"}
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        className="text-red-400 hover:bg-zinc-700 cursor-pointer text-xs gap-2"
+                        className="text-destructive hover:bg-muted/60 cursor-pointer text-xs gap-2"
                         onClick={(e) => { e.stopPropagation(); handleDeleteSuite(suite.id); }}
                       >
-                        <Trash2 className="w-3.5 h-3.5" /> Delete Suite
+                        <Trash2 className="size-3.5" /> Delete Suite
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -676,27 +674,27 @@ export default function EvalsPage({ params }: PageProps) {
         <div className="flex-1 min-w-0">
           {!activeSuiteId || !suiteDetail ? (
             <div className="flex flex-col items-center justify-center py-24 text-center">
-              <FlaskConical className="w-12 h-12 text-zinc-700 mb-4" />
-              <p className="text-zinc-400 font-medium">
+              <FlaskConical className="size-12 text-foreground/20 mb-4" />
+              <p className="text-muted-foreground font-medium">
                 {suites.length === 0 ? "No eval suites yet" : "Select a suite to get started"}
               </p>
-              <p className="text-zinc-600 text-sm mt-1">
+              <p className="text-muted-foreground/40 text-sm mt-1">
                 {suites.length === 0
                   ? "Create an eval suite to start testing your agent"
                   : "Click a suite in the left sidebar"}
               </p>
               {suites.length === 0 && (
                 <Button
-                  className="mt-4 bg-violet-600 hover:bg-violet-500 text-white"
+                  className="mt-4 bg-foreground hover:bg-foreground/90 text-foreground"
                   onClick={() => setShowCreateDialog(true)}
                 >
-                  <Plus className="w-4 h-4 mr-2" /> Create Eval Suite
+                  <Plus className="size-4 mr-2" /> Create Eval Suite
                 </Button>
               )}
             </div>
           ) : isLoadingDetail ? (
             <div className="flex items-center justify-center py-24">
-              <Loader2 className="w-6 h-6 animate-spin text-zinc-600" />
+              <Loader2 className="size-6 animate-spin text-muted-foreground/40" />
             </div>
           ) : (
             <div className="space-y-4">
@@ -704,57 +702,57 @@ export default function EvalsPage({ params }: PageProps) {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h1 className="text-lg font-semibold text-white">{suiteDetail.name}</h1>
+                    <h1 className="text-lg font-semibold text-foreground">{suiteDetail.name}</h1>
                     {suiteDetail.isDefault && (
-                      <span className="text-xs px-2 py-0.5 bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 rounded-full">
+                      <span className="text-xs px-2 py-0.5 bg-muted text-muted-foreground border border-border rounded-full">
                         Default
                       </span>
                     )}
                     {suiteDetail.runOnDeploy && (
-                      <span className="flex items-center gap-1 text-xs px-2 py-0.5 bg-violet-500/15 text-violet-400 border border-violet-500/30 rounded-full">
+                      <span className="flex items-center gap-1 text-xs px-2 py-0.5 bg-muted text-muted-foreground border border-border rounded-full">
                         <Rocket className="w-3 h-3" /> Auto-run on deploy
                       </span>
                     )}
                     {suiteDetail.scheduleEnabled && suiteDetail.scheduleCron && (
-                      <span className="flex items-center gap-1 text-xs px-2 py-0.5 bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full">
+                      <span className="flex items-center gap-1 text-xs px-2 py-0.5 bg-muted text-muted-foreground border border-border rounded-full">
                         <Clock className="w-3 h-3" /> {suiteDetail.scheduleCron}
                       </span>
                     )}
                   </div>
                   {suiteDetail.description && (
-                    <p className="text-sm text-zinc-500 mt-0.5">{suiteDetail.description}</p>
+                    <p className="text-sm text-muted-foreground/60 mt-0.5">{suiteDetail.description}</p>
                   )}
                 </div>
                 {/* Compare button */}
                 <Button
                   size="sm"
                   variant="outline"
-                  className="border-zinc-700 text-zinc-400 hover:bg-zinc-800 shrink-0"
+                  className="border-border text-muted-foreground hover:bg-muted shrink-0"
                   onClick={openCompareDialog}
                   title="Head-to-head A/B comparison"
                 >
-                  <GitCompare className="w-3.5 h-3.5 mr-1.5" />
+                  <GitCompare className="size-3.5 mr-1.5" />
                   Compare
                 </Button>
               </div>
 
               {/* Tabs: Cases / Results */}
               <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "cases" | "results")}>
-                <TabsList className="bg-zinc-800 border border-zinc-700">
-                  <TabsTrigger value="cases" className="data-[state=active]:bg-zinc-700 data-[state=active]:text-white text-zinc-400">
-                    <FlaskConical className="w-3.5 h-3.5 mr-1.5" />
+                <TabsList className="bg-muted border border-border">
+                  <TabsTrigger value="cases" className="data-[state=active]:bg-muted/60 data-[state=active]:text-foreground text-muted-foreground">
+                    <FlaskConical className="size-3.5 mr-1.5" />
                     Test Cases
                     {suiteDetail.testCases.length > 0 && (
-                      <span className="ml-1.5 text-xs bg-zinc-600 text-zinc-300 px-1.5 py-0.5 rounded-full">
+                      <span className="ml-1.5 text-xs bg-muted/40 text-foreground px-1.5 py-0.5 rounded-full">
                         {suiteDetail.testCases.length}
                       </span>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger value="results" className="data-[state=active]:bg-zinc-700 data-[state=active]:text-white text-zinc-400">
-                    <BarChart3 className="w-3.5 h-3.5 mr-1.5" />
+                  <TabsTrigger value="results" className="data-[state=active]:bg-muted/60 data-[state=active]:text-foreground text-muted-foreground">
+                    <BarChart3 className="size-3.5 mr-1.5" />
                     Results
                     {runHistory.length > 0 && (
-                      <span className="ml-1.5 text-xs bg-zinc-600 text-zinc-300 px-1.5 py-0.5 rounded-full">
+                      <span className="ml-1.5 text-xs bg-muted/40 text-foreground px-1.5 py-0.5 rounded-full">
                         {runHistory.length}
                       </span>
                     )}
@@ -782,12 +780,12 @@ export default function EvalsPage({ params }: PageProps) {
                     />
                   ) : (
                     <div className="text-center py-16">
-                      <BarChart3 className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
-                      <p className="text-zinc-500 text-sm">No runs yet</p>
-                      <p className="text-zinc-600 text-xs mt-1">Run your eval suite to see results here</p>
+                      <BarChart3 className="size-10 text-foreground/20 mx-auto mb-3" />
+                      <p className="text-muted-foreground/60 text-sm">No runs yet</p>
+                      <p className="text-muted-foreground/40 text-xs mt-1">Run your eval suite to see results here</p>
                       <Button
                         size="sm"
-                        className="mt-4 bg-violet-600 hover:bg-violet-500 text-white"
+                        className="mt-4 bg-foreground hover:bg-foreground/90 text-foreground"
                         onClick={() => { setActiveTab("cases"); }}
                       >
                         Go to Test Cases
@@ -825,10 +823,10 @@ export default function EvalsPage({ params }: PageProps) {
 
       {/* ── Schedule dialog ── */}
       <Dialog open={showScheduleDialog} onOpenChange={(v) => !v && setShowScheduleDialog(false)}>
-        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-md">
+        <DialogContent className="bg-card border-border max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-400" />
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <Clock className="size-4 text-muted-foreground" />
               Schedule Eval Runs
             </DialogTitle>
           </DialogHeader>
@@ -841,13 +839,13 @@ export default function EvalsPage({ params }: PageProps) {
                 tabIndex={0}
                 onClick={() => setScheduleEnabled((v) => !v)}
                 onKeyDown={(e) => (e.key === " " || e.key === "Enter") && setScheduleEnabled((v) => !v)}
-                className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 ${scheduleEnabled ? "bg-amber-600" : "bg-zinc-700"}`}
+                className={`relative w-9 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${scheduleEnabled ? "bg-foreground" : "bg-muted/60"}`}
               >
-                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${scheduleEnabled ? "translate-x-4" : "translate-x-0"}`} />
+                <span className={`absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow transition-transform ${scheduleEnabled ? "translate-x-4" : "translate-x-0"}`} />
               </div>
               <div>
-                <p className="text-sm text-zinc-300 font-medium">Enable scheduled runs</p>
-                <p className="text-xs text-zinc-500">Automatically run this suite on a recurring schedule</p>
+                <p className="text-sm text-foreground font-medium">Enable scheduled runs</p>
+                <p className="text-xs text-muted-foreground/60">Automatically run this suite on a recurring schedule</p>
               </div>
             </label>
 
@@ -855,7 +853,7 @@ export default function EvalsPage({ params }: PageProps) {
             {scheduleEnabled && (
               <div className="space-y-3">
                 <div>
-                  <Label className="text-zinc-300 text-xs mb-2 block">Frequency</Label>
+                  <Label className="text-foreground text-xs mb-2 block">Frequency</Label>
                   <div className="grid grid-cols-2 gap-2">
                     {CRON_PRESETS.map((p) => (
                       <button
@@ -867,8 +865,8 @@ export default function EvalsPage({ params }: PageProps) {
                         }}
                         className={`text-xs px-3 py-2 rounded border text-left transition-colors ${
                           schedulePreset === p.value
-                            ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
-                            : "border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+                            ? "border-border bg-muted text-foreground"
+                            : "border-border text-muted-foreground hover:border-border hover:text-foreground/90"
                         }`}
                       >
                         {p.label}
@@ -877,24 +875,24 @@ export default function EvalsPage({ params }: PageProps) {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-zinc-300 text-xs">Cron expression</Label>
+                  <Label className="text-foreground text-xs">Cron expression</Label>
                   <Input
                     value={scheduleCron}
                     onChange={(e) => { setScheduleCron(e.target.value); setSchedulePreset("custom"); }}
                     placeholder="0 3 * * *"
-                    className="bg-zinc-800 border-zinc-600 text-white font-mono text-sm"
+                    className="bg-muted border-border text-foreground font-mono text-sm"
                   />
-                  <p className="text-xs text-zinc-600">
-                    Format: minute hour day month weekday · e.g. <code className="text-amber-400/70">0 3 * * *</code> = daily 3 AM
+                  <p className="text-xs text-muted-foreground/40">
+                    Format: minute hour day month weekday · e.g. <code className="text-muted-foreground/70">0 3 * * *</code> = daily 3 AM
                   </p>
                 </div>
                 {/* Timezone selector */}
                 <div className="space-y-1">
-                  <Label className="text-zinc-300 text-xs">Timezone</Label>
+                  <Label className="text-foreground text-xs">Timezone</Label>
                   <select
                     value={scheduleTimezone}
                     onChange={(e) => setScheduleTimezone(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-600 text-white text-sm rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full bg-muted border border-border text-foreground text-sm rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     {TIMEZONE_PRESETS.map((tz) => (
                       <option key={tz.value} value={tz.value}>
@@ -903,7 +901,7 @@ export default function EvalsPage({ params }: PageProps) {
                     ))}
                   </select>
                   {scheduleTimezone !== "UTC" && scheduleCron && (
-                    <p className="text-xs text-amber-400/70">
+                    <p className="text-xs text-muted-foreground/70">
                       Runs at the specified time in {scheduleTimezone}
                     </p>
                   )}
@@ -912,13 +910,13 @@ export default function EvalsPage({ params }: PageProps) {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowScheduleDialog(false)} className="border-zinc-600 text-zinc-300">
+            <Button variant="outline" onClick={() => setShowScheduleDialog(false)} className="border-border text-foreground">
               Cancel
             </Button>
             <Button
               onClick={handleSaveSchedule}
               disabled={isSavingSchedule}
-              className="bg-amber-600 hover:bg-amber-500 text-white"
+              className="bg-foreground hover:bg-foreground/90 text-foreground"
             >
               {isSavingSchedule ? "Saving..." : "Save Schedule"}
             </Button>
@@ -928,10 +926,10 @@ export default function EvalsPage({ params }: PageProps) {
 
       {/* ── Compare dialog ── */}
       <Dialog open={showCompareDialog} onOpenChange={(v) => !v && setShowCompareDialog(false)}>
-        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-card border-border max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <GitCompare className="w-4 h-4 text-blue-400" />
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <GitCompare className="size-4 text-muted-foreground" />
               Head-to-Head Comparison
             </DialogTitle>
           </DialogHeader>
@@ -947,8 +945,8 @@ export default function EvalsPage({ params }: PageProps) {
                     onClick={() => { setCompareType(t); setCompareA(""); setCompareB(""); }}
                     className={`text-sm px-4 py-1.5 rounded-full border transition-colors capitalize ${
                       compareType === t
-                        ? "border-blue-500/60 bg-blue-500/15 text-blue-300"
-                        : "border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                        ? "border-border bg-muted text-foreground"
+                        : "border-border text-muted-foreground hover:border-border"
                     }`}
                   >
                     Compare {t === "version" ? "versions" : "models"}
@@ -960,11 +958,11 @@ export default function EvalsPage({ params }: PageProps) {
                 <div className="grid grid-cols-2 gap-4">
                   {(["a", "b"] as const).map((side) => (
                     <div key={side} className="space-y-1.5">
-                      <Label className="text-zinc-300 text-xs">Version {side.toUpperCase()}</Label>
+                      <Label className="text-foreground text-xs">Version {side.toUpperCase()}</Label>
                       <select
                         value={side === "a" ? compareA : compareB}
                         onChange={(e) => side === "a" ? setCompareA(e.target.value) : setCompareB(e.target.value)}
-                        className="w-full bg-zinc-800 border border-zinc-600 text-zinc-200 rounded-md px-3 py-2 text-sm"
+                        className="w-full bg-muted border border-border text-foreground/90 rounded-md px-3 py-2 text-sm"
                       >
                         <option value="">Select version...</option>
                         {flowVersions.map((v) => (
@@ -980,11 +978,11 @@ export default function EvalsPage({ params }: PageProps) {
                 <div className="grid grid-cols-2 gap-4">
                   {(["a", "b"] as const).map((side) => (
                     <div key={side} className="space-y-1.5">
-                      <Label className="text-zinc-300 text-xs">Model {side.toUpperCase()}</Label>
+                      <Label className="text-foreground text-xs">Model {side.toUpperCase()}</Label>
                       <select
                         value={side === "a" ? compareA : compareB}
                         onChange={(e) => side === "a" ? setCompareA(e.target.value) : setCompareB(e.target.value)}
-                        className="w-full bg-zinc-800 border border-zinc-600 text-zinc-200 rounded-md px-3 py-2 text-sm"
+                        className="w-full bg-muted border border-border text-foreground/90 rounded-md px-3 py-2 text-sm"
                       >
                         <option value="">Select model...</option>
                         {ALL_MODELS.map((m) => (
@@ -998,23 +996,23 @@ export default function EvalsPage({ params }: PageProps) {
                 </div>
               )}
 
-              <p className="text-xs text-zinc-600">
+              <p className="text-xs text-muted-foreground/40">
                 Both {compareType === "version" ? "versions" : "models"} will be run against the same test cases sequentially. This may take a few minutes.
               </p>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setShowCompareDialog(false)} className="border-zinc-600 text-zinc-300">
+                <Button variant="outline" onClick={() => setShowCompareDialog(false)} className="border-border text-foreground">
                   Cancel
                 </Button>
                 <Button
                   onClick={handleRunComparison}
                   disabled={isComparing || !compareA || !compareB || compareA === compareB}
-                  className="bg-blue-600 hover:bg-blue-500 text-white"
+                  className="bg-foreground hover:bg-foreground/90 text-foreground"
                 >
                   {isComparing ? (
-                    <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Running...</>
+                    <><Loader2 className="size-3.5 mr-1.5 animate-spin" /> Running...</>
                   ) : (
-                    <><GitCompare className="w-3.5 h-3.5 mr-1.5" /> Run Comparison</>
+                    <><GitCompare className="size-3.5 mr-1.5" /> Run Comparison</>
                   )}
                 </Button>
               </DialogFooter>
@@ -1026,11 +1024,11 @@ export default function EvalsPage({ params }: PageProps) {
                 <Button
                   variant="outline"
                   onClick={() => setCompareResult(null)}
-                  className="border-zinc-600 text-zinc-300"
+                  className="border-border text-foreground"
                 >
                   Run Another
                 </Button>
-                <Button onClick={() => setShowCompareDialog(false)} className="bg-zinc-700 hover:bg-zinc-600 text-white">
+                <Button onClick={() => setShowCompareDialog(false)} className="bg-muted/60 hover:bg-muted/40 text-foreground">
                   Close
                 </Button>
               </DialogFooter>

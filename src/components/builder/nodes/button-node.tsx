@@ -32,7 +32,7 @@ function ButtonNodeComponent({ data, selected }: NodeProps) {
           {buttons.map((b) => (
             <span
               key={b.id}
-              className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+              className="rounded bg-muted/20 px-1.5 py-0.5 text-foreground dark:bg-muted/20 dark:text-muted-foreground"
             >
               {b.label}
             </span>

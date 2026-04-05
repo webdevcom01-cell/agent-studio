@@ -23,7 +23,7 @@ export function EvaluatorNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-foreground dark:bg-muted/20 dark:text-muted-foreground">
           <ClipboardCheck className="size-4" />
         </div>
         <span className="text-sm font-medium">{(data.label as string) || "Evaluator"}</span>
@@ -42,8 +42,8 @@ export function EvaluatorNode({ data, selected }: NodeProps) {
       <Handle type="source" position={Position.Bottom} id="failed" style={{ left: "70%" }} />
 
       <div className="mt-2 flex justify-between text-[10px] text-muted-foreground px-1">
-        <span className="text-green-600 dark:text-green-400">Pass</span>
-        <span className="text-red-600 dark:text-red-400">Fail</span>
+        <span className="text-foreground/70 dark:text-foreground/60">Pass</span>
+        <span className="text-destructive dark:text-destructive">Fail</span>
       </div>
     </div>
   );

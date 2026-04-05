@@ -50,13 +50,13 @@ function nodeColor(
   status: NodeDebugState["aggregateStatus"],
   nodeType: string
 ): { bar: string; text: string } {
-  if (status === "error") return { bar: "bg-red-500", text: "text-red-400" };
+  if (status === "error") return { bar: "bg-destructive", text: "text-destructive" };
   if (status === "running")
-    return { bar: "bg-violet-400 animate-pulse", text: "text-violet-400" };
+    return { bar: "bg-muted-foreground animate-pulse", text: "text-muted-foreground" };
   if (status === "skipped")
     return { bar: "bg-muted-foreground/30", text: "text-muted-foreground/50" };
   if (status === "waiting")
-    return { bar: "bg-amber-500", text: "text-amber-400" };
+    return { bar: "bg-muted-foreground/60", text: "text-muted-foreground" };
   // success — colour by node type
   if (
     nodeType === "ai_response" ||
@@ -64,28 +64,28 @@ function nodeColor(
     nodeType === "ai_extract" ||
     nodeType === "ai_summarize"
   )
-    return { bar: "bg-violet-500", text: "text-violet-300" };
+    return { bar: "bg-foreground/40", text: "text-foreground/60" };
   if (nodeType === "mcp_tool" || nodeType === "web_fetch" || nodeType === "browser_action")
-    return { bar: "bg-teal-500", text: "text-teal-300" };
+    return { bar: "bg-foreground/30", text: "text-foreground/50" };
   if (nodeType === "kb_search")
-    return { bar: "bg-indigo-500", text: "text-indigo-300" };
+    return { bar: "bg-foreground/35", text: "text-foreground/55" };
   if (nodeType === "call_agent")
-    return { bar: "bg-pink-500", text: "text-pink-300" };
-  return { bar: "bg-emerald-500", text: "text-emerald-300" };
+    return { bar: "bg-foreground/25", text: "text-foreground/45" };
+  return { bar: "bg-foreground/20", text: "text-foreground/60" };
 }
 
 function statusIcon(status: NodeDebugState["aggregateStatus"]) {
   switch (status) {
     case "success":
-      return <CheckCircle2 className="size-3 text-emerald-400 shrink-0" />;
+      return <CheckCircle2 className="size-3 text-foreground/60 shrink-0" />;
     case "error":
-      return <XCircle className="size-3 text-red-400 shrink-0" />;
+      return <XCircle className="size-3 text-destructive shrink-0" />;
     case "running":
-      return <Loader2 className="size-3 text-violet-400 animate-spin shrink-0" />;
+      return <Loader2 className="size-3 text-muted-foreground animate-spin shrink-0" />;
     case "skipped":
       return <SkipForward className="size-3 text-muted-foreground/50 shrink-0" />;
     case "waiting":
-      return <AlertTriangle className="size-3 text-amber-400 shrink-0" />;
+      return <AlertTriangle className="size-3 text-muted-foreground shrink-0" />;
     default:
       return <Clock className="size-3 text-muted-foreground/40 shrink-0" />;
   }
@@ -226,7 +226,7 @@ function TimelineRowItem({ row, totalDurationMs, isSelected, onClick }: RowProps
 
   const colors = isNode
     ? nodeColor(row.status!, row.nodeType!)
-    : { bar: "bg-amber-500/80", text: "text-amber-300" };
+    : { bar: "bg-muted-foreground/50", text: "text-muted-foreground" };
 
   return (
     <div
@@ -234,7 +234,7 @@ function TimelineRowItem({ row, totalDurationMs, isSelected, onClick }: RowProps
         "flex items-center h-7 group transition-colors",
         row.selectable && "cursor-pointer",
         row.selectable && !isSelected && "hover:bg-muted/30",
-        isSelected && "bg-violet-950/30"
+        isSelected && "bg-muted/30"
       )}
       onClick={row.selectable ? onClick : undefined}
     >
@@ -253,7 +253,7 @@ function TimelineRowItem({ row, totalDurationMs, isSelected, onClick }: RowProps
           <span className="shrink-0">{statusIcon(row.status!)}</span>
         )}
         {isTool && (
-          <Wrench className="size-3 text-amber-400/70 shrink-0" />
+          <Wrench className="size-3 text-muted-foreground/60 shrink-0" />
         )}
         <span
           className={cn(
@@ -347,7 +347,7 @@ export function DebugTimeline({
             <span className="text-xs text-muted-foreground">
               {rows.filter((r) => r.kind === "node").length} nodes
               {flowSummary && flowSummary.nodesFailed > 0 && (
-                <span className="text-red-400 ml-1.5">
+                <span className="text-destructive ml-1.5">
                   · {flowSummary.nodesFailed} failed
                 </span>
               )}

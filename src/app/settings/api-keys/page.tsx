@@ -77,13 +77,8 @@ const fetcher = (url: string) =>
 
 // ── Scope colour map ──────────────────────────────────────────────────────────
 
-function scopeColour(scope: string): string {
-  if (scope.startsWith("agents")) return "bg-blue-500/10 text-blue-400 border-blue-500/20";
-  if (scope.startsWith("flows")) return "bg-violet-500/10 text-violet-400 border-violet-500/20";
-  if (scope.startsWith("kb")) return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-  if (scope.startsWith("evals")) return "bg-amber-500/10 text-amber-400 border-amber-500/20";
-  if (scope.startsWith("webhooks")) return "bg-orange-500/10 text-orange-400 border-orange-500/20";
-  return "bg-zinc-500/10 text-zinc-400 border-zinc-500/20";
+function scopeColour(_scope: string): string {
+  return "border border-border text-muted-foreground/60";
 }
 
 function formatDate(iso: string | null): string {
@@ -115,11 +110,11 @@ function CopyButton({ text }: { text: string }): React.ReactElement {
     <button
       type="button"
       onClick={handleCopy}
-      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-zinc-800"
+      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted"
       aria-label="Copy to clipboard"
     >
       {copied ? (
-        <Check className="size-3.5 text-emerald-400" />
+        <Check className="size-3.5 text-foreground/60" />
       ) : (
         <Copy className="size-3.5" />
       )}
@@ -146,7 +141,7 @@ function KeyRevealDialog({
       <DialogContent className="sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Shield className="size-5 text-emerald-400" />
+            <Shield className="size-5 text-foreground/60" />
             Save your API key
           </DialogTitle>
           <DialogDescription>
@@ -155,16 +150,16 @@ function KeyRevealDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-lg border border-border bg-zinc-900/60 p-3">
+        <div className="rounded-lg border border-border bg-muted/20 p-3">
           <div className="flex items-center justify-between gap-2">
-            <code className="text-xs font-mono text-emerald-300 break-all leading-relaxed">
+            <code className="text-xs font-mono text-foreground/80 break-all leading-relaxed">
               {rawKey}
             </code>
             <CopyButton text={rawKey} />
           </div>
         </div>
 
-        <p className="flex items-start gap-2 rounded-md bg-amber-500/5 border border-amber-500/20 p-3 text-xs text-amber-300">
+        <p className="flex items-start gap-2 rounded-md bg-muted/20 border-border p-3 text-xs text-muted-foreground">
           <AlertTriangle className="size-3.5 mt-0.5 shrink-0" />
           Store this key in a secret manager (e.g. Railway environment variables). Never
           commit it to source code.
@@ -282,7 +277,7 @@ function CreateKeyDialog({ onCreated }: CreateKeyDialogProps): React.ReactElemen
               className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] dark:bg-input/30"
             >
               {EXPIRY_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value} className="bg-zinc-900">
+                <option key={o.value} value={o.value} className="bg-background">
                   {o.label}
                 </option>
               ))}
@@ -415,8 +410,8 @@ function KeyRow({ apiKey, onRevoked }: KeyRowProps): React.ReactElement {
   return (
     <div className="flex items-start justify-between gap-4 py-4 px-5">
       <div className="flex items-start gap-3 min-w-0">
-        <div className="mt-0.5 flex items-center justify-center size-8 rounded-md bg-zinc-800 border border-zinc-700 shrink-0">
-          <Key className="size-4 text-zinc-400" />
+        <div className="mt-0.5 flex items-center justify-center size-8 rounded-md bg-muted border-border shrink-0">
+          <Key className="size-4 text-muted-foreground" />
         </div>
         <div className="min-w-0 space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
@@ -496,19 +491,19 @@ export default function ApiKeysPage(): React.ReactElement {
           <div className="divide-y divide-border">
             {[1, 2, 3].map((i) => (
               <div key={i} className="px-5 py-4 flex items-center gap-3 animate-pulse">
-                <div className="size-8 rounded-md bg-zinc-800" />
+                <div className="size-8 rounded-md bg-muted" />
                 <div className="space-y-2 flex-1">
-                  <div className="h-3.5 w-40 rounded bg-zinc-800" />
-                  <div className="h-2.5 w-64 rounded bg-zinc-800" />
-                  <div className="h-2.5 w-48 rounded bg-zinc-800" />
+                  <div className="h-3.5 w-40 rounded bg-muted" />
+                  <div className="h-2.5 w-64 rounded bg-muted" />
+                  <div className="h-2.5 w-48 rounded bg-muted" />
                 </div>
               </div>
             ))}
           </div>
         ) : keys.length === 0 ? (
           <CardContent className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-            <div className="flex items-center justify-center size-12 rounded-full bg-zinc-800">
-              <Key className="size-5 text-zinc-400" />
+            <div className="flex items-center justify-center size-12 rounded-full bg-muted">
+              <Key className="size-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm font-medium">No API keys yet</p>
@@ -527,18 +522,18 @@ export default function ApiKeysPage(): React.ReactElement {
       </Card>
 
       {/* Docs callout */}
-      <Card className="bg-zinc-900/40 border-zinc-700/50">
+      <Card className="bg-card border-border">
         <CardHeader className="pb-0">
           <CardTitle className="text-sm font-medium">Using API keys</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Pass the key as an <code className="text-xs bg-zinc-800 px-1 py-0.5 rounded">x-api-key</code> header
+            Pass the key as an <code className="text-xs bg-muted px-1 py-0.5 rounded">x-api-key</code> header
             in every request, or as a Bearer token:
           </p>
-          <div className="rounded-md bg-zinc-900 border border-zinc-800 p-3 space-y-1.5">
+          <div className="rounded-md bg-muted/20 border-border p-3 space-y-1.5">
             <div className="flex items-center justify-between gap-2">
-              <code className="text-xs font-mono text-zinc-300">
+              <code className="text-xs font-mono text-foreground/80">
                 curl https://your-app.railway.app/api/agents \<br />
                 &nbsp;&nbsp;-H &quot;x-api-key: as_live_…&quot;
               </code>

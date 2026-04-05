@@ -14,8 +14,8 @@ interface PhaseMonitorProps {
 const STATUS_ICON: Record<string, React.ReactNode> = {
   pending: <Circle className="size-4 text-muted-foreground" />,
   running: <Loader2 className="size-4 text-primary animate-spin" />,
-  completed: <CheckCircle2 className="size-4 text-green-500" />,
-  failed: <XCircle className="size-4 text-red-500" />,
+  completed: <CheckCircle2 className="size-4 text-foreground/60" />,
+  failed: <XCircle className="size-4 text-destructive" />,
 };
 
 export function PhaseMonitor({
@@ -31,10 +31,10 @@ export function PhaseMonitor({
           className={cn(
             "text-xs font-medium px-2 py-0.5 rounded-full",
             status === "COMPLETED"
-              ? "bg-green-500/10 text-green-600 dark:text-green-400"
+              ? "bg-muted/10 text-foreground/60"
               : status === "FAILED"
-                ? "bg-red-500/10 text-red-600 dark:text-red-400"
-                : "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+                ? "bg-muted/10 text-destructive"
+                : "bg-muted/10 text-muted-foreground",
           )}
         >
           {status}
@@ -81,7 +81,7 @@ export function PhaseMonitor({
                   )}
                 </div>
                 {phaseData?.error && (
-                  <p className="text-xs text-red-500 mt-0.5 truncate">
+                  <p className="text-xs text-destructive mt-0.5 truncate">
                     {phaseData.error}
                   </p>
                 )}
@@ -98,9 +98,9 @@ export function PhaseMonitor({
             className={cn(
               "h-full rounded-full transition-all duration-500",
               status === "COMPLETED"
-                ? "bg-green-500"
+                ? "bg-foreground/60"
                 : status === "FAILED"
-                  ? "bg-red-500"
+                  ? "bg-destructive"
                   : "bg-primary",
             )}
             style={{

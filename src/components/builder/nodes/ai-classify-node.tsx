@@ -26,7 +26,7 @@ function AIClassifyNodeComponent({ data, selected }: NodeProps) {
           {categories.map((c) => (
             <span
               key={c}
-              className="rounded bg-violet-100 px-1.5 py-0.5 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
+              className="rounded bg-muted/20 px-1.5 py-0.5 text-foreground dark:bg-muted/20 dark:text-muted-foreground"
             >
               {c}
             </span>

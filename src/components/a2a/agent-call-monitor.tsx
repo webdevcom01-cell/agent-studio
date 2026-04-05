@@ -203,7 +203,7 @@ function MetricCard({
   label: string;
   value: string;
   subValue?: string;
-  accent?: "emerald" | "red" | "default";
+  accent?: "success" | "error" | "default";
 }): React.ReactElement {
   return (
     <Card>
@@ -212,16 +212,16 @@ function MetricCard({
           <div
             className={cn(
               "flex size-9 shrink-0 items-center justify-center rounded-lg",
-              accent === "emerald" && "bg-emerald-500/10",
-              accent === "red" && "bg-red-500/10",
+              accent === "success" && "bg-muted/10",
+              accent === "error" && "bg-muted/10",
               (!accent || accent === "default") && "bg-primary/10"
             )}
           >
             <Icon
               className={cn(
                 "size-4",
-                accent === "emerald" && "text-emerald-500",
-                accent === "red" && "text-red-500",
+                accent === "success" && "text-foreground/60",
+                accent === "error" && "text-destructive",
                 (!accent || accent === "default") && "text-primary"
               )}
             />
@@ -286,7 +286,7 @@ function CallChainItem({
     <div
       className={cn(
         "rounded-lg border transition-colors",
-        isFailed && "border-red-500/20 bg-red-500/5",
+        isFailed && "border-destructive/20 bg-muted/5",
         isCompleted && "border-border hover:border-border/80",
         !isFailed && !isCompleted && "border-border bg-muted/30"
       )}
@@ -306,13 +306,13 @@ function CallChainItem({
 
         {/* Status icon */}
         {isCompleted ? (
-          <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
+          <CheckCircle2 className="size-4 text-foreground/60 shrink-0" />
         ) : isFailed ? (
-          <XCircle className="size-4 text-red-500 shrink-0" />
+          <XCircle className="size-4 text-destructive shrink-0" />
         ) : isWorking ? (
-          <Loader2 className="size-4 text-blue-500 shrink-0 animate-spin" />
+          <Loader2 className="size-4 text-muted-foreground shrink-0 animate-spin" />
         ) : (
-          <Clock className="size-4 text-yellow-500 shrink-0" />
+          <Clock className="size-4 text-muted-foreground/60 shrink-0" />
         )}
 
         {/* Agent chain */}
@@ -382,8 +382,8 @@ function CallChainItem({
             </div>
           </div>
           {log.errorMessage && (
-            <div className="mt-2 rounded-md bg-red-500/10 px-2.5 py-2 text-xs">
-              <span className="text-red-500 font-medium">Error: </span>
+            <div className="mt-2 rounded-md bg-muted/10 border border-destructive/20 px-2.5 py-2 text-xs">
+              <span className="text-destructive font-medium">Error: </span>
               <span className="text-muted-foreground">{log.errorMessage}</span>
             </div>
           )}
@@ -431,7 +431,7 @@ function DesktopAppIcons({
   if (apps.length === 0) {
     return (
       <span className="inline-flex items-center gap-0.5 ml-1" title="Desktop automation">
-        <AppWindow className="size-3 text-emerald-500" />
+        <AppWindow className="size-3 text-foreground/60" />
       </span>
     );
   }
@@ -446,12 +446,12 @@ function DesktopAppIcons({
             title={app!.label}
             className="inline-flex"
           >
-            <Icon className="size-3 text-emerald-500" />
+            <Icon className="size-3 text-foreground/60" />
           </span>
         );
       })}
       {apps.length > 3 && (
-        <span className="text-[10px] text-emerald-500 font-medium">
+        <span className="text-[10px] text-foreground/60 font-medium">
           +{apps.length - 3}
         </span>
       )}
@@ -642,9 +642,9 @@ export function AgentCallMonitor({ open, onOpenChange }: AgentCallMonitorProps) 
                   value={`${Math.round(stats.successRate * 100)}%`}
                   accent={
                     stats.successRate >= 0.95
-                      ? "emerald"
+                      ? "success"
                       : stats.successRate < 0.8
-                        ? "red"
+                        ? "error"
                         : "default"
                   }
                 />
@@ -989,7 +989,7 @@ export function AgentCallMonitor({ open, onOpenChange }: AgentCallMonitorProps) 
                 <TabsContent value="failures" className="mt-0 space-y-1.5">
                   {stats.recentFailures.length === 0 ? (
                     <div className="flex flex-col items-center py-10">
-                      <CheckCircle2 className="size-10 text-emerald-500 mb-3" />
+                      <CheckCircle2 className="size-10 text-foreground/60 mb-3" />
                       <p className="text-sm font-semibold">All clear</p>
                       <p className="text-xs text-muted-foreground mt-1">
                         No failures in this period
@@ -999,11 +999,11 @@ export function AgentCallMonitor({ open, onOpenChange }: AgentCallMonitorProps) 
                     stats.recentFailures.map((f) => (
                       <div
                         key={f.taskId}
-                        className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2.5"
+                        className="rounded-lg border border-destructive/20 bg-muted/5 px-3 py-2.5"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5 text-sm">
-                            <XCircle className="size-3.5 text-red-500 shrink-0" />
+                            <XCircle className="size-3.5 text-destructive shrink-0" />
                             <span className="font-medium truncate">{f.callerName}</span>
                             <ArrowRight className="size-3 text-muted-foreground shrink-0" />
                             <span className="font-medium truncate">{f.calleeName}</span>

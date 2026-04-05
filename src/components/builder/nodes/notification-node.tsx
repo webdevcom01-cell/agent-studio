@@ -15,10 +15,10 @@ export function NotificationNode({ data, selected }: NodeProps) {
   };
 
   const levelColors: Record<string, string> = {
-    info: "text-blue-500",
-    success: "text-green-500",
-    warning: "text-yellow-500",
-    error: "text-red-500",
+    info: "text-muted-foreground",
+    success: "text-foreground/60",
+    warning: "text-muted-foreground",
+    error: "text-destructive",
   };
 
   return (
@@ -31,7 +31,7 @@ export function NotificationNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-foreground dark:bg-muted/20 dark:text-muted-foreground">
           <Bell className="size-4" />
         </div>
         <span className="text-sm font-medium">{(data.label as string) || "Notification"}</span>

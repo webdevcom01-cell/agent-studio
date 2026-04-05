@@ -68,13 +68,13 @@ function CountOption({
       onClick={onClick}
       className={`flex-1 rounded-lg border px-3 py-2.5 text-center transition-all ${
         selected
-          ? "border-violet-500 bg-violet-500/10 text-violet-300"
-          : "border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300"
+          ? "border-foreground bg-foreground/10 text-foreground"
+          : "border-border bg-muted/20 text-muted-foreground hover:border-border hover:text-foreground/80"
       }`}
     >
       <div className="text-lg font-bold">{value}</div>
       <div className="text-xs font-medium">{label}</div>
-      <div className="text-[10px] text-zinc-500 mt-0.5">{hint}</div>
+      <div className="text-[10px] text-muted-foreground mt-0.5">{hint}</div>
     </button>
   );
 }
@@ -142,10 +142,10 @@ export function GenerateEvalDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="bg-zinc-900 border-zinc-700 max-w-md">
+      <DialogContent className="bg-card border-border max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-white">
-            <Sparkles className="w-4 h-4 text-violet-400" />
+            <Sparkles className="size-4 text-muted-foreground" />
             Generate Eval Suite with AI
           </DialogTitle>
         </DialogHeader>
@@ -153,40 +153,40 @@ export function GenerateEvalDialog({
         {/* ── Success state ─────────────────────────────────────────────── */}
         {result ? (
           <div className="py-2 space-y-4">
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
-              <CheckCircle2 className="w-5 h-5 text-green-400 mt-0.5 shrink-0" />
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-foreground/5 border border-border">
+              <CheckCircle2 className="size-5 text-foreground/60 mt-0.5 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-green-300">Suite generated successfully</p>
-                <p className="text-xs text-zinc-400 mt-1">
-                  <span className="text-white">{result.suiteName}</span>
+                <p className="text-sm font-medium text-foreground/80">Suite generated successfully</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  <span className="text-foreground">{result.suiteName}</span>
                   {" · "}
-                  <span className="text-violet-300">{result.testCaseCount} test cases</span>
+                  <span className="text-foreground/80">{result.testCaseCount} test cases</span>
                   {" · "}
-                  <span className="text-zinc-500">via {result.modelUsed}</span>
+                  <span className="text-muted-foreground">via {result.modelUsed}</span>
                 </p>
-                <p className="text-xs text-zinc-500 mt-1 italic">{result.suiteDescription}</p>
+                <p className="text-xs text-muted-foreground mt-1 italic">{result.suiteDescription}</p>
               </div>
             </div>
 
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-muted-foreground">
               Review and refine the generated test cases before running your first eval.
               Assertions have been set based on{" "}
-              <span className="text-zinc-300">2026 industry standards</span> for this agent category.
+              <span className="text-foreground/80">2026 industry standards</span> for this agent category.
             </p>
           </div>
         ) : (
           /* ── Config state ───────────────────────────────────────────────── */
           <div className="py-2 space-y-5">
             {/* Context note */}
-            <p className="text-xs text-zinc-400 leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               AI will analyze this agent&apos;s system prompt, category, and knowledge base to generate
               realistic test cases with multi-layer assertions aligned to{" "}
-              <span className="text-zinc-300">2026 eval standards</span>.
+              <span className="text-foreground/80">2026 eval standards</span>.
             </p>
 
             {/* Test case count */}
             <div className="space-y-2">
-              <Label className="text-zinc-300 text-sm">Number of test cases</Label>
+              <Label className="text-foreground/80 text-sm">Number of test cases</Label>
               <div className="flex gap-2">
                 {(
                   [
@@ -211,8 +211,8 @@ export function GenerateEvalDialog({
             {/* Run on deploy toggle */}
             <label className="flex items-center justify-between gap-3 cursor-pointer group">
               <div>
-                <p className="text-sm text-zinc-300">Run on every deploy</p>
-                <p className="text-xs text-zinc-500">Auto-test after each flow update</p>
+                <p className="text-sm text-foreground/80">Run on every deploy</p>
+                <p className="text-xs text-muted-foreground">Auto-test after each flow update</p>
               </div>
               <div
                 role="checkbox"
@@ -222,8 +222,8 @@ export function GenerateEvalDialog({
                 onKeyDown={(e) =>
                   (e.key === " " || e.key === "Enter") && setRunOnDeploy((v) => !v)
                 }
-                className={`relative w-10 h-5.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 ${
-                  runOnDeploy ? "bg-violet-600" : "bg-zinc-700"
+                className={`relative w-10 h-5.5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${
+                  runOnDeploy ? "bg-foreground" : "bg-muted"
                 }`}
                 style={{ minWidth: "2.5rem", height: "1.375rem" }}
               >
@@ -237,16 +237,16 @@ export function GenerateEvalDialog({
 
             {/* Error */}
             {error && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
-                <AlertCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-                <p className="text-xs text-red-300">{error}</p>
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/10 border border-destructive/30">
+                <AlertCircle className="size-4 text-destructive mt-0.5 shrink-0" />
+                <p className="text-xs text-destructive">{error}</p>
               </div>
             )}
 
             {/* Generation progress hint */}
             {isGenerating && (
-              <div className="flex items-center gap-2 text-xs text-zinc-400">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-400" />
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
                 Generating {targetCount} test cases with assertions… (~15–30s)
               </div>
             )}
@@ -258,7 +258,7 @@ export function GenerateEvalDialog({
             variant="ghost"
             onClick={handleClose}
             disabled={isGenerating}
-            className="text-zinc-400 hover:text-white"
+            className="text-muted-foreground hover:text-foreground"
           >
             {result ? "Close" : "Cancel"}
           </Button>
@@ -266,7 +266,7 @@ export function GenerateEvalDialog({
           {result ? (
             <Button
               onClick={handleOpenSuite}
-              className="bg-violet-600 hover:bg-violet-700 text-white"
+              className="bg-foreground hover:bg-foreground/90 text-background"
             >
               Open Suite
             </Button>
@@ -274,16 +274,16 @@ export function GenerateEvalDialog({
             <Button
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-60"
+              className="bg-foreground hover:bg-foreground/90 text-background disabled:opacity-60"
             >
               {isGenerating ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+                  <Loader2 className="size-3.5 animate-spin mr-2" />
                   Generating…
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-3.5 h-3.5 mr-2" />
+                  <Sparkles className="size-3.5 mr-2" />
                   Generate Suite
                 </>
               )}

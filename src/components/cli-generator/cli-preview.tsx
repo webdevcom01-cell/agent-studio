@@ -86,7 +86,7 @@ export function CLIPreview({
                   title="Copy usage"
                 >
                   {copiedCommand === cmd.name ? (
-                    <Check className="size-3 text-green-500" />
+                    <Check className="size-3 text-foreground/60" />
                   ) : (
                     <Copy className="size-3" />
                   )}
@@ -109,7 +109,7 @@ export function CLIPreview({
                         {param.type}
                       </span>
                       {param.required && (
-                        <span className="text-[10px] text-amber-500">
+                        <span className="text-[10px] text-muted-foreground">
                           required
                         </span>
                       )}

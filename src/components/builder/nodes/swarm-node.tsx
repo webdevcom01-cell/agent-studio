@@ -24,7 +24,7 @@ export function SwarmNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="mb-2 flex items-center gap-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-foreground dark:bg-muted/20 dark:text-muted-foreground">
           <Boxes className="size-4" />
         </div>
         <span className="text-sm font-medium">
@@ -45,8 +45,8 @@ export function SwarmNode({ data, selected }: NodeProps) {
       <Handle type="source" position={Position.Bottom} id="failed" style={{ left: "70%" }} />
 
       <div className="mt-2 flex justify-between px-1 text-[10px] text-muted-foreground">
-        <span className="text-green-600 dark:text-green-400">Done</span>
-        <span className="text-red-600 dark:text-red-400">Failed</span>
+        <span className="text-foreground/70 dark:text-foreground/60">Done</span>
+        <span className="text-destructive dark:text-destructive">Failed</span>
       </div>
     </div>
   );

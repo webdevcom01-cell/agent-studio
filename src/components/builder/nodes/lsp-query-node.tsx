@@ -11,16 +11,16 @@ interface LspQueryNodeProps {
 }
 
 const LANG_BADGE_COLOR: Record<string, string> = {
-  typescript: "bg-blue-900/60 text-blue-300",
-  javascript: "bg-yellow-900/60 text-yellow-300",
-  python: "bg-green-900/60 text-green-300",
+  typescript: "bg-muted/20 text-muted-foreground",
+  javascript: "bg-muted/20 text-muted-foreground",
+  python: "bg-muted/20 text-foreground/60",
 };
 
 const OP_BADGE_COLOR: Record<string, string> = {
-  hover: "bg-sky-900/60 text-sky-300",
-  definition: "bg-violet-900/60 text-violet-300",
-  completion: "bg-orange-900/60 text-orange-300",
-  diagnostics: "bg-red-900/60 text-red-300",
+  hover: "bg-muted/20 text-foreground/70",
+  definition: "bg-muted/20 text-muted-foreground",
+  completion: "bg-muted/20 text-muted-foreground",
+  diagnostics: "bg-muted/10 text-destructive",
 };
 
 export function LspQueryNode({ data, selected }: LspQueryNodeProps) {
@@ -28,20 +28,20 @@ export function LspQueryNode({ data, selected }: LspQueryNodeProps) {
   const operation = (data.operation as string) || "hover";
   const label = (data.label as string) || "LSP Query";
 
-  const langClass = LANG_BADGE_COLOR[language] ?? "bg-zinc-700 text-zinc-300";
-  const opClass = OP_BADGE_COLOR[operation] ?? "bg-zinc-700 text-zinc-300";
+  const langClass = LANG_BADGE_COLOR[language] ?? "bg-muted text-foreground/80";
+  const opClass = OP_BADGE_COLOR[operation] ?? "bg-muted text-foreground/80";
 
   return (
     <div
       className={cn(
-        "rounded-lg border bg-zinc-900 min-w-[180px] max-w-[240px] shadow-md",
-        selected ? "border-cyan-500" : "border-zinc-700",
+        "rounded-lg border bg-card min-w-[180px] max-w-[240px] shadow-md",
+        selected ? "border-primary" : "border-border",
       )}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-700 bg-cyan-950/40 rounded-t-lg">
-        <FileSearch className="w-4 h-4 text-cyan-400 shrink-0" />
-        <span className="text-xs font-semibold text-zinc-200 truncate">{label}</span>
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/20 rounded-t-lg">
+        <FileSearch className="w-4 h-4 text-muted-foreground shrink-0" />
+        <span className="text-xs font-semibold text-foreground/90 truncate">{label}</span>
       </div>
 
       {/* Body */}
@@ -55,14 +55,14 @@ export function LspQueryNode({ data, selected }: LspQueryNodeProps) {
           </span>
         </div>
         {typeof data.outputVariable === "string" && data.outputVariable && (
-          <p className="text-[10px] text-zinc-500 truncate">
-            → <span className="text-zinc-400">{data.outputVariable}</span>
+          <p className="text-[10px] text-muted-foreground/60 truncate">
+            → <span className="text-muted-foreground">{data.outputVariable}</span>
           </p>
         )}
       </div>
 
-      <Handle type="target" position={Position.Left} className="!bg-cyan-500" />
-      <Handle type="source" position={Position.Right} className="!bg-cyan-500" />
+      <Handle type="target" position={Position.Left} className="!bg-foreground/60" />
+      <Handle type="source" position={Position.Right} className="!bg-foreground/60" />
     </div>
   );
 }

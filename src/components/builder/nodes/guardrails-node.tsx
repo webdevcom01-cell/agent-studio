@@ -18,7 +18,7 @@ function GuardrailsNodeComponent({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-destructive dark:bg-muted/10 dark:text-destructive">
           <ShieldCheck className="size-4" />
         </div>
         <span className="text-sm font-medium">
@@ -29,8 +29,8 @@ function GuardrailsNodeComponent({ data, selected }: NodeProps) {
       <div className="space-y-1 text-xs text-muted-foreground">
         <p>Checks: <span className="text-foreground">{checks.length}</span></p>
         <p className="text-[10px]">
-          <span className="text-green-500">Pass</span>{" / "}
-          <span className="text-red-400">Fail</span>
+          <span className="text-foreground/60">Pass</span>{" / "}
+          <span className="text-destructive">Fail</span>
         </p>
       </div>
 

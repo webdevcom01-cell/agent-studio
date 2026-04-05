@@ -200,9 +200,9 @@ function VariableDropdown({
                 onSelect(v);
               }}
             >
-              <span className="font-mono text-[11px] text-blue-400">{"{{"}</span>
+              <span className="font-mono text-[11px] text-muted-foreground/60">{"{{"}</span>
               <span className="font-mono text-[11px]">{v}</span>
-              <span className="font-mono text-[11px] text-blue-400">{"}}"}</span>
+              <span className="font-mono text-[11px] text-muted-foreground/60">{"}}"}</span>
             </button>
           </li>
         ))}

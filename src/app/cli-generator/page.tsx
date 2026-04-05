@@ -310,10 +310,9 @@ export default function CLIGeneratorPage(): React.JSX.Element {
   const showFileViewer = selectedId && (hasFiles || isRunning);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur-sm">
-        <div className="mx-auto max-w-6xl px-6 h-14 flex items-center justify-between gap-4">
+      <div className="flex h-[52px] shrink-0 items-center justify-between gap-4 border-b border-border px-3">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon-sm" asChild>
               <Link href="/">
@@ -343,11 +342,9 @@ export default function CLIGeneratorPage(): React.JSX.Element {
               New Generation
             </Button>
           </div>
-        </div>
-      </header>
+      </div>
 
-      {/* Content */}
-      <main className="mx-auto max-w-6xl px-6 py-6">
+      <main className="flex-1 overflow-y-auto px-6 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Generation List */}
           <div className="lg:col-span-1">
@@ -389,13 +386,13 @@ export default function CLIGeneratorPage(): React.JSX.Element {
                         selectedId === gen.id
                           ? "border-primary bg-primary/5"
                           : "border-border bg-card",
-                        stuck && "border-yellow-500/40",
+                        stuck && "border-muted-foreground/30",
                       )}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           {stuck && (
-                            <AlertTriangle className="size-3 shrink-0 text-yellow-500" aria-label="Stuck — click Resume to continue" />
+                            <AlertTriangle className="size-3 shrink-0 text-muted-foreground" aria-label="Stuck — click Resume to continue" />
                           )}
                           <span className="text-sm font-medium truncate">
                             {gen.applicationName}
@@ -425,8 +422,8 @@ export default function CLIGeneratorPage(): React.JSX.Element {
                             className={cn(
                               "opacity-0 group-hover:opacity-100",
                               gen.status === "FAILED"
-                                ? "text-red-500 hover:text-red-400"
-                                : "text-yellow-500 hover:text-yellow-400",
+                                ? "text-destructive hover:text-destructive/80"
+                                : "text-muted-foreground hover:text-foreground",
                             )}
                           >
                             {resuming ? (
@@ -476,14 +473,14 @@ export default function CLIGeneratorPage(): React.JSX.Element {
                       {detail.applicationName}
                     </h2>
                     {detail.errorMessage && (
-                      <p className="text-xs text-red-500 mt-1">
+                      <p className="text-xs text-destructive mt-1">
                         {detail.errorMessage}
                       </p>
                     )}
                   </div>
                   <Button
                     size="sm"
-                    className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                    className="gap-1.5 shrink-0"
                     disabled={!isCompleted}
                     onClick={() => {
                       if (selectedId) {
@@ -552,15 +549,15 @@ export default function CLIGeneratorPage(): React.JSX.Element {
 
 function StatusBadge({ status }: { status: string }): React.JSX.Element {
   const colorMap: Record<string, string> = {
-    PENDING: "bg-gray-500/10 text-gray-500",
-    ANALYZING: "bg-blue-500/10 text-blue-500",
-    DESIGNING: "bg-purple-500/10 text-purple-500",
-    IMPLEMENTING: "bg-orange-500/10 text-orange-500",
-    TESTING: "bg-yellow-500/10 text-yellow-500",
-    DOCUMENTING: "bg-cyan-500/10 text-cyan-500",
-    PUBLISHING: "bg-emerald-500/10 text-emerald-500",
-    COMPLETED: "bg-green-500/10 text-green-500",
-    FAILED: "bg-red-500/10 text-red-500",
+    PENDING: "text-muted-foreground/60",
+    ANALYZING: "text-muted-foreground",
+    DESIGNING: "text-muted-foreground",
+    IMPLEMENTING: "text-muted-foreground",
+    TESTING: "text-muted-foreground",
+    DOCUMENTING: "text-muted-foreground",
+    PUBLISHING: "text-muted-foreground",
+    COMPLETED: "text-foreground/60",
+    FAILED: "text-destructive",
   };
 
   return (

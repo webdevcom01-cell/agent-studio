@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 interface SkillSummary {
   id: string;
@@ -43,17 +44,6 @@ interface SkillsResponse {
     };
   };
 }
-
-const LANGUAGE_COLORS: Record<string, string> = {
-  typescript: "bg-blue-500/10 text-blue-400",
-  javascript: "bg-yellow-500/10 text-yellow-400",
-  python: "bg-green-500/10 text-green-400",
-  go: "bg-cyan-500/10 text-cyan-400",
-  rust: "bg-orange-500/10 text-orange-400",
-  java: "bg-red-500/10 text-red-400",
-  swift: "bg-pink-500/10 text-pink-400",
-  cpp: "bg-purple-500/10 text-purple-400",
-};
 
 export default function SkillsPage(): React.JSX.Element {
   const [skills, setSkills] = useState<SkillSummary[]>([]);
@@ -109,185 +99,183 @@ export default function SkillsPage(): React.JSX.Element {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold">Skills Browser</h1>
-              <p className="text-sm text-muted-foreground">
-                {total} skills from everything-claude-code
-              </p>
-            </div>
-          </div>
-        </div>
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border px-3">
+        <Button variant="ghost" size="icon-sm" asChild>
+          <Link href="/"><ArrowLeft className="size-3.5" /></Link>
+        </Button>
+        <Code2 className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">Skills Browser</span>
+        <span className="text-xs text-muted-foreground/40 ml-auto">
+          {total} skills
+        </span>
+      </div>
 
-        <div className="relative mb-6">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      {/* Search */}
+      <div className="shrink-0 border-b border-border px-4 py-2.5">
+        <div className="relative max-w-2xl">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/40" />
           <Input
-            placeholder="Search skills by name, description, or tag..."
+            placeholder="Search skills by name, description, or tag…"
             value={query}
             onChange={(e): void => {
               setQuery(e.target.value);
               setPage(1);
             }}
-            className="pl-10"
+            className="pl-9 h-8 text-sm"
           />
         </div>
+      </div>
 
-        <div className="flex gap-6">
-          <aside className="w-56 shrink-0 space-y-6">
-            {languages.length > 0 && (
-              <div>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  Language
-                </h3>
-                <div className="space-y-1">
-                  {languages.map((f) => (
-                    <button
-                      key={f.value}
-                      onClick={(): void => handleFilterLanguage(f.value)}
-                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-sm transition-colors ${
-                        language === f.value
-                          ? "bg-fuchsia-500/10 text-fuchsia-400"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Code2 className="h-3.5 w-3.5" />
-                        {f.value}
-                      </span>
-                      <span className="text-xs opacity-60">{f.count}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {categories.length > 0 && (
-              <div>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  Category
-                </h3>
-                <div className="space-y-1">
-                  {categories.map((f) => (
-                    <button
-                      key={f.value}
-                      onClick={(): void => handleFilterCategory(f.value)}
-                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-sm transition-colors ${
-                        category === f.value
-                          ? "bg-fuchsia-500/10 text-fuchsia-400"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Tag className="h-3.5 w-3.5" />
-                        {f.value}
-                      </span>
-                      <span className="text-xs opacity-60">{f.count}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {(language || category) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-xs"
-                onClick={(): void => {
-                  setLanguage("");
-                  setCategory("");
-                  setPage(1);
-                }}
-              >
-                Clear filters
-              </Button>
-            )}
-          </aside>
-
-          <main className="flex-1 min-w-0">
-            {isLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <Skeleton key={i} className="h-40 rounded-lg" />
+      {/* Filter sidebar + grid */}
+      <div className="flex flex-1 overflow-hidden">
+        <aside className="w-52 shrink-0 border-r border-border overflow-y-auto px-3 py-4 space-y-5">
+          {languages.length > 0 && (
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-widest text-foreground/20 mb-2 px-1">
+                Language
+              </p>
+              <div className="space-y-0.5">
+                {languages.map((f) => (
+                  <button
+                    key={f.value}
+                    onClick={(): void => handleFilterLanguage(f.value)}
+                    className={cn(
+                      "w-full flex items-center justify-between px-2 py-1.5 rounded text-xs transition-colors",
+                      language === f.value
+                        ? "bg-foreground/5 text-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Code2 className="size-3.5" />
+                      {f.value}
+                    </span>
+                    <span className="opacity-40">{f.count}</span>
+                  </button>
                 ))}
               </div>
-            ) : skills.length === 0 ? (
-              <div className="text-center py-20 text-muted-foreground">
-                <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-40" />
-                <p className="text-lg font-medium">No skills found</p>
-                <p className="text-sm mt-1">Try adjusting your search or filters</p>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {skills.map((skill) => (
-                    <SkillCard key={skill.id} skill={skill} />
-                  ))}
-                </div>
+            </div>
+          )}
 
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2 mt-8">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page <= 1}
-                      onClick={(): void => setPage(page - 1)}
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-sm text-muted-foreground">
-                      Page {page} of {totalPages}
+          {categories.length > 0 && (
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-widest text-foreground/20 mb-2 px-1">
+                Category
+              </p>
+              <div className="space-y-0.5">
+                {categories.map((f) => (
+                  <button
+                    key={f.value}
+                    onClick={(): void => handleFilterCategory(f.value)}
+                    className={cn(
+                      "w-full flex items-center justify-between px-2 py-1.5 rounded text-xs transition-colors",
+                      category === f.value
+                        ? "bg-foreground/5 text-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Tag className="size-3.5" />
+                      {f.value}
                     </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page >= totalPages}
-                      onClick={(): void => setPage(page + 1)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-          </main>
-        </div>
+                    <span className="opacity-40">{f.count}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(language || category) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-xs"
+              onClick={(): void => {
+                setLanguage("");
+                setCategory("");
+                setPage(1);
+              }}
+            >
+              Clear filters
+            </Button>
+          )}
+        </aside>
+
+        <main className="flex-1 overflow-y-auto p-4">
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-40 rounded-lg" />
+              ))}
+            </div>
+          ) : skills.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <BookOpen className="size-10 text-muted-foreground/20 mb-4" />
+              <p className="text-sm font-medium text-muted-foreground">No skills found</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">
+                Try adjusting your search or filters
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {skills.map((skill) => (
+                  <SkillCard key={skill.id} skill={skill} />
+                ))}
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-6">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={(): void => setPage(page - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {page} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages}
+                    onClick={(): void => setPage(page + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </main>
       </div>
     </div>
   );
 }
 
 function SkillCard({ skill }: { skill: SkillSummary }): React.JSX.Element {
-  const langColor = skill.language
-    ? LANGUAGE_COLORS[skill.language] ?? "bg-gray-500/10 text-gray-400"
-    : null;
-
   return (
-    <div className="border rounded-lg p-4 hover:border-fuchsia-500/30 transition-colors bg-card">
+    <div className="rounded-lg border border-border bg-card p-4 hover:border-border/80 transition-colors">
       <div className="flex items-start justify-between mb-2">
-        <h3 className="font-semibold text-sm leading-tight">{skill.name}</h3>
-        <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
+        <h3 className="text-sm font-semibold leading-tight">{skill.name}</h3>
+        <span className="text-[10px] text-muted-foreground/40 shrink-0 ml-2 font-mono">
           v{skill.version}
         </span>
       </div>
 
-      <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
+      <p className="text-xs text-muted-foreground/60 line-clamp-2 mb-3">
         {skill.description}
       </p>
 
       <div className="flex flex-wrap gap-1.5">
-        {skill.language && langColor && (
-          <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 ${langColor}`}>
+        {skill.language && (
+          <span className="inline-flex items-center rounded-full border border-border px-1.5 py-px text-[10px] font-medium text-muted-foreground/60">
             {skill.language}
-          </Badge>
+          </span>
         )}
         {skill.category && (
           <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
@@ -295,35 +283,35 @@ function SkillCard({ skill }: { skill: SkillSummary }): React.JSX.Element {
           </Badge>
         )}
         {skill.compositionLayer && skill.compositionLayer !== "execution" && (
-          <Badge
-            variant="secondary"
-            className={`text-[10px] px-1.5 py-0 ${
+          <span
+            className={cn(
+              "inline-flex items-center rounded-full border px-1.5 py-px text-[10px] font-medium",
               skill.compositionLayer === "guarantee"
-                ? "bg-red-900/40 text-red-300 border-red-800"
-                : "bg-sky-900/40 text-sky-300 border-sky-800"
-            }`}
+                ? "border-destructive/30 text-destructive/60"
+                : "border-border text-muted-foreground/60"
+            )}
           >
             {skill.compositionLayer}
-          </Badge>
+          </span>
         )}
         {skill.tags.slice(0, 3).map((tag) => (
           <Badge
             key={tag}
             variant="outline"
-            className="text-[10px] px-1.5 py-0 text-muted-foreground"
+            className="text-[10px] px-1.5 py-0 text-muted-foreground/40"
           >
             {tag}
           </Badge>
         ))}
         {skill.tags.length > 3 && (
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-[10px] text-muted-foreground/40">
             +{skill.tags.length - 3}
           </span>
         )}
       </div>
 
       {skill.eccOrigin && (
-        <div className="mt-3 pt-2 border-t flex items-center gap-1 text-[10px] text-fuchsia-400">
+        <div className="mt-3 pt-2 border-t border-border flex items-center gap-1 text-[10px] text-muted-foreground/40">
           <span>ECC</span>
         </div>
       )}

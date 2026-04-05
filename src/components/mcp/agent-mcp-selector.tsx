@@ -146,11 +146,11 @@ export function AgentMCPSelector({ agentId }: AgentMCPSelectorProps): React.Reac
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Plug className="size-4 text-teal-500" />
+          <Plug className="size-4 text-muted-foreground" />
           <span className="text-sm font-medium">MCP Servers</span>
         </div>
         {activeToolCount > 0 && (
-          <Badge className="bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+          <Badge className="bg-muted/20 text-foreground/70">
             {activeToolCount} tool{activeToolCount !== 1 ? "s" : ""} active
           </Badge>
         )}
@@ -217,7 +217,7 @@ function ServerToggleItem({
           type="checkbox"
           checked={isLinked}
           onChange={onToggle}
-          className="size-4 rounded border-zinc-300 accent-teal-600"
+          className="size-4 rounded border-border accent-primary"
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
@@ -279,8 +279,8 @@ function ServerToggleItem({
                   onClick={() => handleToolToggle(tool)}
                   className={`rounded px-1.5 py-0.5 text-[10px] transition-colors ${
                     isEnabled
-                      ? "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"
-                      : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
+                      ? "bg-muted/20 text-foreground/70"
+                      : "bg-muted text-muted-foreground"
                   }`}
                 >
                   {tool}

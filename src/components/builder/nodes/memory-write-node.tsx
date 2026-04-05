@@ -19,7 +19,7 @@ export function MemoryWriteNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-foreground dark:bg-muted/20 dark:text-foreground/60">
           <HardDriveUpload className="size-4" />
         </div>
         <span className="text-sm font-medium">{(data.label as string) || "Memory Write"}</span>
@@ -33,7 +33,7 @@ export function MemoryWriteNode({ data, selected }: NodeProps) {
           Category: <span className="text-foreground">{category}</span>
         </p>
         {hasEmbedding && (
-          <p className="text-emerald-600 dark:text-emerald-400">+ embedding</p>
+          <p className="text-foreground/70 dark:text-foreground/60">+ embedding</p>
         )}
       </div>
 

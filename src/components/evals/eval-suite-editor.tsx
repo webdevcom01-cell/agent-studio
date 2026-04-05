@@ -80,9 +80,9 @@ const ASSERTION_TYPES: AssertionTypeConfig[] = [
 ];
 
 const LAYER_COLORS: Record<number, string> = {
-  1: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  2: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  3: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  1: "bg-foreground/5 text-foreground/60 border-border",
+  2: "bg-muted/10 text-muted-foreground border-border",
+  3: "bg-muted/10 text-muted-foreground border-border",
 };
 
 const LAYER_LABELS: Record<number, string> = {
@@ -159,7 +159,7 @@ function TestCaseDialog({ open, onClose, onSave, initial, isSaving }: TestCaseDi
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-zinc-900 border-zinc-700">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border">
         <DialogHeader>
           <DialogTitle className="text-white">
             {initial ? "Edit Test Case" : "Add Test Case"}
@@ -169,35 +169,35 @@ function TestCaseDialog({ open, onClose, onSave, initial, isSaving }: TestCaseDi
         <div className="space-y-4 py-2">
           {/* Label */}
           <div className="space-y-1.5">
-            <Label className="text-zinc-300">Test Name</Label>
+            <Label className="text-foreground/80">Test Name</Label>
             <Input
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g. Greets user by name"
-              className="bg-zinc-800 border-zinc-600 text-white"
+              className="bg-muted border-border text-foreground"
             />
           </div>
 
           {/* Input message */}
           <div className="space-y-1.5">
-            <Label className="text-zinc-300">User Message</Label>
+            <Label className="text-foreground/80">User Message</Label>
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="The message to send to the agent..."
               rows={3}
-              className="bg-zinc-800 border-zinc-600 text-white resize-none"
+              className="bg-muted border-border text-foreground resize-none"
             />
           </div>
 
           {/* Assertions */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-zinc-300">Assertions</Label>
+              <Label className="text-foreground/80">Assertions</Label>
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 text-xs border-zinc-600 text-zinc-300 hover:bg-zinc-700"
+                className="h-7 text-xs border-border text-foreground/80 hover:bg-muted"
                 onClick={() => setAssertions((prev) => [...prev, emptyAssertion()])}
               >
                 <Plus className="w-3 h-3 mr-1" /> Add
@@ -209,14 +209,14 @@ function TestCaseDialog({ open, onClose, onSave, initial, isSaving }: TestCaseDi
                 const cfg = ASSERTION_TYPES.find((a) => a.value === assertion.type);
                 const jsonPreview = buildAssertionJson(assertion);
                 return (
-                  <div key={idx} className="p-3 bg-zinc-800 rounded-lg border border-zinc-700 space-y-2">
+                  <div key={idx} className="p-3 bg-muted rounded-lg border border-border space-y-2">
                     <div className="flex gap-2 items-start">
                       {/* Type selector */}
                       <div className="w-44 shrink-0">
                         <select
                           value={assertion.type}
                           onChange={(e) => handleTypeChange(idx, e.target.value)}
-                          className="w-full h-8 text-xs rounded-md bg-zinc-700 border border-zinc-600 text-white px-2"
+                          className="w-full h-8 text-xs rounded-md bg-background border border-border text-foreground px-2"
                           data-testid={`assertion-type-${idx}`}
                         >
                           {[1, 2, 3].map((layer) => (
@@ -236,11 +236,11 @@ function TestCaseDialog({ open, onClose, onSave, initial, isSaving }: TestCaseDi
                             value={assertion.value ?? ""}
                             onChange={(e) => updateAssertion(idx, { value: e.target.value })}
                             placeholder={cfg.valuePlaceholder ?? "expected text"}
-                            className="h-8 text-xs bg-zinc-700 border-zinc-600 text-white"
+                            className="h-8 text-xs bg-background border-border text-foreground"
                             data-testid={`assertion-value-${idx}`}
                           />
                           {cfg.valueLabel && cfg.valueLabel !== "Value" && (
-                            <p className="text-[10px] text-zinc-500">{cfg.valueLabel}</p>
+                            <p className="text-[10px] text-muted-foreground">{cfg.valueLabel}</p>
                           )}
                         </div>
                       )}
@@ -253,11 +253,11 @@ function TestCaseDialog({ open, onClose, onSave, initial, isSaving }: TestCaseDi
                             onChange={(e) => updateAssertion(idx, { rubric: e.target.value })}
                             placeholder="Describe what to evaluate..."
                             rows={2}
-                            className="text-xs bg-zinc-700 border-zinc-600 text-white resize-none"
+                            className="text-xs bg-background border-border text-foreground resize-none"
                             data-testid={`assertion-rubric-${idx}`}
                           />
                           {cfg.rubricLabel && (
-                            <p className="text-[10px] text-zinc-500">{cfg.rubricLabel}</p>
+                            <p className="text-[10px] text-muted-foreground">{cfg.rubricLabel}</p>
                           )}
                         </div>
                       )}
@@ -272,11 +272,11 @@ function TestCaseDialog({ open, onClose, onSave, initial, isSaving }: TestCaseDi
                             step={assertion.type === "latency" ? 100 : 0.1}
                             min={0}
                             max={assertion.type === "latency" ? 60000 : 1}
-                            className="w-24 h-8 text-xs bg-zinc-700 border-zinc-600 text-white"
+                            className="w-24 h-8 text-xs bg-background border-border text-foreground"
                             data-testid={`assertion-threshold-${idx}`}
                           />
                           {cfg.thresholdLabel && (
-                            <p className="text-[10px] text-zinc-500">{cfg.thresholdLabel}</p>
+                            <p className="text-[10px] text-muted-foreground">{cfg.thresholdLabel}</p>
                           )}
                         </div>
                       )}
@@ -285,7 +285,7 @@ function TestCaseDialog({ open, onClose, onSave, initial, isSaving }: TestCaseDi
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-8 w-8 p-0 shrink-0 text-zinc-500 hover:text-red-400 hover:bg-transparent"
+                        className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive hover:bg-transparent"
                         onClick={() => setAssertions((prev) => prev.filter((_, i) => i !== idx))}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -295,12 +295,12 @@ function TestCaseDialog({ open, onClose, onSave, initial, isSaving }: TestCaseDi
                     {/* Helper text and JSON preview */}
                     <div className="flex items-start justify-between gap-2">
                       {cfg?.helper && (
-                        <p className="text-[10px] text-amber-400/70" data-testid={`assertion-helper-${idx}`}>
+                        <p className="text-[10px] text-muted-foreground" data-testid={`assertion-helper-${idx}`}>
                           {cfg.helper}
                         </p>
                       )}
                       <pre
-                        className="text-[10px] text-zinc-500 font-mono ml-auto max-w-[50%] truncate"
+                        className="text-[10px] text-muted-foreground font-mono ml-auto max-w-[50%] truncate"
                         data-testid={`assertion-json-${idx}`}
                         title={jsonPreview}
                       >
@@ -315,24 +315,24 @@ function TestCaseDialog({ open, onClose, onSave, initial, isSaving }: TestCaseDi
 
           {/* Tags */}
           <div className="space-y-1.5">
-            <Label className="text-zinc-300 text-sm">Tags <span className="text-zinc-500">(optional, comma-separated)</span></Label>
+            <Label className="text-foreground/80 text-sm">Tags <span className="text-muted-foreground">(optional, comma-separated)</span></Label>
             <Input
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="greeting, rag, edge-case"
-              className="bg-zinc-800 border-zinc-600 text-white"
+              className="bg-muted border-border text-foreground"
             />
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} className="border-zinc-600 text-zinc-300">
+          <Button variant="outline" onClick={onClose} className="border-border text-foreground/80">
             Cancel
           </Button>
           <Button
             onClick={handleSave}
             disabled={!isValid || isSaving}
-            className="bg-violet-600 hover:bg-violet-500 text-white"
+            className="bg-foreground text-background hover:bg-foreground/90"
           >
             {isSaving ? "Saving..." : initial ? "Save Changes" : "Add Test Case"}
           </Button>
@@ -345,10 +345,10 @@ function TestCaseDialog({ open, onClose, onSave, initial, isSaving }: TestCaseDi
 // ─── Result status icon ───────────────────────────────────────────────────────
 
 function StatusIcon({ status }: { status?: string }) {
-  if (status === "PASSED") return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
-  if (status === "FAILED") return <XCircle className="w-4 h-4 text-red-400" />;
-  if (status === "ERROR")  return <AlertCircle className="w-4 h-4 text-yellow-400" />;
-  return <Clock className="w-4 h-4 text-zinc-500" />;
+  if (status === "PASSED") return <CheckCircle2 className="size-4 text-foreground/60" />;
+  if (status === "FAILED") return <XCircle className="size-4 text-destructive" />;
+  if (status === "ERROR")  return <AlertCircle className="size-4 text-muted-foreground" />;
+  return <Clock className="size-4 text-muted-foreground" />;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -406,7 +406,7 @@ export function EvalSuiteEditor({
     <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm text-muted-foreground">
           {cases.length} test case{cases.length !== 1 ? "s" : ""}
           {cases.length > 0 && " · click a row to expand assertion details"}
         </p>
@@ -415,7 +415,7 @@ export function EvalSuiteEditor({
             size="sm"
             variant="outline"
             onClick={() => setShowAddDialog(true)}
-            className="border-zinc-600 text-zinc-300 hover:bg-zinc-700"
+            className="border-border text-foreground/80 hover:bg-muted"
           >
             <Plus className="w-4 h-4 mr-1.5" /> Add Test Case
           </Button>
@@ -423,7 +423,7 @@ export function EvalSuiteEditor({
             size="sm"
             onClick={onRunEvals}
             disabled={cases.length === 0 || isRunning}
-            className="bg-violet-600 hover:bg-violet-500 text-white"
+            className="bg-foreground text-background hover:bg-foreground/90"
           >
             {isRunning ? (
               <><span className="animate-spin mr-1.5">⟳</span> Running...</>
@@ -436,13 +436,13 @@ export function EvalSuiteEditor({
 
       {/* Empty state */}
       {cases.length === 0 && (
-        <div className="text-center py-12 border border-dashed border-zinc-700 rounded-lg">
-          <p className="text-zinc-500 text-sm">No test cases yet</p>
-          <p className="text-zinc-600 text-xs mt-1">Add test cases to start evaluating your agent</p>
+        <div className="text-center py-12 border border-dashed border-border rounded-lg">
+          <p className="text-muted-foreground text-sm">No test cases yet</p>
+          <p className="text-muted-foreground/60 text-xs mt-1">Add test cases to start evaluating your agent</p>
           <Button
             size="sm"
             variant="outline"
-            className="mt-4 border-zinc-600 text-zinc-400 hover:bg-zinc-700"
+            className="mt-4 border-border text-muted-foreground hover:bg-muted"
             onClick={() => setShowAddDialog(true)}
           >
             <Plus className="w-4 h-4 mr-1.5" /> Add First Test Case
@@ -459,25 +459,25 @@ export function EvalSuiteEditor({
           return (
             <div
               key={tc.id}
-              className="border border-zinc-700 rounded-lg overflow-hidden bg-zinc-900"
+              className="border border-border rounded-lg overflow-hidden bg-card"
             >
               {/* Row */}
               <div
-                className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-zinc-800/50 transition-colors"
+                className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted transition-colors"
                 onClick={() => setExpandedId(isExpanded ? null : tc.id)}
               >
-                <GripVertical className="w-4 h-4 text-zinc-600 shrink-0" />
+                <GripVertical className="size-4 text-muted-foreground/40 shrink-0" />
                 <StatusIcon status={lastResult?.status} />
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-zinc-200 truncate">{tc.label}</p>
-                  <p className="text-xs text-zinc-500 truncate">{tc.input}</p>
+                  <p className="text-sm font-medium text-foreground/80 truncate">{tc.label}</p>
+                  <p className="text-xs text-muted-foreground truncate">{tc.input}</p>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
                   {/* Tags */}
                   {tc.tags.map((tag) => (
-                    <span key={tag} className="text-xs px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded border border-zinc-700">
+                    <span key={tag} className="text-xs px-1.5 py-0.5 bg-muted text-muted-foreground rounded border border-border">
                       {tag}
                     </span>
                   ))}
@@ -485,27 +485,27 @@ export function EvalSuiteEditor({
                   {/* Last score */}
                   {lastResult?.score != null && (
                     <span className={`text-xs font-mono font-semibold ${
-                      lastResult.score >= 0.8 ? "text-emerald-400" :
-                      lastResult.score >= 0.5 ? "text-yellow-400" : "text-red-400"
+                      lastResult.score >= 0.8 ? "text-foreground/60" :
+                      lastResult.score >= 0.5 ? "text-muted-foreground" : "text-destructive"
                     }`}>
                       {(lastResult.score * 100).toFixed(0)}%
                     </span>
                   )}
 
                   {/* Assertion count */}
-                  <span className="text-xs text-zinc-500">{tc.assertions.length} assertion{tc.assertions.length !== 1 ? "s" : ""}</span>
+                  <span className="text-xs text-muted-foreground">{tc.assertions.length} assertion{tc.assertions.length !== 1 ? "s" : ""}</span>
 
                   {/* Expand toggle */}
                   {isExpanded
-                    ? <ChevronUp className="w-4 h-4 text-zinc-500" />
-                    : <ChevronDown className="w-4 h-4 text-zinc-500" />
+                    ? <ChevronUp className="size-4 text-muted-foreground" />
+                    : <ChevronDown className="size-4 text-muted-foreground" />
                   }
 
                   {/* Delete */}
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 w-7 p-0 text-zinc-600 hover:text-red-400 hover:bg-transparent"
+                    className="h-7 w-7 p-0 text-muted-foreground/40 hover:text-destructive hover:bg-transparent"
                     disabled={deletingId === tc.id}
                     onClick={(e) => { e.stopPropagation(); handleDeleteCase(tc.id); }}
                   >
@@ -516,18 +516,18 @@ export function EvalSuiteEditor({
 
               {/* Expanded assertion details */}
               {isExpanded && (
-                <div className="border-t border-zinc-700 px-4 py-3 bg-zinc-800/30 space-y-2">
-                  <p className="text-xs font-medium text-zinc-400 mb-2">Assertions</p>
+                <div className="border-t border-border px-4 py-3 bg-muted/20 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Assertions</p>
                   {tc.assertions.map((a, idx) => (
                     <div key={idx} className="flex items-center gap-2 text-xs">
                       <AssertionBadge type={a.type} />
-                      {a.value && <span className="text-zinc-300 font-mono bg-zinc-800 px-2 py-0.5 rounded">&quot;{a.value}&quot;</span>}
-                      {a.threshold != null && <span className="text-zinc-400">threshold: <span className="text-zinc-200">{a.threshold}</span></span>}
-                      {a.rubric && <span className="text-zinc-400 italic truncate max-w-xs">{a.rubric}</span>}
+                      {a.value && <span className="text-foreground/80 font-mono bg-muted px-2 py-0.5 rounded">&quot;{a.value}&quot;</span>}
+                      {a.threshold != null && <span className="text-muted-foreground">threshold: <span className="text-foreground/80">{a.threshold}</span></span>}
+                      {a.rubric && <span className="text-muted-foreground italic truncate max-w-xs">{a.rubric}</span>}
                     </div>
                   ))}
                   {lastResult && (
-                    <p className="text-xs text-zinc-500 pt-1">
+                    <p className="text-xs text-muted-foreground pt-1">
                       Last run: {new Date(lastResult.createdAt).toLocaleString()}
                       {lastResult.latencyMs != null && ` · ${lastResult.latencyMs}ms`}
                     </p>

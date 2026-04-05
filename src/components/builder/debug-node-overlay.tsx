@@ -49,8 +49,8 @@ function BreakpointDot({ isPaused, onClick }: BreakpointDotProps) {
         "absolute -top-2 -left-2 z-50 size-4 rounded-full flex items-center justify-center",
         "shadow-md ring-2 ring-background transition-transform hover:scale-110",
         isPaused
-          ? "bg-orange-500 ring-orange-300 animate-pulse"
-          : "bg-red-500 ring-red-300"
+          ? "bg-foreground/70 ring-foreground/40 animate-pulse"
+          : "bg-destructive ring-destructive/50"
       )}
       title={isPaused ? "Paused here — click to remove breakpoint" : "Breakpoint — click to remove"}
       aria-label="Breakpoint"
@@ -83,7 +83,7 @@ function DebugNodeBadge({ nodeState }: DebugNodeBadgeProps) {
     >
       {/* Tool calls pill */}
       {toolCount > 0 && (
-        <span className="flex items-center gap-0.5 rounded-full bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-medium text-white shadow-sm">
+        <span className="flex items-center gap-0.5 rounded-full bg-muted-foreground/70 px-1.5 py-0.5 text-[10px] font-medium text-background shadow-sm">
           <Wrench className="size-2.5" />
           {toolCount}
         </span>
@@ -93,12 +93,12 @@ function DebugNodeBadge({ nodeState }: DebugNodeBadgeProps) {
       <span
         className={cn(
           "flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-white shadow-sm",
-          aggregateStatus === "running" && "bg-violet-500/90",
-          aggregateStatus === "waiting" && "bg-orange-500/90",
-          aggregateStatus === "success" && "bg-emerald-500/90",
-          aggregateStatus === "error" && "bg-red-500/90",
+          aggregateStatus === "running" && "bg-foreground/70",
+          aggregateStatus === "waiting" && "bg-foreground/50",
+          aggregateStatus === "success" && "bg-foreground/60",
+          aggregateStatus === "error" && "bg-destructive/90",
           aggregateStatus === "skipped" && "bg-muted-foreground/70",
-          aggregateStatus === "pending" && "bg-slate-600/80"
+          aggregateStatus === "pending" && "bg-muted-foreground/50"
         )}
       >
         {aggregateStatus === "running" && (
@@ -136,10 +136,10 @@ function DebugRing({ status }: { status: NodeDebugState["aggregateStatus"] }) {
       aria-hidden="true"
       className={cn(
         "pointer-events-none absolute inset-0 rounded-lg ring-2 ring-offset-0",
-        status === "running" && "ring-violet-500 animate-pulse",
-        status === "waiting" && "ring-orange-500 animate-pulse",
-        status === "success" && "ring-emerald-500",
-        status === "error" && "ring-red-500",
+        status === "running" && "ring-foreground/50 animate-pulse",
+        status === "waiting" && "ring-foreground/30 animate-pulse",
+        status === "success" && "ring-foreground/40",
+        status === "error" && "ring-destructive",
         status === "skipped" && "ring-muted-foreground/30",
         status === "pending" && "ring-transparent"
       )}

@@ -89,9 +89,9 @@ export function MCPTestPanel({ generationId }: MCPTestPanelProps): React.JSX.Ele
       {/* Validation summary */}
       <div className="flex items-center gap-3">
         {result.valid ? (
-          <CheckCircle2 className="size-5 text-green-500 shrink-0" />
+          <CheckCircle2 className="size-5 text-foreground/60 shrink-0" />
         ) : (
-          <XCircle className="size-5 text-red-500 shrink-0" />
+          <XCircle className="size-5 text-destructive shrink-0" />
         )}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium">
@@ -113,7 +113,7 @@ export function MCPTestPanel({ generationId }: MCPTestPanelProps): React.JSX.Ele
           {errors.map((issue, i) => (
             <div
               key={i}
-              className="flex items-start gap-2 text-xs text-red-500 bg-red-500/5 rounded px-2 py-1.5"
+              className="flex items-start gap-2 text-xs text-destructive bg-destructive/5 rounded px-2 py-1.5"
             >
               <XCircle className="size-3 shrink-0 mt-0.5" />
               <span>
@@ -125,7 +125,7 @@ export function MCPTestPanel({ generationId }: MCPTestPanelProps): React.JSX.Ele
           {warnings.map((issue, i) => (
             <div
               key={i}
-              className="flex items-start gap-2 text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-500/5 rounded px-2 py-1.5"
+              className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/20 rounded px-2 py-1.5"
             >
               <AlertTriangle className="size-3 shrink-0 mt-0.5" />
               <span>
@@ -150,7 +150,7 @@ export function MCPTestPanel({ generationId }: MCPTestPanelProps): React.JSX.Ele
             title="Copy config JSON"
           >
             {copiedConfig ? (
-              <Check className="size-3 text-green-500" />
+              <Check className="size-3 text-foreground/60" />
             ) : (
               <Copy className="size-3" />
             )}
@@ -158,8 +158,8 @@ export function MCPTestPanel({ generationId }: MCPTestPanelProps): React.JSX.Ele
         </div>
         <pre
           className={cn(
-            "rounded-lg border border-zinc-700 bg-zinc-900 p-3",
-            "text-[11px] leading-relaxed text-zinc-100 overflow-x-auto",
+            "rounded-lg border border-border bg-muted/30 p-3",
+            "text-[11px] leading-relaxed text-foreground overflow-x-auto",
           )}
         >
           <code>{configJson}</code>

@@ -15,62 +15,24 @@ interface BaseNodeProps {
   outputHandles?: { id: string; label: string }[];
 }
 
-const colorMap: Record<string, { bg: string; border: string; text: string }> = {
-  blue: {
-    bg: "bg-blue-50 dark:bg-blue-950/30",
-    border: "border-blue-200 dark:border-blue-800",
-    text: "text-blue-700 dark:text-blue-300",
-  },
-  purple: {
-    bg: "bg-purple-50 dark:bg-purple-950/30",
-    border: "border-purple-200 dark:border-purple-800",
-    text: "text-purple-700 dark:text-purple-300",
-  },
-  green: {
-    bg: "bg-green-50 dark:bg-green-950/30",
-    border: "border-green-200 dark:border-green-800",
-    text: "text-green-700 dark:text-green-300",
-  },
-  amber: {
-    bg: "bg-amber-50 dark:bg-amber-950/30",
-    border: "border-amber-200 dark:border-amber-800",
-    text: "text-amber-700 dark:text-amber-300",
-  },
-  teal: {
-    bg: "bg-teal-50 dark:bg-teal-950/30",
-    border: "border-teal-200 dark:border-teal-800",
-    text: "text-teal-700 dark:text-teal-300",
-  },
-  red: {
-    bg: "bg-red-50 dark:bg-red-950/30",
-    border: "border-red-200 dark:border-red-800",
-    text: "text-red-700 dark:text-red-300",
-  },
-  violet: {
-    bg: "bg-violet-50 dark:bg-violet-950/30",
-    border: "border-violet-200 dark:border-violet-800",
-    text: "text-violet-700 dark:text-violet-300",
-  },
-  orange: {
-    bg: "bg-orange-50 dark:bg-orange-950/30",
-    border: "border-orange-200 dark:border-orange-800",
-    text: "text-orange-700 dark:text-orange-300",
-  },
-  cyan: {
-    bg: "bg-cyan-50 dark:bg-cyan-950/30",
-    border: "border-cyan-200 dark:border-cyan-800",
-    text: "text-cyan-700 dark:text-cyan-300",
-  },
-  indigo: {
-    bg: "bg-indigo-50 dark:bg-indigo-950/30",
-    border: "border-indigo-200 dark:border-indigo-800",
-    text: "text-indigo-700 dark:text-indigo-300",
-  },
-  emerald: {
-    bg: "bg-emerald-50 dark:bg-emerald-950/30",
-    border: "border-emerald-200 dark:border-emerald-800",
-    text: "text-emerald-700 dark:text-emerald-300",
-  },
+const MONOCHROME_NODE_COLORS = {
+  bg: "bg-muted/30",
+  border: "border-border",
+  text: "text-muted-foreground",
+};
+
+const colorMap: Record<string, typeof MONOCHROME_NODE_COLORS> = {
+  blue: MONOCHROME_NODE_COLORS,
+  purple: MONOCHROME_NODE_COLORS,
+  green: MONOCHROME_NODE_COLORS,
+  amber: MONOCHROME_NODE_COLORS,
+  teal: MONOCHROME_NODE_COLORS,
+  red: MONOCHROME_NODE_COLORS,
+  violet: MONOCHROME_NODE_COLORS,
+  orange: MONOCHROME_NODE_COLORS,
+  cyan: MONOCHROME_NODE_COLORS,
+  indigo: MONOCHROME_NODE_COLORS,
+  emerald: MONOCHROME_NODE_COLORS,
 };
 
 export function BaseNode({
@@ -83,7 +45,7 @@ export function BaseNode({
   hasOutput = true,
   outputHandles,
 }: BaseNodeProps) {
-  const colors = colorMap[color] ?? colorMap.blue;
+  const colors = colorMap[color] ?? MONOCHROME_NODE_COLORS;
 
   return (
     <div

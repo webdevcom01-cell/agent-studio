@@ -47,7 +47,7 @@ function PipelineDiagram() {
         <rect width="900" height="560" fill="transparent" />
 
         {/* ── Stage labels ── */}
-        <text x="450" y="28" textAnchor="middle" className="fill-zinc-500 dark:fill-zinc-400" fontSize="11" fontFamily="monospace">AUTONOMOUS DEVSECOPS PIPELINE — 2026</text>
+        <text x="450" y="28" textAnchor="middle" className="fill-muted-foreground" fontSize="11" fontFamily="monospace">AUTONOMOUS DEVSECOPS PIPELINE — 2026</text>
 
         {/* ── Row 1: Webhook Trigger ── */}
         <rect x="325" y="40" width="250" height="54" rx="10" fill="#1e1b4b" stroke="#6366f1" strokeWidth="1.5" />
@@ -163,21 +163,21 @@ function SetupStep({
 }) {
   return (
     <div className="flex gap-4">
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 font-bold text-sm">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted/20 border border-border flex items-center justify-center text-muted-foreground font-bold text-sm">
         {number}
       </div>
       <div className="flex-1 pb-6">
         <div className="flex items-center gap-2 mb-1">
-          <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
           {badge && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-muted/20 text-muted-foreground border border-border">
               {badge}
             </span>
           )}
         </div>
-        <p className="text-sm text-zinc-400 mb-2">{description}</p>
+        <p className="text-sm text-muted-foreground mb-2">{description}</p>
         {code && (
-          <pre className="text-xs bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-zinc-300 overflow-x-auto font-mono">
+          <pre className="text-xs bg-muted/20 border border-border rounded-lg p-3 text-foreground/80 overflow-x-auto font-mono">
             {code}
           </pre>
         )}
@@ -202,9 +202,9 @@ function ScoreBadge({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   const colorMap: Record<string, string> = {
-    green: "border-green-500/30 bg-green-500/10 text-green-400",
-    yellow: "border-amber-500/30 bg-amber-500/10 text-amber-400",
-    red: "border-red-500/30 bg-red-500/10 text-red-400",
+    green: "border-border bg-muted/20 text-foreground/60",
+    yellow: "border-border bg-muted/20 text-muted-foreground",
+    red: "border-destructive/30 bg-muted/10 text-destructive",
   };
   return (
     <div className={`flex items-center gap-3 p-4 rounded-xl border ${colorMap[color]}`}>
@@ -233,17 +233,17 @@ function AgentCard({
   color: string;
 }) {
   const colorMap: Record<string, string> = {
-    violet: "border-violet-500/30 bg-violet-500/5",
-    blue: "border-blue-500/30 bg-blue-500/5",
-    red: "border-red-500/30 bg-red-500/5",
-    green: "border-green-500/30 bg-green-500/5",
-    orange: "border-orange-500/30 bg-orange-500/5",
+    violet: "border-border bg-card/50",
+    blue: "border-border bg-card/50",
+    red: "border-border bg-card/50",
+    green: "border-border bg-card/50",
+    orange: "border-border bg-card/50",
   };
   return (
     <div className={`p-4 rounded-xl border ${colorMap[color]}`}>
       <div className="text-2xl mb-2">{emoji}</div>
-      <div className="text-sm font-semibold text-zinc-100">{name}</div>
-      <div className="text-xs text-zinc-400 mt-1">{role}</div>
+      <div className="text-sm font-semibold text-foreground">{name}</div>
+      <div className="text-xs text-muted-foreground mt-1">{role}</div>
     </div>
   );
 }
@@ -252,22 +252,22 @@ function AgentCard({
 
 export default function DevSecOpsPage() {
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="flex h-full flex-col overflow-hidden text-foreground"><div className="flex-1 overflow-y-auto">
 
       {/* Hero */}
-      <div className="border-b border-zinc-800/60 bg-gradient-to-b from-zinc-900 to-zinc-950">
+      <div className="shrink-0 border-b border-border bg-card/60">
         <div className="max-w-5xl mx-auto px-6 py-16">
-          <div className="flex items-center gap-2 text-xs text-indigo-400 mb-4 font-mono uppercase tracking-widest">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4 font-mono uppercase tracking-widest">
             <Shield className="w-3.5 h-3.5" />
             <span>DevSecOps Pipeline · 2026</span>
           </div>
           <h1 className="text-4xl font-bold text-white mb-4 leading-tight">
             Autonomous CI/CD<br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-violet-400">
+            <span className="text-foreground">
               Security Pipeline
             </span>
           </h1>
-          <p className="text-lg text-zinc-400 max-w-2xl mb-8">
+          <p className="text-sm text-muted-foreground max-w-2xl mb-8">
             Every pull request triggers a parallel analysis across three specialized AI agents —
             code quality, SAST security scanning, and test coverage intelligence —
             delivering a risk score and automated merge decision in under 60 seconds.
@@ -275,7 +275,7 @@ export default function DevSecOpsPage() {
           <div className="flex flex-wrap gap-3">
             <Link
               href="/templates?category=devsecops"
-              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+              className="inline-flex items-center gap-2 bg-foreground hover:bg-foreground/90 text-background px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
             >
               <Zap className="w-4 h-4" />
               Browse Templates
@@ -285,7 +285,7 @@ export default function DevSecOpsPage() {
               href="https://docs.github.com/en/webhooks"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 border border-zinc-700 hover:border-zinc-500 text-zinc-300 px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+              className="inline-flex items-center gap-2 border border-border hover:border-foreground/30 text-muted-foreground px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors"
             >
               <ExternalLink className="w-4 h-4" />
               GitHub Webhooks Docs
@@ -299,10 +299,10 @@ export default function DevSecOpsPage() {
         {/* Architecture Diagram */}
         <section>
           <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-            <GitPullRequest className="w-5 h-5 text-indigo-400" />
+            <GitPullRequest className="w-5 h-5 text-muted-foreground" />
             Pipeline Architecture
           </h2>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+          <div className="rounded-2xl border border-border bg-card p-6">
             <PipelineDiagram />
           </div>
         </section>
@@ -310,10 +310,10 @@ export default function DevSecOpsPage() {
         {/* 5 Agents */}
         <section>
           <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-            <Zap className="w-5 h-5 text-violet-400" />
+            <Zap className="size-5 text-muted-foreground" />
             5 Specialized Agents
           </h2>
-          <p className="text-sm text-zinc-400 mb-6">
+          <p className="text-sm text-muted-foreground mb-6">
             Each agent has a single responsibility. They run in parallel via the A2A protocol,
             then the Orchestrator aggregates their outputs into a unified risk assessment.
           </p>
@@ -329,10 +329,10 @@ export default function DevSecOpsPage() {
         {/* Risk Score Model */}
         <section>
           <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-            <Shield className="w-5 h-5 text-red-400" />
+            <Shield className="size-5 text-muted-foreground" />
             Risk Scoring Model
           </h2>
-          <p className="text-sm text-zinc-400 mb-6">
+          <p className="text-sm text-muted-foreground mb-6">
             The Risk Aggregator calculates a score from 0–100. Deductions are applied for each finding.
             The score determines the automated merge decision.
           </p>
@@ -343,28 +343,28 @@ export default function DevSecOpsPage() {
             <ScoreBadge min={50}           label="BLOCK — request changes, cannot merge" color="red" icon={XCircle} />
           </div>
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-800 bg-zinc-900/50">
-                  <th className="text-left px-4 py-3 text-zinc-400 font-medium">Finding Type</th>
-                  <th className="text-right px-4 py-3 text-zinc-400 font-medium">Deduction</th>
-                  <th className="text-right px-4 py-3 text-zinc-400 font-medium">Max</th>
+                <tr className="border-b border-border bg-muted/20">
+                  <th className="text-left px-4 py-3 text-muted-foreground font-medium">Finding Type</th>
+                  <th className="text-right px-4 py-3 text-muted-foreground font-medium">Deduction</th>
+                  <th className="text-right px-4 py-3 text-muted-foreground font-medium">Max</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/50">
+              <tbody className="divide-y divide-border">
                 {[
-                  { type: "Critical security vulnerability (CVSS ≥ 9.0)", deduction: "−40 pts", max: "−80 pts", color: "text-red-400" },
-                  { type: "High severity finding (CVSS 7.0–8.9)",          deduction: "−20 pts", max: "−40 pts", color: "text-orange-400" },
-                  { type: "Medium severity finding (CVSS 4.0–6.9)",        deduction: "−10 pts", max: "−20 pts", color: "text-amber-400" },
-                  { type: "ESLint / TypeScript errors",                    deduction: "−5 pts",  max: "−15 pts", color: "text-yellow-400" },
-                  { type: "No tests for new code paths",                   deduction: "−10 pts", max: "−10 pts", color: "text-blue-400" },
-                  { type: "Test coverage < 60%",                           deduction: "−5 pts",  max: "−5 pts",  color: "text-blue-400" },
+                  { type: "Critical security vulnerability (CVSS ≥ 9.0)", deduction: "−40 pts", max: "−80 pts", color: "text-destructive" },
+                  { type: "High severity finding (CVSS 7.0–8.9)",          deduction: "−20 pts", max: "−40 pts", color: "text-muted-foreground" },
+                  { type: "Medium severity finding (CVSS 4.0–6.9)",        deduction: "−10 pts", max: "−20 pts", color: "text-muted-foreground" },
+                  { type: "ESLint / TypeScript errors",                    deduction: "−5 pts",  max: "−15 pts", color: "text-muted-foreground" },
+                  { type: "No tests for new code paths",                   deduction: "−10 pts", max: "−10 pts", color: "text-muted-foreground" },
+                  { type: "Test coverage < 60%",                           deduction: "−5 pts",  max: "−5 pts",  color: "text-muted-foreground" },
                 ].map((row) => (
-                  <tr key={row.type} className="hover:bg-zinc-800/30 transition-colors">
+                  <tr key={row.type} className="hover:bg-muted/20 transition-colors">
                     <td className={`px-4 py-3 ${row.color}`}>{row.type}</td>
-                    <td className="px-4 py-3 text-right font-mono text-zinc-300">{row.deduction}</td>
-                    <td className="px-4 py-3 text-right font-mono text-zinc-500">{row.max}</td>
+                    <td className="px-4 py-3 text-right font-mono text-foreground/80">{row.deduction}</td>
+                    <td className="px-4 py-3 text-right font-mono text-muted-foreground/40">{row.max}</td>
                   </tr>
                 ))}
               </tbody>
@@ -375,14 +375,14 @@ export default function DevSecOpsPage() {
         {/* Setup Guide */}
         <section>
           <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-            <Terminal className="w-5 h-5 text-green-400" />
+            <Terminal className="size-5 text-muted-foreground" />
             Setup Guide
           </h2>
-          <p className="text-sm text-zinc-400 mb-8">
+          <p className="text-sm text-muted-foreground mb-8">
             Get the full pipeline running in about 15 minutes.
           </p>
 
-          <div className="border-l-2 border-zinc-800 pl-6">
+          <div className="border-l-2 border-border pl-6">
             <SetupStep
               number={1}
               title="Create 5 agents from DevSecOps templates"
@@ -440,7 +440,7 @@ https://hooks.slack.com/services/T.../B.../...`}
         {/* What gets tested */}
         <section>
           <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-amber-400" />
+            <BookOpen className="size-5 text-muted-foreground" />
             What the Pipeline Tests
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -457,7 +457,7 @@ https://hooks.slack.com/services/T.../B.../...`}
                   "Async/await anti-patterns",
                   "God objects, feature envy",
                 ],
-                color: "border-blue-500/20",
+                color: "border-border",
               },
               {
                 icon: "🛡️",
@@ -471,7 +471,7 @@ https://hooks.slack.com/services/T.../B.../...`}
                   "Dependency CVEs (npm audit)",
                   "OWASP Top 10 (2025)",
                 ],
-                color: "border-red-500/20",
+                color: "border-border",
               },
               {
                 icon: "🧪",
@@ -485,16 +485,16 @@ https://hooks.slack.com/services/T.../B.../...`}
                   "Test quality (not just quantity)",
                   "Auto-generated missing tests",
                 ],
-                color: "border-green-500/20",
+                color: "border-border",
               },
             ].map((col) => (
-              <div key={col.title} className={`border ${col.color} bg-zinc-900/40 rounded-xl p-5`}>
+              <div key={col.title} className={`border ${col.color} bg-card/40 rounded-xl p-5`}>
                 <div className="text-2xl mb-2">{col.icon}</div>
-                <h3 className="text-sm font-bold text-zinc-100 mb-3">{col.title}</h3>
+                <h3 className="text-sm font-bold text-foreground mb-3">{col.title}</h3>
                 <ul className="space-y-1.5">
                   {col.items.map((item) => (
-                    <li key={item} className="flex items-start gap-2 text-xs text-zinc-400">
-                      <ArrowRight className="w-3 h-3 mt-0.5 flex-shrink-0 text-zinc-600" />
+                    <li key={item} className="flex items-start gap-2 text-xs text-muted-foreground/60">
+                      <ArrowRight className="size-3 mt-0.5 shrink-0 text-muted-foreground/30" />
                       {item}
                     </li>
                   ))}
@@ -507,10 +507,10 @@ https://hooks.slack.com/services/T.../B.../...`}
         {/* Node inventory */}
         <section>
           <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Zap className="w-5 h-5 text-indigo-400" />
+            <Zap className="w-5 h-5 text-muted-foreground" />
             Node Inventory — All 15 Flow Nodes
           </h2>
-          <p className="text-sm text-zinc-400 mb-6">
+          <p className="text-sm text-muted-foreground mb-6">
             This pipeline is the most comprehensive use of Agent Studio&apos;s capabilities —
             it uses 8 out of 32 available node types in a single flow.
           </p>
@@ -526,35 +526,35 @@ https://hooks.slack.com/services/T.../B.../...`}
               { type: "notification",     label: "Notification",     count: 1, desc: "Slack notification" },
               { type: "end",              label: "End",              count: 1, desc: "Pipeline complete" },
             ].map((n) => (
-              <div key={n.type} className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+              <div key={n.type} className="rounded-lg border border-border bg-card p-3">
                 <div className="flex items-center justify-between mb-1">
-                  <code className="text-xs text-indigo-300 font-mono">{n.type}</code>
-                  <span className="text-xs bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full">×{n.count}</span>
+                  <code className="text-xs text-foreground/70 font-mono">{n.type}</code>
+                  <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">×{n.count}</span>
                 </div>
-                <div className="text-xs text-zinc-500">{n.desc}</div>
+                <div className="text-xs text-muted-foreground/40">{n.desc}</div>
               </div>
             ))}
           </div>
         </section>
 
         {/* CTA */}
-        <section className="bg-gradient-to-r from-indigo-900/30 to-violet-900/30 border border-indigo-500/20 rounded-2xl p-8 text-center">
+        <section className="rounded-2xl border border-border bg-card p-8 text-center">
           <h2 className="text-2xl font-bold text-white mb-3">Ready to ship safer, faster?</h2>
-          <p className="text-zinc-400 mb-6 max-w-lg mx-auto text-sm">
+          <p className="text-muted-foreground mb-6 max-w-lg mx-auto text-sm">
             Start with the DevSecOps templates and have your first automated PR review
             running in under 15 minutes.
           </p>
           <div className="flex justify-center gap-3">
             <Link
               href="/templates?category=devsecops"
-              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg text-sm font-semibold transition-colors"
+              className="inline-flex items-center gap-2 bg-foreground hover:bg-foreground/90 text-background px-6 py-3 rounded-lg text-sm font-semibold transition-colors"
             >
               <Zap className="w-4 h-4" />
               Browse DevSecOps Templates
             </Link>
             <Link
               href="/"
-              className="inline-flex items-center gap-2 border border-zinc-700 hover:border-zinc-500 text-zinc-300 px-6 py-3 rounded-lg text-sm font-semibold transition-colors"
+              className="inline-flex items-center gap-2 border border-border hover:border-foreground/30 text-muted-foreground px-6 py-3 rounded-lg text-sm font-semibold transition-colors"
             >
               Back to Dashboard
             </Link>
@@ -562,6 +562,7 @@ https://hooks.slack.com/services/T.../B.../...`}
         </section>
 
       </div>
+    </div>
     </div>
   );
 }

@@ -139,8 +139,8 @@ export function DeployDialog({
             </div>
 
             {testResult && (
-              <div className="mt-3 rounded border border-emerald-500/30 bg-emerald-500/5 p-2">
-                <div className="mb-1 flex items-center gap-1 text-xs font-medium text-emerald-400">
+              <div className="mt-3 rounded border border-border bg-muted/10 p-2">
+                <div className="mb-1 flex items-center gap-1 text-xs font-medium text-foreground/60">
                   <CheckCircle2 className="size-3" />
                   Test passed
                 </div>
@@ -153,8 +153,8 @@ export function DeployDialog({
             )}
 
             {testError && (
-              <div className="mt-3 rounded border border-red-500/30 bg-red-500/5 p-2">
-                <div className="flex items-center gap-1 text-xs font-medium text-red-400">
+              <div className="mt-3 rounded border border-destructive/30 bg-muted/10 p-2">
+                <div className="flex items-center gap-1 text-xs font-medium text-destructive">
                   <AlertCircle className="size-3" />
                   {testError}
                 </div>

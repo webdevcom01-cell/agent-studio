@@ -20,7 +20,7 @@ function AstTransformNodeComponent({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-foreground dark:bg-muted/20 dark:text-muted-foreground">
           <Braces className="size-4" />
         </div>
         <span className="text-sm font-medium">
@@ -30,11 +30,11 @@ function AstTransformNodeComponent({ data, selected }: NodeProps) {
 
       <div className="space-y-1 text-xs text-muted-foreground">
         <div className="flex items-center gap-1">
-          <span className="rounded bg-violet-900/20 px-1 py-0.5 text-[10px] text-violet-400">
+          <span className="rounded bg-muted/20 px-1 py-0.5 text-[10px] text-muted-foreground">
             {language}
           </span>
           {hasReplacement && (
-            <span className="rounded bg-amber-900/20 px-1 py-0.5 text-[10px] text-amber-400">
+            <span className="rounded bg-muted/20 px-1 py-0.5 text-[10px] text-muted-foreground">
               refactor
             </span>
           )}

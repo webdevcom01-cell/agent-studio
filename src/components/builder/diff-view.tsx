@@ -69,9 +69,9 @@ export function DiffView({
 
             {diff.nodes.added.length > 0 && (
               <DiffSection
-                icon={<Plus className="size-3.5 text-emerald-400" />}
+                icon={<Plus className="size-3.5 text-foreground/60" />}
                 title="Added Nodes"
-                className="border-emerald-500/30 bg-emerald-500/5"
+                className="border-border bg-muted/10"
               >
                 {diff.nodes.added.map((n) => (
                   <div key={n.id} className="text-xs">
@@ -84,9 +84,9 @@ export function DiffView({
 
             {diff.nodes.removed.length > 0 && (
               <DiffSection
-                icon={<Minus className="size-3.5 text-red-400" />}
+                icon={<Minus className="size-3.5 text-destructive" />}
                 title="Removed Nodes"
-                className="border-red-500/30 bg-red-500/5"
+                className="border-border bg-destructive/10"
               >
                 {diff.nodes.removed.map((n) => (
                   <div key={n.id} className="text-xs">
@@ -99,9 +99,9 @@ export function DiffView({
 
             {diff.nodes.modified.length > 0 && (
               <DiffSection
-                icon={<Pencil className="size-3.5 text-amber-400" />}
+                icon={<Pencil className="size-3.5 text-muted-foreground" />}
                 title="Modified Nodes"
-                className="border-amber-500/30 bg-amber-500/5"
+                className="border-border bg-muted/10"
               >
                 {diff.nodes.modified.map((m) => (
                   <div key={m.after.id} className="text-xs">
@@ -117,9 +117,9 @@ export function DiffView({
 
             {diff.edges.added.length > 0 && (
               <DiffSection
-                icon={<Plus className="size-3.5 text-emerald-400" />}
+                icon={<Plus className="size-3.5 text-foreground/60" />}
                 title="Added Connections"
-                className="border-emerald-500/30 bg-emerald-500/5"
+                className="border-border bg-muted/10"
               >
                 {diff.edges.added.map((e) => (
                   <div key={e.id} className="text-xs text-muted-foreground">
@@ -131,9 +131,9 @@ export function DiffView({
 
             {diff.edges.removed.length > 0 && (
               <DiffSection
-                icon={<Minus className="size-3.5 text-red-400" />}
+                icon={<Minus className="size-3.5 text-destructive" />}
                 title="Removed Connections"
-                className="border-red-500/30 bg-red-500/5"
+                className="border-border bg-destructive/10"
               >
                 {diff.edges.removed.map((e) => (
                   <div key={e.id} className="text-xs text-muted-foreground">

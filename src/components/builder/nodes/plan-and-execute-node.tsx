@@ -19,7 +19,7 @@ export function PlanAndExecuteNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-muted-foreground">
           <Compass className="size-4" />
         </div>
         <span className="text-sm font-medium">
@@ -40,8 +40,8 @@ export function PlanAndExecuteNode({ data, selected }: NodeProps) {
       <Handle type="source" position={Position.Bottom} id="failed" style={{ left: "70%" }} />
 
       <div className="mt-2 flex justify-between text-[10px] text-muted-foreground px-1">
-        <span className="text-green-600 dark:text-green-400">Done</span>
-        <span className="text-red-600 dark:text-red-400">Failed</span>
+        <span className="text-foreground/70 dark:text-foreground/60">Done</span>
+        <span className="text-destructive dark:text-destructive">Failed</span>
       </div>
     </div>
   );

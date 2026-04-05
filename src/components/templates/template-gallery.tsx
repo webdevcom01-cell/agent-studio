@@ -18,26 +18,26 @@ export interface AgentTemplate {
 }
 
 const COLOR_CLASSES: Record<string, string> = {
-  blue:   "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  green:  "bg-green-500/10 text-green-600 dark:text-green-400",
-  red:    "bg-red-500/10 text-red-600 dark:text-red-400",
-  yellow: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
-  purple: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-  orange: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
-  amber:  "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  blue:   "bg-muted/10 text-muted-foreground",
+  green:  "bg-muted/10 text-muted-foreground",
+  red:    "bg-muted/10 text-muted-foreground",
+  yellow: "bg-muted/10 text-muted-foreground",
+  purple: "bg-muted/10 text-muted-foreground",
+  orange: "bg-muted/10 text-muted-foreground",
+  amber:  "bg-muted/10 text-muted-foreground",
   pink:   "bg-pink-500/10 text-pink-600 dark:text-pink-400",
-  teal:   "bg-teal-500/10 text-teal-600 dark:text-teal-400",
-  cyan:   "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
-  gray:   "bg-gray-500/10 text-gray-600 dark:text-gray-400",
+  teal:   "bg-muted/10 text-muted-foreground",
+  cyan:   "bg-muted/10 text-muted-foreground",
+  gray:   "bg-muted/10 text-muted-foreground",
   // Extended colors for new categories
-  indigo:  "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
-  slate:   "bg-slate-500/10 text-slate-600 dark:text-slate-400",
+  indigo:  "bg-muted/10 text-muted-foreground",
+  slate:   "bg-muted/10 text-muted-foreground",
   lime:    "bg-lime-500/10 text-lime-600 dark:text-lime-400",
   sky:     "bg-sky-500/10 text-sky-600 dark:text-sky-400",
-  violet:  "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  violet:  "bg-muted/10 text-muted-foreground",
   rose:    "bg-rose-500/10 text-rose-600 dark:text-rose-400",
-  emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  fuchsia: "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400",
+  emerald: "bg-muted/10 text-muted-foreground",
+  fuchsia: "bg-muted/10 text-muted-foreground",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -172,7 +172,7 @@ export function TemplateGallery({
                 {CATEGORY_LABELS[template.category] ?? template.category}
               </span>
               {template.category === "desktop-automation" && (
-                <span className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                <span className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted/10 text-muted-foreground">
                   CLI Required
                 </span>
               )}

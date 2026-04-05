@@ -5,9 +5,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
-  Search, Bot, MessageSquare, ArrowLeft, Zap, Database,
+  Search, Bot, MessageSquare, Zap, Database,
   Plug, Filter, SortAsc, ChevronDown, Tag, Layers, Star,
-  ArrowRightLeft, Sparkles, ExternalLink,
+  ArrowRightLeft, Sparkles, ExternalLink, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,43 +18,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import type { DiscoverAgent, DiscoverResponse } from "@/app/api/agents/discover/route";
 
 const SORT_OPTIONS = [
   { value: "popular", label: "Most Popular", icon: Star },
-  { value: "newest", label: "Newest First", icon: Sparkles },
-  { value: "name", label: "Name (A-Z)", icon: SortAsc },
+  { value: "newest", label: "Newest", icon: Sparkles },
+  { value: "name", label: "Name (A–Z)", icon: SortAsc },
   { value: "most_used", label: "Most Called", icon: ArrowRightLeft },
 ] as const;
 
 const SCOPE_OPTIONS = [
-  { value: "all", label: "All Agents" },
-  { value: "mine", label: "My Agents" },
-  { value: "public", label: "Public Only" },
+  { value: "all", label: "All" },
+  { value: "mine", label: "Mine" },
+  { value: "public", label: "Public" },
 ] as const;
-
-const CATEGORY_META: Record<string, { emoji: string; color: string }> = {
-  // Original marketplace categories
-  assistant:    { emoji: "🤖", color: "bg-blue-500/10 text-blue-400" },
-  research:     { emoji: "🔍", color: "bg-purple-500/10 text-purple-400" },
-  writing:      { emoji: "✍️",  color: "bg-green-500/10 text-green-400" },
-  coding:       { emoji: "💻", color: "bg-orange-500/10 text-orange-400" },
-  design:       { emoji: "🎨", color: "bg-pink-500/10 text-pink-400" },
-  marketing:    { emoji: "📣", color: "bg-yellow-500/10 text-yellow-400" },
-  support:      { emoji: "🎧", color: "bg-teal-500/10 text-teal-400" },
-  data:         { emoji: "📊", color: "bg-cyan-500/10 text-cyan-400" },
-  education:    { emoji: "🎓", color: "bg-amber-500/10 text-amber-400" },
-  productivity: { emoji: "⚡", color: "bg-indigo-500/10 text-indigo-400" },
-  specialized:  { emoji: "🔧", color: "bg-gray-500/10 text-gray-400" },
-  // Previously template-only categories (now unified)
-  engineering:        { emoji: "⚙️",  color: "bg-slate-500/10 text-slate-400" },
-  testing:            { emoji: "🧪", color: "bg-lime-500/10 text-lime-400" },
-  product:            { emoji: "📋", color: "bg-amber-500/10 text-amber-400" },
-  "project-management": { emoji: "📅", color: "bg-sky-500/10 text-sky-400" },
-  "game-development": { emoji: "🎮", color: "bg-violet-500/10 text-violet-400" },
-  "spatial-computing": { emoji: "🥽", color: "bg-rose-500/10 text-rose-400" },
-  "paid-media":       { emoji: "💰", color: "bg-red-500/10 text-red-400" },
-};
 
 const MODEL_LABELS: Record<string, string> = {
   "deepseek-chat": "DeepSeek",
@@ -64,12 +42,11 @@ const MODEL_LABELS: Record<string, string> = {
   "claude-haiku-4-5-20251001": "Claude Haiku",
 };
 
-export default function DiscoverPage() {
+export default function DiscoverPage(): React.ReactElement {
   const router = useRouter();
   const [data, setData] = useState<DiscoverResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -77,7 +54,6 @@ export default function DiscoverPage() {
   const [sort, setSort] = useState<string>("popular");
   const [scope, setScope] = useState<string>("all");
 
-  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
     return () => clearTimeout(timer);
@@ -99,7 +75,7 @@ export default function DiscoverPage() {
       if (json.success) {
         setData(json.data);
       } else {
-        toast.error(json.error || "Failed to load agents");
+        toast.error(json.error ?? "Failed to load agents");
       }
     } catch {
       toast.error("Failed to load agent catalog");
@@ -108,14 +84,18 @@ export default function DiscoverPage() {
     }
   }, [debouncedQuery, activeCategory, activeTags, sort, scope]);
 
-  useEffect(() => {
-    fetchAgents();
-  }, [fetchAgents]);
+  useEffect(() => { fetchAgents(); }, [fetchAgents]);
 
-  const toggleTag = (tag: string) => {
+  const toggleTag = (tag: string): void => {
     setActiveTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
     );
+  };
+
+  const clearFilters = (): void => {
+    setSearchQuery("");
+    setActiveCategory(null);
+    setActiveTags([]);
   };
 
   const currentSort = useMemo(
@@ -123,284 +103,229 @@ export default function DiscoverPage() {
     [sort]
   );
 
-  const hasActiveFilters = activeCategory || activeTags.length > 0 || debouncedQuery;
+  const hasActiveFilters = activeCategory !== null || activeTags.length > 0 || debouncedQuery !== "";
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur-sm">
-        <div className="mx-auto max-w-7xl px-6 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon-sm" asChild>
-              <Link href="/">
-                <ArrowLeft className="size-4" />
-              </Link>
-            </Button>
-            <div>
-              <h1 className="text-sm font-medium tracking-tight">Agent Marketplace</h1>
-              <p className="text-xs text-muted-foreground">
-                Discover, search, and use agents
-              </p>
-            </div>
-          </div>
+    <div className="flex h-full flex-col overflow-hidden">
 
-          <div className="flex items-center gap-2">
-            {/* Scope toggle */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
-                  <Filter className="size-3" />
-                  {SCOPE_OPTIONS.find((s) => s.value === scope)?.label}
-                  <ChevronDown className="size-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {SCOPE_OPTIONS.map((opt) => (
-                  <DropdownMenuItem
-                    key={opt.value}
-                    onClick={() => setScope(opt.value)}
-                    className={scope === opt.value ? "bg-accent" : ""}
-                  >
-                    {opt.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Sort toggle */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
-                  <currentSort.icon className="size-3" />
-                  {currentSort.label}
-                  <ChevronDown className="size-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {SORT_OPTIONS.map((opt) => (
-                  <DropdownMenuItem
-                    key={opt.value}
-                    onClick={() => setSort(opt.value)}
-                    className={sort === opt.value ? "bg-accent" : ""}
-                  >
-                    <opt.icon className="size-3.5" />
-                    {opt.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+      {/* Page header */}
+      <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border px-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/40" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search agents…"
+            className="h-8 pl-9 text-sm"
+          />
         </div>
-      </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="flex gap-8">
-          {/* ── Sidebar ──────────────────────────────────────────── */}
-          <aside className="hidden lg:block w-56 shrink-0 space-y-6">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search agents..."
-                className="pl-9 text-sm h-8"
-              />
-            </div>
-
-            {/* Categories */}
-            <div>
-              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                Categories
-              </h3>
-              <div className="space-y-0.5">
-                <button
-                  type="button"
-                  onClick={() => setActiveCategory(null)}
-                  className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors ${
-                    !activeCategory
-                      ? "bg-accent text-accent-foreground font-medium"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                  }`}
-                >
-                  <Layers className="size-3.5" />
-                  All Categories
-                  {data && (
-                    <span className="ml-auto text-[10px] tabular-nums">
-                      {data.total}
-                    </span>
-                  )}
-                </button>
-
-                {data?.categories.map((cat) => {
-                  const meta = CATEGORY_META[cat.name];
-                  return (
-                    <button
-                      key={cat.name}
-                      type="button"
-                      onClick={() =>
-                        setActiveCategory(
-                          activeCategory === cat.name ? null : cat.name
-                        )
-                      }
-                      className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors ${
-                        activeCategory === cat.name
-                          ? "bg-accent text-accent-foreground font-medium"
-                          : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                      }`}
-                    >
-                      <span className="text-sm leading-none">
-                        {meta?.emoji ?? "📁"}
-                      </span>
-                      <span className="capitalize">{cat.name}</span>
-                      <span className="ml-auto text-[10px] tabular-nums">
-                        {cat.count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Popular tags */}
-            {data && data.popularTags.length > 0 && (
-              <div>
-                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                  Popular Tags
-                </h3>
-                <div className="flex flex-wrap gap-1">
-                  {data.popularTags.slice(0, 12).map((tag) => (
-                    <button
-                      key={tag.name}
-                      type="button"
-                      onClick={() => toggleTag(tag.name)}
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                        activeTags.includes(tag.name)
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      }`}
-                    >
-                      <Tag className="size-2.5" />
-                      {tag.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Clear filters */}
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-xs"
-                onClick={() => {
-                  setSearchQuery("");
-                  setActiveCategory(null);
-                  setActiveTags([]);
-                }}
-              >
-                Clear all filters
+        <div className="flex items-center gap-1.5 ml-auto">
+          {/* Scope */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+                <Filter className="size-3" />
+                {SCOPE_OPTIONS.find((s) => s.value === scope)?.label}
+                <ChevronDown className="size-3" />
               </Button>
-            )}
-          </aside>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {SCOPE_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onClick={() => setScope(opt.value)}
+                  className={cn(scope === opt.value && "bg-accent")}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-          {/* ── Main Content ─────────────────────────────────────── */}
-          <main className="flex-1 min-w-0">
-            {/* Mobile search */}
-            <div className="lg:hidden mb-6">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search agents..."
-                  className="pl-9 text-sm"
-                />
+          {/* Sort */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+                <currentSort.icon className="size-3" />
+                {currentSort.label}
+                <ChevronDown className="size-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {SORT_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onClick={() => setSort(opt.value)}
+                  className={cn(sort === opt.value && "bg-accent")}
+                >
+                  <opt.icon className="size-3.5" />
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* Filter sidebar */}
+        <aside className="hidden w-52 shrink-0 flex-col gap-5 overflow-y-auto border-r border-border px-3 py-4 lg:flex">
+
+          {/* Categories */}
+          <div>
+            <p className="mb-2 px-1 text-[10px] font-medium uppercase tracking-widest text-foreground/20">
+              Categories
+            </p>
+            <div className="flex flex-col gap-px">
+              <button
+                type="button"
+                onClick={() => setActiveCategory(null)}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors",
+                  !activeCategory
+                    ? "bg-white/[0.06] font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-white/[0.03] hover:text-foreground"
+                )}
+              >
+                <Layers className="size-3.5 shrink-0" />
+                <span>All</span>
+                {data && (
+                  <span className="ml-auto tabular-nums text-muted-foreground/40">
+                    {data.total}
+                  </span>
+                )}
+              </button>
+
+              {data?.categories.map((cat) => (
+                <button
+                  key={cat.name}
+                  type="button"
+                  onClick={() => setActiveCategory(activeCategory === cat.name ? null : cat.name)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors",
+                    activeCategory === cat.name
+                      ? "bg-white/[0.06] font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-white/[0.03] hover:text-foreground"
+                  )}
+                >
+                  <Tag className="size-3.5 shrink-0" />
+                  <span className="capitalize">{cat.name}</span>
+                  <span className="ml-auto tabular-nums text-muted-foreground/40">
+                    {cat.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Popular tags */}
+          {data && data.popularTags.length > 0 && (
+            <div>
+              <p className="mb-2 px-1 text-[10px] font-medium uppercase tracking-widest text-foreground/20">
+                Tags
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {data.popularTags.slice(0, 12).map((tag) => (
+                  <button
+                    key={tag.name}
+                    type="button"
+                    onClick={() => toggleTag(tag.name)}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] transition-colors",
+                      activeTags.includes(tag.name)
+                        ? "border-border bg-white/[0.08] text-foreground"
+                        : "border-transparent text-muted-foreground/40 hover:border-border hover:text-muted-foreground"
+                    )}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
               </div>
             </div>
+          )}
 
-            {/* Results header */}
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-xs text-muted-foreground">
-                {isLoading
-                  ? "Searching..."
-                  : `${data?.total ?? 0} agent${(data?.total ?? 0) !== 1 ? "s" : ""} found`}
-              </p>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground/40 transition-colors hover:text-muted-foreground"
+            >
+              <X className="size-3" />
+              Clear filters
+            </button>
+          )}
+        </aside>
 
-              {/* Active filter pills */}
-              {(activeCategory || activeTags.length > 0) && (
-                <div className="flex items-center gap-1">
-                  {activeCategory && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-medium">
-                      {CATEGORY_META[activeCategory]?.emoji} {activeCategory}
-                      <button
-                        type="button"
-                        onClick={() => setActiveCategory(null)}
-                        className="ml-0.5 hover:text-primary/70"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  )}
-                  {activeTags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-medium"
-                    >
-                      {tag}
-                      <button
-                        type="button"
-                        onClick={() => toggleTag(tag)}
-                        className="ml-0.5 hover:text-primary/70"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+        {/* Main content */}
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
-            {/* Agent grid */}
-            {isLoading ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="animate-pulse rounded-lg border border-border bg-card p-5 space-y-3"
+          {/* Results bar */}
+          <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-4">
+            <span className="text-xs text-muted-foreground/40">
+              {isLoading
+                ? "Searching…"
+                : `${data?.total ?? 0} agent${(data?.total ?? 0) !== 1 ? "s" : ""}`
+              }
+            </span>
+
+            {(activeCategory ?? activeTags.length > 0) && (
+              <div className="flex items-center gap-1">
+                {activeCategory && (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-border bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    {activeCategory}
+                    <button type="button" onClick={() => setActiveCategory(null)}>
+                      <X className="size-2.5" />
+                    </button>
+                  </span>
+                )}
+                {activeTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 rounded-md border border-border bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-muted-foreground"
                   >
-                    <div className="h-4 w-28 rounded bg-muted" />
-                    <div className="h-3 w-40 rounded bg-muted" />
-                    <div className="h-3 w-20 rounded bg-muted" />
-                    <div className="flex gap-2 pt-2">
-                      <div className="h-6 w-16 rounded bg-muted" />
-                      <div className="h-6 w-16 rounded bg-muted" />
+                    {tag}
+                    <button type="button" onClick={() => toggleTag(tag)}>
+                      <X className="size-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Grid */}
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            {isLoading ? (
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="animate-pulse space-y-3 rounded-lg border border-border bg-card p-4">
+                    <div className="h-3.5 w-32 rounded bg-muted" />
+                    <div className="h-3 w-48 rounded bg-muted" />
+                    <div className="h-3 w-24 rounded bg-muted" />
+                    <div className="flex gap-2 pt-1">
+                      <div className="h-6 w-14 rounded bg-muted" />
+                      <div className="h-6 w-14 rounded bg-muted" />
                     </div>
                   </div>
                 ))}
               </div>
             ) : !data || data.agents.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center">
-                <div className="rounded-full border border-border p-4 mb-5">
-                  <Bot className="size-6 text-muted-foreground" />
+                <div className="mb-5 rounded-full border border-border p-4">
+                  <Bot className="size-5 text-muted-foreground/40" />
                 </div>
-                <h2 className="text-base font-medium mb-1">No agents found</h2>
-                <p className="text-sm text-muted-foreground mb-6 max-w-xs">
+                <h2 className="mb-1 text-sm font-medium">No agents found</h2>
+                <p className="mb-6 max-w-xs text-sm text-muted-foreground">
                   {hasActiveFilters
                     ? "Try adjusting your filters or search query."
-                    : "Create your first agent to get started."}
+                    : "Create your first agent to get started."
+                  }
                 </p>
                 {hasActiveFilters ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setActiveCategory(null);
-                      setActiveTags([]);
-                    }}
-                  >
+                  <Button variant="outline" size="sm" onClick={clearFilters}>
                     Clear filters
                   </Button>
                 ) : (
@@ -410,41 +335,32 @@ export default function DiscoverPage() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
                 {data.agents.map((agent) => (
                   <AgentCard key={agent.id} agent={agent} />
                 ))}
               </div>
             )}
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
     </div>
   );
 }
 
-// ─── Agent Card Component ─────────────────────────────────────────────────────
-
-function AgentCard({ agent }: { agent: DiscoverAgent }) {
-  const catMeta = agent.category ? CATEGORY_META[agent.category] : null;
+function AgentCard({ agent }: { agent: DiscoverAgent }): React.ReactElement {
   const modelLabel = MODEL_LABELS[agent.model] ?? agent.model;
   const totalUsage = agent.stats.conversationCount + agent.stats.callsReceived;
 
   return (
-    <div className="group relative flex flex-col rounded-lg border border-border bg-card p-5 transition-all duration-200 hover:border-foreground/20 hover:shadow-sm">
+    <div className="group flex flex-col rounded-lg border border-border bg-card p-4 transition-colors duration-150 hover:border-border/80 hover:bg-card/80">
       {/* Header */}
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          {catMeta && (
-            <span className="text-lg leading-none shrink-0">{catMeta.emoji}</span>
-          )}
-          <h3 className="text-sm font-medium leading-snug text-foreground truncate">
-            {agent.name}
-          </h3>
-        </div>
-
+      <div className="mb-1.5 flex items-start justify-between gap-2">
+        <h3 className="flex-1 truncate text-sm font-medium leading-snug text-foreground">
+          {agent.name}
+        </h3>
         {agent.isPublic && (
-          <span className="shrink-0 ml-2 inline-flex items-center rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-500">
+          <span className="shrink-0 rounded-md border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground/40">
             Public
           </span>
         )}
@@ -452,107 +368,108 @@ function AgentCard({ agent }: { agent: DiscoverAgent }) {
 
       {/* Description */}
       {agent.description ? (
-        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 mb-3 flex-1">
+        <p className="mb-3 line-clamp-2 flex-1 text-xs leading-relaxed text-muted-foreground">
           {agent.description}
         </p>
       ) : (
-        <div className="flex-1 mb-3" />
+        <div className="mb-3 flex-1" />
       )}
 
       {/* Category + tags */}
-      <div className="flex flex-wrap gap-1 mb-3">
-        {agent.category && catMeta && (
-          <span
-            className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${catMeta.color}`}
-          >
-            {agent.category}
-          </span>
-        )}
-        {agent.tags.slice(0, 3).map((tag) => (
-          <span
-            key={tag}
-            className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
-          >
-            <Tag className="size-2" />
-            {tag}
-          </span>
-        ))}
-        {agent.tags.length > 3 && (
-          <span className="text-[10px] text-muted-foreground">
-            +{agent.tags.length - 3}
-          </span>
-        )}
-      </div>
+      {(agent.category ?? agent.tags.length > 0) && (
+        <div className="mb-3 flex flex-wrap gap-1">
+          {agent.category && (
+            <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground/60">
+              <Tag className="size-2.5" />
+              {agent.category}
+            </span>
+          )}
+          {agent.tags.slice(0, 2).map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex items-center rounded-md border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground/40"
+            >
+              {tag}
+            </span>
+          ))}
+          {agent.tags.length > 2 && (
+            <span className="text-[10px] text-muted-foreground/30">
+              +{agent.tags.length - 2}
+            </span>
+          )}
+        </div>
+      )}
 
-      {/* Stats row */}
-      <div className="flex items-center gap-3 text-[11px] text-muted-foreground mb-4">
-        <span className="flex items-center gap-1" title="Conversations">
+      {/* Stats */}
+      <div className="mb-3 flex items-center gap-3 text-[11px] text-muted-foreground/40">
+        <span className="flex items-center gap-1">
           <MessageSquare className="size-3" />
           {agent.stats.conversationCount}
         </span>
         {agent.stats.skillCount > 0 && (
-          <span className="flex items-center gap-1" title="Skills">
+          <span className="flex items-center gap-1">
             <Zap className="size-3" />
             {agent.stats.skillCount}
           </span>
         )}
         {agent.stats.hasKnowledgeBase && (
-          <span className="flex items-center gap-1" title="Has Knowledge Base">
+          <span className="flex items-center gap-1">
             <Database className="size-3" />
             KB
           </span>
         )}
         {agent.stats.hasMCPTools && (
-          <span className="flex items-center gap-1" title="Has MCP Tools">
+          <span className="flex items-center gap-1">
             <Plug className="size-3" />
             MCP
           </span>
         )}
         {totalUsage > 0 && (
-          <span className="flex items-center gap-1 ml-auto" title="Total usage">
+          <span className="ml-auto flex items-center gap-1">
             <Star className="size-3" />
             {totalUsage}
           </span>
         )}
       </div>
 
-      {/* Model badge */}
-      <div className="flex items-center justify-between mb-3">
-        <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-          {modelLabel}
-        </span>
-        {agent.owner && (
-          <div className="flex items-center gap-1.5">
-            {agent.owner.image && (
-              <Image
-                src={agent.owner.image}
-                alt=""
-                width={14}
-                height={14}
-                className="rounded-full"
-              />
-            )}
-            <span className="text-[10px] text-muted-foreground truncate max-w-20">
-              {agent.owner.name ?? "User"}
-            </span>
-          </div>
-        )}
-      </div>
+      {/* Footer: model + owner + actions */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/30">
+            {modelLabel}
+          </span>
+          {agent.owner && (
+            <div className="flex items-center gap-1 min-w-0">
+              {agent.owner.image && (
+                <Image
+                  src={agent.owner.image}
+                  alt=""
+                  width={12}
+                  height={12}
+                  className="rounded-full"
+                />
+              )}
+              <span className="truncate text-[10px] text-muted-foreground/30 max-w-[80px]">
+                {agent.owner.name ?? "User"}
+              </span>
+            </div>
+          )}
+        </div>
 
-      {/* Actions */}
-      <div className="flex gap-1.5">
-        <Button size="sm" variant="outline" asChild className="flex-1 h-7 text-xs font-normal">
-          <Link href={`/builder/${agent.id}`}>
-            <ExternalLink className="size-3 mr-1" />
-            View
-          </Link>
-        </Button>
-        <Button size="sm" asChild className="flex-1 h-7 text-xs font-normal">
-          <Link href={`/chat/${agent.id}`}>
-            <MessageSquare className="size-3 mr-1" />
-            Chat
-          </Link>
-        </Button>
+        <div className="flex shrink-0 gap-1.5">
+          <Button size="sm" variant="outline" asChild className="h-7 text-xs font-normal">
+            <Link href={`/builder/${agent.id}`}>
+              <ExternalLink className="size-3" />
+              View
+            </Link>
+          </Button>
+          <Button size="sm" asChild className="h-7 text-xs font-normal">
+            <Link href={`/chat/${agent.id}`}>
+              <MessageSquare className="size-3" />
+              Chat
+            </Link>
+          </Button>
+        </div>
       </div>
     </div>
   );

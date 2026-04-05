@@ -7,15 +7,14 @@ import {
   ArrowLeft,
   Send,
   Bot,
-  User,
   Square,
   MessageSquare,
   Plus,
-  ChevronLeft,
-  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useStreamingChat, type ChatMessage } from "@/components/chat/use-streaming-chat";
 import { PipelineProgress } from "@/components/chat/pipeline-progress";
@@ -32,13 +31,12 @@ export default function ChatPage({
   params,
 }: {
   params: Promise<{ agentId: string }>;
-}) {
+}): React.ReactElement {
   const { agentId } = use(params);
   const [agentName, setAgentName] = useState("Agent");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Sidebar state
   const [showSidebar, setShowSidebar] = useState(true);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -55,7 +53,6 @@ export default function ChatPage({
     loadConversation,
   } = useStreamingChat({ agentId });
 
-  // Keep active conversation indicator in sync
   useEffect(() => {
     if (conversationId) setActiveConvId(conversationId);
   }, [conversationId]);
@@ -63,38 +60,25 @@ export default function ChatPage({
   useEffect(() => {
     fetch(`/api/agents/${agentId}`)
       .then((r) => r.json())
-      .then((json) => {
-        if (json.success) setAgentName(json.data.name);
-      })
+      .then((json) => { if (json.success) setAgentName(json.data.name); })
       .catch(() => {});
   }, [agentId]);
 
   const fetchConversations = useCallback(() => {
     fetch(`/api/agents/${agentId}/conversations`)
       .then((r) => r.json())
-      .then((json) => {
-        if (json.success) setConversations(json.data);
-      })
+      .then((json) => { if (json.success) setConversations(json.data); })
       .catch(() => {});
   }, [agentId]);
 
-  useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
-
-  // Refresh conversation list when a new one starts
-  useEffect(() => {
-    if (conversationId) fetchConversations();
-  }, [conversationId, fetchConversations]);
+  useEffect(() => { fetchConversations(); }, [fetchConversations]);
+  useEffect(() => { if (conversationId) fetchConversations(); }, [conversationId, fetchConversations]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  async function handleSelectConversation(conv: ConversationSummary) {
+  async function handleSelectConversation(conv: ConversationSummary): Promise<void> {
     if (conv.id === activeConvId && messages.length > 0) return;
     try {
       const res = await fetch(`/api/agents/${agentId}/conversations/${conv.id}`);
@@ -115,54 +99,69 @@ export default function ChatPage({
     }
   }
 
-  function handleNewChat() {
+  function handleNewChat(): void {
     resetChat();
     setActiveConvId(null);
     inputRef.current?.focus();
   }
 
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (input.trim() && !isLoading) sendMessage();
+    }
+  }
+
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2 border-b px-4 py-2 shrink-0">
-        <Button variant="ghost" size="icon-sm" aria-label="Back to flow builder" asChild>
-          <Link href={`/builder/${agentId}`}>
-            <ArrowLeft className="size-4" aria-hidden="true" />
-          </Link>
+      <div className="flex h-[52px] shrink-0 items-center gap-1 border-b border-border px-3">
+        <Button variant="ghost" size="icon-sm" asChild aria-label="Back to dashboard">
+          <Link href="/"><ArrowLeft className="size-3.5" /></Link>
         </Button>
+
         <Button
           variant="ghost"
           size="icon-sm"
           aria-label={showSidebar ? "Hide conversations" : "Show conversations"}
           onClick={() => setShowSidebar((v) => !v)}
-          title="Toggle conversation list"
         >
-          {showSidebar ? (
-            <ChevronLeft className="size-4" aria-hidden="true" />
-          ) : (
-            <ChevronRight className="size-4" aria-hidden="true" />
-          )}
+          {showSidebar
+            ? <PanelLeftClose className="size-3.5" />
+            : <PanelLeftOpen className="size-3.5" />
+          }
         </Button>
-        <h2 className="text-sm font-semibold flex-1">{agentName}</h2>
-        <Button variant="outline" size="sm" onClick={handleNewChat}>
-          <Plus className="mr-1.5 size-3.5" />
+
+        <span className="mx-1 flex-1 text-sm font-medium tracking-tight text-foreground">
+          {agentName}
+        </span>
+
+        <Button variant="ghost" size="icon-sm" asChild title="Open in Builder" aria-label="Open in Builder">
+          <Link href={`/builder/${agentId}`}><Workflow className="size-3.5" /></Link>
+        </Button>
+
+        <div className="mx-1 h-4 w-px bg-border" />
+
+        <Button variant="outline" size="sm" onClick={handleNewChat} className="gap-1.5">
+          <Plus className="size-3.5" />
           New Chat
         </Button>
       </div>
 
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
+
         {/* Conversation sidebar */}
         {showSidebar && (
-          <div className="flex w-60 shrink-0 flex-col border-r bg-muted/20">
-            <div className="px-3 py-2 border-b">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <div className="flex w-56 shrink-0 flex-col border-r border-border">
+            <div className="border-b border-border px-3 py-2.5">
+              <p className="text-[10px] font-medium uppercase tracking-widest text-foreground/20">
                 Conversations
               </p>
             </div>
             <div className="flex-1 overflow-y-auto py-1">
               {conversations.length === 0 ? (
-                <p className="px-3 py-4 text-xs text-muted-foreground text-center">
+                <p className="px-3 py-6 text-center text-xs text-muted-foreground/40">
                   No conversations yet
                 </p>
               ) : (
@@ -171,20 +170,20 @@ export default function ChatPage({
                     key={conv.id}
                     onClick={() => handleSelectConversation(conv)}
                     className={cn(
-                      "w-full text-left px-3 py-2.5 hover:bg-muted/60 transition-colors border-b border-border/40 last:border-0",
-                      activeConvId === conv.id && "bg-muted"
+                      "group w-full border-b border-border/40 px-3 py-2.5 text-left transition-colors last:border-0 hover:bg-white/[0.02]",
+                      activeConvId === conv.id && "bg-white/[0.04]"
                     )}
                   >
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <MessageSquare className="size-3 shrink-0 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">
+                    <div className="mb-0.5 flex items-center gap-1.5">
+                      <MessageSquare className="size-3 shrink-0 text-muted-foreground/30" />
+                      <span className="text-[10px] text-muted-foreground/40">
                         {new Date(conv.updatedAt).toLocaleDateString(undefined, {
                           month: "short",
                           day: "numeric",
                         })}
                       </span>
                     </div>
-                    <p className="text-xs text-foreground line-clamp-2 pl-5">
+                    <p className="line-clamp-2 pl-[18px] text-xs text-muted-foreground group-hover:text-foreground">
                       {conv.preview || "Empty conversation"}
                     </p>
                   </button>
@@ -196,98 +195,102 @@ export default function ChatPage({
 
         {/* Chat area */}
         <div className="flex flex-1 flex-col overflow-hidden">
+
+          {/* Messages */}
           <div
             ref={scrollRef}
-            className="flex-1 overflow-y-auto p-4 space-y-4"
+            className="flex-1 overflow-y-auto px-4 py-6"
             aria-live="polite"
             aria-label="Chat messages"
             role="log"
           >
-            {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                <Bot className="size-12 mb-4" />
-                <p>Send a message to start chatting with {agentName}</p>
-              </div>
-            )}
+            <div className="mx-auto flex max-w-2xl flex-col gap-5">
+              {messages.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <div className="mb-4 rounded-full border border-border p-4">
+                    <Bot className="size-5 text-muted-foreground/40" />
+                  </div>
+                  <p className="text-sm text-muted-foreground/40">
+                    Start a conversation with {agentName}
+                  </p>
+                </div>
+              )}
 
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                data-testid={`chat-message-${msg.role}`}
-                className={cn(
-                  "flex gap-3 max-w-2xl",
-                  msg.role === "user" ? "ml-auto flex-row-reverse" : ""
-                )}
-              >
+              {messages.map((msg, i) => (
                 <div
+                  key={i}
+                  data-testid={`chat-message-${msg.role}`}
                   className={cn(
-                    "flex size-8 shrink-0 items-center justify-center rounded-full",
-                    msg.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
+                    "flex gap-3",
+                    msg.role === "user" && "flex-row-reverse"
                   )}
                 >
-                  {msg.role === "user" ? (
-                    <User className="size-4" aria-hidden="true" />
-                  ) : (
-                    <Bot className="size-4" aria-hidden="true" />
-                  )}
-                </div>
-                <div
-                  className={cn(
-                    "rounded-lg px-4 py-2.5 text-sm",
+                  {/* Avatar */}
+                  <div className={cn(
+                    "flex size-7 shrink-0 items-center justify-center rounded-full border border-border text-[11px] font-medium",
                     msg.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
-                  )}
-                >
-                  {msg.role === "assistant" ? (
-                    <>
-                      {msg.content ? (
-                        <div className="markdown-body">
-                          <ReactMarkdown>{msg.content}</ReactMarkdown>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground italic">...</span>
-                      )}
-                      {(msg.metadata as { plots?: string[] } | undefined)?.plots?.map((src, pi) => (
-                        <div
-                          key={pi}
-                          className="mt-3 overflow-hidden rounded-lg border border-border bg-muted/30"
-                        >
-                          <img
-                            src={src}
-                            alt={`Python plot ${pi + 1}`}
-                            className="max-w-full"
-                            loading="lazy"
-                          />
-                        </div>
-                      ))}
-                    </>
-                  ) : (
-                    msg.content
-                  )}
-                </div>
-              </div>
-            ))}
+                      ? "bg-foreground text-background"
+                      : "bg-card text-muted-foreground"
+                  )}>
+                    {msg.role === "user" ? "U" : <Bot className="size-3.5" />}
+                  </div>
 
-            {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
-              <div className="flex gap-3" data-testid="chat-loading">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                  <Bot className="size-4" />
-                </div>
-                <div className="rounded-lg bg-muted px-4 py-2.5">
-                  <div className="flex gap-1">
-                    <span className="size-2 rounded-full bg-muted-foreground/50 animate-bounce" />
-                    <span className="size-2 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:150ms]" />
-                    <span className="size-2 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:300ms]" />
+                  {/* Bubble */}
+                  <div className={cn(
+                    "max-w-[80%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed",
+                    msg.role === "user"
+                      ? "rounded-tr-sm bg-foreground text-background"
+                      : "rounded-tl-sm border border-border bg-card text-foreground"
+                  )}>
+                    {msg.role === "assistant" ? (
+                      <>
+                        {msg.content ? (
+                          <div className="prose prose-sm prose-invert max-w-none">
+                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          </div>
+                        ) : (
+                          <span className="italic text-muted-foreground">…</span>
+                        )}
+                        {(msg.metadata as { plots?: string[] } | undefined)?.plots?.map((src, pi) => (
+                          <div
+                            key={pi}
+                            className="mt-3 overflow-hidden rounded-lg border border-border"
+                          >
+                            <img
+                              src={src}
+                              alt={`Python plot ${pi + 1}`}
+                              className="max-w-full"
+                              loading="lazy"
+                            />
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      msg.content
+                    )}
                   </div>
                 </div>
-              </div>
-            )}
+              ))}
+
+              {/* Typing indicator */}
+              {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
+                <div className="flex gap-3" data-testid="chat-loading">
+                  <div className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-card">
+                    <Bot className="size-3.5 text-muted-foreground/40" />
+                  </div>
+                  <div className="rounded-xl rounded-tl-sm border border-border bg-card px-4 py-3">
+                    <div className="flex gap-1">
+                      <span className="size-1.5 rounded-full bg-muted-foreground/30 animate-bounce" />
+                      <span className="size-1.5 rounded-full bg-muted-foreground/30 animate-bounce [animation-delay:150ms]" />
+                      <span className="size-1.5 rounded-full bg-muted-foreground/30 animate-bounce [animation-delay:300ms]" />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Pipeline progress — visible during multi-agent pipeline execution */}
+          {/* Pipeline progress */}
           <PipelineProgress
             agentId={agentId}
             conversationId={conversationId ?? null}
@@ -295,44 +298,53 @@ export default function ChatPage({
           />
 
           {/* Input bar */}
-          <div className="border-t p-4 shrink-0">
+          <div className="shrink-0 border-t border-border px-4 py-3">
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                sendMessage();
-              }}
-              className="mx-auto flex max-w-2xl gap-2"
+              onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
+              className="mx-auto flex max-w-2xl items-end gap-2"
             >
-              <Input
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Type a message..."
-                disabled={isLoading}
-                autoFocus
-                data-testid="chat-input"
-              />
+              <div className="relative flex-1">
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Message…"
+                  disabled={isLoading}
+                  rows={1}
+                  autoFocus
+                  data-testid="chat-input"
+                  className="w-full resize-none rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 max-h-[120px] overflow-y-auto"
+                />
+              </div>
               {isLoading ? (
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
                   onClick={stopGeneration}
                   aria-label="Stop generating"
                   data-testid="chat-stop-btn"
+                  className="shrink-0"
                 >
-                  <Square className="size-4 fill-current" aria-hidden="true" />
+                  <Square className="size-3.5 fill-current" />
                 </Button>
               ) : (
                 <Button
                   type="submit"
+                  size="sm"
                   disabled={!input.trim()}
                   aria-label="Send message"
                   data-testid="chat-send-btn"
+                  className="shrink-0"
                 >
-                  <Send className="size-4" aria-hidden="true" />
+                  <Send className="size-3.5" />
                 </Button>
               )}
             </form>
+            <p className="mt-1.5 text-center text-[11px] text-muted-foreground/20">
+              Enter to send · Shift+Enter for new line
+            </p>
           </div>
         </div>
       </div>

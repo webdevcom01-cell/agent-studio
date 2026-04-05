@@ -81,20 +81,20 @@ interface WebhookDetail extends WebhookSummary {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function statusColor(status: string): string {
-  if (status === "COMPLETED") return "text-green-400";
-  if (status === "FAILED" || status === "SKIPPED") return "text-red-400";
-  if (status === "RUNNING") return "text-blue-400";
-  return "text-zinc-400";
+  if (status === "COMPLETED") return "text-foreground/60";
+  if (status === "FAILED" || status === "SKIPPED") return "text-destructive";
+  if (status === "RUNNING") return "text-muted-foreground";
+  return "text-muted-foreground";
 }
 
 function statusBadgeClass(status: string): string {
   if (status === "COMPLETED")
-    return "bg-green-900/30 text-green-300 border-green-800/50";
+    return "bg-muted/20 text-foreground/60 border-border";
   if (status === "FAILED" || status === "SKIPPED")
-    return "bg-red-900/30 text-red-300 border-red-800/50";
+    return "bg-muted/10 text-destructive border-destructive/30";
   if (status === "RUNNING")
-    return "bg-blue-900/30 text-blue-300 border-blue-800/50";
-  return "bg-zinc-800 text-zinc-400 border-zinc-700";
+    return "bg-muted/20 text-muted-foreground border-border";
+  return "bg-muted text-muted-foreground border-border";
 }
 
 function relativeTime(iso: string): string {
@@ -140,7 +140,7 @@ function PresetPickerDialog({
               key={preset.id}
               type="button"
               onClick={() => { onApply(preset); onClose(); }}
-              className="text-left rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 hover:border-violet-700/60 hover:bg-violet-900/10 transition-colors group"
+              className="text-left rounded-lg border border-border bg-card p-3 hover:border-foreground/20 transition-colors group"
             >
               <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-lg">{preset.icon}</span>
@@ -148,7 +148,7 @@ function PresetPickerDialog({
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">{preset.description}</p>
               {preset.id !== "generic" && (
-                <p className="text-[10px] text-violet-400 mt-2">
+                <p className="text-[10px] text-muted-foreground/60 mt-2">
                   {preset.bodyMappings.length} body · {preset.headerMappings.length} header mappings
                 </p>
               )}
@@ -196,18 +196,18 @@ function EventFilterEditor({
       {/* Current filters as tags */}
       <div className="flex flex-wrap gap-1.5 min-h-[28px]">
         {filters.length === 0 ? (
-          <span className="text-xs text-zinc-600 italic">No filters — all events are accepted</span>
+          <span className="text-xs text-muted-foreground/40 italic">No filters — all events are accepted</span>
         ) : (
           filters.map((f) => (
             <span
               key={f}
-              className="inline-flex items-center gap-1 rounded-full bg-violet-900/30 border border-violet-700/40 px-2 py-0.5 text-xs text-violet-300"
+              className="inline-flex items-center gap-1 rounded-full bg-muted/20 border border-border px-2 py-0.5 text-xs text-muted-foreground"
             >
               {f}
               <button
                 type="button"
                 onClick={() => onRemove(f)}
-                className="hover:text-violet-100 transition-colors"
+                className="hover:text-foreground transition-colors"
                 aria-label={`Remove ${f}`}
               >
                 <X className="size-3" />
@@ -244,13 +244,13 @@ function EventFilterEditor({
 
         {/* Suggestions dropdown */}
         {showSuggestions && filtered.length > 0 && (
-          <div className="absolute z-50 top-full mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 shadow-lg py-1 max-h-48 overflow-y-auto">
+          <div className="absolute z-50 top-full mt-1 w-full rounded-md border border-border bg-card shadow-lg py-1 max-h-48 overflow-y-auto">
             {filtered.slice(0, 20).map((s) => (
               <button
                 key={s}
                 type="button"
                 onMouseDown={(e) => { e.preventDefault(); add(s); }}
-                className="w-full text-left px-3 py-1.5 text-xs hover:bg-zinc-800 transition-colors"
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors"
               >
                 {s}
               </button>
@@ -258,7 +258,7 @@ function EventFilterEditor({
           </div>
         )}
       </div>
-      <p className="text-[11px] text-zinc-600">
+      <p className="text-[11px] text-muted-foreground/40">
         Leave empty to accept all events. Press Enter or click Add to add a filter.
       </p>
     </div>
@@ -293,7 +293,7 @@ function BodyMappingsEditor({
     <div className="space-y-2">
       {mappings.length > 0 ? (
         <div className="space-y-1.5">
-          <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-1.5 text-[10px] text-zinc-500 px-0.5">
+          <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-1.5 text-[10px] text-muted-foreground/40 px-0.5">
             <span>JSONPath</span><span>Variable name</span><span>Type</span><span />
           </div>
           {mappings.map((m, i) => (
@@ -332,7 +332,7 @@ function BodyMappingsEditor({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-zinc-600 italic">No body mappings configured.</p>
+        <p className="text-xs text-muted-foreground/40 italic">No body mappings configured.</p>
       )}
       {mappings.length < 20 && (
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addRow}>
@@ -369,7 +369,7 @@ function HeaderMappingsEditor({
     <div className="space-y-2">
       {mappings.length > 0 ? (
         <div className="space-y-1.5">
-          <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 text-[10px] text-zinc-500 px-0.5">
+          <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 text-[10px] text-muted-foreground/40 px-0.5">
             <span>Header name</span><span>Variable name</span><span />
           </div>
           {mappings.map((m, i) => (
@@ -398,7 +398,7 @@ function HeaderMappingsEditor({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-zinc-600 italic">No header mappings configured.</p>
+        <p className="text-xs text-muted-foreground/40 italic">No header mappings configured.</p>
       )}
       {mappings.length < 20 && (
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addRow}>
@@ -500,7 +500,7 @@ function ConfigTab({
   return (
     <div className="space-y-6">
       {/* Preset picker banner */}
-      <div className="flex items-center justify-between rounded-lg border border-dashed border-zinc-700 bg-zinc-900/30 px-4 py-3">
+      <div className="flex items-center justify-between rounded-lg border border-dashed border-border bg-muted/10 px-4 py-3">
         <div>
           <p className="text-sm font-medium">Provider Presets</p>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -520,7 +520,7 @@ function ConfigTab({
       {/* Event Filters */}
       <div className="space-y-2.5">
         <div className="flex items-center gap-2">
-          <Filter className="size-3.5 text-violet-400" />
+          <Filter className="size-3.5 text-muted-foreground" />
           <h3 className="text-sm font-medium">Event Filters</h3>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -567,7 +567,7 @@ function ConfigTab({
 
       {/* Save bar */}
       <div className={`flex items-center justify-between rounded-lg border px-4 py-3 transition-colors ${
-        dirty ? "border-blue-800/50 bg-blue-900/10" : "border-zinc-800 bg-zinc-900/20"
+        dirty ? "border-foreground/20 bg-muted/10" : "border-border bg-muted/5"
       }`}>
         <p className="text-xs text-muted-foreground">
           {dirty ? "You have unsaved changes" : "Configuration is up to date"}
@@ -680,8 +680,8 @@ function CreateWebhookDialog({
                   onClick={() => setSelectedPreset(selectedPreset?.id === preset.id ? null : preset)}
                   className={`rounded-lg border p-2 text-center transition-colors ${
                     selectedPreset?.id === preset.id
-                      ? "border-violet-600 bg-violet-900/20 text-violet-300"
-                      : "border-zinc-800 hover:border-zinc-600 text-zinc-400"
+                      ? "border-border bg-foreground/5 text-foreground"
+                      : "border-border hover:border-foreground/20 text-muted-foreground/60"
                   }`}
                 >
                   <div className="text-xl mb-1">{preset.icon}</div>
@@ -690,7 +690,7 @@ function CreateWebhookDialog({
               ))}
             </div>
             {selectedPreset && (
-              <div className="rounded-md border border-dashed border-violet-700/40 bg-violet-900/10 px-3 py-2 text-xs text-violet-300">
+              <div className="rounded-md border border-dashed border-border bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
                 <strong>{selectedPreset.name}</strong> preset selected —{" "}
                 {selectedPreset.bodyMappings.length} body mappings,{" "}
                 {selectedPreset.headerMappings.length} header mappings
@@ -703,7 +703,7 @@ function CreateWebhookDialog({
                     href={selectedPreset.docs}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-0.5 ml-2 text-violet-400 hover:text-violet-300"
+                    className="inline-flex items-center gap-0.5 ml-2 text-muted-foreground hover:text-foreground"
                     onClick={(e) => e.stopPropagation()}
                   >
                     Docs <ExternalLink className="size-2.5" />
@@ -798,7 +798,7 @@ function TestPanel({
   return (
     <div className="space-y-4">
       {webhook.eventFilters.length > 0 && (
-        <div className="rounded-md border border-amber-800/50 bg-amber-900/10 px-3 py-2 text-xs text-amber-300">
+        <div className="rounded-md border border-border bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
           <Filter className="inline size-3 mr-1" />
           Event filters are active: {webhook.eventFilters.join(", ")}. Make sure your test event type matches.
         </div>
@@ -829,13 +829,13 @@ function TestPanel({
       </Button>
 
       {result && (
-        <div className={`rounded-md border p-3 space-y-1 ${result.ok ? "border-green-800/50 bg-green-900/20" : "border-red-800/50 bg-red-900/20"}`}>
+        <div className={`rounded-md border p-3 space-y-1 ${result.ok ? "border-border bg-muted/10" : "border-destructive/30 bg-muted/10"}`}>
           <div className="flex items-center gap-2">
             {result.ok
-              ? <CheckCircle2 className="size-4 text-green-400" />
-              : <XCircle className="size-4 text-red-400" />
+              ? <CheckCircle2 className="size-4 text-foreground/60" />
+              : <XCircle className="size-4 text-destructive" />
             }
-            <span className={`text-sm font-medium ${result.ok ? "text-green-300" : "text-red-300"}`}>
+            <span className={`text-sm font-medium ${result.ok ? "text-foreground/60" : "text-destructive"}`}>
               HTTP {result.status} — {result.ok ? "Success" : "Error"}
             </span>
           </div>
@@ -899,29 +899,29 @@ function ExecutionRow({
   const canReplay = exec.rawPayload !== null;
 
   return (
-    <div className="border border-zinc-800 rounded-md overflow-hidden">
+    <div className="border border-border rounded-md overflow-hidden">
       <button
         type="button"
-        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-zinc-800/50 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted/30 transition-colors text-left"
         onClick={() => setExpanded((v) => !v)}
       >
         <span className={`text-xs font-medium uppercase tracking-wide ${statusColor(exec.status)}`}>
           {exec.status.toLowerCase()}
         </span>
         {exec.isReplay && (
-          <Badge variant="outline" className="h-5 text-[10px] border-blue-800/50 text-blue-400 gap-1">
+          <Badge variant="outline" className="h-5 text-[10px] border-border text-muted-foreground gap-1">
             <RotateCcw className="size-2.5" />
             replay
           </Badge>
         )}
         {exec.eventType && (
-          <Badge variant="outline" className="h-5 text-[10px] border-zinc-700 text-zinc-400">
+          <Badge variant="outline" className="h-5 text-[10px] border-border text-muted-foreground">
             {exec.eventType}
           </Badge>
         )}
-        <span className="flex-1 text-xs text-zinc-500">{relativeTime(exec.triggeredAt)}</span>
+        <span className="flex-1 text-xs text-muted-foreground/40">{relativeTime(exec.triggeredAt)}</span>
         {exec.durationMs != null && (
-          <span className="text-[10px] text-zinc-600">{exec.durationMs}ms</span>
+          <span className="text-[10px] text-muted-foreground/40">{exec.durationMs}ms</span>
         )}
         {/* Replay button */}
         {canReplay && (
@@ -930,7 +930,7 @@ function ExecutionRow({
             title="Replay this execution with the original payload"
             disabled={replay.status === "running"}
             onClick={handleReplay}
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700/60 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-50 transition-colors"
           >
             {replay.status === "running" ? (
               <Loader2 className="size-3 animate-spin" />
@@ -940,65 +940,65 @@ function ExecutionRow({
             {replay.status === "running" ? "Replaying…" : "Replay"}
           </button>
         )}
-        {expanded ? <ChevronDown className="size-3.5 text-zinc-500" /> : <ChevronRight className="size-3.5 text-zinc-500" />}
+        {expanded ? <ChevronDown className="size-3.5 text-muted-foreground/40" /> : <ChevronRight className="size-3.5 text-muted-foreground/40" />}
       </button>
 
       {expanded && (
-        <div className="border-t border-zinc-800 px-3 py-2 bg-zinc-900/50 space-y-1.5 text-xs">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-zinc-400">
-            <span className="text-zinc-600">Triggered</span>
+        <div className="border-t border-border px-3 py-2 bg-muted/10 space-y-1.5 text-xs">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
+            <span className="text-muted-foreground/40">Triggered</span>
             <span>{formatDate(exec.triggeredAt)}</span>
             {exec.completedAt && (
               <>
-                <span className="text-zinc-600">Completed</span>
+                <span className="text-muted-foreground/40">Completed</span>
                 <span>{formatDate(exec.completedAt)}</span>
               </>
             )}
             {exec.durationMs != null && (
               <>
-                <span className="text-zinc-600">Duration</span>
+                <span className="text-muted-foreground/40">Duration</span>
                 <span>{exec.durationMs}ms</span>
               </>
             )}
             {exec.sourceIp && (
               <>
-                <span className="text-zinc-600">Source IP</span>
+                <span className="text-muted-foreground/40">Source IP</span>
                 <span className="font-mono">{exec.sourceIp}</span>
               </>
             )}
             {exec.conversationId && (
               <>
-                <span className="text-zinc-600">Conversation ID</span>
+                <span className="text-muted-foreground/40">Conversation ID</span>
                 <span className="font-mono truncate">{exec.conversationId}</span>
               </>
             )}
             {exec.replayOf && (
               <>
-                <span className="text-zinc-600">Replayed from</span>
-                <span className="font-mono text-blue-400 truncate">{exec.replayOf}</span>
+                <span className="text-muted-foreground/40">Replayed from</span>
+                <span className="font-mono text-muted-foreground truncate">{exec.replayOf}</span>
               </>
             )}
           </div>
           {exec.errorMessage && (
-            <div className="rounded bg-red-900/20 border border-red-800/50 px-2 py-1.5 text-red-300">
+            <div className="rounded bg-muted/10 border border-destructive/30 px-2 py-1.5 text-destructive">
               {exec.errorMessage}
             </div>
           )}
           {/* Inline replay result feedback */}
           {replay.status === "success" && (
-            <div className="rounded bg-green-900/20 border border-green-800/50 px-2 py-1.5 text-green-300 flex items-center gap-1.5">
+            <div className="rounded bg-muted/10 border border-border px-2 py-1.5 text-foreground/60 flex items-center gap-1.5">
               <CheckCircle2 className="size-3.5 shrink-0" />
               <span>Replayed — new execution ID: <code className="font-mono">{replay.executionId}</code></span>
             </div>
           )}
           {replay.status === "error" && (
-            <div className="rounded bg-red-900/20 border border-red-800/50 px-2 py-1.5 text-red-300 flex items-center gap-1.5">
+            <div className="rounded bg-muted/10 border border-destructive/30 px-2 py-1.5 text-destructive flex items-center gap-1.5">
               <XCircle className="size-3.5 shrink-0" />
               <span>{replay.error}</span>
             </div>
           )}
           {!canReplay && (
-            <p className="text-zinc-600 text-[10px]">
+            <p className="text-muted-foreground/40 text-[10px]">
               Replay unavailable — no stored payload (captured before replay support was enabled).
             </p>
           )}
@@ -1220,7 +1220,7 @@ function WebhookDetailPanel({
               onClick={() => void toggleEnabled()}
               title={detail.enabled ? "Disable webhook" : "Enable webhook"}
               className={`relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors disabled:opacity-50 ${
-                detail.enabled ? "bg-blue-600" : "bg-zinc-600"
+                detail.enabled ? "bg-foreground" : "bg-muted"
               }`}
             >
               <span className={`inline-block size-4 rounded-full bg-white shadow transition-transform ${
@@ -1259,23 +1259,23 @@ function WebhookDetailPanel({
             {detail.enabled ? "Active" : "Disabled"}
           </span>
           {detail.nodeId && (
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-muted-foreground/40">
               Linked to flow node
             </span>
           )}
           {detail.eventFilters.length > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs text-violet-400">
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/60">
               <Filter className="size-3" />
               {detail.eventFilters.length} filter{detail.eventFilters.length !== 1 ? "s" : ""}
             </span>
           )}
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-muted-foreground/40">
             <Zap className="inline size-3 mr-0.5" />
             {detail.triggerCount} trigger{detail.triggerCount !== 1 ? "s" : ""}
           </span>
           {detail.triggerCount > 0 && (() => {
             const rate = Math.round(((detail.triggerCount - detail.failureCount) / detail.triggerCount) * 100);
-            const color = rate >= 95 ? "text-green-400" : rate >= 80 ? "text-amber-400" : "text-red-400";
+            const color = rate >= 95 ? "text-foreground/60" : rate >= 80 ? "text-muted-foreground" : "text-destructive";
             return (
               <span className={`text-xs font-medium ${color}`}>
                 {rate}% success
@@ -1283,7 +1283,7 @@ function WebhookDetailPanel({
             );
           })()}
           {detail.lastTriggeredAt && (
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-muted-foreground/40">
               <Clock className="inline size-3 mr-0.5" />
               {relativeTime(detail.lastTriggeredAt)}
             </span>
@@ -1294,9 +1294,9 @@ function WebhookDetailPanel({
       {/* Trigger URL + secret */}
       <div className="px-6 py-4 border-b space-y-3">
         <div className="space-y-1.5">
-          <p className="text-xs font-medium text-zinc-400">Trigger URL</p>
+          <p className="text-xs font-medium text-muted-foreground">Trigger URL</p>
           <div className="flex items-center gap-2">
-            <code className="flex-1 truncate rounded-md bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-xs font-mono text-zinc-300">
+            <code className="flex-1 truncate rounded-md bg-muted/10 border border-border px-3 py-1.5 text-xs font-mono text-foreground/80">
               POST {triggerUrl}
             </code>
             <Button variant="outline" size="sm" className="shrink-0 h-8" onClick={copyUrl}>
@@ -1308,7 +1308,7 @@ function WebhookDetailPanel({
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-zinc-400">Signing Secret</p>
+            <p className="text-xs font-medium text-muted-foreground">Signing Secret</p>
             <Button
               variant="ghost"
               size="sm"
@@ -1320,7 +1320,7 @@ function WebhookDetailPanel({
             </Button>
           </div>
           <div className="flex items-center gap-2">
-            <code className="flex-1 truncate rounded-md bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-xs font-mono text-zinc-300">
+            <code className="flex-1 truncate rounded-md bg-muted/10 border border-border px-3 py-1.5 text-xs font-mono text-foreground/80">
               {showSecret ? detail.secret : "•".repeat(43)}
             </code>
             <Button variant="outline" size="sm" className="shrink-0 h-8" onClick={copySecret}>
@@ -1328,7 +1328,7 @@ function WebhookDetailPanel({
               {copiedSecret ? "Copied!" : "Copy"}
             </Button>
           </div>
-          <p className="text-[11px] text-zinc-500">
+          <p className="text-[11px] text-muted-foreground/40">
             Used to verify HMAC-SHA256 signatures. Keep this secret — rotate it if compromised.
           </p>
         </div>
@@ -1413,13 +1413,13 @@ function WebhookDetailPanel({
                   className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium border transition-colors ${
                     execStatus === s
                       ? s === "FAILED"
-                        ? "bg-red-900/40 border-red-700/60 text-red-300"
+                        ? "bg-muted/10 border-destructive/30 text-destructive"
                         : s === "COMPLETED"
-                        ? "bg-green-900/40 border-green-700/60 text-green-300"
+                        ? "bg-muted/10 border-border text-foreground/60"
                         : s === "RUNNING"
-                        ? "bg-blue-900/40 border-blue-700/60 text-blue-300"
-                        : "bg-zinc-700 border-zinc-600 text-zinc-100"
-                      : "bg-transparent border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+                        ? "bg-muted/10 border-border text-muted-foreground"
+                        : "bg-foreground/5 border-border text-foreground"
+                      : "bg-transparent border-border text-muted-foreground/60 hover:border-foreground/20 hover:text-muted-foreground"
                   }`}
                 >
                   {s === "COMPLETED" && <CheckCircle2 className="size-2.5" />}
@@ -1429,7 +1429,7 @@ function WebhookDetailPanel({
                 </button>
               ))}
               {execTotal > 0 && (
-                <span className="ml-auto text-[11px] text-zinc-600">
+                <span className="ml-auto text-[11px] text-muted-foreground/40">
                   {execList.length} of {execTotal}
                 </span>
               )}
@@ -1442,12 +1442,12 @@ function WebhookDetailPanel({
               </div>
             ) : execList.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center gap-3">
-                <Webhook className="size-8 text-zinc-700" />
+                <Webhook className="size-8 text-muted-foreground/20" />
                 <p className="text-sm text-muted-foreground">
                   {execStatus === "ALL" ? "No executions yet" : `No ${execStatus.toLowerCase()} executions`}
                 </p>
                 {execStatus === "ALL" && (
-                  <p className="text-xs text-zinc-600">
+                  <p className="text-xs text-muted-foreground/40">
                     Send a POST request to the trigger URL or use the Test tab.
                   </p>
                 )}
@@ -1470,7 +1470,7 @@ function WebhookDetailPanel({
                     type="button"
                     disabled={loadingMore}
                     onClick={() => void fetchExecutions(false)}
-                    className="w-full flex items-center justify-center gap-2 rounded-md border border-zinc-800 py-2 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-700 transition-colors disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 rounded-md border border-border py-2 text-xs text-muted-foreground/40 hover:text-foreground hover:border-foreground/20 transition-colors disabled:opacity-50"
                   >
                     {loadingMore
                       ? <><Loader2 className="size-3.5 animate-spin" /> Loading…</>
@@ -1581,15 +1581,15 @@ export default function WebhooksPage({
   }
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="flex items-center gap-3 border-b px-4 py-2.5 shrink-0">
+      <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border px-3">
         <Button variant="ghost" size="icon-sm" aria-label="Back to builder" asChild>
           <Link href={`/builder/${agentId}`}>
             <ArrowLeft className="size-4" aria-hidden="true" />
           </Link>
         </Button>
-        <Webhook className="size-4 text-violet-400" />
+        <Webhook className="size-4 text-muted-foreground" />
         <div className="flex-1 min-w-0">
           <h1 className="text-sm font-semibold truncate">
             Webhooks
@@ -1614,7 +1614,7 @@ export default function WebhooksPage({
             </div>
           ) : webhooks.length === 0 ? (
             <div className="flex flex-col items-center justify-center flex-1 p-6 text-center gap-3">
-              <Webhook className="size-10 text-zinc-700" />
+              <Webhook className="size-10 text-muted-foreground/20" />
               <p className="text-sm font-medium">No webhooks yet</p>
               <p className="text-xs text-muted-foreground">
                 Create a webhook to receive events from external systems, or add a{" "}
@@ -1630,19 +1630,19 @@ export default function WebhooksPage({
               {/* Search input */}
               <div className="px-2 pt-2 pb-1">
                 <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-zinc-500 pointer-events-none" />
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/40 pointer-events-none" />
                   <input
                     type="text"
                     placeholder="Search webhooks…"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 pl-7 pr-3 py-1.5 text-xs text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-violet-500/50"
+                    className="w-full rounded-md border border-border bg-card pl-7 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                   {search && (
                     <button
                       type="button"
                       onClick={() => setSearch("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-foreground"
                     >
                       <X className="size-3" />
                     </button>
@@ -1656,7 +1656,7 @@ export default function WebhooksPage({
                   : webhooks;
                 if (filtered.length === 0) {
                   return (
-                    <p className="text-center text-xs text-zinc-600 py-6">
+                    <p className="text-center text-xs text-muted-foreground/40 py-6">
                       No webhooks matching &ldquo;{search}&rdquo;
                     </p>
                   );
@@ -1675,7 +1675,7 @@ export default function WebhooksPage({
                   <div className="flex items-start justify-between gap-1.5">
                     <span className="text-sm font-medium truncate">{wh.name}</span>
                     <span className={`shrink-0 mt-0.5 inline-flex size-2 rounded-full ${
-                      wh.enabled ? "bg-green-500" : "bg-zinc-600"
+                      wh.enabled ? "bg-foreground/60" : "bg-muted"
                     }`} />
                   </div>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -1683,22 +1683,22 @@ export default function WebhooksPage({
                       {wh.triggerCount} trigger{wh.triggerCount !== 1 ? "s" : ""}
                     </span>
                     {wh.failureCount > 0 && (
-                      <span className="text-[10px] text-red-400">{wh.failureCount} failed</span>
+                      <span className="text-[10px] text-destructive">{wh.failureCount} failed</span>
                     )}
                     {wh.eventFilters.length > 0 && (
-                      <span className="text-[10px] text-violet-400">
+                      <span className="text-[10px] text-muted-foreground/60">
                         <Filter className="inline size-2.5 mr-0.5" />
                         {wh.eventFilters.length} filter{wh.eventFilters.length !== 1 ? "s" : ""}
                       </span>
                     )}
                     {wh.lastTriggeredAt && (
-                      <span className="text-[10px] text-zinc-500 ml-auto">
+                      <span className="text-[10px] text-muted-foreground/40 ml-auto">
                         {relativeTime(wh.lastTriggeredAt)}
                       </span>
                     )}
                   </div>
                   {wh.nodeId && (
-                    <span className="text-[10px] text-violet-400 mt-0.5">
+                    <span className="text-[10px] text-muted-foreground/60 mt-0.5">
                       Flow node
                     </span>
                   )}
@@ -1722,7 +1722,7 @@ export default function WebhooksPage({
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-center p-8">
-              <Webhook className="size-12 text-zinc-700" />
+              <Webhook className="size-12 text-muted-foreground/20" />
               <div>
                 <p className="text-sm font-medium">Select a webhook</p>
                 <p className="text-xs text-muted-foreground mt-1">

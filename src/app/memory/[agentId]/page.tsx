@@ -220,24 +220,24 @@ export default function MemoryPage({
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <div className="mx-auto max-w-6xl p-6">
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto"><div className="mx-auto max-w-6xl p-6">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/">
               <Button variant="ghost" size="sm">
-                <ArrowLeft className="mr-1 h-4 w-4" />
+                <ArrowLeft className="mr-1 size-4" />
                 Back
               </Button>
             </Link>
-            <Brain className="h-6 w-6 text-purple-400" />
-            <h1 className="text-2xl font-bold">Agent Memory</h1>
+            <Brain className="size-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Agent Memory</span>
             <Badge variant="secondary">{total} memories</Badge>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleExport}>
-              <Download className="mr-1 h-4 w-4" />
+              <Download className="mr-1 size-4" />
               Export MD
             </Button>
             <Button
@@ -245,7 +245,7 @@ export default function MemoryPage({
               size="sm"
               onClick={() => setImportDialogOpen(true)}
             >
-              <Upload className="mr-1 h-4 w-4" />
+              <Upload className="mr-1 size-4" />
               Import MD
             </Button>
           </div>
@@ -254,7 +254,7 @@ export default function MemoryPage({
         {/* Filters */}
         <div className="mb-4 flex items-center gap-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/40" />
             <Input
               placeholder="Search memories..."
               value={searchTerm}
@@ -268,7 +268,7 @@ export default function MemoryPage({
               setCategoryFilter(e.target.value);
               setPage(1);
             }}
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-300"
+            className="rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground h-9"
           >
             <option value="">All categories</option>
             {categories.map((c) => (
@@ -281,12 +281,12 @@ export default function MemoryPage({
 
         {/* Memory list */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-20 text-zinc-500">
+          <div className="flex items-center justify-center py-20 text-muted-foreground/40">
             Loading memories...
           </div>
         ) : filtered.length === 0 ? (
           <Card>
-            <CardContent className="py-12 text-center text-zinc-500">
+            <CardContent className="py-12 text-center text-muted-foreground/40">
               {total === 0
                 ? "No memories yet. Memories are created by memory_write nodes during agent conversations."
                 : "No memories match your filters."}
@@ -301,17 +301,17 @@ export default function MemoryPage({
                   key={m.id}
                   className={
                     hot
-                      ? "border-amber-800/50 bg-amber-950/20"
-                      : "border-zinc-800"
+                      ? "border-border bg-muted/10"
+                      : "border-border"
                   }
                 >
                   <CardHeader className="px-4 py-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         {hot ? (
-                          <Flame className="h-4 w-4 text-amber-400" />
+                          <Flame className="size-4 text-foreground/50" />
                         ) : (
-                          <Snowflake className="h-4 w-4 text-blue-400" />
+                          <Snowflake className="size-4 text-muted-foreground/40" />
                         )}
                         <CardTitle className="text-sm font-semibold">
                           {m.key}
@@ -330,7 +330,7 @@ export default function MemoryPage({
                         </Badge>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className="mr-2 text-xs text-zinc-500">
+                        <span className="mr-2 text-xs text-muted-foreground/40">
                           {m.accessCount} reads
                         </span>
                         <Button
@@ -344,7 +344,7 @@ export default function MemoryPage({
                           variant="ghost"
                           size="sm"
                           onClick={() => setDeletingId(m.id)}
-                          className="text-red-400 hover:text-red-300"
+                          className="text-muted-foreground hover:text-destructive"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -352,7 +352,7 @@ export default function MemoryPage({
                     </div>
                   </CardHeader>
                   <CardContent className="px-4 pb-3 pt-0">
-                    <pre className="whitespace-pre-wrap text-sm text-zinc-400">
+                    <pre className="whitespace-pre-wrap text-sm text-muted-foreground/60 font-mono">
                       {truncateValue(m.value, 300)}
                     </pre>
                   </CardContent>
@@ -373,7 +373,7 @@ export default function MemoryPage({
             >
               Previous
             </Button>
-            <span className="text-sm text-zinc-500">
+            <span className="text-sm text-muted-foreground/40">
               Page {page} of {totalPages}
             </span>
             <Button
@@ -458,7 +458,7 @@ export default function MemoryPage({
               <DialogTitle>Import Memory from Markdown</DialogTitle>
             </DialogHeader>
             <div>
-              <p className="mb-2 text-sm text-zinc-400">
+              <p className="mb-2 text-sm text-muted-foreground">
                 Paste a MEMORY.md file content below. Entries will be
                 upserted (existing keys get updated, new keys get created).
               </p>
@@ -483,6 +483,6 @@ export default function MemoryPage({
           </DialogContent>
         </Dialog>
       </div>
-    </div>
+    </div></div>
   );
 }

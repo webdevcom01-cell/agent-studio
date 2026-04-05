@@ -46,7 +46,7 @@ function AIResponseNodeComponent({ data, selected }: NodeProps) {
           </span>
         ) : null}
         {mcpToolCount > 0 && (
-          <span className="inline-flex items-center gap-0.5 rounded bg-teal-100 px-1 py-0.5 text-[10px] font-medium text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
+          <span className="inline-flex items-center gap-0.5 rounded bg-muted/20 px-1 py-0.5 text-[10px] font-medium text-foreground/60">
             <Plug className="size-2.5" />
             MCP: {mcpToolCount} {mcpToolCount === 1 ? "tool" : "tools"}
           </span>

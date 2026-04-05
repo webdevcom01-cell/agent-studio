@@ -53,7 +53,7 @@ function formatRelativeTime(dateStr: string): string {
 
 const STATUS_STYLES: Record<string, string> = {
   DRAFT: "bg-muted text-muted-foreground",
-  PUBLISHED: "bg-emerald-500/20 text-emerald-400",
+  PUBLISHED: "bg-muted/10 text-foreground/60",
   ARCHIVED: "bg-muted/50 text-muted-foreground/60",
 };
 

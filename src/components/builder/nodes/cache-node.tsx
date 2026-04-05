@@ -26,7 +26,7 @@ function CacheNodeComponent({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-foreground dark:bg-muted/20 dark:text-muted-foreground">
           <Database className="size-4" />
         </div>
         <span className="text-sm font-medium">
@@ -45,8 +45,8 @@ function CacheNodeComponent({ data, selected }: NodeProps) {
         </p>
         {isGet && (
           <p className="text-[10px]">
-            <span className="text-green-500">Hit</span>{" / "}
-            <span className="text-red-400">Miss</span>
+            <span className="text-foreground/60">Hit</span>{" / "}
+            <span className="text-destructive">Miss</span>
           </p>
         )}
       </div>

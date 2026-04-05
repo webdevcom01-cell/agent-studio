@@ -18,7 +18,7 @@ function VerificationNodeComponent({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-foreground dark:bg-muted/20 dark:text-foreground/60">
           <CircleCheckBig className="size-4" />
         </div>
         <span className="text-sm font-medium">
@@ -33,7 +33,7 @@ function VerificationNodeComponent({ data, selected }: NodeProps) {
             {checks.slice(0, 3).map((c, i) => (
               <span
                 key={i}
-                className="rounded bg-green-900/20 px-1 py-0.5 text-[10px] text-green-400"
+                className="rounded bg-muted/20 px-1 py-0.5 text-[10px] text-foreground/60"
               >
                 {String(c.label || c.type || "check")}
               </span>
@@ -44,8 +44,8 @@ function VerificationNodeComponent({ data, selected }: NodeProps) {
           </div>
         )}
         <p className="text-[10px]">
-          <span className="text-green-500">Passed</span>{" / "}
-          <span className="text-red-400">Failed</span>
+          <span className="text-foreground/60">Passed</span>{" / "}
+          <span className="text-destructive">Failed</span>
         </p>
       </div>
 

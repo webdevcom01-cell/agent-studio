@@ -73,17 +73,17 @@ function ScheduleTriggerNodeComponent({ data, selected }: NodeProps) {
         {/* Status badges row */}
         <div className="flex items-center gap-1 flex-wrap">
           {isCircuitBroken ? (
-            <span className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300">
+            <span className="inline-flex items-center gap-0.5 rounded bg-muted/20 px-1.5 py-0.5 text-[10px] font-medium text-destructive dark:bg-muted/10 dark:text-destructive">
               <AlertTriangle className="size-2.5" />
               Circuit broken
             </span>
           ) : hasActive ? (
-            <span className="inline-flex items-center gap-0.5 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">
+            <span className="inline-flex items-center gap-0.5 rounded bg-muted/20 px-1.5 py-0.5 text-[10px] font-medium text-foreground dark:bg-muted/20 dark:text-foreground/60">
               <CheckCircle className="size-2.5" />
               Active
             </span>
           ) : stats !== null ? (
-            <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+            <span className="inline-flex items-center gap-0.5 rounded bg-muted/20 px-1.5 py-0.5 text-[10px] font-medium text-foreground dark:bg-muted/20 dark:text-muted-foreground">
               <PauseCircle className="size-2.5" />
               {stats.enabled === 0 && stats.circuitBroken === 0 ? "No schedules" : "Disabled"}
             </span>

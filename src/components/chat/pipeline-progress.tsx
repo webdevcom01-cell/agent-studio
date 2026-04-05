@@ -29,13 +29,13 @@ function formatDuration(ms: number): string {
 function StatusIcon({ status }: { status: AgentCallEntry["status"] }) {
   switch (status) {
     case "COMPLETED":
-      return <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0" />;
+      return <CheckCircle2 className="size-3.5 text-foreground/60 shrink-0" />;
     case "FAILED":
-      return <XCircle className="size-3.5 text-red-500 shrink-0" />;
+      return <XCircle className="size-3.5 text-destructive shrink-0" />;
     case "WORKING":
-      return <Loader2 className="size-3.5 text-blue-400 shrink-0 animate-spin" />;
+      return <Loader2 className="size-3.5 text-muted-foreground shrink-0 animate-spin" />;
     default:
-      return <Clock className="size-3.5 text-zinc-500 shrink-0" />;
+      return <Clock className="size-3.5 text-muted-foreground/40 shrink-0" />;
   }
 }
 
@@ -71,26 +71,26 @@ export function PipelineProgress({
     <div
       className={cn(
         "mx-auto max-w-2xl mb-2 rounded-lg border text-xs overflow-hidden",
-        allDone ? "border-border/50" : "border-blue-500/30"
+        allDone ? "border-border/50" : "border-border"
       )}
     >
       {/* Header bar */}
       <div
         className={cn(
           "flex items-center justify-between px-3 py-1.5",
-          allDone ? "bg-muted/40" : "bg-blue-500/10"
+          allDone ? "bg-muted/40" : "bg-foreground/60/10"
         )}
       >
         <span className="font-medium text-muted-foreground">
           Pipeline
           {!allDone && (
-            <Loader2 className="inline ml-1.5 size-3 animate-spin text-blue-400" />
+            <Loader2 className="inline ml-1.5 size-3 animate-spin text-muted-foreground" />
           )}
         </span>
         <span className="text-muted-foreground tabular-nums">
           {completed}/{total} completed
           {failed > 0 && (
-            <span className="ml-1.5 text-red-400">{failed} failed</span>
+            <span className="ml-1.5 text-destructive">{failed} failed</span>
           )}
         </span>
       </div>
@@ -110,7 +110,7 @@ export function PipelineProgress({
                 className={cn(
                   "flex-1 truncate",
                   call.status === "FAILED"
-                    ? "text-red-400"
+                    ? "text-destructive"
                     : "text-foreground/80"
                 )}
               >
@@ -122,7 +122,7 @@ export function PipelineProgress({
                 </span>
               )}
               {call.status === "WORKING" && call.durationMs === null && (
-                <span className="tabular-nums text-blue-400/70 shrink-0">
+                <span className="tabular-nums text-muted-foreground/70 shrink-0">
                   {formatDuration(Date.now() - new Date(call.createdAt).getTime())}
                 </span>
               )}

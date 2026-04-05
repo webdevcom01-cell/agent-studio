@@ -30,7 +30,7 @@ export function FormatTransformNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-muted-foreground">
           <Shuffle className="size-4" />
         </div>
         <span className="text-sm font-medium">{String(data.label || "Format Transform")}</span>

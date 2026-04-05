@@ -34,7 +34,7 @@ export function DebugToggleButton({ isDebugMode, onToggle }: DebugToggleButtonPr
       onClick={onToggle}
       className={cn(
         "gap-1.5",
-        isDebugMode && "bg-violet-600 hover:bg-violet-700 border-violet-600 text-white"
+        isDebugMode && "bg-primary hover:bg-primary/90 border-primary text-primary-foreground"
       )}
       title="Toggle Debug Mode"
       aria-label="Toggle Debug Mode"
@@ -54,7 +54,7 @@ function DebugStatusBar({ state }: { state: DebugSessionState }) {
 
   if (isPaused) {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-orange-400 ml-auto shrink-0 animate-pulse">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground ml-auto shrink-0 animate-pulse">
         <Pause className="size-3" />
         Paused at breakpoint
       </span>
@@ -63,7 +63,7 @@ function DebugStatusBar({ state }: { state: DebugSessionState }) {
 
   if (isRunning) {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-violet-400 ml-auto shrink-0">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground ml-auto shrink-0">
         <Loader2 className="size-3 animate-spin" />
         Running…
       </span>
@@ -77,7 +77,7 @@ function DebugStatusBar({ state }: { state: DebugSessionState }) {
     <span
       className={cn(
         "flex items-center gap-1.5 text-xs ml-auto shrink-0",
-        failed ? "text-red-400" : "text-emerald-400"
+        failed ? "text-destructive" : "text-foreground/60"
       )}
     >
       {failed ? (
@@ -86,7 +86,7 @@ function DebugStatusBar({ state }: { state: DebugSessionState }) {
         <CheckCircle2 className="size-3" />
       )}
       {flowSummary.nodesExecuted} nodes
-      {failed && <span className="text-red-400">· {flowSummary.nodesFailed} failed</span>}
+      {failed && <span className="text-destructive">· {flowSummary.nodesFailed} failed</span>}
       <span className="text-muted-foreground">
         <Clock className="size-3 inline mr-0.5" />
         {(flowSummary.totalDurationMs / 1000).toFixed(2)}s
@@ -138,7 +138,7 @@ export function DebugToolbar({
   }
 
   return (
-    <div className="border-b bg-violet-950/20 border-violet-900/40 px-4 py-2.5">
+    <div className="border-b bg-muted/10 border-border px-4 py-2.5">
       <div className="flex items-start gap-2">
         {/* Test input */}
         <div className="flex-1 relative">
@@ -153,8 +153,8 @@ export function DebugToolbar({
             className={cn(
               "w-full rounded-md border bg-background/60 px-3 py-2 text-sm resize-none",
               "placeholder:text-muted-foreground/60",
-              "focus:outline-none focus:ring-1 focus:ring-violet-500 focus:border-violet-500",
-              "border-violet-800/50",
+              "focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring",
+              "border-border",
               "disabled:opacity-60 disabled:cursor-not-allowed",
               "font-mono"
             )}
@@ -169,7 +169,7 @@ export function DebugToolbar({
               <Button
                 size="sm"
                 onClick={onContinue}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-8"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 h-8"
                 title="Continue (resume until next breakpoint)"
               >
                 <Play className="size-3.5" />
@@ -179,7 +179,7 @@ export function DebugToolbar({
                 size="sm"
                 onClick={onStep}
                 variant="outline"
-                className="gap-1.5 h-8 border-orange-700/60 text-orange-300 hover:bg-orange-900/30"
+                className="gap-1.5 h-8 border-border text-muted-foreground hover:bg-muted/10"
                 title="Step Over (execute one node, then pause)"
               >
                 <StepForward className="size-3.5" />
@@ -203,7 +203,7 @@ export function DebugToolbar({
                 size="sm"
                 onClick={onRun}
                 disabled={!canRun}
-                className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5 h-8"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 h-8"
                 title="Run (Ctrl+Enter)"
               >
                 <Play className="size-3.5" />
@@ -240,10 +240,10 @@ export function DebugToolbar({
 
       {/* Status line */}
       <div className="flex items-center mt-1.5 min-h-[16px]">
-        <span className="text-xs text-violet-400/70 mr-2 flex items-center gap-1">
+        <span className="text-xs text-muted-foreground/60 mr-2 flex items-center gap-1">
           {breakpoints.size > 0 ? (
             <>
-              <CircleDot className="size-3 text-red-400" />
+              <CircleDot className="size-3 text-destructive" />
               {breakpoints.size} breakpoint{breakpoints.size !== 1 ? "s" : ""} set · right-click node to toggle
             </>
           ) : (

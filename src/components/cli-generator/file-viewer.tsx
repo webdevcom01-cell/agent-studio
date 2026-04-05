@@ -134,12 +134,12 @@ export function FileViewer({ generationId, isRunning = false }: FileViewerProps)
                     <span
                       className={cn(
                         "absolute top-2 right-2 text-[10px] font-mono px-1.5 py-0.5 rounded",
-                        "bg-zinc-800 text-zinc-400",
+                        "bg-muted text-muted-foreground",
                       )}
                     >
                       {fileContent.data.language}
                     </span>
-                    <pre className="overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-900 p-4 text-xs leading-relaxed text-zinc-100">
+                    <pre className="overflow-x-auto rounded-lg border border-border bg-muted/20 p-4 text-xs leading-relaxed text-foreground/80">
                       <code>{fileContent.data.content}</code>
                     </pre>
                   </div>
@@ -178,14 +178,14 @@ export function FileViewer({ generationId, isRunning = false }: FileViewerProps)
                 title="Copy install script"
               >
                 {copiedScript ? (
-                  <Check className="size-3 text-green-500" />
+                  <Check className="size-3 text-foreground/60" />
                 ) : (
                   <Copy className="size-3" />
                 )}
               </Button>
             </div>
           </div>
-          <pre className="overflow-x-auto rounded-lg border border-zinc-700 bg-zinc-900 p-3 text-[11px] leading-relaxed text-zinc-100">
+          <pre className="overflow-x-auto rounded-lg border border-border bg-muted/20 p-3 text-[11px] leading-relaxed text-foreground/80">
             <code>{quickStartContent.data.content}</code>
           </pre>
           <p className="text-[10px] text-muted-foreground">

@@ -18,26 +18,26 @@ import {
 
 const LAYER_CONFIG = {
   1: {
-    bg: "bg-zinc-800/60",
-    border: "border-zinc-700/50",
-    text: "text-zinc-300",
-    badge: "bg-zinc-700 text-zinc-300",
+    bg: "bg-muted/30",
+    border: "border-border/50",
+    text: "text-muted-foreground",
+    badge: "border border-border bg-background text-muted-foreground/60",
     label: "L1",
     name: "Deterministic",
   },
   2: {
-    bg: "bg-blue-950/40",
-    border: "border-blue-800/40",
-    text: "text-blue-300",
-    badge: "bg-blue-900/60 text-blue-300",
+    bg: "bg-muted/20",
+    border: "border-border/40",
+    text: "text-muted-foreground",
+    badge: "border border-border bg-background text-muted-foreground/60",
     label: "L2",
     name: "Semantic",
   },
   3: {
-    bg: "bg-violet-950/40",
-    border: "border-violet-800/40",
-    text: "text-violet-300",
-    badge: "bg-violet-900/60 text-violet-300",
+    bg: "bg-muted/10",
+    border: "border-border/30",
+    text: "text-muted-foreground",
+    badge: "border border-border bg-background text-muted-foreground/60",
     label: "L3",
     name: "LLM-Judge",
   },
@@ -68,9 +68,9 @@ function getDisplayValue(assertion: AssertionTemplate["assertion"]): string | nu
 }
 
 function passingScoreColor(score: number): string {
-  if (score >= 0.85) return "text-emerald-400";
-  if (score >= 0.75) return "text-amber-400";
-  return "text-orange-400";
+  if (score >= 0.85) return "text-foreground/60";
+  if (score >= 0.75) return "text-muted-foreground";
+  return "text-destructive/70";
 }
 
 // ─── AssertionRow ─────────────────────────────────────────────────────────────
@@ -115,12 +115,12 @@ function AssertionRow({ template }: { template: AssertionTemplate }) {
         {/* Required pill */}
         <div className="ml-auto flex items-center gap-1">
           {template.required ? (
-            <span className="flex items-center gap-0.5 text-[10px] text-zinc-400 font-medium uppercase tracking-wide">
-              <CheckCircle2 className="size-3 text-emerald-500/80" />
+            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
+              <CheckCircle2 className="size-3 text-muted-foreground" />
               required
             </span>
           ) : (
-            <span className="flex items-center gap-0.5 text-[10px] text-zinc-600 uppercase tracking-wide">
+            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/40 uppercase tracking-wide">
               <Circle className="size-3" />
               optional
             </span>
@@ -148,38 +148,38 @@ function CategoryCard({ standard }: { standard: EvalCategoryStandard }) {
   const optionalCount = merged.assertions.length - requiredCount;
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 space-y-4 flex flex-col">
+    <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
       {/* Header */}
       <div>
         <div className="flex items-center justify-between gap-2 mb-1">
-          <h3 className="text-sm font-semibold text-white">{standard.displayName}</h3>
-          <span className="text-[10px] font-mono text-zinc-600 shrink-0 select-none">
+          <h3 className="text-sm font-semibold text-foreground">{standard.displayName}</h3>
+          <span className="text-[10px] font-mono text-muted-foreground/40 shrink-0 select-none">
             {standard.category}
           </span>
         </div>
-        <p className="text-xs text-zinc-500 leading-relaxed">{standard.description}</p>
+        <p className="text-xs text-muted-foreground/60 leading-relaxed">{standard.description}</p>
       </div>
 
       {/* Stats row */}
       <div className="flex items-center gap-5 text-xs">
         <div>
-          <span className="text-zinc-500">Pass </span>
+          <span className="text-muted-foreground/60">Pass </span>
           <span className={`font-semibold ${passingScoreColor(merged.passingScore)}`}>
             {Math.round(merged.passingScore * 100)}%
           </span>
         </div>
         <div>
-          <span className="text-zinc-500">Min </span>
-          <span className="font-medium text-zinc-200">{merged.minTestCases}</span>
-          <span className="text-zinc-600"> cases</span>
+          <span className="text-muted-foreground/60">Min </span>
+          <span className="font-medium text-foreground/90">{merged.minTestCases}</span>
+          <span className="text-muted-foreground/40"> cases</span>
         </div>
         <div>
-          <span className="text-zinc-500">{requiredCount}</span>
-          <span className="text-zinc-600"> req</span>
+          <span className="text-muted-foreground/60">{requiredCount}</span>
+          <span className="text-muted-foreground/40"> req</span>
           {optionalCount > 0 && (
             <>
-              <span className="text-zinc-700 mx-1">·</span>
-              <span className="text-zinc-600">{optionalCount} opt</span>
+              <span className="text-foreground/20 mx-1">·</span>
+              <span className="text-muted-foreground/40">{optionalCount} opt</span>
             </>
           )}
         </div>
@@ -196,7 +196,7 @@ function CategoryCard({ standard }: { standard: EvalCategoryStandard }) {
       <button
         type="button"
         onClick={() => setShowLabels((v) => !v)}
-        className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+        className="flex items-center gap-1.5 text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
       >
         <BookOpen className="size-3 shrink-0" />
         <span>{standard.suggestedTestLabels.length} suggested test labels</span>
@@ -206,10 +206,10 @@ function CategoryCard({ standard }: { standard: EvalCategoryStandard }) {
       </button>
 
       {showLabels && (
-        <ul className="space-y-1.5 border-t border-zinc-800 pt-3">
+        <ul className="space-y-1.5 border-t border-border pt-3">
           {standard.suggestedTestLabels.map((label, i) => (
-            <li key={i} className="flex items-start gap-2 text-xs text-zinc-500">
-              <span className="text-zinc-700 mt-px shrink-0">·</span>
+            <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground/60">
+              <span className="text-foreground/20 mt-px shrink-0">·</span>
               {label}
             </li>
           ))}
@@ -225,29 +225,26 @@ export default function EvalStandardsPage() {
   const categories = Object.values(CATEGORY_EVAL_STANDARDS);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
-      {/* Top bar */}
-      <div className="border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-3">
-          <Link href="/" className="text-zinc-400 hover:text-white transition-colors">
-            <ArrowLeft className="w-4 h-4" />
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border px-3">
+          <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft className="size-4" />
           </Link>
           <div className="flex items-center gap-2 text-sm">
-            <ShieldCheck className="w-4 h-4 text-violet-400" />
+            <ShieldCheck className="size-4 text-muted-foreground" />
             <span className="font-medium">Eval Standards</span>
           </div>
-          <span className="text-xs text-zinc-600 ml-auto">
+          <span className="text-xs text-muted-foreground/40 ml-auto">
             {categories.length} categories · 2026 industry standards
           </span>
-        </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 py-10 space-y-12">
+      <main className="flex-1 overflow-y-auto px-6 py-8 space-y-10">
 
         {/* Intro */}
         <div className="max-w-2xl">
-          <h1 className="text-2xl font-light tracking-tight mb-2">Eval Standards</h1>
-          <p className="text-sm text-zinc-400 leading-relaxed">
+          <h1 className="mb-2 text-base font-medium tracking-tight">Eval Standards</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
             Platform-wide quality gates for AI agents, organized by category. Based on
             RAGAS, DeepEval, Braintrust, and Anthropic engineering guidelines (2026).
             Global assertions apply unconditionally to every agent; category standards
@@ -256,8 +253,8 @@ export default function EvalStandardsPage() {
         </div>
 
         {/* Layer legend */}
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-          <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-4">
+        <section className="rounded-lg border border-border bg-card/60 p-5">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">
             Evaluation layers
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -269,8 +266,8 @@ export default function EvalStandardsPage() {
                     {cfg.label}
                   </span>
                   <div>
-                    <p className="text-sm font-medium text-zinc-200">{cfg.name}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-sm font-medium text-foreground/90">{cfg.name}</p>
+                    <p className="text-xs text-muted-foreground/60 mt-0.5">
                       {l === 1 && "Free, instant — contains, regex, json_valid, latency. Zero AI cost."}
                       {l === 2 && "Embedding cosine similarity. ~$0.001/eval. Requires OpenAI API key."}
                       {l === 3 && "LLM-as-Judge: rubric, faithfulness, relevance. ~$0.01/eval (DeepSeek)."}
@@ -285,12 +282,12 @@ export default function EvalStandardsPage() {
         {/* Global assertions */}
         <section>
           <div className="flex items-baseline gap-3 mb-4">
-            <h2 className="text-sm font-semibold text-white">Global Assertions</h2>
-            <span className="text-xs text-zinc-500">
+            <h2 className="text-sm font-semibold text-foreground">Global Assertions</h2>
+            <span className="text-xs text-muted-foreground/60">
               Applied to every agent unconditionally — universal quality gates
             </span>
           </div>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 space-y-2">
+          <div className="rounded-lg border border-border bg-card/60 p-5 space-y-2">
             {GLOBAL_EVAL_ASSERTIONS.map((g, i) => (
               <AssertionRow key={i} template={g} />
             ))}
@@ -300,8 +297,8 @@ export default function EvalStandardsPage() {
         {/* Category standards grid */}
         <section>
           <div className="flex items-baseline gap-3 mb-5">
-            <h2 className="text-sm font-semibold text-white">Category Standards</h2>
-            <span className="text-xs text-zinc-500">
+            <h2 className="text-sm font-semibold text-foreground">Category Standards</h2>
+            <span className="text-xs text-muted-foreground/60">
               Merged with global assertions — {categories.length} categories
             </span>
           </div>
@@ -313,7 +310,7 @@ export default function EvalStandardsPage() {
         </section>
 
         {/* Footer note */}
-        <p className="text-xs text-zinc-700 pb-6">
+        <p className="text-xs text-foreground/20 pb-6">
           Standards are version-controlled TypeScript constants in{" "}
           <code className="font-mono">src/lib/evals/standards.ts</code>.
           Thresholds are calibrated using the 10th-percentile-of-human-approvals approach.

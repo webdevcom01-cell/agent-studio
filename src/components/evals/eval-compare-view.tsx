@@ -15,18 +15,18 @@ function scorePct(score: number): string {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 0.8) return "text-emerald-400";
-  if (score >= 0.5) return "text-yellow-400";
-  return "text-red-400";
+  if (score >= 0.8) return "text-foreground/60";
+  if (score >= 0.5) return "text-muted-foreground";
+  return "text-destructive";
 }
 
 function diffBadge(diff: number, unit = ""): React.ReactNode {
   if (Math.abs(diff) < 0.001 && unit === "") return (
-    <span className="text-xs text-zinc-500">=</span>
+    <span className="text-xs text-muted-foreground">=</span>
   );
   const positive = diff > 0;
   const Icon = positive ? TrendingUp : TrendingDown;
-  const color = positive ? "text-emerald-400" : "text-red-400";
+  const color = positive ? "text-foreground/60" : "text-destructive";
   const label = unit === "ms"
     ? `${Math.abs(diff)}ms`
     : `${(Math.abs(diff) * 100).toFixed(1)}%`;
@@ -41,21 +41,21 @@ function diffBadge(diff: number, unit = ""): React.ReactNode {
 // ─── Assertion breakdown panel ────────────────────────────────────────────────
 
 const LAYER_COLORS: Record<string, string> = {
-  L1: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-  L2: "text-blue-400 bg-blue-500/10 border-blue-500/20",
-  L3: "text-purple-400 bg-purple-500/10 border-purple-500/20",
+  L1: "text-foreground/60 bg-muted/10 border-border",
+  L2: "text-muted-foreground bg-muted/10 border-border",
+  L3: "text-muted-foreground bg-muted/10 border-border",
 };
 
 const LAYER_LABEL_COLORS: Record<string, string> = {
-  L1: "text-emerald-400",
-  L2: "text-blue-400",
-  L3: "text-purple-400",
+  L1: "text-foreground/60",
+  L2: "text-muted-foreground",
+  L3: "text-muted-foreground",
 };
 
 function deltaColor(delta: number): string {
-  if (delta > 0.01) return "text-emerald-400";
-  if (delta < -0.01) return "text-red-400";
-  return "text-zinc-500";
+  if (delta > 0.01) return "text-foreground/60";
+  if (delta < -0.01) return "text-destructive";
+  return "text-muted-foreground";
 }
 
 function AssertionBreakdownPanel({
@@ -72,24 +72,24 @@ function AssertionBreakdownPanel({
   if (breakdown.length === 0) return null;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+    <div className="bg-card border border-border rounded-lg overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-zinc-800/40 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
       >
-        <span className="text-sm font-semibold text-zinc-300">Assertion Breakdown by Layer</span>
+        <span className="text-sm font-semibold text-foreground/80">Assertion Breakdown by Layer</span>
         {open ? (
-          <ChevronDown className="w-4 h-4 text-zinc-500" />
+          <ChevronDown className="w-4 h-4 text-muted-foreground" />
         ) : (
-          <ChevronRight className="w-4 h-4 text-zinc-500" />
+          <ChevronRight className="w-4 h-4 text-muted-foreground" />
         )}
       </button>
 
       {open && (
-        <div className="border-t border-zinc-800">
+        <div className="border-t border-border">
           {/* Header */}
-          <div className="grid grid-cols-[100px_1fr_80px_80px_80px_90px] gap-2 px-4 py-2 text-xs text-zinc-500 bg-zinc-800/30">
+          <div className="grid grid-cols-[100px_1fr_80px_80px_80px_90px] gap-2 px-4 py-2 text-xs text-muted-foreground bg-muted/20">
             <span>Layer</span>
             <span>Assertion types</span>
             <span className="text-center">{labelA}</span>
@@ -98,7 +98,7 @@ function AssertionBreakdownPanel({
             <span className="text-center">A / Tie / B</span>
           </div>
 
-          <div className="divide-y divide-zinc-800/50">
+          <div className="divide-y divide-border">
             {breakdown.map((row) => (
               <div
                 key={row.layer}
@@ -107,7 +107,7 @@ function AssertionBreakdownPanel({
                 {/* Layer badge */}
                 <div>
                   <span
-                    className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded border ${LAYER_COLORS[row.layer] ?? "text-zinc-400 bg-zinc-800 border-zinc-700"}`}
+                    className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded border ${LAYER_COLORS[row.layer] ?? "text-muted-foreground bg-muted/20 border-border"}`}
                   >
                     {row.layer} · {row.layerLabel}
                   </span>
@@ -118,7 +118,7 @@ function AssertionBreakdownPanel({
                   {row.assertionTypes.map((t) => (
                     <span
                       key={t}
-                      className="text-xs px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 font-mono"
+                      className="text-xs px-1.5 py-0.5 rounded bg-muted/20 text-muted-foreground font-mono"
                     >
                       {t}
                     </span>
@@ -141,18 +141,18 @@ function AssertionBreakdownPanel({
                 </span>
 
                 {/* Wins / Ties / Losses */}
-                <div className={`text-center text-xs font-mono ${LAYER_LABEL_COLORS[row.layer] ?? "text-zinc-400"}`}>
-                  <span className="text-emerald-400">{row.aWins}</span>
-                  <span className="text-zinc-600"> / </span>
-                  <span className="text-zinc-500">{row.ties}</span>
-                  <span className="text-zinc-600"> / </span>
-                  <span className="text-blue-400">{row.bWins}</span>
+                <div className={`text-center text-xs font-mono ${LAYER_LABEL_COLORS[row.layer] ?? "text-muted-foreground"}`}>
+                  <span className="text-foreground/60">{row.aWins}</span>
+                  <span className="text-muted-foreground"> / </span>
+                  <span className="text-muted-foreground">{row.ties}</span>
+                  <span className="text-muted-foreground"> / </span>
+                  <span className="text-foreground/70">{row.bWins}</span>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="px-4 py-2 text-xs text-zinc-600 border-t border-zinc-800/50">
+          <div className="px-4 py-2 text-xs text-muted-foreground border-t border-border">
             Δ = B score − A score · A&nbsp;wins&nbsp;/&nbsp;Ties&nbsp;/&nbsp;B&nbsp;wins per layer
           </div>
         </div>
@@ -178,16 +178,16 @@ export function EvalCompareView({ result }: EvalCompareViewProps) {
     <div className="space-y-4">
 
       {/* ── Summary bar ── */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+      <div className="bg-card border border-border rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-zinc-300">Comparison Summary</h3>
+          <h3 className="text-sm font-semibold text-foreground/80">Comparison Summary</h3>
           {winnerLabel ? (
-            <div className="flex items-center gap-1.5 text-amber-400 text-xs font-medium">
+            <div className="flex items-center gap-1.5 text-muted-foreground text-xs font-medium">
               <Trophy className="w-3.5 h-3.5" />
               {winnerLabel} wins
             </div>
           ) : (
-            <div className="flex items-center gap-1.5 text-zinc-400 text-xs">
+            <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
               <Minus className="w-3.5 h-3.5" />
               Tie
             </div>
@@ -197,33 +197,33 @@ export function EvalCompareView({ result }: EvalCompareViewProps) {
         {/* Score comparison */}
         <div className="grid grid-cols-3 gap-3 mb-3">
           {/* Version A */}
-          <div className={`bg-zinc-800 rounded-md p-3 text-center ${delta.winner === "a" ? "ring-1 ring-emerald-500/50" : ""}`}>
-            <p className="text-xs text-zinc-500 truncate mb-1">{labelA}</p>
+          <div className={`bg-muted/20 rounded-md p-3 text-center ${delta.winner === "a" ? "ring-1 ring-border" : ""}`}>
+            <p className="text-xs text-muted-foreground truncate mb-1">{labelA}</p>
             <p className={`text-2xl font-mono font-bold ${scoreColor(scoreA)}`}>
               {scorePct(scoreA)}
             </p>
-            <p className="text-xs text-zinc-600 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               {runA.passedCases}/{runA.totalCases} passed
             </p>
           </div>
 
           {/* Delta */}
           <div className="flex flex-col items-center justify-center gap-1">
-            <span className="text-xs text-zinc-600">vs</span>
+            <span className="text-xs text-muted-foreground">vs</span>
             {diffBadge(delta.scoreDiff)}
-            <div className="flex items-center gap-1 text-xs text-zinc-600 mt-1">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
               <Clock className="w-3 h-3" />
               {diffBadge(delta.latencyDiffMs, "ms")}
             </div>
           </div>
 
           {/* Version B */}
-          <div className={`bg-zinc-800 rounded-md p-3 text-center ${delta.winner === "b" ? "ring-1 ring-emerald-500/50" : ""}`}>
-            <p className="text-xs text-zinc-500 truncate mb-1">{labelB}</p>
+          <div className={`bg-muted/20 rounded-md p-3 text-center ${delta.winner === "b" ? "ring-1 ring-border" : ""}`}>
+            <p className="text-xs text-muted-foreground truncate mb-1">{labelB}</p>
             <p className={`text-2xl font-mono font-bold ${scoreColor(scoreB)}`}>
               {scorePct(scoreB)}
             </p>
-            <p className="text-xs text-zinc-600 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               {runB.passedCases}/{runB.totalCases} passed
             </p>
           </div>
@@ -231,13 +231,13 @@ export function EvalCompareView({ result }: EvalCompareViewProps) {
 
         {/* Win/Loss/Tie counts */}
         <div className="flex items-center justify-center gap-4 text-xs">
-          <span className="text-emerald-400 font-medium">
+          <span className="text-foreground/60 font-medium">
             A wins: {delta.aWins}
           </span>
-          <span className="text-zinc-600">|</span>
-          <span className="text-zinc-400">Ties: {delta.ties}</span>
-          <span className="text-zinc-600">|</span>
-          <span className="text-blue-400 font-medium">
+          <span className="text-muted-foreground">|</span>
+          <span className="text-muted-foreground">Ties: {delta.ties}</span>
+          <span className="text-muted-foreground">|</span>
+          <span className="text-foreground/70 font-medium">
             B wins: {delta.bWins}
           </span>
         </div>
@@ -253,8 +253,8 @@ export function EvalCompareView({ result }: EvalCompareViewProps) {
       )}
 
       {/* ── Per-case table ── */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
-        <div className="grid grid-cols-[1fr_1fr_80px_1fr_1fr] gap-0 text-xs font-medium text-zinc-500 bg-zinc-800/50 px-3 py-2 border-b border-zinc-800">
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <div className="grid grid-cols-[1fr_1fr_80px_1fr_1fr] gap-0 text-xs font-medium text-muted-foreground bg-muted/20 px-3 py-2 border-b border-border">
           <span>{labelA} output</span>
           <span className="text-center">Score A</span>
           <span className="text-center">Winner</span>
@@ -262,7 +262,7 @@ export function EvalCompareView({ result }: EvalCompareViewProps) {
           <span>{labelB} output</span>
         </div>
 
-        <div className="divide-y divide-zinc-800">
+        <div className="divide-y divide-border">
           {runA.results.map((caseA, idx) => {
             const caseB = runB.results[idx];
             const scoreA = caseA.score;
@@ -274,17 +274,17 @@ export function EvalCompareView({ result }: EvalCompareViewProps) {
               <div key={caseA.testCaseId} className="px-3 py-2.5">
                 {/* Test case label */}
                 <div className="col-span-full mb-2">
-                  <span className="text-xs font-medium text-zinc-400">
+                  <span className="text-xs font-medium text-muted-foreground">
                     {idx + 1}. {caseA.label}
                   </span>
                 </div>
                 <div className="grid grid-cols-[1fr_80px_80px_80px_1fr] gap-2 items-start">
                   {/* Output A */}
-                  <div className="bg-zinc-800/50 rounded p-2 min-h-[40px]">
+                  <div className="bg-muted/20 rounded p-2 min-h-[40px]">
                     {caseA.status === "ERROR" ? (
-                      <span className="text-red-400 text-xs italic">Error: {caseA.errorMessage}</span>
+                      <span className="text-destructive text-xs italic">Error: {caseA.errorMessage}</span>
                     ) : (
-                      <p className="text-xs text-zinc-300 line-clamp-3 whitespace-pre-wrap">
+                      <p className="text-xs text-foreground/80 line-clamp-3 whitespace-pre-wrap">
                         {caseA.agentOutput ?? "—"}
                       </p>
                     )}
@@ -296,22 +296,22 @@ export function EvalCompareView({ result }: EvalCompareViewProps) {
                       {scorePct(scoreA)}
                     </span>
                     {caseA.status === "PASSED" ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-foreground/60" />
                     ) : (
-                      <XCircle className="w-3.5 h-3.5 text-red-400" />
+                      <XCircle className="w-3.5 h-3.5 text-destructive" />
                     )}
                   </div>
 
                   {/* Winner indicator */}
                   <div className="flex items-center justify-center">
                     {winner === "a" && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-medium">A ▲</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-muted/20 text-foreground/60 font-medium">A ▲</span>
                     )}
                     {winner === "b" && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 font-medium">B ▲</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-muted/20 text-foreground/70 font-medium">B ▲</span>
                     )}
                     {winner === "tie" && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-zinc-700/50 text-zinc-500">—</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-muted/20 text-muted-foreground">—</span>
                     )}
                   </div>
 
@@ -321,18 +321,18 @@ export function EvalCompareView({ result }: EvalCompareViewProps) {
                       {scorePct(scoreB)}
                     </span>
                     {caseB?.status === "PASSED" ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-foreground/60" />
                     ) : (
-                      <XCircle className="w-3.5 h-3.5 text-red-400" />
+                      <XCircle className="w-3.5 h-3.5 text-destructive" />
                     )}
                   </div>
 
                   {/* Output B */}
-                  <div className="bg-zinc-800/50 rounded p-2 min-h-[40px]">
+                  <div className="bg-muted/20 rounded p-2 min-h-[40px]">
                     {caseB?.status === "ERROR" ? (
-                      <span className="text-red-400 text-xs italic">Error: {caseB.errorMessage}</span>
+                      <span className="text-destructive text-xs italic">Error: {caseB.errorMessage}</span>
                     ) : (
-                      <p className="text-xs text-zinc-300 line-clamp-3 whitespace-pre-wrap">
+                      <p className="text-xs text-foreground/80 line-clamp-3 whitespace-pre-wrap">
                         {caseB?.agentOutput ?? "—"}
                       </p>
                     )}
@@ -345,10 +345,10 @@ export function EvalCompareView({ result }: EvalCompareViewProps) {
       </div>
 
       {/* ── Footer links ── */}
-      <div className="flex items-center gap-3 text-xs text-zinc-600">
-        <span>Run A: <code className="font-mono text-zinc-500">{runA.runId}</code></span>
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span>Run A: <code className="font-mono text-muted-foreground">{runA.runId}</code></span>
         <span>·</span>
-        <span>Run B: <code className="font-mono text-zinc-500">{runB.runId}</code></span>
+        <span>Run B: <code className="font-mono text-muted-foreground">{runB.runId}</code></span>
       </div>
     </div>
   );

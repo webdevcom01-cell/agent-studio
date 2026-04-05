@@ -81,10 +81,10 @@ function scorePct(score: number | null): string {
 }
 
 function scoreColor(score: number | null): string {
-  if (score == null) return "text-zinc-400";
-  if (score >= 0.8) return "text-emerald-400";
-  if (score >= 0.5) return "text-yellow-400";
-  return "text-red-400";
+  if (score == null) return "text-muted-foreground";
+  if (score >= 0.8) return "text-foreground/60";
+  if (score >= 0.5) return "text-muted-foreground";
+  return "text-destructive";
 }
 
 function durationLabel(ms: number | null): string {
@@ -95,13 +95,13 @@ function durationLabel(ms: number | null): string {
 
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, string> = {
-    PASSED:    "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-    FAILED:    "bg-red-500/15 text-red-400 border-red-500/30",
-    ERROR:     "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
-    COMPLETED: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-    RUNNING:   "bg-violet-500/15 text-violet-400 border-violet-500/30",
-    PENDING:   "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
-    SKIPPED:   "bg-zinc-500/15 text-zinc-500 border-zinc-600",
+    PASSED:    "bg-foreground/5 text-foreground/60 border-border",
+    FAILED:    "bg-muted/10 text-destructive border-destructive/30",
+    ERROR:     "bg-muted/10 text-muted-foreground border-border",
+    COMPLETED: "bg-muted/10 text-muted-foreground border-border",
+    RUNNING:   "bg-muted/10 text-muted-foreground border-border",
+    PENDING:   "bg-muted/20 text-muted-foreground border-border",
+    SKIPPED:   "bg-muted/20 text-muted-foreground/60 border-border",
   };
   return (
     <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${map[status] ?? map.PENDING}`}>
@@ -113,10 +113,10 @@ function StatusPill({ status }: { status: string }) {
 function TriggeredByBadge({ triggeredBy }: { triggeredBy: string | null }) {
   const value = triggeredBy ?? "manual";
   const map: Record<string, string> = {
-    manual:   "bg-zinc-700/50 text-zinc-400",
-    deploy:   "bg-violet-500/15 text-violet-400",
-    schedule: "bg-amber-500/15 text-amber-400",
-    compare:  "bg-blue-500/15 text-blue-400",
+    manual:   "bg-muted/20 text-muted-foreground",
+    deploy:   "bg-muted/10 text-muted-foreground",
+    schedule: "bg-muted/10 text-muted-foreground",
+    compare:  "bg-muted/10 text-muted-foreground",
   };
   return (
     <span className={`px-1.5 py-0.5 rounded text-xs font-medium capitalize ${map[value] ?? map.manual}`}>
@@ -126,13 +126,13 @@ function TriggeredByBadge({ triggeredBy }: { triggeredBy: string | null }) {
 }
 
 function TrendIcon({ history }: { history: RunHistoryItem[] }) {
-  if (history.length < 2) return <Minus className="w-4 h-4 text-zinc-500" />;
+  if (history.length < 2) return <Minus className="size-4 text-muted-foreground" />;
   const prev = history[1].score;
   const curr = history[0].score;
-  if (prev == null || curr == null) return <Minus className="w-4 h-4 text-zinc-500" />;
-  if (curr > prev + 0.02) return <TrendingUp className="w-4 h-4 text-emerald-400" />;
-  if (curr < prev - 0.02) return <TrendingDown className="w-4 h-4 text-red-400" />;
-  return <Minus className="w-4 h-4 text-zinc-500" />;
+  if (prev == null || curr == null) return <Minus className="size-4 text-muted-foreground" />;
+  if (curr > prev + 0.02) return <TrendingUp className="size-4 text-foreground/60" />;
+  if (curr < prev - 0.02) return <TrendingDown className="size-4 text-destructive" />;
+  return <Minus className="size-4 text-muted-foreground" />;
 }
 
 // ─── Case result row ──────────────────────────────────────────────────────────
@@ -141,29 +141,29 @@ function CaseResultRow({ result }: { result: EvalCaseResult }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="border border-zinc-700 rounded-lg overflow-hidden">
+    <div className="border border-border rounded-lg overflow-hidden">
       <div
-        className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-zinc-800/40 transition-colors bg-zinc-900"
+        className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted transition-colors bg-card"
         onClick={() => setExpanded((v) => !v)}
       >
         {/* Status icon */}
         <div className="shrink-0">
-          {result.status === "PASSED" && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-          {result.status === "FAILED" && <XCircle className="w-4 h-4 text-red-400" />}
-          {result.status === "ERROR"  && <AlertCircle className="w-4 h-4 text-yellow-400" />}
-          {(result.status === "PENDING" || result.status === "SKIPPED") && <Clock className="w-4 h-4 text-zinc-500" />}
+          {result.status === "PASSED" && <CheckCircle2 className="size-4 text-foreground/60" />}
+          {result.status === "FAILED" && <XCircle className="size-4 text-destructive" />}
+          {result.status === "ERROR"  && <AlertCircle className="size-4 text-muted-foreground" />}
+          {(result.status === "PENDING" || result.status === "SKIPPED") && <Clock className="size-4 text-muted-foreground" />}
         </div>
 
         {/* Label + input preview */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-zinc-200 truncate">{result.testCase.label}</p>
-          <p className="text-xs text-zinc-500 truncate">{result.testCase.input}</p>
+          <p className="text-sm font-medium text-foreground/80 truncate">{result.testCase.label}</p>
+          <p className="text-xs text-muted-foreground truncate">{result.testCase.input}</p>
         </div>
 
         {/* Tags */}
         <div className="flex gap-1 shrink-0">
           {result.testCase.tags.map((tag) => (
-            <span key={tag} className="text-xs px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded border border-zinc-700">
+            <span key={tag} className="text-xs px-1.5 py-0.5 bg-muted text-muted-foreground rounded border border-border">
               {tag}
             </span>
           ))}
@@ -175,25 +175,25 @@ function CaseResultRow({ result }: { result: EvalCaseResult }) {
         </span>
 
         {/* Latency */}
-        <span className="text-xs text-zinc-500 w-16 text-right shrink-0 font-mono">
+        <span className="text-xs text-muted-foreground w-16 text-right shrink-0 font-mono">
           {durationLabel(result.latencyMs)}
         </span>
 
         {/* Expand */}
         {expanded
-          ? <ChevronUp className="w-4 h-4 text-zinc-500 shrink-0" />
-          : <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
+          ? <ChevronUp className="size-4 text-muted-foreground shrink-0" />
+          : <ChevronDown className="size-4 text-muted-foreground shrink-0" />
         }
       </div>
 
       {/* Expanded detail */}
       {expanded && (
-        <div className="border-t border-zinc-700 bg-zinc-800/30 px-4 py-3 space-y-3">
+        <div className="border-t border-border bg-muted/20 px-4 py-3 space-y-3">
           {/* Agent output */}
           {result.agentOutput && (
             <div>
-              <p className="text-xs font-medium text-zinc-400 mb-1">Agent Response</p>
-              <p className="text-sm text-zinc-300 bg-zinc-800 rounded-md px-3 py-2 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">
+              <p className="text-xs font-medium text-muted-foreground mb-1">Agent Response</p>
+              <p className="text-sm text-foreground/80 bg-muted rounded-md px-3 py-2 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">
                 {result.agentOutput}
               </p>
             </div>
@@ -201,7 +201,7 @@ function CaseResultRow({ result }: { result: EvalCaseResult }) {
 
           {/* Error */}
           {result.errorMessage && (
-            <div className="text-xs text-red-400 bg-red-900/20 rounded-md px-3 py-2 border border-red-500/20">
+            <div className="text-xs text-destructive bg-muted/10 rounded-md px-3 py-2 border border-destructive/30">
               {result.errorMessage}
             </div>
           )}
@@ -209,17 +209,17 @@ function CaseResultRow({ result }: { result: EvalCaseResult }) {
           {/* Assertion results */}
           {result.assertions.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-zinc-400 mb-2">Assertion Results</p>
+              <p className="text-xs font-medium text-muted-foreground mb-2">Assertion Results</p>
               <div className="space-y-1.5">
                 {result.assertions.map((a, idx) => (
                   <div key={idx} className="flex items-start gap-2 text-xs">
                     {a.passed
-                      ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0" />
-                      : <XCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />
+                      ? <CheckCircle2 className="size-3.5 text-foreground/60 mt-0.5 shrink-0" />
+                      : <XCircle className="size-3.5 text-destructive mt-0.5 shrink-0" />
                     }
-                    <span className="text-zinc-400 font-mono shrink-0">{a.type}</span>
-                    <span className="text-zinc-300 flex-1">{a.message}</span>
-                    <span className={`font-mono font-semibold shrink-0 ${a.passed ? "text-emerald-400" : "text-red-400"}`}>
+                    <span className="text-muted-foreground font-mono shrink-0">{a.type}</span>
+                    <span className="text-foreground/80 flex-1">{a.message}</span>
+                    <span className={`font-mono font-semibold shrink-0 ${a.passed ? "text-foreground/60" : "text-destructive"}`}>
                       {(a.score * 100).toFixed(0)}%
                     </span>
                   </div>
@@ -247,24 +247,24 @@ function TrendChart({ history }: { history: RunHistoryItem[] }) {
     }));
 
   return (
-    <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4">
-      <p className="text-sm font-medium text-zinc-300 mb-3">Score Trend</p>
+    <div className="bg-card border border-border rounded-lg p-4">
+      <p className="text-sm font-medium text-foreground/80 mb-3">Score Trend</p>
       <ResponsiveContainer width="100%" height={120}>
         <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-          <XAxis dataKey="run" tick={{ fontSize: 11, fill: "#71717a" }} />
-          <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#71717a" }} unit="%" />
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+          <XAxis dataKey="run" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+          <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} unit="%" />
           <Tooltip
-            contentStyle={{ backgroundColor: "#18181b", border: "1px solid #3f3f46", borderRadius: 6 }}
-            labelStyle={{ color: "#a1a1aa", fontSize: 11 }}
+            contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6 }}
+            labelStyle={{ color: "hsl(var(--muted-foreground))", fontSize: 11 }}
             formatter={(v) => [`${typeof v === "number" ? v : 0}%`, "Score"]}
           />
           <Line
             type="monotone"
             dataKey="score"
-            stroke="#8b5cf6"
+            stroke="hsl(var(--foreground))"
             strokeWidth={2}
-            dot={{ fill: "#8b5cf6", r: 3 }}
+            dot={{ fill: "hsl(var(--foreground))", r: 3 }}
             activeDot={{ r: 5 }}
             connectNulls
           />
@@ -299,58 +299,58 @@ export function EvalResultsView({ run, history, onSelectRun, agentId, suiteId }:
       <div className="flex items-center justify-end gap-2">
         <button
           onClick={handleDownloadRun}
-          className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors px-2.5 py-1.5 rounded border border-zinc-700 hover:border-zinc-600 bg-zinc-900 hover:bg-zinc-800"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1.5 rounded border border-border hover:border-border bg-card hover:bg-muted"
           title="Download this run as CSV"
         >
-          <Download className="w-3.5 h-3.5" />
+          <Download className="size-3.5" />
           Export Run
         </button>
         <button
           onClick={handleDownloadAllRuns}
-          className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors px-2.5 py-1.5 rounded border border-zinc-700 hover:border-zinc-600 bg-zinc-900 hover:bg-zinc-800"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1.5 rounded border border-border hover:border-border bg-card hover:bg-muted"
           title="Download all completed runs in this suite as CSV"
         >
-          <Download className="w-3.5 h-3.5" />
+          <Download className="size-3.5" />
           Export All Runs
         </button>
       </div>
 
       {/* Summary bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3">
-          <p className="text-xs text-zinc-500 mb-0.5">Score</p>
+        <div className="bg-card border border-border rounded-lg px-4 py-3">
+          <p className="text-xs text-muted-foreground mb-0.5">Score</p>
           <p className={`text-2xl font-bold font-mono ${scoreColor(run.score)}`}>
             {scorePct(run.score)}
             <TrendIcon history={history} />
           </p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3">
-          <p className="text-xs text-zinc-500 mb-0.5">Passed</p>
-          <p className="text-2xl font-bold text-emerald-400">
-            {run.passedCases}<span className="text-sm text-zinc-500 font-normal">/{run.totalCases}</span>
+        <div className="bg-card border border-border rounded-lg px-4 py-3">
+          <p className="text-xs text-muted-foreground mb-0.5">Passed</p>
+          <p className="text-2xl font-bold text-foreground/60">
+            {run.passedCases}<span className="text-sm text-muted-foreground font-normal">/{run.totalCases}</span>
           </p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3">
-          <p className="text-xs text-zinc-500 mb-0.5">Failed</p>
-          <p className={`text-2xl font-bold ${run.failedCases > 0 ? "text-red-400" : "text-zinc-500"}`}>
+        <div className="bg-card border border-border rounded-lg px-4 py-3">
+          <p className="text-xs text-muted-foreground mb-0.5">Failed</p>
+          <p className={`text-2xl font-bold ${run.failedCases > 0 ? "text-destructive" : "text-muted-foreground"}`}>
             {run.failedCases}
           </p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3">
-          <p className="text-xs text-zinc-500 mb-0.5">Duration</p>
-          <p className="text-2xl font-bold text-zinc-300 font-mono">{durationLabel(run.durationMs)}</p>
+        <div className="bg-card border border-border rounded-lg px-4 py-3">
+          <p className="text-xs text-muted-foreground mb-0.5">Duration</p>
+          <p className="text-2xl font-bold text-foreground/80 font-mono">{durationLabel(run.durationMs)}</p>
         </div>
       </div>
 
       {/* Pass rate bar */}
       <div>
-        <div className="flex justify-between text-xs text-zinc-500 mb-1">
+        <div className="flex justify-between text-xs text-muted-foreground mb-1">
           <span>Pass rate</span>
           <span>{(passRate * 100).toFixed(0)}%</span>
         </div>
-        <div className="h-2 bg-zinc-700 rounded-full overflow-hidden">
+        <div className="h-2 bg-muted rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all ${passRate >= 0.8 ? "bg-emerald-500" : passRate >= 0.5 ? "bg-yellow-500" : "bg-red-500"}`}
+            className={`h-full rounded-full transition-all ${passRate >= 0.8 ? "bg-foreground/60" : passRate >= 0.5 ? "bg-muted-foreground" : "bg-destructive"}`}
             style={{ width: `${passRate * 100}%` }}
           />
         </div>
@@ -361,7 +361,7 @@ export function EvalResultsView({ run, history, onSelectRun, agentId, suiteId }:
 
       {/* Per-case results */}
       <div className="space-y-2">
-        <p className="text-sm font-medium text-zinc-300">Test Results</p>
+        <p className="text-sm font-medium text-foreground/80">Test Results</p>
         {run.results.map((result) => (
           <CaseResultRow key={result.id} result={result} />
         ))}
@@ -370,10 +370,10 @@ export function EvalResultsView({ run, history, onSelectRun, agentId, suiteId }:
       {/* Run history table */}
       {history.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-zinc-300">Run History</p>
-          <div className="border border-zinc-700 rounded-lg overflow-hidden">
+          <p className="text-sm font-medium text-foreground/80">Run History</p>
+          <div className="border border-border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-zinc-800 text-zinc-400 text-xs">
+              <thead className="bg-muted text-muted-foreground text-xs">
                 <tr>
                   <th className="text-left px-3 py-2">Date</th>
                   <th className="text-left px-3 py-2">Status</th>
@@ -383,14 +383,14 @@ export function EvalResultsView({ run, history, onSelectRun, agentId, suiteId }:
                   <th className="text-left px-3 py-2">Triggered by</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-700/50">
+              <tbody className="divide-y divide-border/50">
                 {history.map((r) => (
                   <tr
                     key={r.id}
                     onClick={() => onSelectRun(r.id)}
-                    className={`cursor-pointer transition-colors hover:bg-zinc-800/60 ${r.id === run.id ? "bg-zinc-800/40" : ""}`}
+                    className={`cursor-pointer transition-colors hover:bg-muted/60 ${r.id === run.id ? "bg-muted/40" : ""}`}
                   >
-                    <td className="px-3 py-2 text-zinc-400 text-xs">
+                    <td className="px-3 py-2 text-muted-foreground text-xs">
                       {new Date(r.createdAt).toLocaleString()}
                     </td>
                     <td className="px-3 py-2">
@@ -399,10 +399,10 @@ export function EvalResultsView({ run, history, onSelectRun, agentId, suiteId }:
                     <td className={`px-3 py-2 text-right font-mono font-semibold ${scoreColor(r.score)}`}>
                       {scorePct(r.score)}
                     </td>
-                    <td className="px-3 py-2 text-right text-zinc-400 text-xs">
+                    <td className="px-3 py-2 text-right text-muted-foreground text-xs">
                       {r.passedCases}/{r.totalCases}
                     </td>
-                    <td className="px-3 py-2 text-right text-zinc-400 text-xs font-mono">
+                    <td className="px-3 py-2 text-right text-muted-foreground text-xs font-mono">
                       {durationLabel(r.durationMs)}
                     </td>
                     <td className="px-3 py-2 text-xs">
