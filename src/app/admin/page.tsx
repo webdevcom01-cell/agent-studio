@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,10 +84,10 @@ export default function AdminDashboardPage(): React.ReactElement {
   const jobs = jobsRes?.data;
 
   return (
-    <div className="container mx-auto max-w-6xl py-8 px-4">
+    <div className="flex h-full flex-col overflow-hidden"><div className="flex-1 overflow-y-auto px-4 py-8"><div className="mx-auto max-w-6xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+          <h1 className="text-base font-semibold">Admin Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Visibility only — no enforcement. Auto-refreshes every 30s.
           </p>
@@ -123,37 +124,37 @@ export default function AdminDashboardPage(): React.ReactElement {
                   icon={<Users className="size-4" />}
                   label="Total Users"
                   value={stats.overview.totalUsers}
-                  color="text-blue-400"
+                  color="text-muted-foreground"
                 />
                 <MetricCard
                   icon={<Users className="size-4" />}
                   label="Active Users (24h)"
                   value={stats.overview.activeUsers}
-                  color="text-cyan-400"
+                  color="text-muted-foreground"
                 />
                 <MetricCard
                   icon={<Bot className="size-4" />}
                   label="Total Agents"
                   value={stats.overview.totalAgents}
-                  color="text-green-400"
+                  color="text-muted-foreground"
                 />
                 <MetricCard
                   icon={<MessageSquare className="size-4" />}
                   label="Total Conversations"
                   value={stats.overview.totalConversations}
-                  color="text-purple-400"
+                  color="text-muted-foreground"
                 />
                 <MetricCard
                   icon={<TrendingUp className="size-4" />}
                   label="Conversations (30d)"
                   value={stats.overview.recentConversations}
-                  color="text-violet-400"
+                  color="text-muted-foreground"
                 />
                 <MetricCard
                   icon={<Activity className="size-4" />}
                   label="Webhook Executions (30d)"
                   value={stats.webhooks.executions30d}
-                  color="text-yellow-400"
+                  color="text-muted-foreground"
                 />
                 <MetricCard
                   icon={<AlertTriangle className="size-4" />}
@@ -161,10 +162,8 @@ export default function AdminDashboardPage(): React.ReactElement {
                   value={`${stats.webhooks.errorRate.toFixed(1)}%`}
                   color={
                     stats.webhooks.errorRate > 10
-                      ? "text-red-400"
-                      : stats.webhooks.errorRate > 5
-                        ? "text-orange-400"
-                        : "text-green-400"
+                      ? "text-destructive"
+                      : "text-muted-foreground"
                   }
                 />
                 <MetricCard
@@ -172,7 +171,7 @@ export default function AdminDashboardPage(): React.ReactElement {
                   label="Queue Depth"
                   value={stats.queue.waiting + stats.queue.delayed}
                   sub={`${stats.queue.waiting} waiting · ${stats.queue.delayed} delayed`}
-                  color="text-orange-400"
+                  color="text-muted-foreground"
                 />
               </div>
             </>
@@ -186,11 +185,11 @@ export default function AdminDashboardPage(): React.ReactElement {
           {jobs && (
             <>
               <div className="grid grid-cols-5 gap-3 mb-6">
-                <QueueCard label="Waiting" value={jobs.stats.waiting} color="text-yellow-400" />
-                <QueueCard label="Active" value={jobs.stats.active} color="text-blue-400" />
-                <QueueCard label="Completed" value={jobs.stats.completed} color="text-green-400" />
-                <QueueCard label="Failed" value={jobs.stats.failed} color="text-red-400" />
-                <QueueCard label="Delayed" value={jobs.stats.delayed} color="text-orange-400" />
+                <QueueCard label="Waiting" value={jobs.stats.waiting} color="text-muted-foreground" />
+                <QueueCard label="Active" value={jobs.stats.active} color="text-muted-foreground" />
+                <QueueCard label="Completed" value={jobs.stats.completed} color="text-muted-foreground" />
+                <QueueCard label="Failed" value={jobs.stats.failed} color="text-destructive" />
+                <QueueCard label="Delayed" value={jobs.stats.delayed} color="text-muted-foreground" />
               </div>
 
               <Card>
@@ -238,8 +237,8 @@ export default function AdminDashboardPage(): React.ReactElement {
                             <div className="flex items-center gap-2">
                               <div className="h-1.5 w-14 rounded-full bg-muted">
                                 <div
-                                  className="h-full rounded-full bg-primary transition-all"
-                                  style={{ width: `${job.progress}%` }}
+                                  className="h-full rounded-full bg-primary transition-all w-[var(--job-progress)]"
+                                  style={{ "--job-progress": `${job.progress}%` } as React.CSSProperties}
                                 />
                               </div>
                               <span className="text-xs text-muted-foreground w-7">
@@ -314,7 +313,7 @@ export default function AdminDashboardPage(): React.ReactElement {
           )}
         </TabsContent>
       </Tabs>
-    </div>
+    </div></div></div>
   );
 }
 
@@ -368,11 +367,8 @@ function QueueCard({
 
 function stateColor(state: string): string {
   switch (state) {
-    case "active": return "text-blue-400";
-    case "completed": return "text-green-400";
-    case "failed": return "text-red-400";
-    case "waiting": return "text-yellow-400";
-    case "delayed": return "text-orange-400";
+    case "failed": return "text-destructive";
+    case "completed": return "text-foreground/60";
     default: return "text-muted-foreground";
   }
 }

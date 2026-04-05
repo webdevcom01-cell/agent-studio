@@ -89,8 +89,9 @@ import { LspQueryNode } from "./nodes/lsp-query-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Save, Plug, X, Clock, Rocket, Circle, Undo2, Redo2, Search, BarChart2, History, Variable } from "lucide-react";
+import { Save, Plug, X, Clock, Rocket, Circle, Undo2, Redo2, Search, BarChart2, History, Variable, ArrowLeft, Database, FlaskConical, Webhook, MessageSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { AgentMCPSelector } from "@/components/mcp/agent-mcp-selector";
 import type { FlowContent, FlowNode } from "@/types";
@@ -549,7 +550,7 @@ function FlowBuilderCanvas({
         return {
           ...edge,
           animated: true,
-          style: { stroke: "#8b5cf6", strokeWidth: 2 },
+          style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
         };
       }
       return edge;
@@ -568,193 +569,191 @@ function FlowBuilderCanvas({
 
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <div className="flex items-center gap-3">
-          <h2 className="text-sm font-semibold">{agentName}</h2>
-          <NodePicker onAddNode={addNode} />
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Undo / Redo */}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleUndo}
-            disabled={!canUndo}
-            title="Undo (Ctrl+Z)"
-            aria-label="Undo"
-            className="px-2"
-          >
-            <Undo2 className="size-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleRedo}
-            disabled={!canRedo}
-            title="Redo (Ctrl+Y)"
-            aria-label="Redo"
-            className="px-2"
-          >
-            <Redo2 className="size-4" />
-          </Button>
+      {/* ── Toolbar ─────────────────────────────────────────────────────── */}
+      <div className="flex h-[52px] shrink-0 items-center gap-1 border-b border-border px-3">
 
-          {/* Node search toggle */}
-          <Button
-            size="sm"
-            variant={showSearch ? "default" : "ghost"}
-            onClick={() => setShowSearch((v) => !v)}
-            title="Search nodes (Ctrl+F)"
-            aria-label="Search nodes"
-            className="px-2"
-          >
-            <Search className="size-4" />
-          </Button>
+        {/* Left: back + agent name + add node */}
+        <Button variant="ghost" size="icon-sm" asChild aria-label="Back to dashboard">
+          <Link href="/"><ArrowLeft className="size-3.5" /></Link>
+        </Button>
 
-          <div className="w-px h-4 bg-border" />
+        <span className="mx-1 text-sm font-medium tracking-tight text-foreground">
+          {agentName}
+        </span>
 
-          {/* Status indicator */}
-          <button
-            className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
-            onClick={() => {
-              setShowVersionPanel(true);
-              setSelectedNodeId(null);
-              setShowMCPPanel(false);
-            }}
-          >
-            {hasChanges ? (
-              <>
-                <Circle className="size-2.5 fill-amber-400 text-amber-400" />
-                Unsaved changes
-              </>
-            ) : deployedVersion ? (
-              <>
-                <Circle className="size-2.5 fill-emerald-400 text-emerald-400" />
-                Live · v{deployedVersion}
-              </>
-            ) : (
-              <>
-                <Circle className="size-2.5 fill-muted-foreground text-muted-foreground" />
-                No deploy
-              </>
-            )}
-          </button>
+        <NodePicker onAddNode={addNode} />
 
-          {/* Save timestamp */}
-          {lastSavedAt && !hasChanges && (
-            <span className="text-xs text-muted-foreground hidden sm:inline">
-              Saved {saveTimeLabel}
-            </span>
-          )}
+        <div className="mx-1 h-4 w-px bg-border" />
 
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setShowVersionPanel(!showVersionPanel);
-              if (!showVersionPanel) {
-                setSelectedNodeId(null);
-                setShowMCPPanel(false);
-              }
-            }}
-          >
-            <Clock className="mr-1.5 size-4" />
-            History
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              if (lastSavedVersionId) {
-                setShowDeployDialog(true);
-              }
-            }}
-            disabled={!lastSavedVersionId}
-          >
-            <Rocket className="mr-1.5 size-4" />
-            Deploy
-          </Button>
-          <Button
-            size="sm"
-            variant={showMCPPanel ? "default" : "outline"}
-            onClick={() => {
-              setShowMCPPanel(!showMCPPanel);
-              if (!showMCPPanel) {
-                setSelectedNodeId(null);
-                setShowVersionPanel(false);
-              }
-            }}
-            className={showMCPPanel ? "bg-teal-600 hover:bg-teal-700" : ""}
-          >
-            <Plug className="mr-1.5 size-4" />
-            MCP
-          </Button>
-          <DebugToggleButton
-            isDebugMode={debugSession.state.isDebugMode}
-            onToggle={() => {
-              debugSession.toggleDebugMode();
-              // Auto-show timeline + variable watch when entering debug mode
-              if (!debugSession.state.isDebugMode) {
-                setShowTimeline(true);
-                setShowVariableWatch(true);
-              }
-            }}
-          />
-          {debugSession.state.isDebugMode && (
+        {/* Undo / Redo */}
+        <Button size="icon-sm" variant="ghost" onClick={handleUndo} disabled={!canUndo} title="Undo (⌘Z)" aria-label="Undo">
+          <Undo2 className="size-3.5" />
+        </Button>
+        <Button size="icon-sm" variant="ghost" onClick={handleRedo} disabled={!canRedo} title="Redo (⌘Y)" aria-label="Redo">
+          <Redo2 className="size-3.5" />
+        </Button>
+
+        {/* Node search */}
+        <Button
+          size="icon-sm"
+          variant={showSearch ? "secondary" : "ghost"}
+          onClick={() => setShowSearch((v) => !v)}
+          title="Search nodes (⌘F)"
+          aria-label="Search nodes"
+        >
+          <Search className="size-3.5" />
+        </Button>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Agent links */}
+        <Button size="icon-sm" variant="ghost" asChild title="Knowledge Base" aria-label="Knowledge Base">
+          <Link href={`/knowledge/${agentId}`}><Database className="size-3.5" /></Link>
+        </Button>
+        <Button size="icon-sm" variant="ghost" asChild title="Evals" aria-label="Evals">
+          <Link href={`/evals/${agentId}`}><FlaskConical className="size-3.5" /></Link>
+        </Button>
+        <Button size="icon-sm" variant="ghost" asChild title="Webhooks" aria-label="Webhooks">
+          <Link href={`/webhooks/${agentId}`}><Webhook className="size-3.5" /></Link>
+        </Button>
+
+        <div className="mx-1 h-4 w-px bg-border" />
+
+        {/* Save status */}
+        <button
+          className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
+          onClick={() => {
+            setShowVersionPanel(true);
+            setSelectedNodeId(null);
+            setShowMCPPanel(false);
+          }}
+        >
+          {hasChanges ? (
             <>
-              <Button
-                size="sm"
-                variant={showTimeline ? "default" : "outline"}
-                onClick={() => setShowTimeline((v) => !v)}
-                className={cn(
-                  "gap-1.5",
-                  showTimeline && "bg-violet-700 hover:bg-violet-800 border-violet-700 text-white"
-                )}
-                title="Toggle Execution Timeline"
-                aria-label="Toggle Execution Timeline"
-              >
-                <BarChart2 className="size-4" />
-                Timeline
-              </Button>
-              <Button
-                size="sm"
-                variant={showTraceHistory ? "default" : "outline"}
-                onClick={() => setShowTraceHistory((v) => !v)}
-                className={cn(
-                  "gap-1.5",
-                  showTraceHistory && "bg-violet-700 hover:bg-violet-800 border-violet-700 text-white"
-                )}
-                title="Toggle Trace History"
-                aria-label="Toggle Trace History"
-              >
-                <History className="size-4" />
-                History
-              </Button>
-              <Button
-                size="sm"
-                variant={showVariableWatch ? "default" : "outline"}
-                onClick={() => setShowVariableWatch((v) => !v)}
-                className={cn(
-                  "gap-1.5",
-                  showVariableWatch && "bg-violet-700 hover:bg-violet-800 border-violet-700 text-white"
-                )}
-                title="Toggle Variable Watch"
-                aria-label="Toggle Variable Watch"
-              >
-                <Variable className="size-4" />
-                Variables
-              </Button>
+              <Circle className="size-2 fill-muted-foreground text-muted-foreground" />
+              <span>Unsaved</span>
+            </>
+          ) : deployedVersion ? (
+            <>
+              <Circle className="size-2 fill-foreground/60 text-foreground/60" />
+              <span>v{deployedVersion}</span>
+            </>
+          ) : (
+            <>
+              <Circle className="size-2 fill-muted-foreground/40 text-muted-foreground/40" />
+              <span>Draft</span>
             </>
           )}
-          <Button
-            size="sm"
-            onClick={handleSave}
-            disabled={isSaving || !hasChanges}
-            title="Save (Ctrl+S)"
-          >
-            <Save className="mr-1.5 size-4" />
-            {isSaving ? "Saving..." : "Save"}
-          </Button>
-        </div>
+        </button>
+
+        {lastSavedAt && !hasChanges && (
+          <span className="hidden text-xs text-muted-foreground/40 sm:inline">
+            {saveTimeLabel}
+          </span>
+        )}
+
+        <div className="mx-1 h-4 w-px bg-border" />
+
+        {/* Panel toggles */}
+        <Button
+          size="icon-sm"
+          variant={showVersionPanel ? "secondary" : "ghost"}
+          onClick={() => {
+            setShowVersionPanel(!showVersionPanel);
+            if (!showVersionPanel) { setSelectedNodeId(null); setShowMCPPanel(false); }
+          }}
+          title="Version History"
+          aria-label="Version History"
+        >
+          <Clock className="size-3.5" />
+        </Button>
+
+        <Button
+          size="icon-sm"
+          variant={showMCPPanel ? "secondary" : "ghost"}
+          onClick={() => {
+            setShowMCPPanel(!showMCPPanel);
+            if (!showMCPPanel) { setSelectedNodeId(null); setShowVersionPanel(false); }
+          }}
+          title="MCP Tools"
+          aria-label="MCP Tools"
+        >
+          <Plug className="size-3.5" />
+        </Button>
+
+        <DebugToggleButton
+          isDebugMode={debugSession.state.isDebugMode}
+          onToggle={() => {
+            debugSession.toggleDebugMode();
+            if (!debugSession.state.isDebugMode) {
+              setShowTimeline(true);
+              setShowVariableWatch(true);
+            }
+          }}
+        />
+
+        {debugSession.state.isDebugMode && (
+          <>
+            <Button
+              size="icon-sm"
+              variant={showTimeline ? "secondary" : "ghost"}
+              onClick={() => setShowTimeline((v) => !v)}
+              title="Execution Timeline"
+              aria-label="Execution Timeline"
+            >
+              <BarChart2 className="size-3.5" />
+            </Button>
+            <Button
+              size="icon-sm"
+              variant={showTraceHistory ? "secondary" : "ghost"}
+              onClick={() => setShowTraceHistory((v) => !v)}
+              title="Trace History"
+              aria-label="Trace History"
+            >
+              <History className="size-3.5" />
+            </Button>
+            <Button
+              size="icon-sm"
+              variant={showVariableWatch ? "secondary" : "ghost"}
+              onClick={() => setShowVariableWatch((v) => !v)}
+              title="Variable Watch"
+              aria-label="Variable Watch"
+            >
+              <Variable className="size-3.5" />
+            </Button>
+          </>
+        )}
+
+        <div className="mx-1 h-4 w-px bg-border" />
+
+        {/* Primary actions */}
+        <Button size="sm" variant="outline" asChild className="gap-1.5">
+          <Link href={`/chat/${agentId}`}>
+            <MessageSquare className="size-3.5" />
+            Test
+          </Link>
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => { if (lastSavedVersionId) setShowDeployDialog(true); }}
+          disabled={!lastSavedVersionId}
+          className="gap-1.5"
+        >
+          <Rocket className="size-3.5" />
+          Deploy
+        </Button>
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={isSaving || !hasChanges}
+          title="Save (⌘S)"
+          className="gap-1.5"
+        >
+          <Save className="size-3.5" />
+          {isSaving ? "Saving…" : "Save"}
+        </Button>
       </div>
 
       {/* Debug toolbar — shown when debug mode is active */}
@@ -930,7 +929,7 @@ function FlowBuilderCanvas({
           <div className="flex w-80 flex-col border-l bg-background">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="text-sm font-semibold flex items-center gap-1.5">
-                <Plug className="size-4 text-teal-500" />
+                <Plug className="size-4 text-muted-foreground" />
                 MCP Tools
               </h3>
               <Button

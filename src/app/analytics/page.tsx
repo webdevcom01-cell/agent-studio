@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import {
@@ -142,12 +142,12 @@ function formatCost(usd: number): string {
 }
 
 const PIE_COLORS = [
-  "hsl(var(--primary))",
-  "hsl(210, 70%, 55%)",
-  "hsl(170, 60%, 45%)",
-  "hsl(280, 55%, 55%)",
-  "hsl(30, 75%, 50%)",
-  "hsl(340, 65%, 50%)",
+  "hsl(var(--foreground) / 0.7)",
+  "hsl(var(--foreground) / 0.55)",
+  "hsl(var(--foreground) / 0.42)",
+  "hsl(var(--foreground) / 0.30)",
+  "hsl(var(--muted-foreground) / 0.7)",
+  "hsl(var(--muted-foreground) / 0.5)",
 ];
 
 const CHART_STYLE = {
@@ -191,15 +191,15 @@ function StatCard({
         {(subValue || (trend && trendLabel)) && (
           <div className="mt-2.5 pt-2 border-t border-border/50 flex items-center gap-1 text-xs">
             {trend === "up" ? (
-              <ArrowUpRight className="size-3 text-emerald-500" />
+              <ArrowUpRight className="size-3 text-foreground/50" />
             ) : trend === "down" ? (
-              <ArrowDownRight className="size-3 text-red-500" />
+              <ArrowDownRight className="size-3 text-destructive" />
             ) : null}
             <span
               className={cn(
                 "font-medium truncate",
-                trend === "up" && "text-emerald-500",
-                trend === "down" && "text-red-500",
+                trend === "up" && "text-foreground/60",
+                trend === "down" && "text-destructive",
                 trend === "neutral" && "text-muted-foreground",
                 !trend && "text-muted-foreground"
               )}
@@ -244,12 +244,10 @@ function FunnelBar({
   label,
   count,
   maxCount,
-  color,
 }: {
   label: string;
   count: number;
   maxCount: number;
-  color: string;
 }): React.ReactElement {
   const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
   return (
@@ -265,8 +263,8 @@ function FunnelBar({
       </div>
       <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden">
         <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, backgroundColor: color }}
+          className="h-full rounded-full bg-foreground/40 transition-all duration-500 w-[var(--bar-w)]"
+          style={{ "--bar-w": `${pct}%` } as React.CSSProperties}
         />
       </div>
     </div>
@@ -284,50 +282,42 @@ export default function AnalyticsPage(): React.ReactElement {
   const analytics = data?.data;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+      <div className="flex h-[52px] shrink-0 items-center justify-between gap-3 border-b border-border px-3">
+        <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon-sm" asChild>
-            <Link href="/">
-              <ArrowLeft className="size-4" />
-            </Link>
+            <Link href="/"><ArrowLeft className="size-3.5" /></Link>
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">
-              Agent performance, costs, and user engagement
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium">Analytics</span>
           {period === "24h" && (
             <Badge variant="secondary" className="gap-1">
               <Activity className="size-3" />
               Live
             </Badge>
           )}
-          <div className="flex gap-0.5 rounded-lg border p-0.5">
-            {(["24h", "7d", "30d", "90d"] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={cn(
-                  "px-3 py-1.5 text-sm rounded-md transition-all font-medium",
-                  period === p
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                )}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
+        </div>
+        <div className="flex gap-0.5 rounded-lg border p-0.5 mr-2">
+          {(["24h", "7d", "30d", "90d"] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={cn(
+                "px-2.5 py-1 text-xs rounded-md transition-all font-medium",
+                period === p
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              )}
+            >
+              {p}
+            </button>
+          ))}
         </div>
       </div>
+      <div className="flex-1 overflow-y-auto px-4 py-6">
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 mb-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 mb-6 mt-2">
         {isLoading || !analytics ? (
           Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)
         ) : (
@@ -492,14 +482,14 @@ export default function AnalyticsPage(): React.ReactElement {
                               </div>
                               <div className="h-2 w-20 rounded-full bg-muted overflow-hidden">
                                 <div
-                                  className="h-full rounded-full bg-primary/60"
+                                  className="h-full rounded-full bg-primary/60 w-[var(--agent-bar-w)]"
                                   style={{
-                                    width: `${Math.round(
+                                    "--agent-bar-w": `${Math.round(
                                       (agent.conversationCount /
                                         Math.max(analytics.topAgents[0].conversationCount, 1)) *
                                         100
                                     )}%`,
-                                  }}
+                                  } as React.CSSProperties}
                                 />
                               </div>
                             </div>
@@ -556,10 +546,10 @@ export default function AnalyticsPage(): React.ReactElement {
                         <span className="size-2 rounded-full bg-primary" /> p50
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="size-2 rounded-full" style={{ backgroundColor: "hsl(30, 75%, 50%)" }} /> p95
+                        <span className="size-2 rounded-full bg-muted-foreground/60" /> p95
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="size-2 rounded-full" style={{ backgroundColor: "hsl(0, 70%, 55%)" }} /> p99
+                        <span className="size-2 rounded-full bg-destructive/60" /> p99
                       </span>
                     </div>
                   </div>
@@ -594,8 +584,8 @@ export default function AnalyticsPage(): React.ReactElement {
                           contentStyle={CHART_STYLE}
                         />
                         <Line type="monotone" dataKey="p50Ms" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="p50" />
-                        <Line type="monotone" dataKey="p95Ms" stroke="hsl(30, 75%, 50%)" strokeWidth={2} dot={false} name="p95" strokeDasharray="4 2" />
-                        <Line type="monotone" dataKey="p99Ms" stroke="hsl(0, 70%, 55%)" strokeWidth={1.5} dot={false} name="p99" strokeDasharray="2 2" />
+                        <Line type="monotone" dataKey="p95Ms" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name="p95" strokeDasharray="4 2" />
+                        <Line type="monotone" dataKey="p99Ms" stroke="hsl(var(--destructive))" strokeWidth={1.5} dot={false} name="p99" strokeDasharray="2 2" />
                       </LineChart>
                     </ResponsiveContainer>
                   )}
@@ -620,7 +610,7 @@ export default function AnalyticsPage(): React.ReactElement {
                           <XAxis dataKey="date" tickFormatter={formatDate} className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                           <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} unit="%" axisLine={false} tickLine={false} />
                           <Tooltip labelFormatter={(l) => formatDate(String(l))} contentStyle={CHART_STYLE} formatter={(v) => [`${Number(v)}%`, "Error Rate"]} />
-                          <Bar dataKey="rate" fill="hsl(0, 70%, 55%)" radius={[4, 4, 0, 0]} name="Error Rate" />
+                          <Bar dataKey="rate" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} name="Error Rate" />
                         </BarChart>
                       </ResponsiveContainer>
                     )}
@@ -692,8 +682,8 @@ export default function AnalyticsPage(): React.ReactElement {
                       <AreaChart data={analytics.costTrend}>
                         <defs>
                           <linearGradient id="costGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(150, 60%, 45%)" stopOpacity={0.2} />
-                            <stop offset="95%" stopColor="hsl(150, 60%, 45%)" stopOpacity={0} />
+                            <stop offset="5%" stopColor="hsl(var(--foreground))" stopOpacity={0.2} />
+                            <stop offset="95%" stopColor="hsl(var(--foreground))" stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
@@ -704,7 +694,7 @@ export default function AnalyticsPage(): React.ReactElement {
                           formatter={(v, name) => [String(name) === "costUsd" ? formatCost(Number(v)) : formatTokens(Number(v)), String(name) === "costUsd" ? "Cost" : "Tokens"]}
                           contentStyle={CHART_STYLE}
                         />
-                        <Area type="monotone" dataKey="costUsd" stroke="hsl(150, 60%, 45%)" fill="url(#costGradient)" strokeWidth={2} name="costUsd" />
+                        <Area type="monotone" dataKey="costUsd" stroke="hsl(var(--foreground))" fill="url(#costGradient)" strokeWidth={2} name="costUsd" />
                       </AreaChart>
                     </ResponsiveContainer>
                   )}
@@ -733,8 +723,8 @@ export default function AnalyticsPage(): React.ReactElement {
                               </span>
                             </div>
                             <div className="flex gap-1">
-                              <div className="h-1.5 rounded-full bg-primary/40" style={{ flex: model.totalInputTokens }} title={`Input: ${formatTokens(model.totalInputTokens)}`} />
-                              <div className="h-1.5 rounded-full bg-primary" style={{ flex: model.totalOutputTokens }} title={`Output: ${formatTokens(model.totalOutputTokens)}`} />
+                              <div className="h-1.5 rounded-full bg-primary/40 flex-[var(--flex-in)]" style={{ "--flex-in": model.totalInputTokens } as React.CSSProperties} title={`Input: ${formatTokens(model.totalInputTokens)}`} />
+                              <div className="h-1.5 rounded-full bg-primary flex-[var(--flex-out)]" style={{ "--flex-out": model.totalOutputTokens } as React.CSSProperties} title={`Output: ${formatTokens(model.totalOutputTokens)}`} />
                             </div>
                           </div>
                         ))}
@@ -823,25 +813,21 @@ export default function AnalyticsPage(): React.ReactElement {
                       label="Started conversation"
                       count={analytics.conversationFunnel.started}
                       maxCount={analytics.conversationFunnel.started}
-                      color="hsl(var(--primary))"
                     />
                     <FunnelBar
                       label="Sent a message"
                       count={analytics.conversationFunnel.sentMessage}
                       maxCount={analytics.conversationFunnel.started}
-                      color="hsl(210, 70%, 55%)"
                     />
                     <FunnelBar
                       label="Multi-turn (3+ messages)"
                       count={analytics.conversationFunnel.multiTurn}
                       maxCount={analytics.conversationFunnel.started}
-                      color="hsl(170, 60%, 45%)"
                     />
                     <FunnelBar
                       label="Completed"
                       count={analytics.conversationFunnel.completed}
                       maxCount={analytics.conversationFunnel.started}
-                      color="hsl(150, 60%, 45%)"
                     />
                   </div>
                 </CardContent>
@@ -866,42 +852,42 @@ export default function AnalyticsPage(): React.ReactElement {
                             <p className="text-xs text-muted-foreground">Total Searches</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-2xl font-bold text-emerald-500">{analytics.kbSearchStats.withResults}</p>
+                            <p className="text-2xl font-bold text-foreground">{analytics.kbSearchStats.withResults}</p>
                             <p className="text-xs text-muted-foreground">With Results</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-2xl font-bold text-red-500">{analytics.kbSearchStats.withoutResults}</p>
+                            <p className="text-2xl font-bold text-muted-foreground">{analytics.kbSearchStats.withoutResults}</p>
                             <p className="text-xs text-muted-foreground">No Results</p>
                           </div>
                         </div>
                         <div className="h-3 w-full rounded-full bg-muted overflow-hidden flex">
                           <div
-                            className="h-full bg-emerald-500 transition-all"
+                            className="h-full bg-foreground/60 transition-all w-[var(--kb-hit-w)]"
                             style={{
-                              width: `${Math.round(
+                              "--kb-hit-w": `${Math.round(
                                 (analytics.kbSearchStats.withResults /
                                   analytics.kbSearchStats.totalSearches) *
                                   100
                               )}%`,
-                            }}
+                            } as React.CSSProperties}
                           />
                           <div
-                            className="h-full bg-red-500 transition-all"
+                            className="h-full bg-muted-foreground/30 transition-all w-[var(--kb-miss-w)]"
                             style={{
-                              width: `${Math.round(
+                              "--kb-miss-w": `${Math.round(
                                 (analytics.kbSearchStats.withoutResults /
                                   analytics.kbSearchStats.totalSearches) *
                                   100
                               )}%`,
-                            }}
+                            } as React.CSSProperties}
                           />
                         </div>
                         <div className="flex items-center gap-4 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
-                            <span className="size-2 rounded-full bg-emerald-500" /> Hit ({analytics.summary.kbSearchHitRate}%)
+                            <span className="size-2 rounded-full bg-foreground/60" /> Hit ({analytics.summary.kbSearchHitRate}%)
                           </span>
                           <span className="flex items-center gap-1">
-                            <span className="size-2 rounded-full bg-red-500" /> Miss ({100 - analytics.summary.kbSearchHitRate}%)
+                            <span className="size-2 rounded-full bg-muted-foreground/30" /> Miss ({100 - analytics.summary.kbSearchHitRate}%)
                           </span>
                         </div>
                       </div>
@@ -955,6 +941,7 @@ export default function AnalyticsPage(): React.ReactElement {
           )}
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 }

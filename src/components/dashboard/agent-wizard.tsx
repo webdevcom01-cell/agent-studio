@@ -8,8 +8,8 @@
  * Step 3 — Review:    Summary before creating
  */
 
-import { useState } from "react";
-import { Check, Bot, LayoutTemplate, ChevronRight, Sparkles } from "lucide-react";
+import React, { useState } from "react";
+import { Check, Bot, LayoutTemplate, ChevronRight, Sparkles, Zap, Scale, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -70,9 +70,15 @@ interface AgentWizardProps {
 type Step = 1 | 2 | 3;
 
 const TIER_LABELS: Record<string, string> = {
-  fast: "⚡ Fast",
-  balanced: "⚖️ Balanced",
-  powerful: "🧠 Powerful",
+  fast: "Fast",
+  balanced: "Balanced",
+  powerful: "Powerful",
+};
+
+const TIER_ICONS: Record<string, React.ReactElement> = {
+  fast: <Zap className="size-3" />,
+  balanced: <Scale className="size-3" />,
+  powerful: <Brain className="size-3" />,
 };
 
 const STEP_LABELS: Record<Step, string> = {
@@ -292,7 +298,8 @@ function Step2Configure({
               if (group.length === 0) return null;
               return (
                 <SelectGroup key={tier}>
-                  <SelectLabel className="text-xs text-muted-foreground">
+                  <SelectLabel className="text-xs text-muted-foreground flex items-center gap-1">
+                    {TIER_ICONS[tier]}
                     {TIER_LABELS[tier]}
                   </SelectLabel>
                   {group.map((m) => (
@@ -388,7 +395,8 @@ function Step3Review({ template, name, description, model, systemPrompt }: Step3
           <dd className="flex-1">
             <span className="text-sm font-medium">{modelMeta?.name ?? model}</span>
             {modelMeta && (
-              <Badge variant="outline" className="ml-2 text-xs py-0">
+              <Badge variant="outline" className="ml-2 text-xs py-0 flex items-center gap-1">
+                {TIER_ICONS[modelMeta.tier]}
                 {TIER_LABELS[modelMeta.tier]}
               </Badge>
             )}

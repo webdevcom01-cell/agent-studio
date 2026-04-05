@@ -11,7 +11,7 @@
  */
 
 import { useState, useMemo } from "react";
-import { ChevronDown, FlaskConical, Loader2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, FlaskConical, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -42,9 +42,9 @@ function formatValue(value: unknown): string {
 }
 
 function valueBadgeClass(found: boolean, value: unknown): string {
-  if (!found) return "bg-zinc-800 border-zinc-700 text-zinc-500";
-  if (value === null) return "bg-amber-900/20 border-amber-800/40 text-amber-400";
-  return "bg-green-900/20 border-green-800/40 text-green-300";
+  if (!found) return "bg-muted/20 border-border text-muted-foreground";
+  if (value === null) return "bg-muted/20 border-border text-muted-foreground";
+  return "bg-muted/10 border-border text-foreground/60";
 }
 
 function parsePayload(raw: string): { parsed: unknown; error: string | null } {
@@ -119,31 +119,31 @@ export function JsonPathTester({ bodyMappings }: JsonPathTesterProps) {
   }
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/30">
+    <div className="rounded-lg border border-border bg-card">
       {/* Header — collapsible */}
       <button
         type="button"
-        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-zinc-800/30 transition-colors rounded-lg"
+        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors rounded-lg"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
         <span className="flex items-center gap-2">
-          <FlaskConical className="size-3.5 text-violet-400 shrink-0" />
+          <FlaskConical className="size-3.5 text-muted-foreground shrink-0" />
           JSONPath Tester
-          <span className="text-[11px] font-normal text-zinc-500">
+          <span className="text-[11px] font-normal text-muted-foreground">
             — preview body mapping results against a sample payload
           </span>
         </span>
         <ChevronDown
-          className={`size-4 text-zinc-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`size-4 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`}
         />
       </button>
 
       {open && (
-        <div className="px-4 pb-4 space-y-4 border-t border-zinc-800">
+        <div className="px-4 pb-4 space-y-4 border-t border-border">
           {/* Empty state when no mappings */}
           {validMappings.length === 0 ? (
-            <p className="pt-3 text-xs text-zinc-500 italic">
+            <p className="pt-3 text-xs text-muted-foreground italic">
               Configure at least one body mapping above to use the tester.
             </p>
           ) : (
@@ -151,7 +151,7 @@ export function JsonPathTester({ bodyMappings }: JsonPathTesterProps) {
               {/* Left: Payload input */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium text-zinc-400">Sample Payload</p>
+                  <p className="text-xs font-medium text-muted-foreground">Sample Payload</p>
                   <div className="flex items-center gap-1.5">
                     <Button
                       type="button"
@@ -204,12 +204,13 @@ export function JsonPathTester({ bodyMappings }: JsonPathTesterProps) {
                   spellCheck={false}
                 />
                 {parseError && (
-                  <p className="text-[11px] text-red-400">
-                    ⚠ {parseError}
+                  <p className="text-[11px] text-destructive flex items-center gap-1">
+                    <AlertTriangle className="size-3 shrink-0" />
+                    {parseError}
                   </p>
                 )}
                 {!parseError && payloadRaw.trim() && parsed === null && (
-                  <p className="text-[11px] text-amber-400">
+                  <p className="text-[11px] text-muted-foreground">
                     Payload is empty — enter JSON to test mappings.
                   </p>
                 )}
@@ -217,10 +218,10 @@ export function JsonPathTester({ bodyMappings }: JsonPathTesterProps) {
 
               {/* Right: Results */}
               <div className="space-y-2">
-                <p className="text-xs font-medium text-zinc-400">Mapping Results</p>
+                <p className="text-xs font-medium text-muted-foreground">Mapping Results</p>
                 {!payloadRaw.trim() || parseError ? (
-                  <div className="rounded-md border border-dashed border-zinc-800 flex items-center justify-center min-h-[160px]">
-                    <p className="text-xs text-zinc-600 text-center px-4">
+                  <div className="rounded-md border border-dashed border-border flex items-center justify-center min-h-[160px]">
+                    <p className="text-xs text-muted-foreground text-center px-4">
                       {parseError
                         ? "Fix the JSON error to see results"
                         : "Enter a JSON payload to preview how your body mappings resolve"}
@@ -231,13 +232,13 @@ export function JsonPathTester({ bodyMappings }: JsonPathTesterProps) {
                     {results.map((r, i) => (
                       <div
                         key={i}
-                        className="rounded-md border border-zinc-800 bg-zinc-900/50 px-3 py-2 space-y-0.5"
+                        className="rounded-md border border-border bg-card px-3 py-2 space-y-0.5"
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <code className="text-[11px] text-zinc-400 font-mono">
+                          <code className="text-[11px] text-muted-foreground font-mono">
                             {r.jsonPath}
                           </code>
-                          <code className="text-[11px] text-violet-400 font-mono shrink-0">
+                          <code className="text-[11px] text-foreground/70 font-mono shrink-0">
                             → {r.variableName}
                           </code>
                         </div>
@@ -249,7 +250,7 @@ export function JsonPathTester({ bodyMappings }: JsonPathTesterProps) {
                               {formatValue(r.value)}
                             </span>
                           ) : (
-                            <span>⚠ not found</span>
+                            <span className="flex items-center gap-1"><AlertTriangle className="size-3 shrink-0" /> not found</span>
                           )}
                         </div>
                       </div>

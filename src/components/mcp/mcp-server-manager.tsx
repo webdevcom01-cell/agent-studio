@@ -208,7 +208,7 @@ export function MCPServerManager({ open, onOpenChange }: MCPServerManagerProps):
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Plug className="size-5 text-teal-500" />
+              <Plug className="size-5 text-muted-foreground" />
               MCP Servers
             </DialogTitle>
             <DialogDescription>
@@ -390,7 +390,7 @@ function FeaturedServerCard({ server, connected, onConnect }: FeaturedServerCard
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold">{server.name}</p>
             {connected && (
-              <Badge className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+              <Badge className="text-[10px] px-1.5 py-0 bg-muted/20 text-foreground/60">
                 Connected
               </Badge>
             )}
@@ -410,7 +410,7 @@ function FeaturedServerCard({ server, connected, onConnect }: FeaturedServerCard
       <ul className="space-y-1">
         {server.capabilities.map((cap) => (
           <li key={cap} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-            <span className="mt-0.5 text-teal-500" aria-hidden="true">✓</span>
+            <CheckCircle2 className="size-3 mt-0.5 shrink-0 text-muted-foreground" />
             {cap}
           </li>
         ))}
@@ -600,7 +600,7 @@ function ConnectFeaturedDialog({
 
           {/* Transport info */}
           <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
-            <Plug className="size-3.5 shrink-0 text-teal-500" />
+            <Plug className="size-3.5 shrink-0 text-muted-foreground" />
             <span>
               Transport: <span className="font-medium text-foreground">
                 {server.transport === "STREAMABLE_HTTP" ? "Streamable HTTP" : "SSE"}
@@ -616,8 +616,8 @@ function ConnectFeaturedDialog({
             <div
               className={`rounded-md p-3 text-xs ${
                 testResult.success
-                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"
-                  : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300"
+                  ? "bg-muted/10 text-foreground/60"
+                  : "bg-muted/10 text-destructive"
               }`}
             >
               <div className="flex items-center gap-1.5 font-medium mb-1">
@@ -634,7 +634,7 @@ function ConnectFeaturedDialog({
                     <Badge
                       key={tool}
                       variant="secondary"
-                      className="text-[10px] bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"
+                      className="text-[10px] bg-muted/20 text-foreground/70"
                     >
                       {tool}
                     </Badge>
@@ -743,7 +743,7 @@ function ServerCard({
               {featuredMatch.icon}
             </span>
           )}
-          {!featuredMatch && <Plug className="size-4 shrink-0 text-teal-500" />}
+          {!featuredMatch && <Plug className="size-4 shrink-0 text-muted-foreground" />}
           <span className="font-medium text-sm truncate">{server.name}</span>
           <Badge variant="outline" className="text-[10px] shrink-0">
             {server.serverType === "cli_bridge" ? "CLI" : server.transport === "SSE" ? "SSE" : "HTTP"}
@@ -796,7 +796,7 @@ function ServerCard({
         >
           <div
             className={`size-2 rounded-full ${
-              server.enabled ? "bg-emerald-500" : "bg-zinc-400 dark:bg-zinc-600"
+              server.enabled ? "bg-foreground/60" : "bg-muted"
             }`}
           />
           {server.enabled ? "Enabled" : "Disabled"}
@@ -809,8 +809,8 @@ function ServerCard({
         <div
           className={`rounded p-2 text-xs ${
             testResult.success
-              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300"
-              : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300"
+              ? "bg-muted/10 text-foreground/60"
+              : "bg-muted/10 text-destructive"
           }`}
         >
           <div className="flex items-center gap-1.5 mb-1">
@@ -829,7 +829,7 @@ function ServerCard({
                 <Badge
                   key={tool}
                   variant="secondary"
-                  className="text-[10px] bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"
+                  className="text-[10px] bg-muted/20 text-foreground/70"
                 >
                   {tool}
                 </Badge>

@@ -33,15 +33,15 @@ function formatDuration(ms: number): string {
 function statusIcon(status: NodeDebugState["aggregateStatus"], size = "size-4") {
   switch (status) {
     case "success":
-      return <CheckCircle2 className={cn(size, "text-emerald-400")} />;
+      return <CheckCircle2 className={cn(size, "text-foreground/60")} />;
     case "error":
-      return <XCircle className={cn(size, "text-red-400")} />;
+      return <XCircle className={cn(size, "text-destructive")} />;
     case "running":
-      return <Loader2 className={cn(size, "text-violet-400 animate-spin")} />;
+      return <Loader2 className={cn(size, "text-muted-foreground animate-spin")} />;
     case "skipped":
       return <SkipForward className={cn(size, "text-muted-foreground")} />;
     case "waiting":
-      return <AlertTriangle className={cn(size, "text-amber-400")} />;
+      return <AlertTriangle className={cn(size, "text-muted-foreground")} />;
     default:
       return <Clock className={cn(size, "text-muted-foreground")} />;
   }
@@ -61,11 +61,11 @@ function statusLabel(status: NodeDebugState["aggregateStatus"]): string {
 
 function statusColor(status: NodeDebugState["aggregateStatus"]): string {
   const map: Record<string, string> = {
-    success: "text-emerald-400",
-    error: "text-red-400",
-    running: "text-violet-400",
+    success: "text-foreground/60",
+    error: "text-destructive",
+    running: "text-muted-foreground",
     skipped: "text-muted-foreground",
-    waiting: "text-amber-400",
+    waiting: "text-muted-foreground",
     pending: "text-muted-foreground",
   };
   return map[status] ?? "text-muted-foreground";
@@ -124,16 +124,13 @@ function ToolCallRow({ call }: { call: ToolCallTrace }) {
         className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-muted/30 transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >
-        <Wrench className="size-3 text-amber-400 shrink-0" />
+        <Wrench className="size-3 text-muted-foreground shrink-0" />
         <span className="flex-1 font-mono text-foreground/80 truncate">{call.toolName}</span>
-        <span
-          className={cn(
-            "text-[10px] font-medium",
-            call.status === "success" ? "text-emerald-400" : "text-red-400"
-          )}
-        >
-          {call.status === "success" ? "✓" : "✗"}
-        </span>
+        {call.status === "success" ? (
+          <CheckCircle2 className="size-3 text-foreground/60" />
+        ) : (
+          <XCircle className="size-3 text-destructive" />
+        )}
         <span className="text-muted-foreground text-[10px]">
           {formatDuration(call.durationMs)}
         </span>
@@ -148,7 +145,7 @@ function ToolCallRow({ call }: { call: ToolCallTrace }) {
           {call.input !== undefined && <JsonBlock value={call.input} label="Input" />}
           {call.result !== undefined && <JsonBlock value={call.result} label="Result" />}
           {call.error && (
-            <div className="rounded bg-red-950/30 border border-red-900/30 px-2 py-1.5 text-[11px] text-red-300">
+            <div className="rounded bg-muted/10 border border-destructive/30 px-2 py-1.5 text-[11px] text-destructive">
               {call.error}
             </div>
           )}
@@ -173,8 +170,8 @@ function IterationView({ execution }: IterationViewProps) {
         <span
           className={cn(
             "flex items-center gap-1 font-medium",
-            execution.status === "success" && "text-emerald-400",
-            execution.status === "error" && "text-red-400",
+            execution.status === "success" && "text-foreground/60",
+            execution.status === "error" && "text-destructive",
             execution.status === "skipped" && "text-muted-foreground"
           )}
         >
@@ -191,7 +188,7 @@ function IterationView({ execution }: IterationViewProps) {
 
       {/* Error message */}
       {execution.error && (
-        <div className="rounded-md border border-red-900/40 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+        <div className="rounded-md border border-destructive/30 bg-muted/10 px-3 py-2 text-xs text-destructive">
           <div className="font-medium mb-1 flex items-center gap-1.5">
             <XCircle className="size-3" /> Error
           </div>
@@ -211,7 +208,7 @@ function IterationView({ execution }: IterationViewProps) {
           <div className="rounded-md border border-border/50 bg-muted/20 divide-y divide-border/30 overflow-hidden">
             {Object.entries(execution.variables).map(([k, v]) => (
               <div key={k} className="flex items-start gap-2 px-2.5 py-1.5 text-[11px]">
-                <span className="font-mono text-violet-300 shrink-0">{k}</span>
+                <span className="font-mono text-foreground/70 shrink-0">{k}</span>
                 <ArrowRight className="size-3 text-muted-foreground/40 mt-0.5 shrink-0" />
                 <span className="font-mono text-foreground/70 break-all min-w-0">
                   {typeof v === "object" ? JSON.stringify(v) : String(v)}
@@ -322,14 +319,14 @@ export function DebugPanel({ nodeState, nodeName, onClose }: DebugPanelProps) {
               className={cn(
                 "flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium shrink-0 transition-colors",
                 selectedIteration === i
-                  ? "bg-violet-600 text-white"
+                  ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
               {exec.status === "success" ? (
-                <CheckCircle2 className="size-2.5 text-emerald-400" />
+                <CheckCircle2 className="size-2.5 text-foreground/60" />
               ) : exec.status === "error" ? (
-                <XCircle className="size-2.5 text-red-400" />
+                <XCircle className="size-2.5 text-destructive" />
               ) : null}
               #{i + 1}
             </button>
@@ -342,7 +339,7 @@ export function DebugPanel({ nodeState, nodeName, onClose }: DebugPanelProps) {
         {nodeState.executions.length === 0 ? (
           // Node started but not yet finished
           <div className="flex flex-col items-center justify-center h-24 gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-5 animate-spin text-violet-400" />
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
             Executing…
           </div>
         ) : currentExecution ? (

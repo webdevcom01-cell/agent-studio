@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { PropertySection } from "./property-section";
 import { VariableInput, VariableTextarea } from "./variable-input";
 import { type Node } from "@xyflow/react";
-import { Trash2, X, Plus, Search, Database, Plug, Zap, AlertTriangle, Clipboard, Check } from "lucide-react";
+import { Trash2, X, Plus, Search, Database, Plug, Zap, Scale, Brain, AlertTriangle, Clipboard, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,9 +32,15 @@ interface PropertyPanelProps {
 }
 
 const TIER_LABELS: Record<string, string> = {
-  fast: "⚡ Fast & Cheap",
-  balanced: "⚖️ Balanced",
-  powerful: "🧠 Powerful",
+  fast: "Fast & Cheap",
+  balanced: "Balanced",
+  powerful: "Powerful",
+};
+
+const TIER_ICONS: Record<string, React.ReactElement> = {
+  fast: <Zap className="size-3" />,
+  balanced: <Scale className="size-3" />,
+  powerful: <Brain className="size-3" />,
 };
 
 function ModelSelect({
@@ -58,7 +64,8 @@ function ModelSelect({
           if (group.length === 0) return null;
           return (
             <SelectGroup key={tier}>
-              <SelectLabel className="text-xs text-muted-foreground">
+              <SelectLabel className="text-xs text-muted-foreground flex items-center gap-1">
+                {TIER_ICONS[tier]}
                 {TIER_LABELS[tier]}
               </SelectLabel>
               {group.map((m) => (
@@ -97,7 +104,7 @@ function validateUrl(url: string): string | undefined {
 function FieldHint({ error }: { error: string | undefined }) {
   if (!error) return null;
   return (
-    <p className="flex items-center gap-1 text-xs text-amber-500" role="alert">
+    <p className="flex items-center gap-1 text-xs text-muted-foreground" role="alert">
       <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
       {error}
     </p>
@@ -156,7 +163,7 @@ export function PropertyPanel({
             onClick={copyConfig}
           >
             {copied ? (
-              <Check className="size-3.5 text-green-500" aria-hidden="true" />
+              <Check className="size-3.5 text-foreground/60" aria-hidden="true" />
             ) : (
               <Clipboard className="size-3.5" aria-hidden="true" />
             )}
@@ -259,10 +266,10 @@ export function PropertyPanel({
                 <p className="text-xs text-muted-foreground">Max tokens in the response</p>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between rounded-md border border-zinc-700 bg-zinc-800/50 p-3">
+                <div className="flex items-center justify-between rounded-md border border-border bg-muted/20 p-3">
                   <div className="space-y-0.5">
                     <Label className="text-sm font-medium">Use Knowledge Base</Label>
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-muted-foreground">
                       Automatically retrieve context from KB on each message
                     </p>
                   </div>
@@ -273,8 +280,8 @@ export function PropertyPanel({
                     onClick={() => update("enableRAG", !((data.enableRAG as boolean) ?? true))}
                     className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
                       ((data.enableRAG as boolean) ?? true)
-                        ? "bg-green-600"
-                        : "bg-zinc-600"
+                        ? "bg-primary"
+                        : "bg-muted-foreground/30"
                     }`}
                   >
                     <span
@@ -287,17 +294,17 @@ export function PropertyPanel({
                   </button>
                 </div>
                 {!((data.enableRAG as boolean) ?? true) && (
-                  <p className="rounded bg-zinc-800/50 px-2 py-1.5 text-xs text-zinc-400">
+                  <p className="rounded bg-muted/20 px-2 py-1.5 text-xs text-muted-foreground">
                     Knowledge Base retrieval is disabled for this node.
                     Use a kb_search node to retrieve context manually.
                   </p>
                 )}
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between rounded-md border border-zinc-700 bg-zinc-800/50 p-3">
+                <div className="flex items-center justify-between rounded-md border border-border bg-muted/20 p-3">
                   <div className="space-y-0.5">
                     <Label className="text-sm font-medium">Agent Orchestration</Label>
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-muted-foreground">
                       Let AI dynamically call your other agents as tools
                     </p>
                   </div>
@@ -308,8 +315,8 @@ export function PropertyPanel({
                     onClick={() => update("enableAgentTools", !(data.enableAgentTools as boolean))}
                     className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
                       (data.enableAgentTools as boolean)
-                        ? "bg-blue-600"
-                        : "bg-zinc-600"
+                        ? "bg-primary"
+                        : "bg-muted-foreground/30"
                     }`}
                   >
                     <span
@@ -322,7 +329,7 @@ export function PropertyPanel({
                   </button>
                 </div>
                 {(data.enableAgentTools as boolean) && (
-                  <p className="rounded bg-blue-950/50 px-2 py-1.5 text-xs text-blue-300">
+                  <p className="rounded bg-muted/10 px-2 py-1.5 text-xs text-muted-foreground">
                     This AI node will see your other agents as callable tools.
                     The LLM decides which agents to invoke based on the conversation.
                     Protected by circuit breaker, rate limiting, and depth control.
@@ -1017,7 +1024,7 @@ function AIClassifyProperties({ data, update }: SubPanelProps) {
           {categories.map((cat, i) => (
             <span
               key={cat}
-              className="inline-flex items-center gap-1 rounded bg-violet-100 px-2 py-0.5 text-xs text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
+              className="inline-flex items-center gap-1 rounded bg-muted/10 px-2 py-0.5 text-xs text-muted-foreground"
             >
               {cat}
               <button onClick={() => removeCategory(i)} className="hover:text-destructive">
@@ -1559,7 +1566,7 @@ function CallAgentProperties({ data, update, variables = [], currentAgentId }: C
           </Button>
         </div>
         {inputMapping.length === 0 && (
-          <p className="text-xs text-amber-500">
+          <p className="text-xs text-muted-foreground">
             No input mapping configured. Sub-agent will receive empty context.
             Add mappings to pass variables to the sub-agent.
           </p>
@@ -1849,7 +1856,7 @@ function AIExtractProperties({ data, update }: SubPanelProps) {
           </Button>
         </div>
         {fields.length === 0 && (
-          <p className="text-xs text-amber-500">
+          <p className="text-xs text-muted-foreground">
             At least one field is required for extraction.
           </p>
         )}
@@ -2330,7 +2337,7 @@ function EvaluatorProperties({ data, update }: SubPanelProps) {
           </Button>
         </div>
         {criteria.length === 0 && (
-          <p className="text-xs text-amber-500">
+          <p className="text-xs text-muted-foreground">
             At least one criterion is required for evaluation.
           </p>
         )}
@@ -2570,21 +2577,21 @@ function ScheduleTriggerProperties({ data, update, agentId }: ScheduleTriggerPro
   function statusBadge(schedule: LiveSchedule) {
     const broken = schedule.failureCount >= schedule.maxRetries && !schedule.enabled;
     if (broken) return (
-      <span className="rounded bg-red-900/30 px-1.5 py-0.5 text-[10px] text-red-300">circuit broken</span>
+      <span className="rounded bg-muted/10 border border-destructive/30 px-1.5 py-0.5 text-[10px] text-destructive">circuit broken</span>
     );
     if (!schedule.enabled) return (
-      <span className="rounded bg-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400">disabled</span>
+      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">disabled</span>
     );
     return (
-      <span className="rounded bg-green-900/30 px-1.5 py-0.5 text-[10px] text-green-300">active</span>
+      <span className="rounded bg-muted/10 px-1.5 py-0.5 text-[10px] text-foreground/60">active</span>
     );
   }
 
   function execStatusColor(status: string): string {
-    if (status === "COMPLETED") return "text-green-400";
-    if (status === "FAILED") return "text-red-400";
-    if (status === "RUNNING") return "text-blue-400";
-    return "text-zinc-400";
+    if (status === "COMPLETED") return "text-foreground/60";
+    if (status === "FAILED") return "text-destructive";
+    if (status === "RUNNING") return "text-muted-foreground";
+    return "text-muted-foreground";
   }
 
   return (
@@ -2596,7 +2603,7 @@ function ScheduleTriggerProperties({ data, update, agentId }: ScheduleTriggerPro
           type="button"
           onClick={() => update("enabled", !nodeEnabled)}
           className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-            nodeEnabled ? "bg-blue-600" : "bg-zinc-600"
+            nodeEnabled ? "bg-primary" : "bg-muted-foreground/30"
           }`}
         >
           <span
@@ -2639,8 +2646,8 @@ function ScheduleTriggerProperties({ data, update, agentId }: ScheduleTriggerPro
                 onClick={() => update("cronExpression", preset.value)}
                 className={`rounded border px-2 py-0.5 text-xs transition-colors ${
                   cronExpression === preset.value
-                    ? "border-blue-500 bg-blue-900/30 text-blue-300"
-                    : "border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    ? "border-border bg-muted text-foreground"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {preset.label}
@@ -2668,8 +2675,8 @@ function ScheduleTriggerProperties({ data, update, agentId }: ScheduleTriggerPro
                 onClick={() => update("intervalMinutes", preset.value)}
                 className={`rounded border px-2 py-0.5 text-xs transition-colors ${
                   intervalMinutes === preset.value
-                    ? "border-blue-500 bg-blue-900/30 text-blue-300"
-                    : "border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    ? "border-border bg-muted text-foreground"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {preset.label}
@@ -2696,22 +2703,22 @@ function ScheduleTriggerProperties({ data, update, agentId }: ScheduleTriggerPro
       </div>
 
       {/* Live preview panel */}
-      <div className="rounded-md border border-zinc-700 bg-zinc-800/50 p-3 space-y-2">
-        <p className="text-xs font-medium text-zinc-400">Schedule Preview</p>
+      <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
+        <p className="text-xs font-medium text-muted-foreground">Schedule Preview</p>
         {previewLoading && (
-          <p className="text-xs text-zinc-500 animate-pulse">Computing…</p>
+          <p className="text-xs text-muted-foreground/60 animate-pulse">Computing…</p>
         )}
         {!previewLoading && preview?.valid && preview.description && (
-          <p className="text-xs text-green-400">{preview.description}</p>
+          <p className="text-xs text-foreground/60">{preview.description}</p>
         )}
         {!previewLoading && preview && !preview.valid && preview.error && (
-          <p className="text-xs text-red-400">{preview.error}</p>
+          <p className="text-xs text-destructive">{preview.error}</p>
         )}
         {!previewLoading && preview?.valid && preview.nextRuns.length > 0 && (
-          <div className="space-y-1 pt-1 border-t border-zinc-700/50">
-            <p className="text-xs text-zinc-500">Next runs:</p>
+          <div className="space-y-1 pt-1 border-t border-border/50">
+            <p className="text-xs text-muted-foreground/60">Next runs:</p>
             {preview.nextRuns.map((run, i) => (
-              <p key={i} className="text-xs font-mono text-zinc-300">
+              <p key={i} className="text-xs font-mono text-foreground/80">
                 {formatNextRun(run)}
               </p>
             ))}
@@ -2730,26 +2737,26 @@ function ScheduleTriggerProperties({ data, update, agentId }: ScheduleTriggerPro
 
       {/* ── Live schedules panel ─────────────────────────────────────────── */}
       {agentId && (
-        <div className="rounded-md border border-zinc-700 bg-zinc-800/50 p-3 space-y-2">
+        <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-zinc-400">Live Schedules</p>
+            <p className="text-xs font-medium text-muted-foreground">Live Schedules</p>
             {scheduleLoading && (
-              <span className="text-[10px] text-zinc-500 animate-pulse">loading…</span>
+              <span className="text-[10px] text-muted-foreground/60 animate-pulse">loading…</span>
             )}
           </div>
 
           {!scheduleLoading && schedules !== null && schedules.length === 0 && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground/60">
               No schedules yet — create one via the Schedules API.
             </p>
           )}
 
           {schedules && schedules.map((sched) => (
-            <div key={sched.id} className="rounded border border-zinc-700 bg-zinc-900/50 p-2 space-y-1.5">
+            <div key={sched.id} className="rounded border border-border bg-card/50 p-2 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
                   {statusBadge(sched)}
-                  <span className="text-[10px] font-mono text-zinc-400 truncate">
+                  <span className="text-[10px] font-mono text-muted-foreground truncate">
                     {sched.cronExpression ?? (sched.intervalMinutes ? `every ${sched.intervalMinutes}m` : sched.scheduleType.toLowerCase())}
                   </span>
                 </div>
@@ -2758,7 +2765,7 @@ function ScheduleTriggerProperties({ data, update, agentId }: ScheduleTriggerPro
                   disabled={toggleLoading === sched.id}
                   onClick={() => void toggleSchedule(sched)}
                   className={`flex-shrink-0 relative inline-flex h-4 w-7 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 disabled:opacity-50 ${
-                    sched.enabled ? "bg-blue-600" : "bg-zinc-600"
+                    sched.enabled ? "bg-primary" : "bg-muted-foreground/30"
                   }`}
                 >
                   <span
@@ -2769,7 +2776,7 @@ function ScheduleTriggerProperties({ data, update, agentId }: ScheduleTriggerPro
                 </button>
               </div>
               {sched.nextRunAt && sched.enabled && (
-                <p className="text-[10px] text-zinc-500">
+                <p className="text-[10px] text-muted-foreground/60">
                   Next: {new Date(sched.nextRunAt).toLocaleString("en-US", {
                     month: "short", day: "numeric",
                     hour: "2-digit", minute: "2-digit",
@@ -2791,37 +2798,37 @@ function ScheduleTriggerProperties({ data, update, agentId }: ScheduleTriggerPro
 
       {/* ── Execution History ─────────────────────────────────────────────── */}
       {agentId && schedules && schedules.length > 0 && (
-        <div className="rounded-md border border-zinc-700 bg-zinc-800/50 p-3 space-y-2">
+        <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
           <button
             type="button"
             className="flex items-center justify-between w-full text-left"
             onClick={() => setHistoryOpen((v) => !v)}
           >
-            <p className="text-xs font-medium text-zinc-400">Execution History</p>
-            <span className="text-[10px] text-zinc-500">{historyOpen ? "▲" : "▼"}</span>
+            <p className="text-xs font-medium text-muted-foreground">Execution History</p>
+            <span className="text-[10px] text-muted-foreground/60">{historyOpen ? "▲" : "▼"}</span>
           </button>
 
           {historyOpen && (
-            <div className="space-y-1 pt-1 border-t border-zinc-700/50">
+            <div className="space-y-1 pt-1 border-t border-border/50">
               {schedules.flatMap((s) => s.executions).length === 0 ? (
-                <p className="text-xs text-zinc-500">No executions yet.</p>
+                <p className="text-xs text-muted-foreground/60">No executions yet.</p>
               ) : (
                 schedules.flatMap((s) => s.executions).map((exec) => (
                   <div key={exec.id} className="flex items-center gap-2 text-[10px]">
                     <span className={`font-medium ${execStatusColor(exec.status)}`}>
                       {exec.status.toLowerCase()}
                     </span>
-                    <span className="text-zinc-500">
+                    <span className="text-muted-foreground/60">
                       {new Date(exec.triggeredAt).toLocaleString("en-US", {
                         month: "short", day: "numeric",
                         hour: "2-digit", minute: "2-digit",
                       })}
                     </span>
                     {exec.durationMs && (
-                      <span className="text-zinc-600">{exec.durationMs}ms</span>
+                      <span className="text-muted-foreground/40">{exec.durationMs}ms</span>
                     )}
                     {exec.errorMessage && (
-                      <span className="text-red-400 truncate max-w-[120px]" title={exec.errorMessage}>
+                      <span className="text-destructive truncate max-w-[120px]" title={exec.errorMessage}>
                         {exec.errorMessage}
                       </span>
                     )}
@@ -2939,15 +2946,15 @@ function WebhookTriggerProperties({ data, update, agentId, nodeId }: WebhookTrig
 
       {/* Live webhook info — only visible after deploy */}
       {agentId && (
-        <div className="rounded-md border border-zinc-700 bg-zinc-800/50 p-3 space-y-2">
-          <p className="text-xs font-medium text-zinc-400">Webhook Config</p>
+        <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">Webhook Config</p>
 
           {loading && (
-            <p className="text-xs text-zinc-500 animate-pulse">Loading…</p>
+            <p className="text-xs text-muted-foreground/60 animate-pulse">Loading…</p>
           )}
 
           {!loading && !webhook && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground/60">
               Not deployed yet. Deploy the flow to create the webhook endpoint.
             </p>
           )}
@@ -2958,8 +2965,8 @@ function WebhookTriggerProperties({ data, update, agentId, nodeId }: WebhookTrig
               <div className="flex items-center justify-between gap-2">
                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                   webhook.enabled
-                    ? "bg-green-900/30 text-green-300"
-                    : "bg-zinc-700 text-zinc-400"
+                    ? "bg-muted/10 text-foreground/60"
+                    : "bg-muted text-muted-foreground"
                 }`}>
                   {webhook.enabled ? "Active" : "Disabled"}
                 </span>
@@ -2968,7 +2975,7 @@ function WebhookTriggerProperties({ data, update, agentId, nodeId }: WebhookTrig
                   disabled={toggling}
                   onClick={() => void toggleWebhook()}
                   className={`relative inline-flex h-4 w-7 cursor-pointer rounded-full border-2 border-transparent transition-colors disabled:opacity-50 ${
-                    webhook.enabled ? "bg-blue-600" : "bg-zinc-600"
+                    webhook.enabled ? "bg-primary" : "bg-muted-foreground/30"
                   }`}
                 >
                   <span className={`inline-block size-3 rounded-full bg-white shadow transition-transform ${
@@ -2979,13 +2986,13 @@ function WebhookTriggerProperties({ data, update, agentId, nodeId }: WebhookTrig
 
               {/* Stats */}
               {(webhook.triggerCount > 0 || webhook.failureCount > 0) && (
-                <p className="text-[10px] text-zinc-400">
+                <p className="text-[10px] text-muted-foreground">
                   {webhook.triggerCount} trigger{webhook.triggerCount !== 1 ? "s" : ""}
                   {webhook.failureCount > 0 && (
-                    <span className="text-red-400"> · {webhook.failureCount} failed</span>
+                    <span className="text-destructive"> · {webhook.failureCount} failed</span>
                   )}
                   {webhook.lastTriggeredAt && (
-                    <span className="text-zinc-500">
+                    <span className="text-muted-foreground/60">
                       {" · "}last {new Date(webhook.lastTriggeredAt).toLocaleString("en-US", {
                         month: "short", day: "numeric",
                         hour: "2-digit", minute: "2-digit",
@@ -2998,9 +3005,9 @@ function WebhookTriggerProperties({ data, update, agentId, nodeId }: WebhookTrig
               {/* Trigger URL */}
               {triggerUrl && (
                 <div className="space-y-1">
-                  <p className="text-[10px] text-zinc-500 font-medium">Trigger URL (POST):</p>
+                  <p className="text-[10px] text-muted-foreground/60 font-medium">Trigger URL (POST):</p>
                   <div className="flex items-center gap-1">
-                    <code className="flex-1 truncate rounded bg-zinc-900 px-2 py-1 text-[10px] text-zinc-300 font-mono">
+                    <code className="flex-1 truncate rounded bg-muted px-2 py-1 text-[10px] text-foreground/80 font-mono">
                       {triggerUrl}
                     </code>
                     <Button
@@ -4680,7 +4687,7 @@ function AggregateProperties({ data, update }: Omit<SubPanelProps, "variables">)
       <div className="space-y-2">
         <Label>Branch Variables</Label>
         {branchVars.length === 0 && (
-          <p className="text-xs text-amber-500">
+          <p className="text-xs text-muted-foreground">
             No branch variables configured. Add the outputVariable names from your parallel node branches.
           </p>
         )}
@@ -5989,7 +5996,7 @@ function ParallelBranchesProperties({ data, update }: Omit<SubPanelProps, "varia
       <div className="space-y-2">
         <Label>Branches</Label>
         {branches.length === 0 && (
-          <p className="text-xs text-amber-500">
+          <p className="text-xs text-muted-foreground">
             No branches configured. Add at least one branch for parallel execution.
           </p>
         )}
@@ -6194,7 +6201,7 @@ function AstTransformProperties({ data, update }: SubPanelProps) {
       <div className="space-y-2">
         <Label>Source Code</Label>
         <p className="text-xs text-muted-foreground">
-          Code to search. Use <code className="text-violet-400">{"{{variable}}"}</code> to reference a flow variable.
+          Code to search. Use <code className="text-muted-foreground">{"{{variable}}"}</code> to reference a flow variable.
         </p>
         <Textarea
           className="font-mono text-xs"
@@ -6208,7 +6215,7 @@ function AstTransformProperties({ data, update }: SubPanelProps) {
       <div className="space-y-2">
         <Label>Pattern</Label>
         <p className="text-xs text-muted-foreground">
-          AST-grep structural pattern. Use <code className="text-violet-400">$NAME</code> for captures.
+          AST-grep structural pattern. Use <code className="text-muted-foreground">$NAME</code> for captures.
         </p>
         <Textarea
           className="font-mono text-xs"
@@ -6222,7 +6229,7 @@ function AstTransformProperties({ data, update }: SubPanelProps) {
       <div className="space-y-2">
         <Label>Replacement (optional)</Label>
         <p className="text-xs text-muted-foreground">
-          Leave blank for search-only. Use <code className="text-violet-400">$CAPTURE_NAME</code> tokens.
+          Leave blank for search-only. Use <code className="text-muted-foreground">$CAPTURE_NAME</code> tokens.
         </p>
         <Textarea
           className="font-mono text-xs"
@@ -6300,7 +6307,7 @@ function LspQueryProperties({ data, update }: SubPanelProps) {
       <div className="space-y-2">
         <Label>Source Code</Label>
         <p className="text-xs text-muted-foreground">
-          Code to analyze. Use <code className="text-cyan-400">{"{{variable}}"}</code> to reference a flow variable.
+          Code to analyze. Use <code className="text-muted-foreground">{"{{variable}}"}</code> to reference a flow variable.
         </p>
         <Textarea
           className="font-mono text-xs"
