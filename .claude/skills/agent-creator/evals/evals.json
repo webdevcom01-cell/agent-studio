@@ -1,0 +1,53 @@
+{
+  "skill_name": "agent-creator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a TypeScript security audit agent for our Next.js 15 project. It should scan API routes and code for OWASP Top 10 vulnerabilities and return a JSON report with severity scores.",
+      "expected_output": "A complete system prompt (4000+ chars) with <role>, <output_format> including JSON schema with verdict/findings fields, <constraints> with OWASP/security rules, <failure_modes>, and <example> block. Should be classified as a leaf agent and include CVSS v4.0 scoring.",
+      "files": [],
+      "assertions": [
+        "The output includes a <role> block with a specific expert identity (not 'helpful assistant')",
+        "The output includes a <output_format> or <output> section",
+        "The output includes a JSON schema with at least verdict, findings, and severity fields",
+        "The output includes a <constraints> section with at least 3 specific rules",
+        "The output includes a <failure_modes> section",
+        "The output includes an <example> block",
+        "The total system prompt is at least 4000 characters",
+        "The skill asks the user if they want to deploy to Railway PostgreSQL"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Napravi agenta koji orchestrira naš CI/CD pipeline. Treba da pozove tri pod-agenta: security scanner, unit test runner, i code quality checker — i da vrati jedan konsolidovani izveštaj sa ukupnim verdiktom PASS/FAIL.",
+      "expected_output": "A complete system prompt for an orchestrator-type agent. Should include agent roster, handoff schemas, retry logic, and how to consolidate results from 3 sub-agents. JSON schema should show the combined report structure. Should include <role>, <output_format>, <constraints>, <failure_modes>, <example>.",
+      "files": [],
+      "assertions": [
+        "The output includes a <role> block identifying it as an orchestrator",
+        "The output describes coordination of multiple sub-agents or pipeline stages",
+        "The output includes a JSON schema for the consolidated report",
+        "The output includes PASS/FAIL or similar verdict logic",
+        "The output includes a <failure_modes> section covering sub-agent failure",
+        "The output includes a <constraints> section",
+        "The output includes an <example> block showing sample input/output",
+        "The total system prompt is at least 4000 characters"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I want an agent that helps our team write better system prompts. It should analyze a draft prompt and suggest improvements following 2026 standards (XML structure, JSON schemas, failure modes, etc.).",
+      "expected_output": "A complete system prompt for a user-facing (hybrid) agent. Should include structured markdown output format (not just JSON), practical scoring rubric, and specific guidance on Anthropic/Google DeepMind 2026 standards. All 5 required sections present.",
+      "files": [],
+      "assertions": [
+        "The output includes a <role> block with a specific expert identity",
+        "The output includes a <output_format> section describing markdown or structured response",
+        "The output references 2026 standards (Anthropic, Google DeepMind, OpenAI, or similar)",
+        "The output includes a <constraints> section",
+        "The output includes a <failure_modes> section",
+        "The output includes an <example> block",
+        "The total system prompt is at least 4000 characters",
+        "The skill classifies the agent type (leaf/orchestrator/user-facing/hybrid)"
+      ]
+    }
+  ]
+}

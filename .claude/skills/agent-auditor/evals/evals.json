@@ -1,0 +1,35 @@
+{
+  "skill_name": "agent-auditor",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Audit all agents in my Railway database and score them. Connection string: postgresql://postgres:testpass@tramway.proxy.rlwy.net:54364/railway. Show me which ones need immediate attention.",
+      "expected_output": "The skill should: (1) provide Python psycopg2 code to connect and pull agents, (2) apply the 10-dimension scoring rubric, (3) show a summary report with counts per tier (enterprise/improvement/critical/delete), (4) list agents below 8/10 with their missing dimensions, (5) generate improvement suggestions for critical agents.",
+      "files": [],
+      "assertions": [
+        "The output includes Python code or instructions for psycopg2 database connection",
+        "The output references the 10-dimension scoring rubric or equivalent quality criteria",
+        "The output defines thresholds (8/10 enterprise quality, 6-7 needs improvement, <6 critical)",
+        "The output includes a summary report structure showing agent tier counts",
+        "The output identifies specific missing sections (role, output_format, constraints, etc.) for low-scoring agents",
+        "The output generates or shows how to generate improvement suggestions for failing agents",
+        "The output recommends applying changes to Railway after review"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I want to set up a monthly automated audit of all my AI agents to make sure they maintain enterprise quality standards. How should I approach this, and can you run the audit now? My DB: postgresql://postgres:testpass@tramway.proxy.rlwy.net:54364/railway",
+      "expected_output": "The skill should: (1) explain the periodic audit process, (2) provide the scoring methodology, (3) suggest using the schedule skill for automation, (4) run or provide code to run an actual audit, (5) include the full verification workflow.",
+      "files": [],
+      "assertions": [
+        "The output explains a structured audit workflow with clear steps",
+        "The output references the 10-dimension quality rubric",
+        "The output mentions or suggests using a scheduling mechanism for automated audits",
+        "The output provides Python scoring code or equivalent methodology",
+        "The output includes a final verification step to confirm improvements",
+        "The output defines what 'enterprise quality' means (8+/10 or equivalent threshold)",
+        "The output recommends running the audit before production deploys"
+      ]
+    }
+  ]
+}
