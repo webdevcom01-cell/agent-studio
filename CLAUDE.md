@@ -27,7 +27,9 @@ knowledge evolution. OAuth login (GitHub + Google). Simplified extraction from t
 - **Language:** TypeScript strict
 - **Styling:** Tailwind CSS v4 — ONLY Tailwind, no inline styles, no CSS modules
 - **Package manager:** pnpm
-- **Database ORM:** Prisma v6 + PostgreSQL (Supabase, pgvector v0.8.0)
+- **Database ORM:** Prisma v6 + PostgreSQL (**Railway PostgreSQL**, pgvector v0.8.2)
+  - ⚠️ PRODUCTION DB = Railway PostgreSQL (postgres.railway.internal) — NOT Supabase
+  - Supabase project `elegzqtlqkcvqhpklykl` is PAUSED/UNUSED — do not query it
 - **AI:** Vercel AI SDK v6 (`ai@6.0.116`) — never raw fetch to providers
   - **Chat (required):** DeepSeek (`@ai-sdk/deepseek`, default), OpenAI (`@ai-sdk/openai`)
   - **Chat (optional):** Anthropic (`@ai-sdk/anthropic`), Google Gemini (`@ai-sdk/google`), Groq (`@ai-sdk/groq`), Mistral (`@ai-sdk/mistral`), Moonshot/Kimi (OpenAI-compatible)
@@ -103,6 +105,17 @@ cp .env.example .env.local
 pnpm db:push && pnpm db:generate
 pnpm dev  # http://localhost:3000
 ```
+
+### ⚠️ DATABASE — VAŽNO
+
+**PRODUCTION baza = Railway PostgreSQL** (postgres.railway.internal)
+- DATABASE_URL i DIRECT_URL u Railway Variables → Postgres servis → Variables tab
+- pgvector v0.8.2 je instaliran direktno na Railway PostgreSQL
+
+**Supabase projekat `elegzqtlqkcvqhpklykl` je PAUZIRAN i ne koristi se.**
+- NE queryuj Supabase za produkcijske podatke
+- NE koristi Supabase SQL Editor za agent-studio podatke
+- Ako ikad treba da quertuješ bazu direktno: Railway → Postgres servis → Database → Query tab
 
 ### Commands
 ```

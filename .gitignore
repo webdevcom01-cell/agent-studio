@@ -104,3 +104,11 @@ test-*.ts
 deploy-fixes.sh
 fix-flow-nodes.sql
 fix-models.cjs
+
+# Scratch evaluation/audit files
+DOCUMENTATION-AUDIT-PROMPT.md
+VERIFICATION-PROMPT.md
+pre-deployment-audit-prompt.md
+agents.csv
+agents_export.csv
+test_write_check
