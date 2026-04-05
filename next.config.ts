@@ -6,6 +6,7 @@ const CDN_URL = process.env.CDN_URL;
 const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["pdf-parse", "mammoth", "tiktoken", "sharp", "bullmq", "@ast-grep/napi"],
+  transpilePackages: ["swr"],
   // ESLint runs in CI (GitHub Actions) — skip during Railway builds to avoid
   // pre-existing lint debt blocking deploys.
   eslint: { ignoreDuringBuilds: true },

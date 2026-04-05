@@ -3,6 +3,7 @@ import { DM_Sans } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToasterProvider } from "@/components/toaster-provider";
+import { AppShell } from "@/components/layout/app-shell";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -24,10 +25,10 @@ export default function RootLayout({
 }): React.ReactElement {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${dmSans.variable} font-[family-name:var(--font-sans)] min-h-screen antialiased`}>
+      <body className={`${dmSans.variable} font-[family-name:var(--font-sans)] h-full antialiased`}>
         <SessionProvider>
           <ThemeProvider>
-            {children}
+            <AppShell>{children}</AppShell>
           </ThemeProvider>
         </SessionProvider>
         <ToasterProvider />

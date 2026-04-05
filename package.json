@@ -32,7 +32,6 @@
     "knip:ci": "npx knip@5 --reporter compact --no-exit-code"
   },
   "dependencies": {
-    "@ast-grep/napi": "^0.42.1",
     "@ai-sdk/anthropic": "^3.0.66",
     "@ai-sdk/deepseek": "^2.0.27",
     "@ai-sdk/google": "^3.0.58",
@@ -40,6 +39,7 @@
     "@ai-sdk/mcp": "^1.0.32",
     "@ai-sdk/mistral": "^3.0.28",
     "@ai-sdk/openai": "^3.0.50",
+    "@ast-grep/napi": "^0.42.1",
     "@asteasolutions/zod-to-openapi": "^7.3.4",
     "@auth/prisma-adapter": "^2.11.1",
     "@aws-sdk/client-s3": "^3.1024.0",
@@ -75,6 +75,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.577.0",
     "mammoth": "^1.12.0",
+    "motion": "^12.38.0",
     "mysql2": "^3.20.0",
     "next": "15.5.14",
     "next-auth": "5.0.0-beta.30",
