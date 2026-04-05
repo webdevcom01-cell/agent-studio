@@ -167,6 +167,52 @@
 | `/api/cron/migrate-oauth-tokens` | POST | One-time migration for OAuth token schema |
 | `/api/cron/migrate-webhook-secrets` | POST | One-time migration for webhook secret format |
 
+## Agent Memory
+
+| Route | Methods | Purpose |
+|-------|---------|---------|
+| `/api/agents/[agentId]/memory` | GET | List memories (paginated, sortable by importance/accessedAt, filterable by category) |
+| `/api/agents/[agentId]/memory/[memoryId]` | GET, PATCH, DELETE | CRUD individual memories |
+| `/api/agents/[agentId]/memory/export` | GET | Export all agent memories |
+| `/api/agents/[agentId]/memory/import` | POST | Import memories |
+
+## API Keys
+
+| Route | Methods | Purpose |
+|-------|---------|---------|
+| `/api/api-keys` | GET, POST | List caller's API keys, create new key (returns raw key once) |
+| `/api/api-keys/[keyId]` | GET, PATCH, DELETE | Manage individual API keys (scoping, expiration) |
+
+## Organizations & Invites
+
+| Route | Methods | Purpose |
+|-------|---------|---------|
+| `/api/orgs/[orgId]/invite` | POST | Send org invite (generates token, supports ADMIN/MEMBER/VIEWER roles) |
+| `/api/orgs/[orgId]/members` | GET | List org members |
+| `/api/orgs/[orgId]/members/[memberId]` | PATCH, DELETE | Update/remove individual members |
+| `/api/invites/[token]/accept` | POST | Accept org invite via token |
+
+## User Account
+
+| Route | Methods | Purpose |
+|-------|---------|---------|
+| `/api/user/account` | DELETE | Request account deletion (30-day grace period, GDPR) |
+| `/api/user/export` | GET | Export user data |
+
+## Admin
+
+| Route | Methods | Purpose |
+|-------|---------|---------|
+| `/api/admin/jobs` | GET | List queue jobs (active, waiting, completed, failed, delayed) |
+| `/api/admin/stats` | GET | System stats (agents, conversations, users, webhook metrics) |
+
+## OpenAPI / Docs
+
+| Route | Methods | Purpose |
+|-------|---------|---------|
+| `/api/openapi.json` | GET | OpenAPI 3.1 spec (cached, force-static) |
+| `/api/docs` | GET | Swagger UI page |
+
 ## System
 
 | Route | Methods | Purpose |

@@ -107,6 +107,22 @@ src/
       agents/[agentId]/evals/[suiteId]/run/[runId]/export/route.ts ← GET CSV export
       agents/[agentId]/evals/[suiteId]/export/route.ts         ← GET bulk CSV
       agents/[agentId]/evals/[suiteId]/compare/route.ts        ← POST A/B comparison
+      agents/[agentId]/memory/route.ts                         ← GET list memories
+      agents/[agentId]/memory/[memoryId]/route.ts              ← GET, PATCH, DELETE memory
+      agents/[agentId]/memory/export/route.ts                  ← GET export memories
+      agents/[agentId]/memory/import/route.ts                  ← POST import memories
+      api-keys/route.ts                           ← GET list, POST create API keys
+      api-keys/[keyId]/route.ts                   ← GET, PATCH, DELETE API key
+      orgs/[orgId]/invite/route.ts                ← POST send org invite
+      orgs/[orgId]/members/route.ts               ← GET list org members
+      orgs/[orgId]/members/[memberId]/route.ts    ← PATCH, DELETE org member
+      invites/[token]/accept/route.ts             ← POST accept org invite
+      user/account/route.ts                       ← DELETE request account deletion
+      user/export/route.ts                        ← GET export user data
+      admin/jobs/route.ts                         ← GET list queue jobs
+      admin/stats/route.ts                        ← GET system stats
+      openapi.json/route.ts                       ← GET OpenAPI 3.1 spec
+      docs/route.ts                               ← GET Swagger UI
 
   components/
     cli-generator/                ← CLI Generator UI components
@@ -252,7 +268,7 @@ src/
       workers/
         pyodide-node-worker.js ← Node.js Worker thread running Pyodide WASM
       handlers/
-        index.ts           ← Handler registry (56 handlers + 2 streaming variants)
+        index.ts           ← Handler registry (59 handlers + 2 streaming variants)
         ai-response-handler.ts          ← Non-streaming AI (generateText + MCP + agent tools)
         ai-response-streaming-handler.ts ← Streaming AI (streamText → NDJSON + MCP + agent tools)
         mcp-tool-handler.ts             ← Deterministic MCP tool call node
@@ -296,7 +312,8 @@ src/
         set-variable-handler.ts, end-handler.ts, goto-handler.ts, wait-handler.ts,
         ai-classify-handler.ts, ai-extract-handler.ts, ai-summarize-handler.ts,
         api-call-handler.ts, function-handler.ts, kb-search-handler.ts,
-        webhook-handler.ts, webhook-trigger-handler.ts
+        webhook-handler.ts, webhook-trigger-handler.ts,
+        verification-handler.ts, ast-transform-handler.ts, lsp-query-handler.ts
     knowledge/
       index.ts        ← Main search entry point
       chunker.ts      ← Text chunking (400 tokens, 20% overlap)

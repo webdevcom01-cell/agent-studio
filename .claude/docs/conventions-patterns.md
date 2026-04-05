@@ -1,8 +1,8 @@
 # Key Conventions & Patterns
 
 ## Runtime Engine
-- 56 node handlers registered in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants: ai-response-streaming, parallel-streaming)
-- Node types (56): message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, webhook_trigger, email_send, notification, format_transform, switch, web_fetch, browser_action, desktop_app, learn, python_code, structured_output, cache, embeddings, retry, ab_test, semantic_router, cost_monitor, aggregate, web_search, multimodal_input, image_generation, speech_audio, database_query, file_operations, mcp_task_runner, guardrails, code_interpreter, trajectory_evaluator, plan_and_execute, reflexive_loop, swarm
+- 59 node handlers registered in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants: ai-response-streaming, parallel-streaming)
+- Node types (59): message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, webhook_trigger, email_send, notification, format_transform, switch, web_fetch, browser_action, desktop_app, learn, python_code, structured_output, cache, embeddings, retry, ab_test, semantic_router, cost_monitor, aggregate, web_search, multimodal_input, image_generation, speech_audio, database_query, file_operations, mcp_task_runner, guardrails, code_interpreter, trajectory_evaluator, plan_and_execute, reflexive_loop, swarm, verification, ast_transform, lsp_query
 - Safety limits: MAX_ITERATIONS=50, MAX_HISTORY=100
 - Handlers return `ExecutionResult` with messages, nextNodeId, waitForInput, updatedVariables
 - Handlers never throw — always return graceful fallback

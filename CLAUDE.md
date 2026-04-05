@@ -69,7 +69,7 @@ Detailed reference documentation lives in `.claude/docs/`. Read these when worki
 ## 4. KEY PATTERNS (summary)
 
 ### Runtime Engine
-- 56 node handlers in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants)
+- 59 node handlers in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants)
 - Safety limits: MAX_ITERATIONS=50, MAX_HISTORY=100
 - Handlers return `ExecutionResult`, never throw — always graceful fallback
 
@@ -121,16 +121,29 @@ pnpm dev  # http://localhost:3000
 ```
 pnpm dev              # Dev server (Turbopack)
 pnpm build            # Production build
+pnpm start            # Start production server
 pnpm lint             # ESLint
 pnpm typecheck        # TypeScript check (no emit)
 pnpm test             # Vitest unit tests
+pnpm test:watch       # Vitest watch mode
+pnpm test:coverage    # Vitest with coverage report
+pnpm test:load        # k6 load testing
 pnpm test:e2e         # Playwright E2E tests
+pnpm test:e2e:ui      # Playwright UI mode
+pnpm test:e2e:debug   # Playwright debug mode
+pnpm test:e2e:report  # Show Playwright HTML report
 pnpm db:generate      # Generate Prisma client
 pnpm db:migrate       # Run migrations (dev)
+pnpm db:migrate:deploy # Deploy migrations (production)
 pnpm db:push          # Sync schema directly
 pnpm db:studio        # Prisma Studio UI
+pnpm db:seed          # Seed dev data
 pnpm precheck         # Pre-push validation (TS + vitest + lucide mocks + strings)
 pnpm precheck:file    # Same, for a specific file
+pnpm worker           # Run BullMQ queue worker
+pnpm mcp:playwright   # Start Playwright MCP server (port 3100)
+pnpm knip             # Check for unused dependencies/exports
+pnpm knip:fix         # Auto-fix unused imports
 ```
 
 ---
