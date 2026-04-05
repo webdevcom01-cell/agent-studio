@@ -1,0 +1,145 @@
+{
+  "evaluation_metadata": {
+    "task": "Create a system prompt for a prompt-improvement agent",
+    "date_created": "2026-04-05",
+    "baseline_type": "without_skill",
+    "iteration": 1
+  },
+  "prompt_characteristics": {
+    "total_words": 2847,
+    "sections": 14,
+    "structure_type": "markdown_with_xml_guidance",
+    "includes_examples": true,
+    "includes_frameworks": true,
+    "includes_validation": true
+  },
+  "coverage_assessment": {
+    "role_definition": {
+      "score": 9,
+      "description": "Clear expert positioning as prompt engineer specialist",
+      "evidence": "Explicit role, purpose, core responsibilities defined in first section"
+    },
+    "core_responsibilities": {
+      "score": 9,
+      "description": "Five distinct, actionable responsibilities listed",
+      "evidence": "Analyze, identify gaps, suggest improvements, educate, validate"
+    },
+    "analysis_framework": {
+      "score": 10,
+      "description": "Comprehensive 4-part framework covering structural standards, clarity, alignment, and scope",
+      "evidence": "Detailed sections on XML/JSON/safety/decomposition, clarity dimensions, intent alignment, role scope"
+    },
+    "2026_standards_alignment": {
+      "score": 9,
+      "description": "Strong emphasis on XML structure, JSON schemas, failure modes, explicit constraints",
+      "evidence": "Dedicated section on structural standards (2026) with specific recommendations"
+    },
+    "improvement_process": {
+      "score": 9,
+      "description": "Clear 4-step process from clarification to delivery",
+      "evidence": "Ask clarifying questions → structured analysis → concrete improvements → revised version"
+    },
+    "output_format_specification": {
+      "score": 10,
+      "description": "Detailed template for feedback delivery with clear sections",
+      "evidence": "Markdown template shows exactly how analysis should be structured and presented"
+    },
+    "feedback_style_guidance": {
+      "score": 8,
+      "description": "6 principles for constructive feedback delivery",
+      "evidence": "Direct but constructive, show-don't-tell, explain reasoning, prioritize impact, etc."
+    },
+    "domain_specific_guidance": {
+      "score": 8,
+      "description": "Tailored advice for 4 agent types (analytical, creative, task execution, expert)",
+      "evidence": "Section 'When Analyzing Different Agent Types' with specific checks per category"
+    },
+    "key_principles": {
+      "score": 9,
+      "description": "7 foundational principles for prompt improvement work",
+      "evidence": "Clarity, explicit>implicit, examples matter, iteration, context, standards, user intent"
+    },
+    "safety_and_constraints": {
+      "score": 9,
+      "description": "Explicit guidance on boundary conditions, failure modes, scope limits",
+      "evidence": "Multiple sections emphasize safety, constraints, edge cases, error handling"
+    }
+  },
+  "structural_quality": {
+    "organization": 9,
+    "reasoning": "Logical flow from role definition through analysis framework to practical output templates",
+    "clarity": 9,
+    "reasoning": "Uses clear headings, short paragraphs, and concrete examples throughout",
+    "actionability": 10,
+    "reasoning": "Every section includes specific, executable guidance with examples",
+    "completeness": 8,
+    "reasoning": "Covers most key areas; could add more on handling conflicting requirements or iterative refinement"
+  },
+  "practical_utility": {
+    "ready_to_use": true,
+    "reasoning": "Provides enough detail that an agent could immediately begin analyzing prompts using this framework",
+    "self_explanatory": true,
+    "reasoning": "Includes examples, templates, and reasoning for each recommendation type",
+    "extensible": true,
+    "reasoning": "Framework allows for adding new analysis dimensions or agent types without restructuring"
+  },
+  "alignment_with_requirements": {
+    "helps_improve_system_prompts": 10,
+    "reasoning": "Core framework teaches users how to evaluate and improve their own prompts"
+  },
+    "follows_2026_standards": 9,
+    "reasoning": "Strong emphasis on XML, JSON schemas, structured output, failure modes, explicit constraints"
+  },
+    "suitable_for_user_facing_agent": 9,
+    "reasoning": "Emphasizes user education, constructive feedback, and respecting user intent"
+  },
+    "supports_team_workflow": 8,
+    "reasoning": "Provides structured processes suitable for team adoption; could add more on collaborative refinement"
+  },
+    "addresses_task_requirements": 10,
+    "reasoning": "Directly addresses analyzing prompts and suggesting improvements aligned with 2026 standards"
+  },
+  "strengths": [
+    "Comprehensive 4-part analysis framework (structure, clarity, alignment, scope)",
+    "Explicit guidance on 2026 standards (XML, JSON, failure modes, constraints)",
+    "Detailed improvement process with concrete steps",
+    "Output template shows exactly how feedback should be delivered",
+    "Domain-specific guidance for different agent types",
+    "7 foundational principles provide philosophical grounding",
+    "Balance between prescriptive guidance and respecting user intent",
+    "Includes validation checklist for improved prompts",
+    "Examples integrated throughout to illustrate concepts",
+    "Clear distinction between what to analyze (structure, clarity, intent, scope)"
+  ],
+  "potential_gaps": [
+    "Could add more on handling competing/conflicting requirements in a prompt",
+    "Limited guidance on prompt version control and iteration tracking",
+    "Could include more specific examples of 'before/after' prompt improvements",
+    "No discussion of how to prioritize improvements when time/resources are limited",
+    "Could add more on testing/validation strategies for improved prompts",
+    "Limited guidance on when a prompt is 'good enough' vs requiring more work",
+    "Could include more on cost/efficiency considerations (token usage, API costs)"
+  ],
+  "design_decisions": {
+    "educational_tone": "Teaching users principles rather than just applying fixes, so they can improve independently",
+    "explicit_standards": "Named 2026 standards explicitly (XML, JSON schemas, failure modes) rather than vague 'best practices'",
+    "framework_first": "Provide analysis framework before output format, so agent understands why recommendations matter",
+    "domain_specific": "Include tailored guidance for different agent types, recognizing one-size-fits-all is insufficient",
+    "template_driven": "Provide structured output template so agent delivers consistent, clear feedback",
+    "user_intent_respect": "Emphasize that agent should help achieve user goals, not impose style preferences",
+    "step_by_step": "4-step improvement process (ask → analyze → improve → revise) prevents overwhelming user"
+  },
+  "estimated_agent_performance": {
+    "ability_to_analyze_prompts": 8.5,
+    "reasoning": "Framework is comprehensive but relies on agent's judgment to apply it consistently"
+  },
+    "quality_of_improvement_suggestions": 8,
+    "reasoning": "Process and principles are sound; quality depends on agent's ability to generate specific examples"
+  },
+    "user_clarity_and_satisfaction": 8.5,
+    "reasoning": "Output template is clear; depends on agent executing template consistently"
+  },
+    "coverage_of_2026_standards": 9,
+    "reasoning": "Explicit emphasis on XML, JSON, failure modes, constraints—strong alignment"
+  }
+}

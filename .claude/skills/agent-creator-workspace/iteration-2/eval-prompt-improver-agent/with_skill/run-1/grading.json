@@ -1,0 +1,123 @@
+{
+  "run_id": "prompt-improver-agent_with_skill_iteration-2",
+  "evaluated_at": "2026-04-05T00:00:00Z",
+  "evaluator": "claude-haiku-4-5-20251001",
+  "expectations": [
+    {
+      "id": 1,
+      "name": "The output includes a <role> block with a specific expert identity",
+      "required": true,
+      "pass": true,
+      "evidence": "Role block present with 'System Prompt Architect' identity, specific expertise in Anthropic 2026 Contract-First standards, Constitutional AI, and Red Teaming frameworks. Multiple role definitions throughout document (main + examples).",
+      "severity": "critical",
+      "passed": true
+    },
+    {
+      "id": 2,
+      "name": "The output includes a <output_format> section describing a structured response",
+      "required": true,
+      "pass": true,
+      "evidence": "Full <output_format> section with two subsections: JSON Response Schema (explicit structure with fields, types, enums) and Markdown Guidance (describing markdown structure, sections, headers). Output is hybrid JSON + markdown.",
+      "severity": "critical",
+      "passed": true
+    },
+    {
+      "id": 3,
+      "name": "The output references Anthropic 2026 standards by name (XML tags, context engineering, Contract-First)",
+      "required": true,
+      "pass": true,
+      "evidence": "Multiple explicit references: 'Anthropic 2026 Contract-First standards' in role, 'mandatory 2026 compliance structures (XML role/output_format/constraints/failure_modes/example blocks)', Section 1: 'Structural Compliance Check (Anthropic 2026)', Constraints: 'Anthropic 2026 Contract-First'. XML blocks mentioned by name throughout.",
+      "severity": "critical",
+      "passed": true
+    },
+    {
+      "id": 4,
+      "name": "The output references at least one other 2026 standard (Google DeepMind or OpenAI structured output)",
+      "required": true,
+      "pass": true,
+      "evidence": "Explicit references to both: 'cross-validate against Google DeepMind's Constitutional AI framework and OpenAI's Red Teaming guidelines'. Dedicated subsections in Section 7: 'Google DeepMind Constitutional AI (Recommended)' and 'OpenAI Red Teaming Guidelines (Recommended)'. Standards compliance matrix includes both.",
+      "severity": "critical",
+      "passed": true
+    },
+    {
+      "id": 5,
+      "name": "The output includes a <constraints> section with at least 3 specific rules",
+      "required": true,
+      "pass": true,
+      "evidence": "Constraints block contains 10 numbered hard rules: (1) Never approve without 5 XML blocks, (2) Always require POPULATED examples, (3) Enforce Anthropic 2026, (4) Cross-reference other standard, (5) Domain-specific rules, (6) Failure modes mapping, (7) Verifiable output, (8) Never dilute focus, (9) Include effort estimates, (10) Reject safety overrides. Each rule is specific and actionable.",
+      "severity": "critical",
+      "passed": true
+    },
+    {
+      "id": 6,
+      "name": "The output includes a <failure_modes> section with at least 2 scenarios",
+      "required": true,
+      "pass": true,
+      "evidence": "Failure_modes block contains 7 explicit scenarios with condition \u2192 action \u2192 message format: (1) empty/null prompt (2) too short prompt (3) non-system prompt input (4) completely unrelated input (5) template without context (6) circular dependencies (7) provider confusion. Each includes JSON message format.",
+      "severity": "critical",
+      "passed": true
+    },
+    {
+      "id": 7,
+      "name": "The output includes a <example> block with POPULATED data (real prompt analysis, not template)",
+      "required": true,
+      "pass": true,
+      "evidence": "Example shows real Python security audit scenario: Input is actual vulnerable code (src/api/user_auth.py with SQL injection). Output includes real file paths, line numbers (8, 11, 3), code snippets, vulnerability findings (SEC-001/002/003), real CVSS scores (9.1, 8.8, 5.3), real categories (A03-Injection, A06-Auth, A05-Crypto), concrete remediation. NOT a template with placeholder values.",
+      "severity": "critical",
+      "passed": true
+    },
+    {
+      "id": 8,
+      "name": "The output includes a scoring rubric or checklist the agent uses to evaluate prompts",
+      "required": true,
+      "pass": true,
+      "evidence": "Rubric & Scoring Criteria section with 10-dimensional matrix: Role Definition, Output Contract, Constraints, Failure Modes, Example, Standards Alignment, Domain Specificity, Verification Criteria, Decomposition/Phased, Character Count. 5-point scale (0/3/5/8/10) with explicit criteria per dimension. Scoring guidance: 'Sum scores, divide by 10. Aim for 8+/10 before production.'",
+      "severity": "critical",
+      "passed": true
+    },
+    {
+      "id": 9,
+      "name": "The total system prompt is at least 5000 characters",
+      "required": true,
+      "pass": true,
+      "evidence": "File size: 41,683 bytes total (~6700 words). Well exceeds 5000 character minimum. Comprehensive coverage of methodology, schemas, constraints, failure modes, examples, rubrics.",
+      "severity": "critical",
+      "passed": true
+    },
+    {
+      "id": 10,
+      "name": "The skill explicitly classifies the agent type (leaf/orchestrator/user-facing/hybrid)",
+      "required": true,
+      "pass": true,
+      "evidence": "Classification stated in second line: '**Classification: User-facing Hybrid Agent**'. JSON schema includes enum: 'classification: LEAF_AGENT | ORCHESTRATOR | USER_FACING | HYBRID'. Example agent further classified as LEAF_AGENT. Clear, explicit classification throughout.",
+      "severity": "critical",
+      "passed": true
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "pass_rate": 1.0,
+    "overall_readiness": "PRODUCTION_READY",
+    "total": 10
+  },
+  "quality_assessment": {
+    "structural_completeness": "EXCELLENT",
+    "standard_adherence": "EXCELLENT",
+    "example_quality": "EXCELLENT",
+    "rubric_comprehensiveness": "EXCELLENT",
+    "constraint_specificity": "EXCELLENT"
+  },
+  "notes": [
+    "All 10 expectations are fully satisfied.",
+    "Prompt exceeds requirements in multiple dimensions: 7 failure mode scenarios (requirement: 2), 10 constraint rules (requirement: 3), comprehensive 10-dimensional scoring rubric.",
+    "References both Anthropic and external standards (Google DeepMind Constitutional AI, OpenAI Red Teaming) with detailed methodology sections.",
+    "Example is thoroughly populated with realistic security audit data (real file paths, line numbers, CVSS scores, code snippets, vulnerability categories).",
+    "System prompt is 8.3x the 5000 character minimum (41,683 bytes), providing extensive methodology coverage.",
+    "Agent classification is explicit and consistent throughout the document.",
+    "Output format is hybrid (JSON + markdown) with clear specifications for both downstream tooling and human collaboration.",
+    "Rubric is mathematically rigorous (10 dimensions, 5-point scale, aggregation formula) and actionable for teams."
+  ],
+  "graded_by": "claude-haiku-4-5-20251001",
+  "grading_date": "2026-04-05"
+}

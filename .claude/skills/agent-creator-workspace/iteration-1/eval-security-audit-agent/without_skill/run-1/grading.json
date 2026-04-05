@@ -1,0 +1,78 @@
+{
+  "eval_id": 1,
+  "agent_name": "security-audit-agent",
+  "configuration": "without_skill",
+  "grading_timestamp": "2026-04-05T00:00:00Z",
+  "expectations": [
+    {
+      "id": 1,
+      "text": "The output includes a <role> block with a specific expert identity (not 'helpful assistant')",
+      "passed": true,
+      "evidence": "The system prompt begins with: 'You are an expert security auditor specialized in identifying OWASP Top 10 vulnerabilities in TypeScript/Next.js 15 codebases.' This is a specific expert identity distinct from a generic helpful assistant."
+    },
+    {
+      "id": 2,
+      "text": "The output includes a <output_format> or <output> section",
+      "passed": true,
+      "evidence": "The system prompt includes a '## JSON Report Format' section (starting at ~line 120) with detailed specification of the JSON output structure including scanMetadata, summary, vulnerabilities, detailedFindings, remediationPriority, cicdIntegration, and scanConfiguration."
+    },
+    {
+      "id": 3,
+      "text": "The output includes a JSON schema with at least verdict, findings, and severity fields",
+      "passed": true,
+      "evidence": "The JSON Report Format section specifies a comprehensive schema with 'vulnerabilities' array containing: severity, severityScore, title, description, impact, etc. The schema includes 'detailedFindings' with multiple finding categories and 'summary' with severityCount fields (criticalCount, highCount, mediumCount, lowCount)."
+    },
+    {
+      "id": 4,
+      "text": "The output includes a <constraints> section with at least 3 specific rules",
+      "passed": true,
+      "evidence": "The system prompt includes a '## Constraints & Limitations' section with 4 specific constraints: (1) audit identifies common patterns only, not substitute for penetration testing, (2) cannot detect all vulnerabilities, (3) severity scores are guidelines, (4) some checks may produce false positives if conventions differ."
+    },
+    {
+      "id": 5,
+      "text": "The output includes a <failure_modes> section",
+      "passed": false,
+      "evidence": "The system prompt does not include an explicitly labeled '<failure_modes>' section. While there is a 'Constraints & Limitations' section and 'False Positives' subsection under 'Code Analysis', there is no dedicated failure_modes section that specifically addresses what the agent should do when it encounters errors or cannot complete tasks."
+    },
+    {
+      "id": 6,
+      "text": "The output includes an <example> block",
+      "passed": true,
+      "evidence": "The system prompt includes an '## Example Vulnerability Assessment' section starting around line 280. It provides a concrete TypeScript example showing a vulnerable GET endpoint and flags 3 specific issues (CRITICAL missing authentication, CRITICAL missing authorization, MEDIUM information disclosure) with detailed explanations."
+    },
+    {
+      "id": 7,
+      "text": "The total system prompt is at least 4000 characters",
+      "passed": true,
+      "evidence": "The system_prompt.md file is 15043 characters total, well exceeding the 4000 character minimum requirement."
+    },
+    {
+      "id": 8,
+      "text": "The skill asks the user if they want to deploy to Railway PostgreSQL",
+      "passed": false,
+      "evidence": "The system prompt does not include any question or prompt asking the user whether they want to deploy to Railway PostgreSQL. While the prompt mentions Railway PostgreSQL in the 'Security Assumptions' section ('Assume Railway PostgreSQL is the production database'), it does not pose this as an interactive question to the user."
+    }
+  ],
+  "summary": {
+    "total_expectations": 8,
+    "passed": 6,
+    "failed": 2,
+    "pass_rate": 0.75
+  },
+  "notes": {
+    "strengths": [
+      "Excellent role specification with expert security auditor identity",
+      "Comprehensive JSON output format with detailed schema examples",
+      "Well-structured severity scoring system with 4 tiers and clear criteria",
+      "Detailed OWASP Top 10 mapping with 10 vulnerability categories and specific checks",
+      "Concrete example vulnerability assessment demonstrating expected analysis depth",
+      "Strong constraints section addressing limitations and false positives",
+      "Extensive scanning rules for Next.js 15 specific security patterns",
+      "Remediation guidance with code examples and priority ordering"
+    ],
+    "areas_for_improvement": [
+      "Missing explicit failure_modes section - should address handling of edge cases like: inaccessible files, parsing errors, non-Next.js codebases, empty projects, timeout scenarios",
+      "Missing interactive user prompt about Railway PostgreSQL deployment - should ask user's deployment target after analysis"
+    ]
+  }
+}

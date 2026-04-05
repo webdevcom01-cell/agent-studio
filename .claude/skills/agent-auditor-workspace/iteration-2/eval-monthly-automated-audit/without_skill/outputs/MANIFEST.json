@@ -1,0 +1,399 @@
+{
+  "manifest": {
+    "title": "Monthly Automated AI Agent Audit System",
+    "version": "1.0",
+    "release_date": "2026-04-05",
+    "status": "production_ready",
+    "target_audience": "Enterprise AI teams maintaining multiple agents",
+    "database": "Railway PostgreSQL (postgres.railway.internal)",
+    "total_lines": 3013,
+    "total_files": 6
+  },
+
+  "files": [
+    {
+      "name": "QUICK_START.md",
+      "lines": 351,
+      "purpose": "Entry point - 30-second overview and 5-step installation",
+      "sections": [
+        "30-second overview",
+        "The 6 audit dimensions",
+        "Files in this package",
+        "Installation (5 steps)",
+        "Key thresholds",
+        "What happens during audit",
+        "Understanding the output",
+        "Customization",
+        "Troubleshooting",
+        "Performance tips",
+        "Advanced: custom test suite",
+        "Compliance & legal",
+        "Integration points",
+        "Support matrix",
+        "Version history"
+      ],
+      "key_content": [
+        "5-step installation guide",
+        "Critical alert thresholds with examples",
+        "Execution timeline and flow",
+        "Email digest format example",
+        "Slack alert format example",
+        "Cron customization reference"
+      ]
+    },
+    {
+      "name": "audit_output.md",
+      "lines": 626,
+      "purpose": "Complete methodology and audit framework specification",
+      "sections": [
+        "1. Audit Methodology",
+        "2. Audit Dimensions (6 total)",
+        "3. Audit Execution Pipeline (6 phases)",
+        "4. Alert Thresholds",
+        "5. Storage & Retention",
+        "6. Implementation Requirements",
+        "7. Sample Audit Report",
+        "8. Next Steps"
+      ],
+      "key_content": [
+        "Architecture diagram (scheduler + orchestrator + workers + reporting)",
+        "Performance metrics (latency percentiles, error rates, throughput)",
+        "Quality metrics (accuracy, hallucination, consistency, format)",
+        "Compliance metrics (RAG, security, PII, auth)",
+        "Operational metrics (availability, resources, database)",
+        "Knowledge metrics (embeddings, retrieval, currency)",
+        "User experience metrics (engagement, satisfaction)",
+        "6-phase execution pipeline with detailed steps",
+        "12 critical + 9 warning alert thresholds with SLA targets",
+        "PostgreSQL schema for agent_audits and audit_metrics tables",
+        "Retention policy (24 months DB, 12 months S3)",
+        "Sample audit report with findings and recommendations"
+      ]
+    },
+    {
+      "name": "audit_script.py",
+      "lines": 621,
+      "purpose": "Production-ready Python implementation of audit system",
+      "classes": [
+        "AuditDatabase - PostgreSQL connection and queries",
+        "PerformanceAnalyzer - Latency percentiles, error rates, throughput",
+        "QualityAssessor - Semantic similarity, hallucination, consistency",
+        "ComplianceAuditor - RAG citations, prompt injection, PII",
+        "OperationalMonitor - Uptime, resources, vector search latency",
+        "UserEngagementAnalyzer - DAU, satisfaction metrics",
+        "TokenEconomics - Token tracking and cost calculation",
+        "AuditOrchestrator - Main coordinator with async execution"
+      ],
+      "key_features": [
+        "Async/await for parallel agent processing",
+        "OpenAI embedding integration (text-embedding-3-small)",
+        "PostgreSQL connection pooling",
+        "Structured error handling with graceful fallbacks",
+        "Comprehensive logging",
+        "CLI with multiple execution modes (full/performance-only/targeted)",
+        "Type hints throughout (no any types)",
+        "Data validation with dataclasses"
+      ],
+      "usage": [
+        "python audit_script.py --db-url postgresql://user:pass@host/db --mode full",
+        "python audit_script.py --mode performance-only",
+        "python audit_script.py --agents agent1,agent2,agent3 --mode targeted"
+      ]
+    },
+    {
+      "name": "metrics.json",
+      "lines": 627,
+      "purpose": "Structured metric definitions, thresholds, and configuration",
+      "dimensions": [
+        "Performance metrics (latency, reliability, throughput)",
+        "Quality metrics (accuracy, hallucination, consistency)",
+        "Compliance metrics (RAG, security, PII, auth)",
+        "Operational metrics (availability, resources, database)",
+        "Knowledge metrics (coverage, embedding, retrieval, currency)",
+        "User experience metrics (engagement, satisfaction)",
+        "Cost metrics (token economics, model usage)"
+      ],
+      "structure_per_metric": [
+        "description - human-readable explanation",
+        "target - desired value or varies_by_agent",
+        "unit - measurement unit (percent, milliseconds, etc)",
+        "alert_threshold_critical - trigger immediate action",
+        "alert_threshold_warning - trigger review within 24h",
+        "test_method - how metric is evaluated"
+      ],
+      "alert_severity_levels": [
+        "critical - 1h response SLA, page on-call",
+        "warning - 24h response SLA, email admin",
+        "info - 7d response SLA, slack digest"
+      ]
+    },
+    {
+      "name": "README.md",
+      "lines": 385,
+      "purpose": "Comprehensive setup and reference guide",
+      "sections": [
+        "Overview and deliverables summary",
+        "Architecture diagram",
+        "Key metrics at a glance",
+        "Installation (5 steps with code examples)",
+        "Execution timeline",
+        "Alert examples",
+        "Sample audit report format",
+        "Configuration reference",
+        "Limitations and notes",
+        "Production considerations",
+        "Next steps"
+      ],
+      "code_examples": [
+        "SQL table creation",
+        "Environment variable setup",
+        "Node.js scheduler configuration",
+        "CLI usage examples"
+      ]
+    },
+    {
+      "name": "DELIVERY_SUMMARY.txt",
+      "lines": 411,
+      "purpose": "Executive summary and checklist for stakeholders",
+      "sections": [
+        "Deliverables overview",
+        "Core features checklist",
+        "Key metrics at a glance",
+        "Alert examples (critical/warning/info)",
+        "Architecture overview diagram",
+        "Database schema summary",
+        "Installation checklist",
+        "Usage examples",
+        "Customization points",
+        "Production deployment notes",
+        "Limitations and known issues",
+        "Next steps & roadmap",
+        "Support information"
+      ]
+    }
+  ],
+
+  "audit_dimensions": {
+    "performance": {
+      "latency": ["p50_ms", "p95_ms", "p99_ms"],
+      "reliability": ["error_rate", "timeout_rate", "uptime_pct"],
+      "throughput": ["req_per_min", "concurrent_users"]
+    },
+    "quality": {
+      "accuracy": ["semantic_similarity", "factual_correctness", "numeric_precision"],
+      "hallucination": ["unsupported_claims_rate", "confident_errors"],
+      "consistency": ["response_variance", "format_consistency"]
+    },
+    "compliance": {
+      "rag_quality": ["citation_coverage", "citation_accuracy", "fabricated_citations", "source_relevance"],
+      "security": ["prompt_injection_resistance", "jailbreak_prevention", "system_prompt_leakage", "token_limit_padding"],
+      "pii_handling": ["pii_detection_rate", "pii_leakage_count", "data_retention_compliance"],
+      "auth": ["rate_limiting_enforced", "api_key_age_max_days", "token_expiry_configured"]
+    },
+    "operational": {
+      "availability": ["monthly_uptime_pct", "mttr_hours", "incident_frequency"],
+      "resource_efficiency": ["cpu_usage_pct", "memory_mb", "cache_hit_rate"],
+      "database": ["query_latency_p95_ms", "vector_search_p95_ms", "index_fragmentation", "backup_freshness_hours", "replication_lag_seconds"]
+    },
+    "knowledge": {
+      "rag_coverage": ["document_count", "chunk_count", "vector_coverage_pct"],
+      "embedding_quality": ["null_vectors_count", "dimension_mismatch", "days_since_reindex"],
+      "retrieval_quality": ["precision_at_k", "ndcg_score", "hybrid_search_balance"],
+      "knowledge_currency": ["source_freshness_pct", "max_document_age_days", "update_frequency_days", "duplication_rate"]
+    },
+    "user_experience": {
+      "engagement": ["dau", "sessions_per_user", "avg_session_duration_min", "conversation_turns", "abandonment_rate"],
+      "satisfaction": ["thumbs_up_rate", "thumbs_down_rate", "retry_rate", "escalation_rate"]
+    },
+    "cost": {
+      "token_economics": ["total_tokens_month", "input_tokens", "output_tokens", "cost_per_request_cents", "cost_per_dau_cents"],
+      "model_usage": ["deepseek_ratio", "openai_ratio", "model_cost_comparison"]
+    }
+  },
+
+  "alert_thresholds": {
+    "critical": [
+      "Error rate > 2%",
+      "p95 latency > 5 seconds",
+      "Uptime < 99%",
+      "Any prompt injection successful",
+      "PII detected in logs",
+      "API key age > 90 days",
+      "Database backup > 24 hours old",
+      "Vector embedding null rate > 1%",
+      "Hallucination rate > 10%",
+      "Citation accuracy < 90%",
+      "Cost increase > 50% vs baseline",
+      "Knowledge base not updated > 30 days"
+    ],
+    "warning": [
+      "Error rate > 1%",
+      "p95 latency > 3 seconds",
+      "Uptime < 99.5%",
+      "Hallucination rate > 5%",
+      "Citation accuracy < 95%",
+      "Cost increase > 25% vs baseline",
+      "Satisfaction rate < 75%",
+      "Cache hit rate < 70%",
+      "Knowledge base not updated > 7 days"
+    ]
+  },
+
+  "execution_schedule": {
+    "frequency": "monthly",
+    "cron_expression": "0 2 * * 0",
+    "description": "First Sunday of month at 02:00 UTC",
+    "timezone": "UTC",
+    "duration_minutes": "120-240",
+    "phases": [
+      {"name": "Preparation", "duration_min": 15},
+      {"name": "Performance", "duration_min": 30},
+      {"name": "Quality", "duration_min": 60},
+      {"name": "Compliance", "duration_min": 45},
+      {"name": "Operational/Knowledge", "duration_min": 40},
+      {"name": "Reporting", "duration_min": 15}
+    ]
+  },
+
+  "database_schema": {
+    "agent_audits": {
+      "description": "Monthly audit snapshots per agent",
+      "columns": 27,
+      "key_fields": [
+        "agent_id (UUID, FK to agents)",
+        "audit_date (DATE)",
+        "p50/p95/p99_latency_ms (FLOAT)",
+        "error_rate, timeout_rate (FLOAT)",
+        "accuracy_score, hallucination_rate (FLOAT)",
+        "citation_coverage, citation_accuracy (FLOAT)",
+        "uptime_pct, cpu_usage_pct (FLOAT)",
+        "knowledge_base_documents, knowledge_base_chunks (INT)",
+        "dau (INT), satisfaction_rate (FLOAT)",
+        "total_tokens (BIGINT), cost_usd (FLOAT)",
+        "report (JSON)"
+      ],
+      "indexes": [
+        "idx_agent_audits_agentId_date on (agent_id, audit_date DESC)"
+      ],
+      "retention": "24 months"
+    },
+    "audit_metrics": {
+      "description": "Time-series metric details",
+      "columns": 5,
+      "key_fields": [
+        "audit_id (UUID, FK to agent_audits)",
+        "metric_name (VARCHAR)",
+        "metric_value (FLOAT)",
+        "dimension (VARCHAR)",
+        "recorded_at (TIMESTAMPTZ)"
+      ],
+      "indexes": [
+        "idx_audit_metrics_auditId on (audit_id)"
+      ]
+    }
+  },
+
+  "dependencies": {
+    "python": ["psycopg2-binary", "numpy", "scikit-learn", "requests"],
+    "node": ["node-cron", "bullmq", "nodemailer", "aws-sdk"],
+    "services": ["PostgreSQL 15+", "OpenAI API", "SendGrid", "Slack Webhooks", "AWS S3"],
+    "optional": ["Redis", "DataDog/NewRelic", "PagerDuty"]
+  },
+
+  "performance_characteristics": {
+    "agents_per_month": 24,
+    "parallel_workers": "4-16",
+    "concurrent_audits": 16,
+    "total_duration_hours": "2-4",
+    "database_queries_per_agent": 8,
+    "api_calls_per_agent": 5,
+    "estimated_openai_cost_per_month": "$50-200"
+  },
+
+  "quality_targets": {
+    "accuracy": "95%+ (semantic similarity > 0.85)",
+    "hallucination": "< 5% unsupported claims",
+    "consistency": "> 95% response variance",
+    "citation_coverage": "100%",
+    "prompt_injection_defense": "100%",
+    "pii_detection": "zero exposures",
+    "availability": "99.95% uptime",
+    "latency_p95": "< 2.0 seconds"
+  },
+
+  "deployment_checklist": [
+    "Create PostgreSQL tables (agent_audits, audit_metrics)",
+    "Install Python dependencies",
+    "Configure environment variables",
+    "Test database connection",
+    "Deploy audit_script.py to server/container",
+    "Set up node-cron scheduler",
+    "Configure SendGrid + Slack webhooks",
+    "Create S3 bucket for archival",
+    "Run initial audit (baseline)",
+    "Document findings and recommendations",
+    "Set up monitoring/alerting"
+  ],
+
+  "customization_points": [
+    "Audit schedule (cron expression)",
+    "Alert thresholds (critical/warning)",
+    "Test suite (ground truth datasets)",
+    "Metric weights (if using scoring)",
+    "Database connection (hostname, port)",
+    "Model selection (DeepSeek vs OpenAI)",
+    "Output format (email, Slack, webhook)",
+    "Storage location (S3 bucket, path)"
+  ],
+
+  "known_limitations": [
+    "Only audits agents created > 30 days ago (excludes new agents)",
+    "Monthly snapshots (not real-time monitoring)",
+    "Synthetic test suite requires curated datasets (setup separately)",
+    "LLM-as-Judge quality depends on model capability",
+    "Railway PostgreSQL access may be restricted (use console for setup)",
+    "Does not include code quality or documentation analysis"
+  ],
+
+  "roadmap": {
+    "v1.0": "Initial release with 6-dimension framework",
+    "v1.1": "Real-time dashboard + anomaly detection",
+    "v1.2": "Custom metric plugins + agent comparison",
+    "v2.0": "Multi-region orchestration + advanced ML-based scoring"
+  },
+
+  "support_matrix": [
+    {"component": "PostgreSQL 15+", "status": "supported", "notes": "pgvector required"},
+    {"component": "Railway", "status": "supported", "notes": "use postgres.railway.internal"},
+    {"component": "OpenAI API", "status": "required", "notes": "for embeddings"},
+    {"component": "Slack", "status": "optional", "notes": "for alerts"},
+    {"component": "S3", "status": "optional", "notes": "for archival"},
+    {"component": "Redis", "status": "optional", "notes": "for caching"}
+  ],
+
+  "contact_and_resources": {
+    "documentation": {
+      "methodology": "audit_output.md sections 1-4",
+      "implementation": "audit_script.py class docstrings",
+      "metrics": "metrics.json",
+      "setup": "README.md or QUICK_START.md",
+      "troubleshooting": "QUICK_START.md section 'Troubleshooting'"
+    },
+    "common_issues": [
+      "Connection refused → Check DATABASE_URL, test psql connection",
+      "No agents found → Verify agents exist and are > 30 days old",
+      "OpenAI API error → Verify API key, check rate limits",
+      "Missing logs → Check conversation_logs table populated"
+    ]
+  },
+
+  "metadata": {
+    "created_date": "2026-04-05",
+    "created_by": "Claude Agent (evaluation iteration-2)",
+    "total_lines_of_content": 3013,
+    "estimated_setup_time_hours": 4,
+    "estimated_first_audit_time_hours": 3,
+    "version_control_recommended": true,
+    "testing_required_before_production": true
+  }
+}

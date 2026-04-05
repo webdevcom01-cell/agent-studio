@@ -1,0 +1,135 @@
+{
+  "expectations": [
+    {
+      "text": "The output includes a <role> block with a specific expert identity",
+      "passed": true,
+      "evidence": "Line 3 states: 'You are an expert prompt engineer specializing in analyzing and improving AI system prompts and user-facing instructions.' This establishes a clear, specific expert identity."
+    },
+    {
+      "text": "The output includes a <output_format> section describing a structured response",
+      "passed": true,
+      "evidence": "Section 'Feedback Framework' (lines 75-102) provides detailed structured response guidance including 5-part analysis structure: Overview, Strengths, Priority Improvements, Optional Enhancements, and Revised Prompt."
+    },
+    {
+      "text": "The output references Anthropic 2026 standards by name (XML tags, context engineering, or Contract-First)",
+      "passed": false,
+      "evidence": "The prompt mentions '2026 best practices' (line 12) and '2026 LLM best practices' (line 59) but never explicitly names Anthropic-specific standards like 'XML tags', 'context engineering', or 'Contract-First'. References are generic, not specific to named Anthropic standards."
+    },
+    {
+      "text": "The output references at least one other 2026 standard (Google DeepMind or OpenAI structured output)",
+      "passed": false,
+      "evidence": "The system prompt does not mention Google DeepMind or OpenAI standards. The metrics.json mentions these are to be evaluated ('Model-agnostic language: Avoid model-specific quirks...') but the system prompt itself does not reference them by name or as external standards."
+    },
+    {
+      "text": "The output includes a <constraints> section with at least 3 specific rules",
+      "passed": false,
+      "evidence": "The prompt has a 'Writing Guidelines for Suggestions' section (lines 104-123) with 5 guideline rules, but it is NOT formatted as a <constraints> block. The rules exist but lack the XML structure specified in the expectation. Additionally, 'Safety & Boundaries' section (lines 29-41) lists safety rules but again not in XML <constraints> format."
+    },
+    {
+      "text": "The output includes a <failure_modes> section with at least 2 scenarios",
+      "passed": false,
+      "evidence": "The system prompt does not include a <failure_modes> XML block. The metrics.json (lines 190-196) includes 'Red flags to avoid' but this is not in the system prompt and lacks the formal XML structure specified in the expectation."
+    },
+    {
+      "text": "The output includes a <example> block with POPULATED data (real prompt analysis, not template)",
+      "passed": true,
+      "evidence": "Section 'Examples of Strong Prompts' (lines 150-160) provides a detailed 7-point example of a strong prompt with actual populated content showing: task, context, format, tone, boundaries, success criteria, and fallback behavior. This is concrete, not template-based."
+    },
+    {
+      "text": "The output includes a scoring rubric or checklist the agent uses to evaluate prompts",
+      "passed": false,
+      "evidence": "The metrics.json contains a detailed 'evaluation_framework' with weighted dimensions (30% Clarity, 25% Safety, 20% Quality, 15% 2026 Practices, 10% Task Alignment) and sub-metrics with 0-100 scales, but this is NOT included in the system_prompt.md file itself. The system prompt describes evaluation dimensions (lines 14-74) but does not include a formal scoring rubric with point values or weights that the agent would use to score responses."
+    },
+    {
+      "text": "The total system prompt is at least 5000 characters",
+      "passed": true,
+      "evidence": "system_prompt.md is 7244 characters, exceeding the 5000 minimum requirement."
+    },
+    {
+      "text": "The skill explicitly classifies the agent type (leaf/orchestrator/user-facing/hybrid)",
+      "passed": false,
+      "evidence": "The system prompt does not explicitly classify the agent type. While context suggests it is 'user-facing' (embedded in agent-studio, users paste prompts for feedback), there is no explicit statement like 'This is a user-facing leaf agent' or similar classification."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 6,
+    "total": 10,
+    "pass_rate": 0.4
+  },
+  "execution_metrics": {
+    "total_tokens": 74014,
+    "duration_seconds": 56.0,
+    "output_file": "system_prompt.md",
+    "output_chars": 7244,
+    "metrics_file": "metrics.json"
+  },
+  "timing": {
+    "executor_duration_seconds": 56.0
+  },
+  "claims": [
+    {
+      "claim": "The system prompt is designed for prompt engineers analyzing user-submitted drafts",
+      "type": "factual",
+      "verified": true,
+      "evidence": "Lines 173-179 explicitly state users may 'Paste draft prompts for quick feedback' and the agent is 'embedded in agent-studio'. Line 3 identifies the role as 'prompt engineer'."
+    },
+    {
+      "claim": "The prompt covers 5 key evaluation dimensions: Clarity, Safety, Output Quality, 2026 Practices, and Task Alignment",
+      "type": "factual",
+      "verified": true,
+      "evidence": "Lines 14-74 detail exactly these five dimensions with specific guidance for each."
+    },
+    {
+      "claim": "The agent provides a 5-part feedback structure: Overview, Strengths, Priority Improvements, Optional Enhancements, and Revised Prompt",
+      "type": "factual",
+      "verified": true,
+      "evidence": "Lines 76-102 detail this exact structure in 'Analysis Structure'."
+    },
+    {
+      "claim": "The prompt teaches 2026 LLM best practices to users",
+      "type": "quality",
+      "verified": true,
+      "evidence": "Line 120 states the success criteria includes 'Raises awareness of 2026 best practices'. Sections 56-73 detail specific 2026 practices."
+    },
+    {
+      "claim": "The prompt includes XML-style tags like <role>, <constraints>, <failure_modes> as required by expectations",
+      "type": "factual",
+      "verified": false,
+      "evidence": "The system prompt does not use XML tags. While expectations 1 and 3-6 require XML-style structural markers, the actual output uses markdown sections instead. This is a core structural mismatch."
+    }
+  ],
+  "user_notes_summary": {
+    "uncertainties": [
+      "Unclear if metrics.json scoring rubric should be incorporated into system_prompt.md or if separation is acceptable",
+      "The 'without_skill' baseline may not be expected to include Anthropic-specific standard naming"
+    ],
+    "needs_review": [
+      "Expectations 3-6 assume XML structural formatting that the output does not use"
+    ],
+    "workarounds": []
+  },
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "assertion": "The output references Anthropic 2026 standards by name",
+        "reason": "The expectation assumes the system prompt should explicitly name standards (XML tags, context engineering, Contract-First). The actual output uses generic '2026 best practices' language. Either the system prompt needs to add explicit standard names, or the expectation should accept generic '2026 standards' references."
+      },
+      {
+        "assertion": "The output includes a <constraints> section with at least 3 specific rules",
+        "reason": "Expectations assume XML-style blocks (<constraints>, <failure_modes>, <role>) but the system prompt uses markdown sections. The content exists (5 writing guidelines, multiple safety rules) but the structural format doesn't match the expectation. Either the system prompt should use XML blocks or expectations should accept markdown equivalents."
+      },
+      {
+        "assertion": "The output includes a scoring rubric or checklist the agent uses to evaluate prompts",
+        "reason": "A detailed weighted evaluation framework exists in metrics.json (7 sub-metrics across 5 dimensions with point scales), but it is in a separate file and not embedded in the system prompt where the agent would reference it during evaluation."
+      },
+      {
+        "reason": "No assertion checks whether the 2026 practices mentioned in the prompt are accurately described or aligned with actual 2026 standards. The prompt claims to teach '2026 best practices' but the content (model-agnostic language, structured outputs, context budgeting) could be from any year."
+      },
+      {
+        "reason": "The system prompt lacks explicit scope boundaries. It claims to help 'teams' but doesn't define: maximum time per analysis, maximum prompt length, what constitutes 'actionable' feedback, or how to handle conflicting improvement suggestions."
+      }
+    ],
+    "overall": "The system prompt provides solid content for prompt engineering feedback across 5 well-structured dimensions with good examples and guidelines. However, it has a critical structural mismatch with expectations: the expectations assume XML-style blocks (<role>, <constraints>, <failure_modes>, <output_format>) but the output uses markdown sections. Additionally, key content (scoring rubric, agent type classification) is missing or in separate files. The baseline achieves 40% pass rate due to these structural and content gaps rather than quality issues."
+  }
+}

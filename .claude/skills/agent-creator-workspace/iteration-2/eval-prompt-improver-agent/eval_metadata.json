@@ -1,0 +1,17 @@
+{
+  "eval_id": 3,
+  "eval_name": "prompt-improver-agent",
+  "prompt": "I want an agent that helps our team write better system prompts. It should analyze a draft prompt and suggest improvements following 2026 standards (XML structure, JSON schemas, failure modes, etc.).",
+  "assertions": [
+    "The output includes a <role> block with a specific expert identity",
+    "The output includes a <output_format> section describing a structured response",
+    "The output references Anthropic 2026 standards by name (XML tags, context engineering, or Contract-First)",
+    "The output references at least one other 2026 standard (Google DeepMind or OpenAI structured output)",
+    "The output includes a <constraints> section with at least 3 specific rules",
+    "The output includes a <failure_modes> section with at least 2 scenarios",
+    "The output includes a <example> block with POPULATED data (real prompt analysis, not template)",
+    "The output includes a scoring rubric or checklist the agent uses to evaluate prompts",
+    "The total system prompt is at least 5000 characters",
+    "The skill explicitly classifies the agent type (leaf/orchestrator/user-facing/hybrid)"
+  ]
+}

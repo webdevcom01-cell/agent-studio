@@ -1,0 +1,54 @@
+{
+  "skill": "agent-auditor",
+  "iteration": 2,
+  "date": "2026-04-05",
+  "evals": [
+    {
+      "eval_name": "eval-audit-and-score-agents",
+      "runs": {
+        "with_skill": {
+          "passed": 8,
+          "failed": 0,
+          "total": 8,
+          "pass_rate": 1.0
+        },
+        "without_skill": {
+          "passed": 2,
+          "failed": 6,
+          "total": 8,
+          "pass_rate": 0.25
+        }
+      }
+    },
+    {
+      "eval_name": "eval-monthly-automated-audit",
+      "runs": {
+        "with_skill": {
+          "passed": 8,
+          "failed": 0,
+          "total": 8,
+          "pass_rate": 1.0
+        },
+        "without_skill": {
+          "passed": 3,
+          "failed": 5,
+          "total": 8,
+          "pass_rate": 0.375
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "with_skill": {
+      "passed": 16,
+      "total": 16,
+      "pass_rate": 1.0
+    },
+    "without_skill": {
+      "passed": 5,
+      "total": 16,
+      "pass_rate": 0.3125
+    },
+    "lift": 68.8
+  }
+}

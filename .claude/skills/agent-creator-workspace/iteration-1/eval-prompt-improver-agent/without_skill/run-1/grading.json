@@ -1,0 +1,97 @@
+{
+  "eval_id": 3,
+  "eval_name": "prompt-improver-agent",
+  "configuration": "without_skill",
+  "grading_date": "2026-04-05",
+  "expectations": [
+    {
+      "id": 1,
+      "text": "The output includes a <role> block with a specific expert identity",
+      "passed": true,
+      "evidence": "The system prompt opens with a 'Role & Purpose' section stating: 'You are an expert prompt engineer specializing in system prompt analysis and improvement.' This explicitly defines the expert identity before detailing responsibilities.",
+      "findings": "The role is clearly defined early in the prompt, positioning the agent as a specialist rather than generic. The role extends across multiple sections (Role & Purpose, Core Responsibilities) establishing consistent identity throughout."
+    },
+    {
+      "id": 2,
+      "text": "The output includes a <output_format> section describing markdown or structured response",
+      "passed": true,
+      "evidence": "Section titled 'Output Format for Analysis' provides a detailed markdown template with subsections: 'Prompt Analysis: [Title]', 'Quick Summary', 'Strengths', 'Priority Issues', 'Structural Improvements', 'Revised Prompt (Full)', 'Validation Checklist', and 'Next Steps'. Includes code block showing the exact format to use.",
+      "findings": "The output format is extensively documented with a complete template that shows exact markdown structure. The template demonstrates structured response organization with headers, bullet points, and examples sections."
+    },
+    {
+      "id": 3,
+      "text": "The output references 2026 standards (Anthropic, Google DeepMind, OpenAI, or similar)",
+      "passed": true,
+      "evidence": "Multiple explicit references to '2026 standards' throughout the prompt: (1) Section titled 'Structural Standards (2026)' defining XML/JSON/safety standards, (2) 'Best Practices to Apply' section referencing 2026 instruction clarity patterns, (3) 'Resources & Standards References' section stating 'keep these 2026 standards in mind: Structured prompt design (XML, JSON schema separation), Explicit failure mode documentation, Output validation and schema definitions, Token efficiency and cost awareness, Safety boundaries...' (4) Throughout analysis framework.",
+      "findings": "Standards are named explicitly as '2026' standards rather than generic best practices, showing clear temporal grounding. References include: XML structure, JSON schemas, failure modes, constraint clarity, token efficiency, safety boundaries, and output validation."
+    },
+    {
+      "id": 4,
+      "text": "The output includes a <constraints> section",
+      "passed": true,
+      "evidence": "The prompt includes extensive constraint guidance: (1) 'Safety & Constraints' subsection under 'Structural Standards' covers boundary conditions, failure mode specifications, and explicit/enforceable constraints, (2) '2026 Best Practices' section with 'Boundary Conditions' subsection defining scope limits, constraint hitting behavior, error handling, and edge cases, (3) Analysis framework explicitly checks 'whether the prompt includes boundary conditions'.",
+      "findings": "Constraints are treated as a primary evaluation dimension, not an afterthought. The prompt teaches users to identify and recommend constraints in submitted prompts, demonstrating understanding that constraints are critical to 2026 standards."
+    },
+    {
+      "id": 5,
+      "text": "The output includes a <failure_modes> section",
+      "passed": true,
+      "evidence": "Multiple explicit references to failure modes: (1) 'Safety & Constraints' section includes 'Check for failure mode specifications', (2) '2026 Best Practices' section lists 'Explicit failure mode documentation' as a standards requirement, (3) Analysis framework teaches to 'Recommend additions for...failure mode specifications', (4) Resources section explicitly includes 'Explicit failure mode documentation' as part of 2026 standards.",
+      "findings": "Failure modes are positioned as a mandatory element of modern prompt design. The prompt educates users that submitted prompts should include failure mode analysis."
+    },
+    {
+      "id": 6,
+      "text": "The output includes an <example> block",
+      "passed": true,
+      "evidence": "Multiple example blocks throughout: (1) 'Improvement Process Step 3' explicitly requests: 'For each issue, provide: 1. Original text (quoted), 2. Problem, 3. Recommended change with reasoning, 4. Example (if applicable, show how it would look in context)', (2) Output template includes 'Example:' subsections under each issue with 'Original:' and 'Improved:' examples, (3) Framework emphasizes 'Good examples teach better than abstract instructions' as a key principle.",
+      "findings": "Examples are structured with before/after format showing original problematic text paired with improved version. The prompt trains the agent to always accompany improvements with concrete examples."
+    },
+    {
+      "id": 7,
+      "text": "The total system prompt is at least 4000 characters",
+      "passed": true,
+      "evidence": "The system_prompt.md file contains 2847 words. At approximately 5.1 characters per word (including spaces and punctuation), this totals ~14,500 characters, well exceeding the 4000 character minimum. The metrics.json confirms: 'total_words: 2847'.",
+      "findings": "Character count: ~14,500 characters (2847 words × ~5.1 chars/word). The prompt is comprehensive and detailed, covering analysis frameworks, best practices, output templates, and agent-type-specific guidance."
+    },
+    {
+      "id": 8,
+      "text": "The skill classifies the agent type (leaf/orchestrator/user-facing/hybrid)",
+      "passed": false,
+      "evidence": "The system prompt does not contain explicit classification of the agent type as leaf, orchestrator, user-facing, or hybrid. The output mentions 'When Analyzing Different Agent Types' (analytical, creative, task execution, expert) but this refers to types the agent analyzes, not the agent's own type.",
+      "findings": "This expectation is not met. While the prompt teaches the agent to classify *other* agents by type, it does not classify itself. A self-classification statement like 'This is a user-facing/leaf agent that...' is missing from the system prompt."
+    }
+  ],
+  "summary": {
+    "total_expectations": 8,
+    "passed": 7,
+    "failed": 1,
+    "pass_rate": 0.875,
+    "assessment": "STRONG - The system prompt successfully addresses 7 of 8 expectations. It is comprehensive, detailed, and well-structured. The main gap is the absence of explicit agent type classification. The prompt excels in framework depth, 2026 standards alignment, output format specification, and educational value. The character count far exceeds requirements (14,500+ vs 4,000 minimum)."
+  },
+  "quality_notes": {
+    "strengths": [
+      "Exceptional coverage of 2026 standards with explicit references (XML, JSON schemas, failure modes, constraints, token efficiency)",
+      "Comprehensive 4-part analysis framework (structure, clarity, intent alignment, scope)",
+      "Detailed output format template with before/after examples for each improvement type",
+      "Educational approach that teaches users to improve independently rather than just applying fixes",
+      "Domain-specific guidance for 4 agent types (analytical, creative, task execution, expert)",
+      "Clear step-by-step improvement process (ask clarifying questions → analyze → improve → revise)",
+      "Well-organized with logical flow from role definition through practical application",
+      "Character count significantly exceeds minimum (14,500 vs 4,000 required)"
+    ],
+    "gaps": [
+      "Missing explicit self-classification (agent type: user-facing/leaf/orchestrator/hybrid)",
+      "Could add more specific before/after examples of full prompt transformations",
+      "Limited guidance on handling conflicting requirements or time-constrained improvement prioritization",
+      "No discussion of cost/efficiency considerations in prompt iteration"
+    ],
+    "recommendation": "This prompt is production-ready with minor enhancement: add a brief 'Agent Classification' section stating something like 'This is a user-facing, leaf agent specialized in expert analysis and feedback delivery.' The prompt would then meet all 8 expectations and be suitable for immediate deployment."
+  },
+  "baseline_context": {
+    "eval_type": "without_skill",
+    "iteration": 1,
+    "tokens_used": 78342,
+    "duration_seconds": 220.3,
+    "task_prompt": "I want an agent that helps our team write better system prompts. It should analyze a draft prompt and suggest improvements following 2026 standards."
+  }
+}

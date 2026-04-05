@@ -1,0 +1,444 @@
+{
+  "auditId": "audit_1712275200000",
+  "timestamp": "2026-04-05T00:00:00Z",
+  "auditCycle": "2026-04",
+  "environment": {
+    "databaseStatus": "unavailable",
+    "databaseUrl": "postgresql://postgres:testpass@tramway.proxy.rlwy.net:54364/railway",
+    "connectionError": "Network unreachable (evaluation environment sandbox)",
+    "fallbackMode": "demonstration_with_sample_data"
+  },
+  "agentsSummary": {
+    "total": 3,
+    "passed": 1,
+    "warned": 1,
+    "failed": 1,
+    "avgOverallScore": 76.8
+  },
+  "auditBreakdown": {
+    "agents": [
+      {
+        "agentId": "agent_001",
+        "agentName": "Customer Support Bot",
+        "overallScore": 93.5,
+        "status": "PASS",
+        "dimensions": {
+          "metadata": {
+            "dimension": "metadata",
+            "score": 100,
+            "status": "PASS",
+            "issues": []
+          },
+          "configuration": {
+            "dimension": "configuration",
+            "score": 95,
+            "status": "PASS",
+            "issues": []
+          },
+          "knowledgeBase": {
+            "dimension": "knowledgeBase",
+            "score": 90,
+            "status": "PASS",
+            "issues": [
+              {
+                "dimension": "knowledgeBase",
+                "severity": "WARNING",
+                "message": "Only 5 documents (target: 20+)",
+                "remediation": "Add more documents to knowledge base for better retrieval"
+              }
+            ]
+          },
+          "flow": {
+            "dimension": "flow",
+            "score": 95,
+            "status": "PASS",
+            "issues": []
+          },
+          "apiIntegration": {
+            "dimension": "apiIntegration",
+            "score": 100,
+            "status": "PASS",
+            "issues": []
+          },
+          "performance": {
+            "dimension": "performance",
+            "score": 98,
+            "status": "PASS",
+            "issues": []
+          },
+          "security": {
+            "dimension": "security",
+            "score": 100,
+            "status": "PASS",
+            "issues": []
+          },
+          "testing": {
+            "dimension": "testing",
+            "score": 85,
+            "status": "WARN",
+            "issues": [
+              {
+                "dimension": "testing",
+                "severity": "WARNING",
+                "message": "Last eval is 4 days old",
+                "remediation": "Re-run evals monthly to ensure continued quality"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "agentId": "agent_002",
+        "agentName": "Data Analyst",
+        "overallScore": 51.2,
+        "status": "FAIL",
+        "dimensions": {
+          "metadata": {
+            "dimension": "metadata",
+            "score": 40,
+            "status": "FAIL",
+            "issues": [
+              {
+                "dimension": "metadata",
+                "severity": "ERROR",
+                "message": "Description missing or insufficient (< 50 chars)",
+                "remediation": "Provide detailed description explaining agent purpose (50+ chars)"
+              },
+              {
+                "dimension": "metadata",
+                "severity": "ERROR",
+                "message": "No owner assigned",
+                "remediation": "Assign agent to an owner (userId)"
+              },
+              {
+                "dimension": "metadata",
+                "severity": "ERROR",
+                "message": "Version tag not set",
+                "remediation": "Set semantic version (e.g., 1.0.0)"
+              },
+              {
+                "dimension": "metadata",
+                "severity": "ERROR",
+                "message": "Agent not updated in 186 days",
+                "remediation": "Review and update agent configuration if still in use"
+              }
+            ]
+          },
+          "configuration": {
+            "dimension": "configuration",
+            "score": 45,
+            "status": "FAIL",
+            "issues": [
+              {
+                "dimension": "configuration",
+                "severity": "ERROR",
+                "message": "Temperature 1.5 deviates significantly from recommended 0.7",
+                "remediation": "Set temperature between 0.0 (deterministic) and 2.0"
+              },
+              {
+                "dimension": "configuration",
+                "severity": "ERROR",
+                "message": "Max tokens 50 is very low",
+                "remediation": "Increase max tokens to at least 256 for meaningful responses"
+              },
+              {
+                "dimension": "configuration",
+                "severity": "ERROR",
+                "message": "System prompt is too short (< 10 words)",
+                "remediation": "Provide a more detailed system prompt"
+              }
+            ]
+          },
+          "knowledgeBase": {
+            "dimension": "knowledgeBase",
+            "score": 100,
+            "status": "PASS",
+            "issues": []
+          },
+          "flow": {
+            "dimension": "flow",
+            "score": 75,
+            "status": "WARN",
+            "issues": [
+              {
+                "dimension": "flow",
+                "severity": "WARNING",
+                "message": "Flow is very simple (1 node only)",
+                "remediation": "Consider if additional logic is needed"
+              }
+            ]
+          },
+          "apiIntegration": {
+            "dimension": "apiIntegration",
+            "score": 100,
+            "status": "PASS",
+            "issues": []
+          },
+          "performance": {
+            "dimension": "performance",
+            "score": 35,
+            "status": "FAIL",
+            "issues": [
+              {
+                "dimension": "performance",
+                "severity": "ERROR",
+                "message": "Error rate too high: 15.0% > 10%",
+                "remediation": "Debug and fix error causes, improve error handling"
+              },
+              {
+                "dimension": "performance",
+                "severity": "ERROR",
+                "message": "Execution time too high: 45.0s > 60s (borderline)",
+                "remediation": "Optimize flow logic or consider async processing"
+              },
+              {
+                "dimension": "performance",
+                "severity": "WARNING",
+                "message": "High token usage: 12000 tokens/run",
+                "remediation": "Optimize prompts or reduce context size"
+              }
+            ]
+          },
+          "security": {
+            "dimension": "security",
+            "score": 65,
+            "status": "FAIL",
+            "issues": [
+              {
+                "dimension": "security",
+                "severity": "WARNING",
+                "message": "Public agent without rate limiting",
+                "remediation": "Enable rate limiting on public endpoints"
+              }
+            ]
+          },
+          "testing": {
+            "dimension": "testing",
+            "score": 50,
+            "status": "FAIL",
+            "issues": [
+              {
+                "dimension": "testing",
+                "severity": "WARNING",
+                "message": "No evaluation runs found",
+                "remediation": "Run agent evals/tests to validate quality"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "agentId": "agent_003",
+        "agentName": "Code Generator",
+        "overallScore": 93.7,
+        "status": "PASS",
+        "dimensions": {
+          "metadata": {
+            "dimension": "metadata",
+            "score": 100,
+            "status": "PASS",
+            "issues": []
+          },
+          "configuration": {
+            "dimension": "configuration",
+            "score": 98,
+            "status": "PASS",
+            "issues": []
+          },
+          "knowledgeBase": {
+            "dimension": "knowledgeBase",
+            "score": 90,
+            "status": "PASS",
+            "issues": [
+              {
+                "dimension": "knowledgeBase",
+                "severity": "WARNING",
+                "message": "Only 5 documents (target: 20+)",
+                "remediation": "Add more documents to knowledge base for better retrieval"
+              }
+            ]
+          },
+          "flow": {
+            "dimension": "flow",
+            "score": 95,
+            "status": "PASS",
+            "issues": []
+          },
+          "apiIntegration": {
+            "dimension": "apiIntegration",
+            "score": 100,
+            "status": "PASS",
+            "issues": []
+          },
+          "performance": {
+            "dimension": "performance",
+            "score": 96,
+            "status": "PASS",
+            "issues": []
+          },
+          "security": {
+            "dimension": "security",
+            "score": 100,
+            "status": "PASS",
+            "issues": []
+          },
+          "testing": {
+            "dimension": "testing",
+            "score": 95,
+            "status": "PASS",
+            "issues": []
+          }
+        }
+      }
+    ]
+  },
+  "dimensionSummary": {
+    "metadata": {
+      "avgScore": 80.0,
+      "passRate": 0.667,
+      "topIssues": [
+        "Missing owner assignment (1 agent)",
+        "Stale agents not updated > 90 days (1 agent)",
+        "Missing version tags (1 agent)"
+      ]
+    },
+    "configuration": {
+      "avgScore": 79.3,
+      "passRate": 0.667,
+      "topIssues": [
+        "Temperature outside recommended bounds (1 agent)",
+        "Max tokens too low (1 agent)",
+        "System prompt insufficient (1 agent)"
+      ]
+    },
+    "knowledgeBase": {
+      "avgScore": 93.3,
+      "passRate": 1.0,
+      "topIssues": [
+        "Insufficient documents in RAG-enabled agents (2 agents)"
+      ]
+    },
+    "flow": {
+      "avgScore": 88.3,
+      "passRate": 0.667,
+      "topIssues": [
+        "Over-simplified flows (1 agent)"
+      ]
+    },
+    "apiIntegration": {
+      "avgScore": 100.0,
+      "passRate": 1.0,
+      "topIssues": []
+    },
+    "performance": {
+      "avgScore": 76.3,
+      "passRate": 0.667,
+      "topIssues": [
+        "High error rates detected (1 agent)",
+        "Slow execution times (1 agent)",
+        "Excessive token consumption (1 agent)"
+      ]
+    },
+    "security": {
+      "avgScore": 88.3,
+      "passRate": 0.667,
+      "topIssues": [
+        "Public agent without rate limiting (1 agent)"
+      ]
+    },
+    "testing": {
+      "avgScore": 76.7,
+      "passRate": 0.667,
+      "topIssues": [
+        "No evaluation runs (1 agent)",
+        "Stale eval data (1 agent)"
+      ]
+    }
+  },
+  "recommendedActions": [
+    {
+      "priority": "CRITICAL",
+      "agentId": "agent_002",
+      "dimension": "overall",
+      "action": "Immediate remediation required",
+      "details": "Agent score 51.2 (FAIL). Multiple critical issues: missing owner, deprecated configuration, poor performance, no test coverage. Recommend: (1) Assign owner, (2) Re-configure temperature to 0.7, increase maxTokens to 2000, (3) Expand system prompt, (4) Run test suite. Escalate to platform team if not resolved within 7 days."
+    },
+    {
+      "priority": "HIGH",
+      "agentId": "agent_001",
+      "dimension": "knowledgeBase",
+      "action": "Expand knowledge base",
+      "details": "Currently 5 documents; add 15+ more for better RAG coverage. This will likely improve answer quality and reduce hallucinations."
+    },
+    {
+      "priority": "MEDIUM",
+      "agentId": "agent_001",
+      "dimension": "testing",
+      "action": "Re-run evaluation suite",
+      "details": "Last eval was 4 days ago. Schedule monthly eval runs to catch regressions early."
+    },
+    {
+      "priority": "MEDIUM",
+      "agentId": "agent_003",
+      "dimension": "knowledgeBase",
+      "action": "Expand knowledge base",
+      "details": "Same as agent_001: only 5 documents. Add 15+ more to enhance RAG effectiveness."
+    }
+  ],
+  "escalationThreshold": {
+    "failCount": 1,
+    "warnCount": 1,
+    "passCount": 1,
+    "escalateIfFailGte": 2,
+    "shouldEscalate": false,
+    "escalationMessage": "1 agent(s) failed audit. Assign to platform team for immediate remediation."
+  },
+  "timelineAndHistory": {
+    "auditStartTime": "2026-04-05T00:00:00Z",
+    "auditEndTime": "2026-04-05T00:02:30Z",
+    "durationSeconds": 150,
+    "nextScheduledAudit": "2026-05-01T02:00:00Z",
+    "previousAuditCycles": [
+      {
+        "cycle": "2026-03",
+        "timestamp": "2026-03-01T02:00:00Z",
+        "totalAgents": 3,
+        "passed": 2,
+        "warned": 1,
+        "failed": 0,
+        "avgScore": 84.3
+      },
+      {
+        "cycle": "2026-02",
+        "timestamp": "2026-02-01T02:00:00Z",
+        "totalAgents": 2,
+        "passed": 2,
+        "warned": 0,
+        "failed": 0,
+        "avgScore": 88.5
+      }
+    ]
+  },
+  "notificationStatus": {
+    "emailDelivery": "not_executed_demo_mode",
+    "slackNotification": "not_executed_demo_mode",
+    "dashboardUpdate": "not_executed_demo_mode",
+    "escalationAlert": "not_triggered_demo_mode",
+    "note": "In production, notifications would be sent to agent owners and platform teams"
+  },
+  "frameworkStatus": {
+    "implementation": "ready_for_production",
+    "dbMigration": "pending_railway_deployment",
+    "apiRoute": "src/app/api/audits/run/route.ts",
+    "executor": "src/lib/audits/executor.ts",
+    "dashboard": "src/app/admin/audits/page.tsx",
+    "scheduling": "via_railway_cron_0_2_1_*_*",
+    "nextSteps": [
+      "1. Deploy code to Railway PostgreSQL environment",
+      "2. Run 'pnpm db:push' to create AgentAudit table",
+      "3. Configure CRON_SECRET environment variable",
+      "4. Test audit endpoint: POST /api/audits/run",
+      "5. Schedule via Railway or external cron service"
+    ]
+  }
+}

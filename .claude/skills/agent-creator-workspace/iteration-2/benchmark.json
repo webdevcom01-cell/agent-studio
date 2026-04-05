@@ -1,0 +1,71 @@
+{
+  "skill": "agent-creator",
+  "iteration": 2,
+  "date": "2026-04-05",
+  "evals": [
+    {
+      "eval_name": "eval-cicd-orchestrator-agent",
+      "runs": {
+        "with_skill": {
+          "passed": 10,
+          "failed": 0,
+          "total": 10,
+          "pass_rate": 1.0
+        },
+        "without_skill": {
+          "passed": 10,
+          "failed": 0,
+          "total": 10,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "eval_name": "eval-prompt-improver-agent",
+      "runs": {
+        "with_skill": {
+          "passed": 10,
+          "failed": 0,
+          "total": 10,
+          "pass_rate": 1.0
+        },
+        "without_skill": {
+          "passed": 4,
+          "failed": 6,
+          "total": 10,
+          "pass_rate": 0.4
+        }
+      }
+    },
+    {
+      "eval_name": "eval-security-audit-agent",
+      "runs": {
+        "with_skill": {
+          "passed": 10,
+          "failed": 0,
+          "total": 10,
+          "pass_rate": 1.0
+        },
+        "without_skill": {
+          "passed": 5,
+          "failed": 5,
+          "total": 10,
+          "pass_rate": 0.5
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "with_skill": {
+      "passed": 30,
+      "total": 30,
+      "pass_rate": 1.0
+    },
+    "without_skill": {
+      "passed": 19,
+      "total": 30,
+      "pass_rate": 0.6333
+    },
+    "lift": 36.7
+  }
+}

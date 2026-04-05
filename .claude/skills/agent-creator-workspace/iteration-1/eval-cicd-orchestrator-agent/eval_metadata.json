@@ -1,0 +1,15 @@
+{
+  "eval_id": 2,
+  "eval_name": "cicd-orchestrator-agent",
+  "prompt": "Napravi agenta koji orchestrira naš CI/CD pipeline. Treba da pozove tri pod-agenta: security scanner, unit test runner, i code quality checker — i da vrati jedan konsolidovani izveštaj sa ukupnim verdiktom PASS/FAIL.",
+  "assertions": [
+    "The output includes a <role> block identifying it as an orchestrator",
+    "The output describes coordination of multiple sub-agents or pipeline stages",
+    "The output includes a JSON schema for the consolidated report",
+    "The output includes PASS/FAIL or similar verdict logic",
+    "The output includes a <failure_modes> section covering sub-agent failure",
+    "The output includes a <constraints> section",
+    "The output includes an <example> block showing sample input/output",
+    "The total system prompt is at least 4000 characters"
+  ]
+}

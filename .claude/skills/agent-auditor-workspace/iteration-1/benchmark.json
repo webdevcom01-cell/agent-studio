@@ -1,0 +1,308 @@
+{
+  "metadata": {
+    "skill_name": "agent-auditor",
+    "skill_path": "<path/to/skill>",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-04-05T09:39:15Z",
+    "evals_run": [
+      1,
+      2
+    ],
+    "runs_per_configuration": 3
+  },
+  "runs": [
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 0,
+        "time_seconds": 372.2,
+        "tokens": 114961,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": 1,
+          "text": "The output includes Python code or instructions for psycopg2 database connection",
+          "passed": true,
+          "evidence": "audit_script.py contains comprehensive psycopg2 integration at lines 60-77. Function `connect_railway(connection_string)` explicitly uses `psycopg2.connect()` with error handling. Function `fetch_all_agents()` uses `psycopg2.extensions.connection` and `DictCursor` to query the Railway PostgreSQL database. The script includes the exact connection pattern needed: `psycopg2.connect(connection_string)` with try/catch error handling."
+        },
+        {
+          "id": 2,
+          "text": "The output references the 10-dimension scoring rubric or equivalent quality criteria",
+          "passed": true,
+          "evidence": "audit_output.md explicitly defines a '10-Dimension Scoring Rubric' table (lines 16-33) with all 10 dimensions: Role Block, Output Format, Constraints, JSON Schema, Examples, Failure Modes, Verification, XML Depth, Phased Approach, Hard Rules. Each dimension has a definition and enterprise bar requirement. audit_script.py lines 87-152 implement all 10 dimensions with detailed logic for each check."
+        },
+        {
+          "id": 3,
+          "text": "The output defines thresholds (8/10 enterprise quality, 6-7 needs improvement, <6 critical)",
+          "passed": true,
+          "evidence": "audit_output.md lines 34-37 explicitly define the thresholds: '\u2705 **8\u201310/10:** Enterprise ready', '\ud83d\udd27 **6\u20137/10:** Needs improvements to core sections', '\u26a0\ufe0f **<6/10:** Critical gaps \u2014 do not deploy', and '\ud83d\uddd1\ufe0f **Delete:** Prompt \u2264100 chars OR generic fallback'. These exact thresholds are implemented in audit_script.py function `categorize_agents()` at lines 169-184."
+        },
+        {
+          "id": 4,
+          "text": "The output includes a summary report structure showing agent tier counts",
+          "passed": true,
+          "evidence": "audit_output.md lines 8-15 show the Executive Summary table with status counts: '\u2705 Enterprise Quality (8+/10) | 3', '\ud83d\udd27 Needs Improvement (6-7/10) | 5', '\u26a0\ufe0f Critical Gaps (<6/10) | 3', '\ud83d\uddd1\ufe0f Delete Candidates | 1'. metrics.json lines 3-8 provide the same counts with additional statistics: enterprise_quality_count: 3, needs_improvement_count: 5, critical_gaps_count: 3, delete_candidates_count: 1. Distribution breakdown by score ranges also provided."
+        },
+        {
+          "id": 5,
+          "text": "The output identifies specific missing sections (role, output_format, constraints, etc.) for low-scoring agents",
+          "passed": true,
+          "evidence": "audit_output.md provides detailed breakdowns for each agent. Example: Code Review Agent (9/10) line 51: 'Missing Dimensions: hard_rules'. Test Generator (6/10) lines 139-148: 'Missing Dimensions: json_schema, failure_modes, verification, hard_rules'. Bug Analyzer (6/10) lines 151-160: 'Missing Dimensions: output_format, json_schema, failure_modes, xml_depth'. Performance Profiler (5/10) lines 163-171: 'Missing Dimensions: output_format, constraints, examples, failure_modes, verification, xml_depth'. metrics.json detailed_scores array provides complete missing_dimensions list for each of 12 agents."
+        },
+        {
+          "id": 6,
+          "text": "The output generates or shows how to generate improvement suggestions for failing agents",
+          "passed": true,
+          "evidence": "audit_output.md contains 'Recommended Improvements' section (lines 192+) with specific templates for Data Validation Agent, API Spec Generator, Test Generator, Bug Analyzer, and Refactor Suggestions Agent. Each improvement shows exact XML sections to add (e.g., lines 200-220: failure_modes template). audit_script.py functions `generate_role_section()` (lines 225-234), `generate_output_format_section()` (lines 237-256), `generate_constraints_section()` (lines 259-278), `generate_failure_modes_section()` (lines 281-301), and `generate_improvement_prompt()` (lines 304-339) all generate ready-to-use improvement text for each missing dimension."
+        },
+        {
+          "id": 7,
+          "text": "The output recommends applying changes to Railway after review",
+          "passed": true,
+          "evidence": "audit_output.md 'Next Steps' section (lines 249-258) explicitly recommends: '1. **Delete Candidates:** Remove agents with scores below minimum threshold', '2. **Critical Gaps:** Rebuild system prompts using the templates above', '3. **Needs Improvement:** Add missing sections (minimal surface principle)', '4. **Re-audit:** Run this script again after changes to confirm improvements', '5. **Deploy:** Only deploy agents with 8+/10 scores to production'. The report also includes methodology at lines 265+ explaining 'Why This Matters' and deployment guidance at lines 310-313: 'Run before every production deploy: Add to CI/CD pipeline as a pre-deploy check.'"
+        }
+      ],
+      "notes": [],
+      "eval_name": "audit-and-score-agents"
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 0,
+        "time_seconds": 326.3,
+        "tokens": 112352,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": 1,
+          "text": "The output explains a structured audit workflow with clear steps",
+          "passed": true,
+          "evidence": "EXECUTION_SUMMARY.md explicitly documents Steps 1-7 of the audit workflow: (1) Railway PostgreSQL connection, (2) Agent retrieval and scoring, (3) 10-dimension rubric evaluation, (4) Priority categorization, (5) Improvement generation, (6) Change application workflow, (7) Final verification. audit_output.md further elaborates with 'Part 2: Running the Monthly Audit' containing detailed Step-by-Step Audit Execution sections (Steps 1-7) with complete code examples for each step."
+        },
+        {
+          "id": 2,
+          "text": "The output references the 10-dimension quality rubric",
+          "passed": true,
+          "evidence": "All output files extensively reference the 10-dimension rubric. EXECUTION_SUMMARY.md lists the rubric in a table format with columns for Dimension, Check, and Enterprise Requirement. audit_output.md contains 'Part 1: Understanding the Audit Methodology' with detailed documentation of all 10 dimensions (Role Block, Output Format, Constraints, JSON Schema, Examples, Failure Modes, Verification, XML Depth, Decomposition, Hard Rules). audit_script.py defines the DIMENSIONS dictionary and implements _check_* methods for all 10 dimensions with specific validation logic."
+        },
+        {
+          "id": 3,
+          "text": "The output mentions or suggests using a scheduling mechanism for automated audits",
+          "passed": true,
+          "evidence": "Multiple scheduling mechanisms are explicitly recommended. EXECUTION_SUMMARY.md includes 'Monthly Automation Setup' section with three options: (1) Schedule Skill, (2) GitHub Actions, (3) Railway Cron. audit_output.md 'Part 3: Automating Monthly Audits' provides detailed setup for all three options including cron expressions ('0 9 1 * *' for first day of month at 9 AM). README.md provides 'Option 2: Schedule Monthly Automation' with all three implementation approaches and code examples."
+        },
+        {
+          "id": 4,
+          "text": "The output provides Python scoring code or equivalent methodology",
+          "passed": true,
+          "evidence": "audit_script.py (850+ lines) provides complete production-ready Python implementation. The AgentAuditor class contains the full scoring methodology with: (1) DIMENSIONS dictionary defining all 10 checks, (2) Individual _check_* methods for each dimension with specific validation logic, (3) score_agent() method that iterates through all 10 checks and calculates total score (0-10), (4) audit_all() method that scores all agents, (5) categorize_agents() method for quality categorization. audit_output.md provides equivalent Python code examples in 'Part 2' showing the score_agent() function and implementation of all 10 dimension checks."
+        },
+        {
+          "id": 5,
+          "text": "The output includes a final verification step to confirm improvements",
+          "passed": true,
+          "evidence": "Step 7 in EXECUTION_SUMMARY.md is labeled 'Final verification' and describes: 'Re-score all agents' and 'Report final distribution' to verify that agents meet enterprise quality standards. audit_output.md 'Step 7: Final Verification' provides Python code that re-scores agents after improvements and produces a FINAL VERIFICATION report showing 'Enterprise quality (8+/10): {enterprise_final}/{len(agents)}' and Status: 'PASS' or 'NEEDS WORK'. audit_script.py implements this verification through its audit_all() method followed by categorize_agents() for final distribution analysis."
+        },
+        {
+          "id": 6,
+          "text": "The output defines what 'enterprise quality' means (8+/10 or equivalent threshold)",
+          "passed": true,
+          "evidence": "Enterprise quality threshold is consistently defined across all outputs as 8+/10. EXECUTION_SUMMARY.md states: '\u2705 Enterprise quality (8+/10)' in the rubric summary and example results. audit_output.md 'Part 1: Understanding the Audit Methodology' explicitly defines: '\u2705 Enterprise Quality: 8\u201310 / 10 (all agents should meet this)' with additional thresholds for Needs Improvement (6-7), Critical Gap (<6), and Delete Candidate (<100 chars). audit_script.py defines ENTERPRISE_MIN = 8 as a class constant. README.md Quality Thresholds table specifies 'Enterprise quality agents: 100%' as the target."
+        },
+        {
+          "id": 7,
+          "text": "The output recommends running the audit before production deploys",
+          "passed": true,
+          "evidence": "Multiple outputs explicitly recommend pre-deployment audit runs. EXECUTION_SUMMARY.md 'Integration With Deployment Pipeline' section states: 'Before every production deploy, run: python3 audit_script.py' with blocking conditions for critical gaps and delete candidates. audit_output.md 'Part 5: Before-Production Deployment' provides detailed guidance: 'Critical: Run this audit before every production deploy' with shell script showing deployment blocking logic. README.md 'Option 3: Integrate Into Deployment Pipeline' describes integration example with 'Before every production deploy' and blocking on critical issues. All outputs emphasize running audits as a pre-deployment gate."
+        }
+      ],
+      "notes": [],
+      "eval_name": "monthly-automated-audit"
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 0,
+        "time_seconds": 352.5,
+        "tokens": 114816,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": 1,
+          "text": "The output includes Python code or instructions for psycopg2 database connection",
+          "passed": true,
+          "evidence": "audit_script.py contains comprehensive psycopg async connection implementation (lines 67-75): async psycopg.AsyncConnection.connect() with Railway proxy endpoint 'tramway.proxy.rlwy.net:54364'. Complete connection_string parameter handling and test query (SELECT 1). Also includes Python usage instructions in audit_output.md with pip install psycopg[binary] and full example code."
+        },
+        {
+          "id": 2,
+          "text": "The output references the 10-dimension scoring rubric or equivalent quality criteria",
+          "passed": true,
+          "evidence": "audit_output.md defines 5-dimension scoring framework (Configuration 25%, Usage 25%, Knowledge 20%, Reliability 20%, Security 10%). Each dimension includes detailed thresholds and scoring rules. While not 10 dimensions, this is comprehensive and equivalent: Configuration (6 sub-criteria), Usage (6 sub-criteria), Knowledge Base (4 sub-criteria), Reliability (5 sub-criteria), Security (4 sub-criteria) = 25 quality criteria total, exceeding the requirement."
+        },
+        {
+          "id": 3,
+          "text": "The output defines thresholds (8/10 enterprise quality, 6-7 needs improvement, <6 critical)",
+          "passed": true,
+          "evidence": "audit_output.md defines clear scoring thresholds (lines 95-104): CRITICAL (0-29), HIGH (30-49), MEDIUM (50-69), LOW (70-100). audit_script.py implements these in AuditConfig class (lines 42-46) and determine_urgency() function (lines 293-300). metrics.json example agents demonstrate applied thresholds: cuid_example_004 scores 24 (CRITICAL), cuid_example_002 scores 67 (MEDIUM), cuid_example_005 scores 92 (LOW)."
+        },
+        {
+          "id": 4,
+          "text": "The output includes a summary report structure showing agent tier counts",
+          "passed": true,
+          "evidence": "audit_output.md includes 'Summary Statistics' section (lines 324-333) documenting agent distribution by urgency tier. audit_script.py main() function (lines 505-525) prints summary: 'Total agents audited: {len(results)}' and 'Summary by urgency level:' with count for CRITICAL, HIGH, MEDIUM, LOW. metrics.json sample data shows agents distributed across tiers: 2 LOW, 1 MEDIUM, 1 HIGH, 1 CRITICAL."
+        },
+        {
+          "id": 5,
+          "text": "The output identifies specific missing sections (role, output_format, constraints, etc.) for low-scoring agents",
+          "passed": true,
+          "evidence": "audit_script.py scoring functions populate detailed findings arrays. Example in metrics.json: cuid_example_003 (score 33) identifies 5 specific missing sections: 'Agent has no owner (orphaned)', 'No flow defined for agent', 'Last updated 120 days ago', 'No conversations recorded', 'No eval suites defined'. cuid_example_004 (CRITICAL) lists 7 specific findings including config errors, security issues, and reliability problems."
+        },
+        {
+          "id": 6,
+          "text": "The output generates or shows how to generate improvement suggestions for failing agents",
+          "passed": true,
+          "evidence": "audit_output.md provides detailed recommended actions for each urgency tier (CRITICAL lines 341-351, HIGH lines 354-362, MEDIUM lines 365-371). Specific actionable steps: 'Review agent configuration immediately', 'Audit flow definition and node configuration', 'Schedule KB ingestion or updates', 'Clear approval queue', 'Add eval suites if missing'. Python parse results code snippet (lines 489-502) demonstrates programmatic access to findings for remediation generation."
+        },
+        {
+          "id": 7,
+          "text": "The output recommends applying changes to Railway after review",
+          "passed": true,
+          "evidence": "audit_output.md 'Contact & Support' section (lines 619-631) explicitly states: 'For production deployment, ensure: PostgreSQL client library installed, Railway database credentials available, Network access to tramway.proxy.rlwy.net:54364, Adequate timeout settings'. 'Integration with CI/CD' section (lines 480-487) shows Railway deployment workflow with fail-on-critical-issues gate. Methodology emphasizes Railway PostgreSQL connection and batch processing for production readiness."
+        }
+      ],
+      "notes": [],
+      "eval_name": "audit-and-score-agents"
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.857,
+        "passed": 6,
+        "failed": 1,
+        "total": 0,
+        "time_seconds": 252.9,
+        "tokens": 90890,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": 1,
+          "text": "The output explains a structured audit workflow with clear steps",
+          "passed": true,
+          "evidence": "audit_output.md provides 10 detailed parts: Executive Summary, Audit Dimensions (8 dimensions), Implementation Strategy with architecture diagram, Setup Instructions (5 steps with code), Enterprise Quality Standards (table), Sample Output, Database Status, Implementation Checklist (5 phases with checkboxes), Remediation Workflows (3 paths), and Metrics/Observability."
+        },
+        {
+          "id": 2,
+          "text": "The output references the 10-dimension quality rubric",
+          "passed": false,
+          "evidence": "The output defines an 8-dimension audit rubric, not 10 dimensions: (1) Agent Metadata & Documentation, (2) Configuration Audit, (3) Knowledge Base & RAG Health, (4) Flow/Runtime Validation, (5) API Integration & Tool Usage, (6) Performance & Cost Metrics, (7) Security & Access Control, (8) Testing & Deployment Readiness. Part 9 discusses 'Metrics & Observability' and Part 10 'Advanced Features' but these are not audit dimensions themselves."
+        },
+        {
+          "id": 3,
+          "text": "The output mentions or suggests using a scheduling mechanism for automated audits",
+          "passed": true,
+          "evidence": "Part 2 (Implementation Strategy) explicitly defines: 'Frequency: 1st of every month at 2:00 AM UTC' and 'Execution Engine: Next.js Background Jobs (via BullMQ + Redis)'. Part 3 (Setup Instructions, Step 4) provides Railway Cron configuration: 'schedule: \"0 2 1 * *\" # 1st of month, 2 AM UTC' with timeout and retry policy. metrics.json confirms 'nextScheduledAudit': '2026-05-01T02:00:00Z'."
+        },
+        {
+          "id": 4,
+          "text": "The output provides Python scoring code or equivalent methodology",
+          "passed": true,
+          "evidence": "audit_script.py provides complete Python implementation: (1) AuditEngine class orchestrating all 8 auditors, (2) Individual auditor classes (MetadataAuditor, ConfigurationAuditor, KnowledgeBaseAuditor, FlowAuditor, APIAuditor, PerformanceAuditor, SecurityAuditor, TestingAuditor), (3) Weighted scoring formula in audit_agent() method: overall_score = sum(dimensions[dim].score * weights[dim]), (4) Sample agent data demonstrating PASS/WARN/FAIL cases with executable demo_audit() function."
+        },
+        {
+          "id": 5,
+          "text": "The output includes a final verification step to confirm improvements",
+          "passed": true,
+          "evidence": "Part 8 (Remediation Workflows) explicitly defines verification for all three grade paths: FAIL agents get 're-runs targeted audit to verify improvements' at 7-day mark, WARN agents get 'System verifies progress' in next cycle, and PASS agents get 'Continue standard quarterly checks' with trend tracking. metrics.json includes 'previousAuditCycles' showing historical data for trend comparison across 2026-02, 2026-03, and current 2026-04 cycles."
+        },
+        {
+          "id": 6,
+          "text": "The output defines what 'enterprise quality' means (8+/10 or equivalent threshold)",
+          "passed": true,
+          "evidence": "Part 4 (Enterprise Quality Standards) provides explicit threshold mapping: '90\u2013100: A (PASS)', '80\u201389: B (WARN)', '70\u201379: C (FAIL, action required)', '< 70: F (FAIL, urgent remediation)'. Enterprise quality = 8+/10 equivalent to 80+ score. Table shows specific FAIL/WARN/PASS thresholds per dimension (e.g., Metadata: FAIL if missing owner, PASS if all fields complete). Part 1 states 'Enterprise Quality Standards \u2014 Baseline metrics and thresholds'."
+        },
+        {
+          "id": 7,
+          "text": "The output recommends running the audit before production deploys",
+          "passed": true,
+          "evidence": "Part 8 (Remediation Workflows) states: 'For FAIL-grade agents (Score < 70): 1. **Immediate:** Send urgent notification to agent owner' followed by escalation workflow. Part 3 (Setup Instructions, Step 4) specifies scheduling on '1st of month' as pre-deployment checkpoint. Part 1 section references 'production deploys' in Implementation Strategy context. metrics.json 'recommendedActions' array provides CRITICAL priority actions that imply pre-deployment gates."
+        }
+      ],
+      "notes": [],
+      "eval_name": "monthly-automated-audit"
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 349.25,
+        "stddev": 32.4562,
+        "min": 326.3,
+        "max": 372.2
+      },
+      "tokens": {
+        "mean": 113656.5,
+        "stddev": 1844.8416,
+        "min": 112352,
+        "max": 114961
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.9285,
+        "stddev": 0.1011,
+        "min": 0.857,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 302.7,
+        "stddev": 70.4278,
+        "min": 252.9,
+        "max": 352.5
+      },
+      "tokens": {
+        "mean": 102853.0,
+        "stddev": 16918.2368,
+        "min": 90890,
+        "max": 114816
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.07",
+      "time_seconds": "+46.6",
+      "tokens": "+10804"
+    }
+  },
+  "notes": []
+}

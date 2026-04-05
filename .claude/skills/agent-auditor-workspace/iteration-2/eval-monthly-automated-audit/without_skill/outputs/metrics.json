@@ -1,0 +1,626 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "name": "Agent Studio Monthly Audit Metrics",
+    "description": "Enterprise-grade quality standards for AI agent monitoring",
+    "last_updated": "2026-04-05T00:00:00Z",
+    "applicable_to": "all_active_agents"
+  },
+  
+  "audit_schedule": {
+    "frequency": "monthly",
+    "cron_expression": "0 2 * * 0",
+    "timezone": "UTC",
+    "description": "First Sunday of month at 02:00 UTC",
+    "duration_minutes": "120-240"
+  },
+
+  "performance_metrics": {
+    "latency": {
+      "p50_ms": {
+        "description": "Median response time",
+        "target": 1000,
+        "unit": "milliseconds",
+        "alert_threshold_critical": 5000,
+        "alert_threshold_warning": 3000
+      },
+      "p95_ms": {
+        "description": "95th percentile response time (most users experience this or better)",
+        "target": 2000,
+        "unit": "milliseconds",
+        "alert_threshold_critical": 5000,
+        "alert_threshold_warning": 3000
+      },
+      "p99_ms": {
+        "description": "99th percentile response time (outliers/worst-case)",
+        "target": 5000,
+        "unit": "milliseconds",
+        "alert_threshold_critical": 15000,
+        "alert_threshold_warning": 10000
+      }
+    },
+    "reliability": {
+      "error_rate": {
+        "description": "Percentage of requests returning errors",
+        "target": 0.1,
+        "unit": "percent",
+        "alert_threshold_critical": 2.0,
+        "alert_threshold_warning": 1.0
+      },
+      "timeout_rate": {
+        "description": "Percentage of requests exceeding max wait time",
+        "target": 0.01,
+        "unit": "percent",
+        "alert_threshold_critical": 0.5,
+        "alert_threshold_warning": 0.1
+      },
+      "uptime_pct": {
+        "description": "Service availability percentage",
+        "target": 99.95,
+        "unit": "percent",
+        "alert_threshold_critical": 98.0,
+        "alert_threshold_warning": 99.0
+      }
+    },
+    "throughput": {
+      "req_per_min": {
+        "description": "Average requests per minute",
+        "target": "varies_by_agent",
+        "unit": "requests/minute",
+        "alert_threshold_critical": "30% below baseline",
+        "alert_threshold_warning": "15% below baseline"
+      },
+      "concurrent_users": {
+        "description": "Peak concurrent user count",
+        "target": "varies_by_agent",
+        "unit": "users",
+        "alert_threshold_critical": null,
+        "alert_threshold_warning": null
+      }
+    }
+  },
+
+  "quality_metrics": {
+    "accuracy": {
+      "semantic_similarity": {
+        "description": "Cosine similarity between response and ground truth embeddings",
+        "target": 0.85,
+        "unit": "0-1 scale",
+        "alert_threshold_critical": 0.70,
+        "alert_threshold_warning": 0.75,
+        "test_method": "OpenAI text-embedding-3-small on 50-query sample"
+      },
+      "factual_correctness": {
+        "description": "LLM-as-Judge evaluation of response correctness",
+        "target": 0.95,
+        "unit": "percent",
+        "alert_threshold_critical": 0.85,
+        "alert_threshold_warning": 0.90,
+        "test_method": "Prompt-based scoring on curated test set"
+      },
+      "numeric_precision": {
+        "description": "Error margin on numeric outputs",
+        "target": 0.01,
+        "unit": "percent error",
+        "alert_threshold_critical": 0.05,
+        "alert_threshold_warning": 0.03
+      }
+    },
+    "hallucination": {
+      "unsupported_claims_rate": {
+        "description": "Percentage of responses with claims outside RAG context",
+        "target": 0.05,
+        "unit": "percent",
+        "alert_threshold_critical": 0.10,
+        "alert_threshold_warning": 0.08,
+        "test_method": "Semantic + regex analysis on sample outputs"
+      },
+      "confident_errors": {
+        "description": "High-confidence incorrect statements",
+        "target": 0.0,
+        "unit": "count",
+        "alert_threshold_critical": 1,
+        "alert_threshold_warning": 0,
+        "test_method": "LLM analysis of model confidence vs. correctness"
+      }
+    },
+    "consistency": {
+      "response_variance": {
+        "description": "Semantic drift across repeated executions",
+        "target": 0.05,
+        "unit": "variance score (0-1)",
+        "alert_threshold_critical": 0.20,
+        "alert_threshold_warning": 0.15,
+        "test_method": "Rerun 10 identical queries, measure embedding distance"
+      },
+      "format_consistency": {
+        "description": "Adherence to output schema",
+        "target": 1.0,
+        "unit": "percent",
+        "alert_threshold_critical": 0.90,
+        "alert_threshold_warning": 0.95,
+        "test_method": "JSON schema validation"
+      }
+    }
+  },
+
+  "compliance_metrics": {
+    "rag_quality": {
+      "citation_coverage": {
+        "description": "Percentage of responses with citations",
+        "target": 1.0,
+        "unit": "percent",
+        "alert_threshold_critical": 0.90,
+        "alert_threshold_warning": 0.95,
+        "requirement": "MANDATORY for all RAG-enabled agents"
+      },
+      "citation_accuracy": {
+        "description": "Percentage of citations matching actual sources",
+        "target": 0.99,
+        "unit": "percent",
+        "alert_threshold_critical": 0.90,
+        "alert_threshold_warning": 0.95,
+        "test_method": "Verify citation chunks exist in knowledge_base table"
+      },
+      "fabricated_citations": {
+        "description": "Count of fake/hallucinated citations",
+        "target": 0,
+        "unit": "count",
+        "alert_threshold_critical": 1,
+        "alert_threshold_warning": 0
+      },
+      "source_relevance": {
+        "description": "Semantic relevance of cited content to query",
+        "target": 0.75,
+        "unit": "cosine similarity (0-1)",
+        "alert_threshold_critical": 0.60,
+        "alert_threshold_warning": 0.65,
+        "test_method": "Cosine sim between query and cited chunk embedding"
+      }
+    },
+    "security": {
+      "prompt_injection_resistance": {
+        "description": "Percentage of injection attacks successfully blocked",
+        "target": 1.0,
+        "unit": "percent",
+        "alert_threshold_critical": 0.95,
+        "alert_threshold_warning": 0.99,
+        "test_method": "OWASP LLM Top 10 + 20 custom adversarial inputs"
+      },
+      "jailbreak_prevention": {
+        "description": "Count of jailbreak attempts blocked",
+        "target": "all",
+        "unit": "count",
+        "alert_threshold_critical": "any_bypass",
+        "alert_threshold_warning": null
+      },
+      "system_prompt_leakage": {
+        "description": "Any successful extractions of system prompt",
+        "target": 0,
+        "unit": "count",
+        "alert_threshold_critical": 1,
+        "alert_threshold_warning": 0
+      },
+      "token_limit_padding": {
+        "description": "Cushion remaining before hitting model max tokens",
+        "target": 200,
+        "unit": "tokens",
+        "alert_threshold_critical": 50,
+        "alert_threshold_warning": 100
+      }
+    },
+    "pii_handling": {
+      "pii_detection_rate": {
+        "description": "Percentage of logs scanned for PII",
+        "target": 1.0,
+        "unit": "percent",
+        "alert_threshold_critical": 0.90,
+        "alert_threshold_warning": 0.95
+      },
+      "pii_leakage_count": {
+        "description": "Count of PII exposures detected in logs",
+        "target": 0,
+        "unit": "count",
+        "alert_threshold_critical": 1,
+        "alert_threshold_warning": 0
+      },
+      "data_retention_compliance": {
+        "description": "Percentage of conversations deleted within SLA",
+        "target": 1.0,
+        "unit": "percent",
+        "alert_threshold_critical": 0.90,
+        "alert_threshold_warning": 0.95
+      }
+    },
+    "auth": {
+      "rate_limiting_enforced": {
+        "description": "Rate limits active and functional",
+        "target": true,
+        "unit": "boolean",
+        "alert_threshold_critical": "not_enforced",
+        "alert_threshold_warning": null
+      },
+      "api_key_age_max_days": {
+        "description": "Maximum age of active API keys",
+        "target": 90,
+        "unit": "days",
+        "alert_threshold_critical": 180,
+        "alert_threshold_warning": 90
+      },
+      "token_expiry_configured": {
+        "description": "Session token expiry < 24 hours",
+        "target": true,
+        "unit": "boolean",
+        "alert_threshold_critical": "not_configured",
+        "alert_threshold_warning": null
+      }
+    }
+  },
+
+  "operational_metrics": {
+    "availability": {
+      "monthly_uptime_pct": {
+        "description": "Service availability in audit period",
+        "target": 99.95,
+        "unit": "percent",
+        "alert_threshold_critical": 98.0,
+        "alert_threshold_warning": 99.0
+      },
+      "mttr_hours": {
+        "description": "Mean time to recovery from incidents",
+        "target": 1,
+        "unit": "hours",
+        "alert_threshold_critical": 4,
+        "alert_threshold_warning": 2
+      },
+      "incident_frequency": {
+        "description": "Count of incidents in month",
+        "target": 0,
+        "unit": "count",
+        "alert_threshold_critical": 3,
+        "alert_threshold_warning": 1
+      }
+    },
+    "resource_efficiency": {
+      "cpu_usage_pct": {
+        "description": "Average CPU utilization",
+        "target": 25,
+        "unit": "percent",
+        "alert_threshold_critical": 80,
+        "alert_threshold_warning": 60
+      },
+      "memory_mb": {
+        "description": "Average memory consumption per agent instance",
+        "target": 256,
+        "unit": "megabytes",
+        "alert_threshold_critical": 1024,
+        "alert_threshold_warning": 512
+      },
+      "cache_hit_rate": {
+        "description": "Redis/local cache effectiveness",
+        "target": 0.80,
+        "unit": "percent",
+        "alert_threshold_critical": 0.50,
+        "alert_threshold_warning": 0.65
+      }
+    },
+    "database": {
+      "query_latency_p95_ms": {
+        "description": "95th percentile database query time",
+        "target": 50,
+        "unit": "milliseconds",
+        "alert_threshold_critical": 500,
+        "alert_threshold_warning": 200
+      },
+      "vector_search_p95_ms": {
+        "description": "95th percentile pgvector search time",
+        "target": 50,
+        "unit": "milliseconds",
+        "alert_threshold_critical": 200,
+        "alert_threshold_warning": 100
+      },
+      "index_fragmentation": {
+        "description": "HNSW index health (0=healthy, 1=degraded)",
+        "target": 0,
+        "unit": "fragmentation score",
+        "alert_threshold_critical": 0.5,
+        "alert_threshold_warning": 0.3
+      },
+      "backup_freshness_hours": {
+        "description": "Hours since last successful backup",
+        "target": 24,
+        "unit": "hours",
+        "alert_threshold_critical": 48,
+        "alert_threshold_warning": 36
+      },
+      "replication_lag_seconds": {
+        "description": "Replication delay in multi-region setup",
+        "target": 0,
+        "unit": "seconds",
+        "alert_threshold_critical": 10,
+        "alert_threshold_warning": 5
+      }
+    }
+  },
+
+  "knowledge_metrics": {
+    "rag_coverage": {
+      "document_count": {
+        "description": "Total documents in knowledge base",
+        "target": "varies_by_agent",
+        "unit": "documents",
+        "alert_threshold_critical": 0,
+        "alert_threshold_warning": null
+      },
+      "chunk_count": {
+        "description": "Total indexed chunks (after splitting)",
+        "target": "varies_by_agent",
+        "unit": "chunks",
+        "alert_threshold_critical": 0,
+        "alert_threshold_warning": null
+      },
+      "vector_coverage_pct": {
+        "description": "Percentage of documents successfully embedded",
+        "target": 1.0,
+        "unit": "percent",
+        "alert_threshold_critical": 0.90,
+        "alert_threshold_warning": 0.95
+      }
+    },
+    "embedding_quality": {
+      "null_vectors_count": {
+        "description": "Count of corrupt/missing embeddings",
+        "target": 0,
+        "unit": "count",
+        "alert_threshold_critical": 1,
+        "alert_threshold_warning": 0
+      },
+      "dimension_mismatch": {
+        "description": "Any 1536-dim embedding inconsistencies",
+        "target": 0,
+        "unit": "count",
+        "alert_threshold_critical": 1,
+        "alert_threshold_warning": 0
+      },
+      "days_since_reindex": {
+        "description": "Age of embeddings since last recompute",
+        "target": 30,
+        "unit": "days",
+        "alert_threshold_critical": 60,
+        "alert_threshold_warning": 45,
+        "enforcement": "Monthly refresh required for active agents"
+      }
+    },
+    "retrieval_quality": {
+      "precision_at_k": {
+        "description": "Percentage of top-K results relevant",
+        "target": 0.80,
+        "unit": "percent",
+        "alert_threshold_critical": 0.60,
+        "alert_threshold_warning": 0.70,
+        "test_method": "Curated 30-query set + relevance judgments"
+      },
+      "ndcg_score": {
+        "description": "Normalized discounted cumulative gain (ranking quality)",
+        "target": 0.80,
+        "unit": "0-1 scale",
+        "alert_threshold_critical": 0.60,
+        "alert_threshold_warning": 0.70
+      },
+      "hybrid_search_balance": {
+        "description": "Effectiveness of semantic (70%) + BM25 (30%) weighting",
+        "target": "optimal",
+        "unit": "qualitative",
+        "alert_threshold_critical": null,
+        "alert_threshold_warning": null
+      }
+    },
+    "knowledge_currency": {
+      "source_freshness_pct": {
+        "description": "Percentage of documents < 30 days old",
+        "target": 0.70,
+        "unit": "percent",
+        "alert_threshold_critical": 0.30,
+        "alert_threshold_warning": 0.50
+      },
+      "max_document_age_days": {
+        "description": "Age of oldest indexed document",
+        "target": 90,
+        "unit": "days",
+        "alert_threshold_critical": 365,
+        "alert_threshold_warning": 180
+      },
+      "update_frequency_days": {
+        "description": "Average days between knowledge base updates",
+        "target": 7,
+        "unit": "days",
+        "alert_threshold_critical": 30,
+        "alert_threshold_warning": 14
+      },
+      "duplication_rate": {
+        "description": "Percentage of near-duplicate chunks",
+        "target": 0.05,
+        "unit": "percent",
+        "alert_threshold_critical": 0.20,
+        "alert_threshold_warning": 0.10
+      }
+    }
+  },
+
+  "user_experience_metrics": {
+    "engagement": {
+      "dau": {
+        "description": "Daily active users",
+        "target": "varies_by_agent",
+        "unit": "users",
+        "alert_threshold_critical": "30% below baseline",
+        "alert_threshold_warning": "15% below baseline"
+      },
+      "sessions_per_user": {
+        "description": "Average session count per user",
+        "target": 3,
+        "unit": "sessions",
+        "alert_threshold_critical": 1,
+        "alert_threshold_warning": 1.5
+      },
+      "avg_session_duration_min": {
+        "description": "Average conversation length",
+        "target": 5,
+        "unit": "minutes",
+        "alert_threshold_critical": 1,
+        "alert_threshold_warning": 2
+      },
+      "conversation_turns": {
+        "description": "Average messages per session",
+        "target": 4,
+        "unit": "messages",
+        "alert_threshold_critical": 1,
+        "alert_threshold_warning": 2
+      },
+      "abandonment_rate": {
+        "description": "Percentage of incomplete sessions",
+        "target": 0.10,
+        "unit": "percent",
+        "alert_threshold_critical": 0.40,
+        "alert_threshold_warning": 0.25
+      }
+    },
+    "satisfaction": {
+      "thumbs_up_rate": {
+        "description": "Percentage of positive feedback",
+        "target": 0.80,
+        "unit": "percent",
+        "alert_threshold_critical": 0.60,
+        "alert_threshold_warning": 0.70
+      },
+      "thumbs_down_rate": {
+        "description": "Percentage of negative feedback",
+        "target": 0.05,
+        "unit": "percent",
+        "alert_threshold_critical": 0.15,
+        "alert_threshold_warning": 0.10
+      },
+      "retry_rate": {
+        "description": "Percentage re-asking same question",
+        "target": 0.05,
+        "unit": "percent",
+        "alert_threshold_critical": 0.20,
+        "alert_threshold_warning": 0.10
+      },
+      "escalation_rate": {
+        "description": "Percentage escalated to human",
+        "target": 0.05,
+        "unit": "percent",
+        "alert_threshold_critical": 0.20,
+        "alert_threshold_warning": 0.10
+      }
+    }
+  },
+
+  "cost_metrics": {
+    "token_economics": {
+      "total_tokens_month": {
+        "description": "Total input + output tokens",
+        "target": "varies_by_agent",
+        "unit": "tokens",
+        "alert_threshold_critical": "50% above baseline",
+        "alert_threshold_warning": "25% above baseline"
+      },
+      "input_tokens": {
+        "description": "Context + query tokens",
+        "target": "varies_by_agent",
+        "unit": "tokens",
+        "alert_threshold_critical": null,
+        "alert_threshold_warning": null
+      },
+      "output_tokens": {
+        "description": "Response generation tokens",
+        "target": "varies_by_agent",
+        "unit": "tokens",
+        "alert_threshold_critical": null,
+        "alert_threshold_warning": null
+      },
+      "cost_per_request_cents": {
+        "description": "Average cost per user request",
+        "target": "varies_by_model",
+        "unit": "cents USD",
+        "alert_threshold_critical": "50% above baseline",
+        "alert_threshold_warning": "25% above baseline"
+      },
+      "cost_per_dau_cents": {
+        "description": "Cost per daily active user",
+        "target": "varies_by_agent",
+        "unit": "cents USD",
+        "alert_threshold_critical": "50% above baseline",
+        "alert_threshold_warning": "25% above baseline"
+      }
+    },
+    "model_usage": {
+      "deepseek_ratio": {
+        "description": "Percentage of requests using DeepSeek",
+        "target": 0.60,
+        "unit": "percent",
+        "alert_threshold_critical": null,
+        "alert_threshold_warning": null
+      },
+      "openai_ratio": {
+        "description": "Percentage of requests using OpenAI",
+        "target": 0.40,
+        "unit": "percent",
+        "alert_threshold_critical": null,
+        "alert_threshold_warning": null
+      },
+      "model_cost_comparison": {
+        "description": "Cost efficiency ranking across models",
+        "target": "deepseek > openai",
+        "unit": "cost ratio",
+        "alert_threshold_critical": null,
+        "alert_threshold_warning": null
+      }
+    }
+  },
+
+  "alert_severity_levels": {
+    "critical": {
+      "description": "Immediate action required — production impact or compliance violation",
+      "response_sla_hours": 1,
+      "escalation": "page_on_call_engineer"
+    },
+    "warning": {
+      "description": "Review within 24 hours — trend toward degradation or minor issue",
+      "response_sla_hours": 24,
+      "escalation": "email_admin"
+    },
+    "info": {
+      "description": "Informational note — improvements or minor variance",
+      "response_sla_hours": 168,
+      "escalation": "slack_digest"
+    }
+  },
+
+  "audit_output_format": {
+    "agent_audit_record": {
+      "agent_id": "UUID",
+      "audit_date": "YYYY-MM-DD",
+      "all_metrics": "...as defined above...",
+      "report": "JSON object with findings",
+      "created_at": "ISO 8601 timestamp"
+    },
+    "monthly_digest": {
+      "summary": "Executive overview with highlights",
+      "alerts": "List of critical/warning items",
+      "agent_scorecards": "Individual agent performance cards",
+      "recommendations": "Optimization suggestions",
+      "trend_analysis": "Month-over-month comparison"
+    }
+  },
+
+  "implementation_notes": {
+    "database_schema": "See agent_audits, audit_metrics tables in audit_output.md section 5",
+    "automation": "Deploy as BullMQ worker + node-cron scheduler",
+    "testing": "Run synthetic test suite monthly — 50-100 queries per agent type",
+    "reporting": "Email digest + Slack alerts + S3 archive",
+    "retention": "24 months in PostgreSQL, 12 months hot storage in S3",
+    "sla_definition": "p95 response time < 2s, error rate < 0.5%, uptime > 99.9%"
+  }
+}

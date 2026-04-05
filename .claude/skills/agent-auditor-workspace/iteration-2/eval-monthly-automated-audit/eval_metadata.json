@@ -1,0 +1,15 @@
+{
+  "eval_id": 2,
+  "eval_name": "monthly-automated-audit",
+  "prompt": "I want to set up a monthly automated audit of all my AI agents to make sure they maintain enterprise quality standards. How should I approach this, and can you run the audit now? My DB: postgresql://postgres:testpass@tramway.proxy.rlwy.net:54364/railway",
+  "assertions": [
+    "The output explains a structured audit workflow with at least 4 clear steps",
+    "The output references the 10-dimension quality rubric with specific dimension names",
+    "The output mentions using the schedule skill or cron for automated monthly runs",
+    "The output provides complete Python scoring code (not just pseudo-code)",
+    "The output includes a final verification step to confirm improvements after changes",
+    "The output defines enterprise quality as 8+/10 or equivalent explicit threshold",
+    "The output recommends running the audit before production deploys as a quality gate",
+    "The output includes a dimension coverage table or per-dimension statistics"
+  ]
+}

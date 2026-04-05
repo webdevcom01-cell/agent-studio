@@ -1,0 +1,223 @@
+{
+  "run_metadata": {
+    "agent_name": "cicd-orchestrator-agent",
+    "variant": "with_skill",
+    "iteration": "iteration-2",
+    "grading_date": "2026-04-05T15:30:00Z",
+    "grader_model": "claude-haiku-4-5",
+    "outputs_directory": "/sessions/dreamy-intelligent-hawking/mnt/agent-studio/.claude/skills/agent-creator-workspace/iteration-2/eval-cicd-orchestrator-agent/with_skill/outputs/"
+  },
+  "expectations": [
+    {
+      "id": 1,
+      "expectation": "The output includes a <role> block identifying it as an orchestrator",
+      "status": "PASS",
+      "evidence": "Lines 7-11 of system_prompt.md contain explicit <role> block. Opening line states: 'You are the CI/CD Pipeline Orchestrator for agent-studio's continuous integration system.' Mission describes coordinating three sub-agents and returning unified PASS/FAIL verdict.",
+      "score": 1.0,
+      "passed": true
+    },
+    {
+      "id": 2,
+      "expectation": "The output includes an agent roster listing all 3 sub-agents with their input/output schemas",
+      "status": "PASS",
+      "evidence": "Lines 39-52 contain Agent Roster table listing exactly 3 sub-agents: Security Scanner, Unit Test Runner, Code Quality Checker. Each sub-agent has Input Schema (JSON with 4 fields), Output Schema (JSON with 5-9 fields), and Timeout (250 seconds).",
+      "details": {
+        "security_scanner": {
+          "input_schema": "branchName, repoRoot, targetFiles, scanDepth",
+          "output_schema": "verdict, findings[], scanDuration, filesAnalyzed"
+        },
+        "unit_test_runner": {
+          "input_schema": "branchName, repoRoot, testPattern, coverageThreshold",
+          "output_schema": "verdict, totalTests, passed, failed, skipped, coverage{}, failedTests[]"
+        },
+        "code_quality_checker": {
+          "input_schema": "branchName, repoRoot, targetFiles, rulesVersion",
+          "output_schema": "verdict, violations[], totalViolations, errorCount, warningCount"
+        }
+      },
+      "score": 1.0,
+      "passed": true
+    },
+    {
+      "id": 3,
+      "expectation": "The output specifies an invocation pattern (MCP, A2A, or function call)",
+      "status": "PASS",
+      "evidence": "Lines 54-62 explicitly define A2A Protocol as invocation mechanism. Includes HTTP POST endpoint template: POST /api/a2a/{subAgentId}/tasks with JSON-RPC 2.0 envelope format. Specifies PARALLEL execution model (all three sub-agents invoked simultaneously).",
+      "invocation_pattern": "A2A Protocol",
+      "http_method": "POST",
+      "endpoint": "/api/a2a/{subAgentId}/tasks",
+      "envelope_format": "JSON-RPC 2.0",
+      "execution_model": "PARALLEL",
+      "score": 1.0,
+      "passed": true
+    },
+    {
+      "id": 4,
+      "expectation": "The output includes timeout values (per-agent and/or global timeout)",
+      "status": "PASS",
+      "evidence": "Lines 64-72 specify Timeout Strategy with two timeout values: (1) Per-sub-agent timeout: 250 seconds, (2) Global orchestration timeout: 300 seconds total (with 50s buffer). Retry policy explicitly set to NO_RETRIES (fail-fast principle for CI/CD).",
+      "per_agent_timeout_seconds": 250,
+      "global_timeout_seconds": 300,
+      "global_buffer_seconds": 50,
+      "retry_policy": "NO_RETRIES (fail-fast)",
+      "score": 1.0,
+      "passed": true
+    },
+    {
+      "id": 5,
+      "expectation": "The output includes consolidation logic showing how PASS/FAIL verdict is determined from sub-agent results",
+      "status": "PASS",
+      "evidence": "Lines 74-89 present Consolidation Logic with 5 deterministic rules: (1) IF any sub-agent times out \u2192 mark REVIEW; (2) IF any FAIL \u2192 overall FAIL; (3) IF any REVIEW (no FAIL) \u2192 overall REVIEW; (4) IF all PASS \u2192 overall PASS; (5) Invalid JSON \u2192 REVIEW. Rules follow fail-safe priority: FAIL > REVIEW > PASS.",
+      "consolidation_rules": [
+        "Any timeout \u2192 REVIEW status",
+        "Any FAIL \u2192 overall FAIL (immediately, no override)",
+        "Any REVIEW and no FAIL \u2192 overall REVIEW",
+        "All PASS \u2192 overall PASS",
+        "Invalid JSON \u2192 REVIEW"
+      ],
+      "decision_tree_deterministic": true,
+      "fail_safe_ordering": "FAIL > REVIEW > PASS",
+      "score": 1.0,
+      "passed": true
+    },
+    {
+      "id": 6,
+      "expectation": "The output includes a <failure_modes> section covering sub-agent timeout and sub-agent failure scenarios",
+      "status": "PASS",
+      "evidence": "Lines 258-362 contain <failure_modes> section with 8 detailed failure scenarios. Scenario 2 covers 'Sub-Agent Timeout (Single Agent)' with action: mark REVIEW, continue with others, include in timedOutAgents array. Scenario 4 covers 'Sub-Agent HTTP Error (5xx Response)' with action: treat as REVIEW, include in failedAgents array. Additional scenarios cover: missing input, global timeout, invalid JSON, out-of-scope, ambiguous verdict, network partition.",
+      "failure_scenarios": [
+        {
+          "scenario": "Missing or Malformed Input",
+          "returns": "overallVerdict=FAIL"
+        },
+        {
+          "scenario": "Sub-Agent Timeout (Single Agent)",
+          "returns": "Mark as REVIEW, continue"
+        },
+        {
+          "scenario": "Global Timeout (All Sub-Agents)",
+          "returns": "overallVerdict=REVIEW, status=global_timeout"
+        },
+        {
+          "scenario": "Sub-Agent HTTP Error (5xx)",
+          "returns": "Treat as REVIEW, continue"
+        },
+        {
+          "scenario": "Sub-Agent Returns Invalid JSON",
+          "returns": "Treat as REVIEW, escalate"
+        },
+        {
+          "scenario": "Out-of-Scope Request",
+          "returns": "overallVerdict=FAIL"
+        },
+        {
+          "scenario": "Sub-Agent Returns Ambiguous Verdict",
+          "returns": "Treat as REVIEW"
+        },
+        {
+          "scenario": "Network Partition",
+          "returns": "Treat as timeout, mark REVIEW"
+        }
+      ],
+      "timeout_coverage": "YES",
+      "failure_coverage": "YES",
+      "score": 1.0,
+      "passed": true
+    },
+    {
+      "id": 7,
+      "expectation": "The output includes an <example> block with POPULATED data (real branch names, test counts, verdicts \u2014 not placeholders)",
+      "status": "PASS",
+      "evidence": "Lines 364-476 contain <example> section with real-world scenario: Feature branch 'feature/oauth-github-google' with real git commit SHA (f7e3a2d9c1b4e6f8a2d9c1b4e6f8a2d9), 5 target files, author 'alice@agent-studio.dev'. Output includes populated data: 156 total tests, 156 passed, 0 failed, CVSS 9.8 hardcoded secret vulnerability, 92.1% branch coverage, 94.7% function coverage. Example shows realistic execution timeline (14:23:10 to 14:23:45) and demonstrates FAIL verdict due to CRITICAL security finding (hardcoded OAuth secret).",
+      "example_details": {
+        "branch_name": "feature/oauth-github-google",
+        "commit_sha": "f7e3a2d9c1b4e6f8a2d9c1b4e6f8a2d9",
+        "author": "alice@agent-studio.dev",
+        "target_files_count": 5,
+        "security_finding_severity": "CRITICAL",
+        "security_finding_cvss": 9.8,
+        "security_finding_category": "A01-BrokenAuthentication",
+        "total_tests": 156,
+        "tests_passed": 156,
+        "tests_failed": 0,
+        "test_pass_rate": 100.0,
+        "code_quality_violations": 0,
+        "coverage_branches": 92.1,
+        "coverage_functions": 94.7,
+        "overall_verdict": "FAIL",
+        "verdict_reason": "Security vulnerability overrides passing tests"
+      },
+      "is_template": false,
+      "has_realistic_data": true,
+      "score": 1.0,
+      "passed": true
+    },
+    {
+      "id": 8,
+      "expectation": "The output includes a JSON schema for the consolidated report with at least 5 fields",
+      "status": "PASS",
+      "evidence": "Lines 197-245 define complete JSON schema for orchestrator output. Top-level fields include: result_id, timestamp, branchName, commitSHA, requestId, overallVerdict, overallStatus, consolidationSummary, securityFindings, testResults, codeQualityIssues, orchestrationMetrics, verdictExplanation, nextAction, blockReasons, recommendedReviewers, auditTrail (17 top-level fields). Nested objects add 33 additional fields. Total: 50+ fields far exceeds minimum of 5.",
+      "top_level_fields_count": 17,
+      "nested_fields_count": 33,
+      "total_schema_fields": 50,
+      "minimum_required": 5,
+      "sample_fields": [
+        "result_id",
+        "overallVerdict",
+        "securityFindings",
+        "testResults",
+        "codeQualityIssues",
+        "orchestrationMetrics",
+        "verdictExplanation",
+        "nextAction",
+        "auditTrail"
+      ],
+      "score": 1.0,
+      "passed": true
+    },
+    {
+      "id": 9,
+      "expectation": "The total system prompt is at least 5000 characters",
+      "status": "PASS",
+      "evidence": "Total system prompt character count: 11,847 characters (verified in metrics.json). This exceeds minimum of 5,000 characters by 237% (6,847 extra characters). Includes comprehensive sections: role, agent roster, invocation pattern, consolidation logic, core methodology (5 steps), agent-studio context, output format, failure modes (8 scenarios), example, constraints (15 rules), and summary.",
+      "total_characters": 11847,
+      "minimum_required": 5000,
+      "percent_of_minimum": 236.94,
+      "score": 1.0,
+      "passed": true
+    },
+    {
+      "id": 10,
+      "expectation": "The skill explicitly classifies the agent type as orchestrator",
+      "status": "PASS",
+      "evidence": "System prompt explicitly classifies agent type as ORCHESTRATOR in three locations: (1) Line 3: 'Classification: ORCHESTRATOR' (bold, capitalized); (2) Line 7: 'You are the CI/CD Pipeline Orchestrator'; (3) Line 9: 'This is NOT a leaf agent \u2014 it is a pipeline controller'. Classification is unambiguous and appears at start of document.",
+      "classification_locations": [
+        {
+          "line": 3,
+          "text": "Classification: ORCHESTRATOR"
+        },
+        {
+          "line": 7,
+          "text": "You are the CI/CD Pipeline Orchestrator"
+        },
+        {
+          "line": 9,
+          "text": "pipeline controller"
+        }
+      ],
+      "explicit_capitalization": true,
+      "score": 1.0,
+      "passed": true
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "pass_rate": 1.0,
+    "rubric_score": "100/100",
+    "total": 10
+  },
+  "grader_notes": "This CI/CD Pipeline Orchestrator agent output is production-ready and meets all 10 strict expectations. The system prompt is comprehensive, deterministic, and domain-specific. Agent roster specifies 3 sub-agents with full I/O contracts. Invocation pattern (A2A Protocol) is clearly defined. Consolidation logic is fail-safe and deterministic. Timeout strategy is comprehensive (250s per-agent, 300s global, no retries). Failure modes cover all edge cases including timeouts, HTTP errors, and malformed responses. Example demonstrates realistic scenario with populated data (OAuth secret detection, 156 tests, CVSS 9.8). JSON schema is extensive (50+ fields). System prompt is 11,847 characters (237% of minimum). Orchestrator classification is explicit and unambiguous. All hard requirements satisfied. Recommended for immediate deployment to production CI/CD pipeline.",
+  "deployment_recommendation": "READY FOR PRODUCTION",
+  "suitable_for_railway_deployment": true
+}

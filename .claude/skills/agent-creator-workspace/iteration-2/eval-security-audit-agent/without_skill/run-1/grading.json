@@ -1,0 +1,141 @@
+{
+  "run": {
+    "agent": "security-audit-agent",
+    "variant": "without_skill",
+    "iteration": 2
+  },
+  "expectations": [
+    {
+      "id": 1,
+      "description": "The output includes a <role> block with a specific expert identity (not 'helpful assistant')",
+      "found": true,
+      "evidence": "Section: 'You are an expert TypeScript security auditor specialized in Next.js 15 API route security.'",
+      "details": "Role is clearly defined with specific expertise in TypeScript, Next.js 15, API route security, and OWASP vulnerabilities.",
+      "pass": true,
+      "passed": true
+    },
+    {
+      "id": 2,
+      "description": "The output includes a <output_format> section with a complete JSON schema",
+      "found": true,
+      "evidence": "Section: 'Output Format: JSON Report' includes full JSON schema with auditMetadata, findings, categoryBreakdown, recommendations, complianceNotes",
+      "details": "Complete JSON schema provided with all required fields and example structure",
+      "pass": true,
+      "passed": true
+    },
+    {
+      "id": 3,
+      "description": "The JSON schema includes verdict, findings (array), and severity fields with concrete allowed values",
+      "found": true,
+      "evidence": "Schema includes 'findings' array with severity field showing: CRITICAL, HIGH, MEDIUM, LOW; confidence field shows HIGH, MEDIUM, LOW",
+      "details": "All required fields present with enumerated allowed values (CRITICAL|HIGH|MEDIUM|LOW for severity)",
+      "pass": true,
+      "passed": true
+    },
+    {
+      "id": 4,
+      "description": "The output includes a <constraints> section with at least 5 specific rules",
+      "found": false,
+      "evidence": "No explicit <constraints> section titled as such. However, 'Expected Secure Patterns' section covers 7 specific rules",
+      "details": "Section 'Expected Secure Patterns' lists 7 rules: (1) Auth checks before DB, (2) Try/catch with logger.error, (3) No sensitive data in responses, (4) DNS/URL validation, (5) CRON_SECRET validation, (6) No env leak, (7) Proper error messages. Functionally equivalent but not explicitly labeled as <constraints>",
+      "pass": false,
+      "severity": "low",
+      "passed": false
+    },
+    {
+      "id": 5,
+      "description": "The output includes a <failure_modes> section with at least 3 distinct scenarios",
+      "found": false,
+      "evidence": "No explicit <failure_modes> section. However, 'Detailed Vulnerability Patterns to Search' section contains 15 anti-patterns organized into 6 categories with explicit ANTI-PATTERN labels",
+      "details": "Section documents patterns like missing auth guards, incorrect placement, no boundary validation, SQL injection, template injection, unsafe external calls, hardcoded keys, insufficient HMAC entropy, webhook validation skipped, missing Zod validation, missing rate limiting, error details exposed, no URL validation, no audit trail, sensitive data in logs. These are failure modes but not explicitly labeled as <failure_modes> section",
+      "pass": false,
+      "severity": "low",
+      "passed": false
+    },
+    {
+      "id": 6,
+      "description": "The output includes an <example> block with POPULATED data (real-looking file paths, severity scores, CVE IDs \u2014 not template placeholders)",
+      "found": true,
+      "evidence": "Example JSON in 'Output Format: JSON Report' includes: file path 'src/app/api/agents/[agentId]/update/route.ts', severity 'CRITICAL', lines [15, 28], OWASP category 'A01:2021', CWE ID 'CWE-284', priority 1, overallRiskScore 7.2",
+      "details": "Real-looking example data provided - file paths match agent-studio structure, severity values are concrete, CWE IDs are valid references (CWE-284, CWE-20, CWE-352, CWE-918), line numbers are realistic",
+      "pass": true,
+      "passed": true
+    },
+    {
+      "id": 7,
+      "description": "The output references CVSS v4.0 specifically (not v3.1 or unversioned CVSS)",
+      "found": false,
+      "evidence": "No mention of CVSS v4.0, v3.1, or any CVSS version in the system prompt",
+      "details": "The prompt focuses on severity classification (CRITICAL/HIGH/MEDIUM/LOW) and exploitability/impact matrix but does not reference CVSS scoring system at all",
+      "pass": false,
+      "severity": "medium",
+      "passed": false
+    },
+    {
+      "id": 8,
+      "description": "The output references OWASP Top 10 2025 (not 2021 or unversioned)",
+      "found": false,
+      "evidence": "Prompt references 'OWASP Top 10 (2024)' in section header and 'OWASP Top 10 2024' in compliance notes; all 10 categories labeled as 'A##:2021'",
+      "details": "References OWASP 2024 and 2021, not 2025. Compliance notes state 'Addresses Top 10 2024' but all categories use 2021 enumeration (A01:2021, A02:2021, etc.)",
+      "pass": false,
+      "severity": "medium",
+      "passed": false
+    },
+    {
+      "id": 9,
+      "description": "The total system prompt is at least 5000 characters",
+      "found": true,
+      "evidence": "System prompt is 13,832 characters (measured via wc -c)",
+      "details": "Character count: 13,832 >> 5,000 minimum requirement. Well above threshold.",
+      "pass": true,
+      "passed": true
+    },
+    {
+      "id": 10,
+      "description": "The skill explicitly classifies the agent type (leaf/orchestrator/user-facing/hybrid)",
+      "found": false,
+      "evidence": "No explicit agent type classification (leaf/orchestrator/user-facing/hybrid) found in the prompt",
+      "details": "The prompt describes the agent as performing security audits and analyzing code, implying a 'leaf' agent (single-purpose tool), but does not explicitly state this classification",
+      "pass": false,
+      "severity": "low",
+      "passed": false
+    }
+  ],
+  "scoring": {
+    "total_expectations": 10,
+    "passed": 6,
+    "failed": 4,
+    "pass_rate": 0.6
+  },
+  "summary": {
+    "overall_assessment": "The security-audit-agent system prompt is comprehensive and well-structured, with strong coverage of OWASP vulnerabilities, practical code examples, and JSON output schema. However, it falls short on 4 expectations: (1) no explicit <constraints> section label, (2) no explicit <failure_modes> section label, (3) no CVSS v4.0 reference, (4) OWASP 2024/2021 instead of 2025, (5) no explicit agent type classification. The prompt is production-ready for security auditing but does not fully meet the evaluation rubric requirements.",
+    "strengths": [
+      "Expert role clearly defined with specific domain expertise",
+      "Complete JSON schema with all required fields and enumerated values",
+      "15 anti-patterns documented with real code examples",
+      "Excellent character count (13.8K, well above 5K minimum)",
+      "Real-looking example data with valid CWE IDs and file paths",
+      "7 specific security rules documented in 'Expected Secure Patterns'",
+      "Detailed 4-phase audit methodology",
+      "Severity classification matrix with exploitability/impact guidance"
+    ],
+    "gaps": [
+      "Missing explicit <constraints> section (has rules but not labeled)",
+      "Missing explicit <failure_modes> section (has anti-patterns but not labeled)",
+      "No CVSS v4.0 reference (uses simplified severity matrix instead)",
+      "References OWASP 2024/2021, not 2025",
+      "No explicit agent type classification (leaf/orchestrator/user-facing/hybrid)"
+    ],
+    "recommendations": [
+      "Add explicit '<constraints>' section header or reorganize 'Expected Secure Patterns' under that label",
+      "Add explicit '<failure_modes>' section header or clearly label anti-patterns section",
+      "Incorporate CVSS v4.0 scoring methodology into the severity matrix",
+      "Update OWASP references to 2025 (if available) or clarify 2024/2021 usage",
+      "Add explicit line: 'Agent Type: Leaf (single-purpose security auditor)' or similar"
+    ],
+    "passed": 5,
+    "failed": 5,
+    "total": 10,
+    "pass_rate": 0.5
+  }
+}

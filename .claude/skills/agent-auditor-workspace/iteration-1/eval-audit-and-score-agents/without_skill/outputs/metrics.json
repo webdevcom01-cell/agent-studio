@@ -1,0 +1,85 @@
+[
+  {
+    "agentId": "cuid_example_001",
+    "name": "Customer Support Bot",
+    "configScore": 85,
+    "usageScore": 92,
+    "knowledgeScore": 78,
+    "reliabilityScore": 88,
+    "securityScore": 90,
+    "overallScore": 86,
+    "urgencyLevel": "LOW",
+    "findings": [],
+    "lastUpdated": "2026-04-05T12:00:00Z"
+  },
+  {
+    "agentId": "cuid_example_002",
+    "name": "Data Analyzer",
+    "configScore": 75,
+    "usageScore": 45,
+    "knowledgeScore": 60,
+    "reliabilityScore": 70,
+    "securityScore": 85,
+    "overallScore": 67,
+    "urgencyLevel": "MEDIUM",
+    "findings": [
+      "No activity in last 7 days",
+      "Last updated 45 days ago (exceeds 30-day threshold)",
+      "Only 3 total conversations recorded"
+    ],
+    "lastUpdated": "2026-04-05T12:00:00Z"
+  },
+  {
+    "agentId": "cuid_example_003",
+    "name": "Orphaned Prototype",
+    "configScore": 40,
+    "usageScore": 20,
+    "knowledgeScore": 35,
+    "reliabilityScore": 25,
+    "securityScore": 45,
+    "overallScore": 33,
+    "urgencyLevel": "HIGH",
+    "findings": [
+      "Agent has no owner (orphaned)",
+      "No flow defined for agent",
+      "Last updated 120 days ago",
+      "No conversations recorded",
+      "No eval suites defined for testing"
+    ],
+    "lastUpdated": "2026-04-05T12:00:00Z"
+  },
+  {
+    "agentId": "cuid_example_004",
+    "name": "High-Risk Configuration",
+    "configScore": 25,
+    "usageScore": 15,
+    "knowledgeScore": 50,
+    "reliabilityScore": 10,
+    "securityScore": 20,
+    "overallScore": 24,
+    "urgencyLevel": "CRITICAL",
+    "findings": [
+      "Agent is public (consider restricting access)",
+      "Possible hardcoded secret detected in system prompt (api_key)",
+      "Temperature 2.5 outside valid range [0-2]",
+      "No flow defined for agent",
+      "Recent error rate too high: 25.0%",
+      "No eval suites defined for testing",
+      "12 pending approvals (potential bottleneck)"
+    ],
+    "lastUpdated": "2026-04-05T12:00:00Z"
+  },
+  {
+    "agentId": "cuid_example_005",
+    "name": "Well-Maintained Chatbot",
+    "configScore": 95,
+    "usageScore": 88,
+    "knowledgeScore": 92,
+    "reliabilityScore": 91,
+    "securityScore": 98,
+    "overallScore": 92,
+    "urgencyLevel": "LOW",
+    "findings": [],
+    "lastUpdated": "2026-04-05T12:00:00Z"
+  }
+]

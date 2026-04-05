@@ -1,0 +1,186 @@
+{
+  "audit_date": "2026-04-05T00:00:00",
+  "audit_run_type": "example_demonstration",
+  "notes": "Example metrics showing typical agent-studio audit results. Real metrics will be generated when connecting to your Railway PostgreSQL instance.",
+  "summary": {
+    "total_agents": 3,
+    "enterprise_quality": 0,
+    "enterprise_quality_percent": 0,
+    "needs_improvement": 0,
+    "critical_gaps": 2,
+    "delete_candidates": 1
+  },
+  "scores": {
+    "average": 1.67,
+    "min": 1,
+    "max": 4,
+    "distribution": {
+      "enterprise_8_10": 0,
+      "improvement_6_7": 0,
+      "critical_below_6": 3
+    }
+  },
+  "prompt_length": {
+    "average": 174,
+    "min": 54,
+    "max": 349,
+    "below_4000_chars": 3
+  },
+  "recommendations": {
+    "urgent": 3,
+    "high_priority": 0,
+    "target_enterprise_percent": 100
+  },
+  "agent_details": [
+    {
+      "name": "Code Reviewer",
+      "id": "1",
+      "score": 1,
+      "prompt_length": 349,
+      "status": "critical_gap",
+      "missing_dimensions": [
+        "output_format",
+        "constraints",
+        "json_schema",
+        "examples",
+        "failure_modes",
+        "verification",
+        "xml_depth",
+        "decomposition",
+        "hard_rules"
+      ],
+      "is_delete_candidate": false,
+      "recommended_action": "Full rewrite - add all critical sections"
+    },
+    {
+      "name": "Documentation Helper",
+      "id": "2",
+      "score": 0,
+      "prompt_length": 54,
+      "status": "delete_candidate",
+      "missing_dimensions": [
+        "role_block",
+        "output_format",
+        "constraints",
+        "json_schema",
+        "examples",
+        "failure_modes",
+        "verification",
+        "xml_depth",
+        "decomposition",
+        "hard_rules"
+      ],
+      "is_delete_candidate": true,
+      "recommended_action": "Delete from system - insufficient prompt"
+    },
+    {
+      "name": "Data Analyzer",
+      "id": "3",
+      "score": 4,
+      "prompt_length": 145,
+      "status": "critical_gap",
+      "missing_dimensions": [
+        "output_format",
+        "json_schema",
+        "examples",
+        "verification",
+        "decomposition"
+      ],
+      "is_delete_candidate": false,
+      "recommended_action": "Add missing output_format, JSON schema, and examples"
+    }
+  ],
+  "improvements_summary": {
+    "total_improvements_available": 2,
+    "critical_rewrites": 2,
+    "minor_additions": 0,
+    "estimated_chars_to_add": 1461,
+    "estimated_score_improvement": {
+      "code_reviewer": "1 -> 6",
+      "data_analyzer": "4 -> 7"
+    }
+  },
+  "quality_dimensions_coverage": {
+    "role_block": {
+      "compliant_agents": 1,
+      "percent": 33.3
+    },
+    "output_format": {
+      "compliant_agents": 0,
+      "percent": 0
+    },
+    "constraints": {
+      "compliant_agents": 1,
+      "percent": 33.3
+    },
+    "json_schema": {
+      "compliant_agents": 0,
+      "percent": 0
+    },
+    "examples": {
+      "compliant_agents": 0,
+      "percent": 0
+    },
+    "failure_modes": {
+      "compliant_agents": 0,
+      "percent": 0
+    },
+    "verification": {
+      "compliant_agents": 0,
+      "percent": 0
+    },
+    "xml_depth": {
+      "compliant_agents": 1,
+      "percent": 33.3
+    },
+    "decomposition": {
+      "compliant_agents": 0,
+      "percent": 0
+    },
+    "hard_rules": {
+      "compliant_agents": 0,
+      "percent": 0
+    }
+  },
+  "2026_standards_alignment": {
+    "anthropic_context_engineering": {
+      "xml_tags_usage": "Low (1/10 dimensions)",
+      "high_signal_tokens": "Medium",
+      "status": "Needs improvement"
+    },
+    "deepmind_contract_first": {
+      "output_verifiability": "Low - no JSON schemas",
+      "recursive_decomposition": "None present",
+      "least_privilege_constraints": "Minimal",
+      "status": "Critical improvement needed"
+    },
+    "openai_structured_output": {
+      "directive_clarity": "Medium",
+      "constraint_definition": "Low",
+      "format_pattern_precision": "None",
+      "status": "Needs comprehensive update"
+    }
+  },
+  "scheduling_recommendations": {
+    "audit_frequency": "Monthly",
+    "suggested_schedule": "0 9 1 * * (First day of month at 9 AM)",
+    "before_deployment": true,
+    "automation_method": "Use 'schedule' skill or GitHub Actions",
+    "critical_gates": [
+      "Block deployment if critical_gaps > 0",
+      "Block deployment if delete_candidates not removed",
+      "Require enterprise_quality_percent >= 95"
+    ]
+  },
+  "next_steps": [
+    "Review improvement recommendations above",
+    "Apply improvements to Railway PostgreSQL",
+    "Re-run audit to verify score improvements",
+    "Set up monthly schedule using 'schedule' skill",
+    "Integrate audit check into deployment pipeline"
+  ],
+  "historical_tracking": {
+    "tracking_enabled": false,
+    "suggestion": "Create 'AuditHistory' table in Railway to track monthly audit results"
+  }
+}

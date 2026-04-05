@@ -1,0 +1,503 @@
+{
+  "audit_metadata": {
+    "audit_date": "2026-04-05T14:32:18.445213",
+    "total_agents_audited": 12,
+    "rubric_version": "2026-enterprise",
+    "standards": [
+      "Anthropic 2026 Context Engineering",
+      "Google DeepMind Contract-First",
+      "OpenAI 2026 Structured Output"
+    ]
+  },
+  "summary_statistics": {
+    "enterprise_quality_count": 3,
+    "needs_improvement_count": 5,
+    "critical_gaps_count": 3,
+    "delete_candidates_count": 1,
+    "average_score": 6.8,
+    "average_prompt_length": 4847,
+    "min_prompt_length": 45,
+    "max_prompt_length": 8932,
+    "median_score": 6.5,
+    "std_dev_score": 2.4
+  },
+  "distribution": {
+    "score_0_to_2": 1,
+    "score_3_to_5": 2,
+    "score_6_to_7": 5,
+    "score_8_to_10": 3
+  },
+  "dimension_coverage": {
+    "role_block": {
+      "present_count": 11,
+      "missing_count": 1,
+      "percentage": 91.7
+    },
+    "output_format": {
+      "present_count": 8,
+      "missing_count": 4,
+      "percentage": 66.7
+    },
+    "constraints": {
+      "present_count": 9,
+      "missing_count": 3,
+      "percentage": 75.0
+    },
+    "json_schema": {
+      "present_count": 8,
+      "missing_count": 4,
+      "percentage": 66.7
+    },
+    "examples": {
+      "present_count": 9,
+      "missing_count": 3,
+      "percentage": 75.0
+    },
+    "failure_modes": {
+      "present_count": 7,
+      "missing_count": 5,
+      "percentage": 58.3
+    },
+    "verification": {
+      "present_count": 8,
+      "missing_count": 4,
+      "percentage": 66.7
+    },
+    "xml_depth": {
+      "present_count": 10,
+      "missing_count": 2,
+      "percentage": 83.3
+    },
+    "phased_approach": {
+      "present_count": 11,
+      "missing_count": 1,
+      "percentage": 91.7
+    },
+    "hard_rules": {
+      "present_count": 8,
+      "missing_count": 4,
+      "percentage": 66.7
+    }
+  },
+  "detailed_scores": [
+    {
+      "rank": 1,
+      "name": "Code Review Agent",
+      "id": "agent-code-review-001",
+      "score": 9,
+      "status": "enterprise_quality",
+      "prompt_length": 8932,
+      "model": "claude-sonnet-4-6",
+      "is_public": true,
+      "created_at": "2025-11-15",
+      "dimensions": {
+        "role_block": true,
+        "output_format": true,
+        "constraints": true,
+        "json_schema": true,
+        "examples": true,
+        "failure_modes": true,
+        "verification": true,
+        "xml_depth": true,
+        "phased_approach": true,
+        "hard_rules": false
+      },
+      "missing_dimensions": ["hard_rules"],
+      "is_delete_candidate": false,
+      "issues": []
+    },
+    {
+      "rank": 2,
+      "name": "Security Analyzer",
+      "id": "agent-security-analyzer-001",
+      "score": 9,
+      "status": "enterprise_quality",
+      "prompt_length": 7654,
+      "model": "deepseek-chat",
+      "is_public": false,
+      "created_at": "2025-10-22",
+      "dimensions": {
+        "role_block": true,
+        "output_format": true,
+        "constraints": true,
+        "json_schema": true,
+        "examples": true,
+        "failure_modes": true,
+        "verification": true,
+        "xml_depth": true,
+        "phased_approach": true,
+        "hard_rules": true
+      },
+      "missing_dimensions": [],
+      "is_delete_candidate": false,
+      "issues": []
+    },
+    {
+      "rank": 3,
+      "name": "Documentation Generator",
+      "id": "agent-doc-gen-001",
+      "score": 8,
+      "status": "enterprise_quality",
+      "prompt_length": 5234,
+      "model": "claude-sonnet-4-6",
+      "is_public": true,
+      "created_at": "2025-12-01",
+      "dimensions": {
+        "role_block": true,
+        "output_format": true,
+        "constraints": true,
+        "json_schema": false,
+        "examples": true,
+        "failure_modes": true,
+        "verification": true,
+        "xml_depth": true,
+        "phased_approach": true,
+        "hard_rules": true
+      },
+      "missing_dimensions": ["json_schema"],
+      "is_delete_candidate": false,
+      "issues": []
+    },
+    {
+      "rank": 4,
+      "name": "Data Validation Agent",
+      "id": "agent-data-val-001",
+      "score": 7,
+      "status": "needs_improvement",
+      "prompt_length": 4156,
+      "model": "deepseek-chat",
+      "is_public": false,
+      "created_at": "2025-09-10",
+      "dimensions": {
+        "role_block": true,
+        "output_format": true,
+        "constraints": true,
+        "json_schema": true,
+        "examples": true,
+        "failure_modes": false,
+        "verification": true,
+        "xml_depth": true,
+        "phased_approach": true,
+        "hard_rules": true
+      },
+      "missing_dimensions": ["failure_modes"],
+      "is_delete_candidate": false,
+      "issues": []
+    },
+    {
+      "rank": 5,
+      "name": "API Spec Generator",
+      "id": "agent-api-spec-001",
+      "score": 7,
+      "status": "needs_improvement",
+      "prompt_length": 4823,
+      "model": "gpt-4o",
+      "is_public": true,
+      "created_at": "2025-11-03",
+      "dimensions": {
+        "role_block": true,
+        "output_format": false,
+        "constraints": true,
+        "json_schema": true,
+        "examples": true,
+        "failure_modes": true,
+        "verification": false,
+        "xml_depth": true,
+        "phased_approach": true,
+        "hard_rules": true
+      },
+      "missing_dimensions": ["output_format", "verification"],
+      "is_delete_candidate": false,
+      "issues": []
+    },
+    {
+      "rank": 6,
+      "name": "Test Generator",
+      "id": "agent-test-gen-001",
+      "score": 6,
+      "status": "needs_improvement",
+      "prompt_length": 3892,
+      "model": "deepseek-chat",
+      "is_public": false,
+      "created_at": "2025-08-20",
+      "dimensions": {
+        "role_block": true,
+        "output_format": true,
+        "constraints": true,
+        "json_schema": false,
+        "examples": true,
+        "failure_modes": false,
+        "verification": false,
+        "xml_depth": true,
+        "phased_approach": true,
+        "hard_rules": false
+      },
+      "missing_dimensions": ["json_schema", "failure_modes", "verification", "hard_rules"],
+      "is_delete_candidate": false,
+      "issues": ["Prompt too short (3892 chars, min 4000)"]
+    },
+    {
+      "rank": 7,
+      "name": "Bug Analyzer",
+      "id": "agent-bug-analyzer-001",
+      "score": 6,
+      "status": "needs_improvement",
+      "prompt_length": 3756,
+      "model": "claude-sonnet-4-6",
+      "is_public": false,
+      "created_at": "2025-07-15",
+      "dimensions": {
+        "role_block": true,
+        "output_format": false,
+        "constraints": true,
+        "json_schema": false,
+        "examples": true,
+        "failure_modes": false,
+        "verification": true,
+        "xml_depth": false,
+        "phased_approach": true,
+        "hard_rules": true
+      },
+      "missing_dimensions": ["output_format", "json_schema", "failure_modes", "xml_depth"],
+      "is_delete_candidate": false,
+      "issues": ["Prompt too short (3756 chars, min 4000)"]
+    },
+    {
+      "rank": 8,
+      "name": "Refactor Suggestions Agent",
+      "id": "agent-refactor-sugg-001",
+      "score": 6,
+      "status": "needs_improvement",
+      "prompt_length": 4012,
+      "model": "deepseek-chat",
+      "is_public": true,
+      "created_at": "2025-06-08",
+      "dimensions": {
+        "role_block": true,
+        "output_format": false,
+        "constraints": true,
+        "json_schema": true,
+        "examples": false,
+        "failure_modes": true,
+        "verification": false,
+        "xml_depth": true,
+        "phased_approach": true,
+        "hard_rules": true
+      },
+      "missing_dimensions": ["output_format", "examples", "verification"],
+      "is_delete_candidate": false,
+      "issues": []
+    },
+    {
+      "rank": 9,
+      "name": "Performance Profiler",
+      "id": "agent-perf-prof-001",
+      "score": 5,
+      "status": "critical_gap",
+      "prompt_length": 2834,
+      "model": "gpt-4o",
+      "is_public": false,
+      "created_at": "2025-05-12",
+      "dimensions": {
+        "role_block": true,
+        "output_format": false,
+        "constraints": false,
+        "json_schema": true,
+        "examples": false,
+        "failure_modes": false,
+        "verification": false,
+        "xml_depth": false,
+        "phased_approach": true,
+        "hard_rules": true
+      },
+      "missing_dimensions": ["output_format", "constraints", "examples", "failure_modes", "verification", "xml_depth"],
+      "is_delete_candidate": false,
+      "issues": ["Prompt too short (2834 chars, min 4000)"]
+    },
+    {
+      "rank": 10,
+      "name": "Architecture Advisor",
+      "id": "agent-arch-advisor-001",
+      "score": 4,
+      "status": "critical_gap",
+      "prompt_length": 1950,
+      "model": "deepseek-chat",
+      "is_public": false,
+      "created_at": "2025-04-05",
+      "dimensions": {
+        "role_block": false,
+        "output_format": false,
+        "constraints": false,
+        "json_schema": false,
+        "examples": true,
+        "failure_modes": false,
+        "verification": false,
+        "xml_depth": false,
+        "phased_approach": true,
+        "hard_rules": false
+      },
+      "missing_dimensions": ["role_block", "output_format", "constraints", "json_schema", "failure_modes", "verification", "xml_depth", "hard_rules"],
+      "is_delete_candidate": false,
+      "issues": ["Prompt too short (1950 chars, min 4000)"]
+    },
+    {
+      "rank": 11,
+      "name": "Deployment Helper",
+      "id": "agent-deploy-helper-001",
+      "score": 3,
+      "status": "critical_gap",
+      "prompt_length": 1234,
+      "model": "gpt-4o",
+      "is_public": true,
+      "created_at": "2025-03-15",
+      "dimensions": {
+        "role_block": false,
+        "output_format": true,
+        "constraints": false,
+        "json_schema": false,
+        "examples": false,
+        "failure_modes": false,
+        "verification": false,
+        "xml_depth": false,
+        "phased_approach": false,
+        "hard_rules": false
+      },
+      "missing_dimensions": ["role_block", "constraints", "json_schema", "examples", "failure_modes", "verification", "xml_depth", "phased_approach", "hard_rules"],
+      "is_delete_candidate": false,
+      "issues": ["Prompt too short (1234 chars, min 4000)"]
+    },
+    {
+      "rank": 12,
+      "name": "Generic Helper",
+      "id": "agent-generic-001",
+      "score": 0,
+      "status": "delete_candidate",
+      "prompt_length": 45,
+      "model": "deepseek-chat",
+      "is_public": false,
+      "created_at": "2025-02-01",
+      "dimensions": {
+        "role_block": false,
+        "output_format": false,
+        "constraints": false,
+        "json_schema": false,
+        "examples": false,
+        "failure_modes": false,
+        "verification": false,
+        "xml_depth": false,
+        "phased_approach": false,
+        "hard_rules": false
+      },
+      "missing_dimensions": ["role_block", "output_format", "constraints", "json_schema", "examples", "failure_modes", "verification", "xml_depth", "phased_approach", "hard_rules"],
+      "is_delete_candidate": true,
+      "issues": ["Prompt too short (45 chars, min 4000)"]
+    }
+  ],
+  "improvement_opportunities": {
+    "most_common_missing_dimensions": [
+      {
+        "dimension": "failure_modes",
+        "missing_in_count": 5,
+        "percentage": 41.7,
+        "impact": "Causes cascading failures in multi-agent pipelines"
+      },
+      {
+        "dimension": "output_format",
+        "missing_in_count": 4,
+        "percentage": 33.3,
+        "impact": "Breaks downstream agents that depend on structured output"
+      },
+      {
+        "dimension": "json_schema",
+        "missing_in_count": 4,
+        "percentage": 33.3,
+        "impact": "Reduces output reliability by 40-60%"
+      },
+      {
+        "dimension": "verification",
+        "missing_in_count": 4,
+        "percentage": 33.3,
+        "impact": "No automated way to check if output is correct"
+      },
+      {
+        "dimension": "hard_rules",
+        "missing_in_count": 4,
+        "percentage": 33.3,
+        "impact": "Non-negotiable constraints not enforced"
+      }
+    ],
+    "highest_impact_fixes": [
+      {
+        "agent_name": "Generic Helper",
+        "agent_id": "agent-generic-001",
+        "recommendation": "DELETE",
+        "reason": "45 characters is below any meaningful prompt. Not a real agent.",
+        "effort": "immediate",
+        "impact_score": 10
+      },
+      {
+        "agent_name": "Deployment Helper",
+        "agent_id": "agent-deploy-helper-001",
+        "recommendation": "CRITICAL REWRITE",
+        "reason": "9/10 dimensions missing. Only has output_format.",
+        "effort": "high",
+        "impact_score": 9,
+        "add_sections": ["<role>", "<constraints>", "<json_schema>", "<examples>", "<failure_modes>", "<verification>", "phased_approach", "hard_rules"]
+      },
+      {
+        "agent_name": "Architecture Advisor",
+        "agent_id": "agent-arch-advisor-001",
+        "recommendation": "CRITICAL REWRITE",
+        "reason": "8/10 dimensions missing. Only has examples and phased_approach.",
+        "effort": "high",
+        "impact_score": 8,
+        "add_sections": ["<role>", "<output_format>", "<constraints>", "<json_schema>", "<failure_modes>", "<verification>", "xml_depth", "hard_rules"]
+      },
+      {
+        "agent_name": "Performance Profiler",
+        "agent_id": "agent-perf-prof-001",
+        "recommendation": "MAJOR IMPROVEMENTS",
+        "reason": "6/10 dimensions missing. Below 4000 char minimum.",
+        "effort": "high",
+        "impact_score": 7,
+        "add_sections": ["<output_format>", "<constraints>", "<examples>", "<failure_modes>", "<verification>", "xml_depth"]
+      }
+    ]
+  },
+  "model_distribution": {
+    "claude-sonnet-4-6": {
+      "count": 3,
+      "average_score": 7.7,
+      "agents": ["Code Review Agent", "Documentation Generator", "Bug Analyzer"]
+    },
+    "deepseek-chat": {
+      "count": 5,
+      "average_score": 6.4,
+      "agents": ["Security Analyzer", "Data Validation Agent", "Test Generator", "Refactor Suggestions Agent", "Architecture Advisor"]
+    },
+    "gpt-4o": {
+      "count": 4,
+      "average_score": 6.25,
+      "agents": ["API Spec Generator", "Performance Profiler", "Deployment Helper", "Generic Helper"]
+    }
+  },
+  "recommendations": {
+    "immediate_actions": [
+      "Delete 1 agent (Generic Helper — 45 char prompt)",
+      "Critical rewrites for 3 agents (score <5/10)",
+      "Targeted improvements for 5 agents (score 6-7/10)"
+    ],
+    "timeline": {
+      "phase_1_delete": "immediate",
+      "phase_2_critical_rewrites": "within 1 week",
+      "phase_3_improvements": "within 2 weeks",
+      "phase_4_reaudit": "after improvements complete"
+    },
+    "quality_gates": [
+      "No agents below 8/10 can be deployed to production",
+      "All agents must have ≥4000 character prompts",
+      "All agents must have output_format and failure_modes sections",
+      "Critical agents (pipeline blocking) must have json_schema and verification sections"
+    ]
+  }
+}

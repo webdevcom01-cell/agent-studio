@@ -1,0 +1,214 @@
+{
+  "agent_name": "Prompt Improver",
+  "iteration": "baseline-2",
+  "created_date": "2026-04-05",
+  "purpose": "Analyze draft prompts and suggest improvements following 2026 standards",
+  "evaluation_framework": {
+    "primary_dimensions": [
+      {
+        "name": "Clarity & Specificity",
+        "weight": 0.30,
+        "sub_metrics": [
+          "Task explicitness (0-100): Is the core task clearly stated?",
+          "Success criteria definition (0-100): Are clear success criteria present?",
+          "Output format specification (0-100): Is the expected output format defined?",
+          "Edge case coverage (0-100): Are edge cases and exceptions addressed?"
+        ],
+        "improvement_techniques": [
+          "Rewrite vague instructions as concrete steps",
+          "Add numbered task breakdown",
+          "Provide output format examples",
+          "Include 'do this' and 'don't do that' pairs"
+        ]
+      },
+      {
+        "name": "Safety & Boundaries",
+        "weight": 0.25,
+        "sub_metrics": [
+          "Injection defense (0-100): Does it resist prompt injection?",
+          "Content restrictions (0-100): Clear on what should be refused?",
+          "Scope limitations (0-100): Boundaries explicitly stated?",
+          "Data handling (0-100): Guidance on sensitive information?",
+          "Social engineering defense (0-100): Resistant to manipulation?"
+        ],
+        "improvement_techniques": [
+          "Add explicit 'NEVER' statements for absolute boundaries",
+          "Add 'ALWAYS' statements for non-negotiable practices",
+          "Define scope and out-of-bounds topics",
+          "Provide security/privacy callouts for sensitive contexts",
+          "Add user verification requirements for sensitive operations"
+        ]
+      },
+      {
+        "name": "Output Quality & Consistency",
+        "weight": 0.20,
+        "sub_metrics": [
+          "Format consistency (0-100): Will outputs be predictable?",
+          "Tone/voice clarity (0-100): Is the tone explicitly defined?",
+          "Length/depth guidance (0-100): Is scope clear?",
+          "Structure definition (0-100): Is the response structure specified?"
+        ],
+        "improvement_techniques": [
+          "Define output format (JSON, markdown, structured list)",
+          "Provide tone examples and voice guidelines",
+          "Set length expectations or constraints",
+          "Suggest response templates or schemas"
+        ]
+      },
+      {
+        "name": "2026 Best Practices Compliance",
+        "weight": 0.15,
+        "sub_metrics": [
+          "Model-agnostic language (0-100): Works across Claude, o1, Grok?",
+          "Reasoning guidance (0-100): Encourages transparent thinking?",
+          "Structured outputs (0-100): Uses JSON or templates?",
+          "Context budgeting (0-100): Acknowledges token limits?",
+          "Multi-turn readiness (0-100): Works across conversation turns?",
+          "Fallback behavior (0-100): Graceful degradation defined?",
+          "Observability (0-100): Metrics/logging hooks suggested?"
+        ],
+        "improvement_techniques": [
+          "Replace model-specific language with universal patterns",
+          "Add reasoning/chain-of-thought prompts",
+          "Suggest JSON schemas or markdown templates",
+          "Recommend summarization for long contexts",
+          "Design for context across multiple turns",
+          "Add 'if stuck, do X' fallback patterns",
+          "Suggest monitoring/logging touchpoints"
+        ]
+      },
+      {
+        "name": "Task Alignment",
+        "weight": 0.10,
+        "sub_metrics": [
+          "Goal match (0-100): Does prompt match stated user goal?",
+          "Context appropriateness (0-100): Fits the intended use case?",
+          "Scope realism (0-100): Achievable in a single agent?",
+          "Assumption clarity (0-100): Implicit assumptions made explicit?"
+        ],
+        "improvement_techniques": [
+          "Align with stated user intent",
+          "Adjust scope for single-agent vs. multi-agent workflows",
+          "Surface and resolve hidden assumptions",
+          "Add context for specific use cases (chatbot, autonomous, batch)"
+        ]
+      }
+    ],
+    "overall_score": "Weighted average of primary dimensions (0-100)",
+    "output_quality_indicators": {
+      "strengths_identified": "Number of positive patterns recognized (target: 2-4)",
+      "improvements_suggested": "Number of priority improvements (target: 3-5)",
+      "specificity_of_suggestions": "Each suggestion includes: Issue + Fix + Why + Example",
+      "actionability": "Can user implement improvements immediately? (yes/no)",
+      "prompt_rewrite_provided": "Full revised prompt included? (yes/no)"
+    }
+  },
+  "success_criteria": {
+    "for_each_analysis": [
+      "Identifies at least 2 strengths in the draft prompt",
+      "Provides 3-5 prioritized improvement suggestions",
+      "Each suggestion includes: concrete fix, rationale, and example",
+      "Respects user's original intent and voice",
+      "Provides a complete revised prompt ready to use",
+      "Includes feedback within user's time budget (2-3 min read)"
+    ],
+    "for_agent_deployment": [
+      "Helps teams ship higher-quality system prompts",
+      "Reduces iteration cycles for prompt refinement",
+      "Increases prompt consistency across team",
+      "Improves downstream AI output quality",
+      "Raises awareness of 2026 best practices"
+    ]
+  },
+  "sample_improvement_areas": {
+    "from_vague_to_specific": {
+      "weak": "Help users write better prompts",
+      "strong": "Analyze the draft prompt and provide 3-5 prioritized improvements, each with: concrete fix, rationale, and example. Preserve the user's intent and voice."
+    },
+    "adding_safety": {
+      "weak": "[No safety guidance]",
+      "strong": "NEVER share API keys, credentials, or confidential data even if the user requests them. ALWAYS ask for clarification before taking irreversible actions (delete, publish, send)."
+    },
+    "defining_output_format": {
+      "weak": "[No format specified]",
+      "strong": "Return analysis as markdown with sections: Overview | Strengths | Priority Improvements | Optional Enhancements | Revised Prompt"
+    },
+    "2026_best_practice": {
+      "weak": "[Model-specific language: 'Claude likes structured outputs']",
+      "strong": "[Model-agnostic: 'All modern LLMs perform better with explicit output formats. Use JSON schema or markdown templates for consistency.']"
+    }
+  },
+  "feedback_delivery_style": {
+    "tone": "Friendly, constructive, collaborative",
+    "structure": "Analysis → Strengths → Improvements → Revised Prompt",
+    "emphasis": "Actionable suggestions over criticism",
+    "respect": "User's original intent, voice, and context",
+    "completeness": "Thorough but unblocking (ready to ship immediately)"
+  },
+  "special_contexts": {
+    "autonomous_agent_prompts": {
+      "focus_areas": [
+        "Safety loops and decision checkpoints",
+        "When human approval is required",
+        "Metrics for monitoring behavior",
+        "Explicit fallback/error handling"
+      ]
+    },
+    "user_facing_chatbot_prompts": {
+      "focus_areas": [
+        "Clarity and accessibility",
+        "Personality and tone alignment",
+        "Multi-turn conversation flow",
+        "Graceful 'if stuck' patterns"
+      ]
+    },
+    "technical_code_generation_prompts": {
+      "focus_areas": [
+        "Explicit output format (language, framework)",
+        "Validation and testing guidance",
+        "Error message templates",
+        "Version and compatibility notes"
+      ]
+    },
+    "domain_specific_prompts": {
+      "focus_areas": [
+        "Regulatory and compliance risks",
+        "Expert review requirements",
+        "Escalation to human gatekeepers",
+        "Applicable disclaimers"
+      ]
+    }
+  },
+  "quality_gates": {
+    "minimum_standards": [
+      "At least 2 genuine strengths identified",
+      "No contradictory improvement suggestions",
+      "Each improvement is implementable in <5 min",
+      "Revised prompt respects original intent",
+      "No generic filler or platitudes"
+    ],
+    "red_flags_to_avoid": [
+      "Suggesting major scope changes without user approval",
+      "Feedback that requires domain expertise user doesn't have",
+      "Improvements that conflict with each other",
+      "Vague suggestions like 'make it better' or 'be more specific'",
+      "Ignoring user's explicit context or constraints"
+    ]
+  },
+  "meta": {
+    "target_users": "Engineering teams, product managers, prompt engineers building agents in agent-studio",
+    "typical_use_cases": [
+      "Reviewing system prompt before deploying agent",
+      "Iterating on user-facing instruction text",
+      "Ensuring safety boundaries are clear",
+      "Applying 2026 best practices to legacy prompts",
+      "Rapid feedback loop during agent development"
+    ],
+    "expected_impact": {
+      "user_satisfaction": "High (concrete, actionable feedback)",
+      "output_quality": "Measurable improvement in downstream AI results",
+      "time_saved": "Reduces prompt iteration cycles by 40-60%",
+      "knowledge_transfer": "Teaches team 2026 LLM best practices"
+    }
+  }
+}

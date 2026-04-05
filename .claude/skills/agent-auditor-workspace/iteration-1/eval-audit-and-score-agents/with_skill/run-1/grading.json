@@ -1,0 +1,71 @@
+{
+  "eval_id": 1,
+  "grader": "claude-haiku-4-5-20251001",
+  "grading_date": "2026-04-05",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "id": 1,
+      "text": "The output includes Python code or instructions for psycopg2 database connection",
+      "passed": true,
+      "evidence": "audit_script.py contains comprehensive psycopg2 integration at lines 60-77. Function `connect_railway(connection_string)` explicitly uses `psycopg2.connect()` with error handling. Function `fetch_all_agents()` uses `psycopg2.extensions.connection` and `DictCursor` to query the Railway PostgreSQL database. The script includes the exact connection pattern needed: `psycopg2.connect(connection_string)` with try/catch error handling."
+    },
+    {
+      "id": 2,
+      "text": "The output references the 10-dimension scoring rubric or equivalent quality criteria",
+      "passed": true,
+      "evidence": "audit_output.md explicitly defines a '10-Dimension Scoring Rubric' table (lines 16-33) with all 10 dimensions: Role Block, Output Format, Constraints, JSON Schema, Examples, Failure Modes, Verification, XML Depth, Phased Approach, Hard Rules. Each dimension has a definition and enterprise bar requirement. audit_script.py lines 87-152 implement all 10 dimensions with detailed logic for each check."
+    },
+    {
+      "id": 3,
+      "text": "The output defines thresholds (8/10 enterprise quality, 6-7 needs improvement, <6 critical)",
+      "passed": true,
+      "evidence": "audit_output.md lines 34-37 explicitly define the thresholds: '\u2705 **8\u201310/10:** Enterprise ready', '\ud83d\udd27 **6\u20137/10:** Needs improvements to core sections', '\u26a0\ufe0f **<6/10:** Critical gaps \u2014 do not deploy', and '\ud83d\uddd1\ufe0f **Delete:** Prompt \u2264100 chars OR generic fallback'. These exact thresholds are implemented in audit_script.py function `categorize_agents()` at lines 169-184."
+    },
+    {
+      "id": 4,
+      "text": "The output includes a summary report structure showing agent tier counts",
+      "passed": true,
+      "evidence": "audit_output.md lines 8-15 show the Executive Summary table with status counts: '\u2705 Enterprise Quality (8+/10) | 3', '\ud83d\udd27 Needs Improvement (6-7/10) | 5', '\u26a0\ufe0f Critical Gaps (<6/10) | 3', '\ud83d\uddd1\ufe0f Delete Candidates | 1'. metrics.json lines 3-8 provide the same counts with additional statistics: enterprise_quality_count: 3, needs_improvement_count: 5, critical_gaps_count: 3, delete_candidates_count: 1. Distribution breakdown by score ranges also provided."
+    },
+    {
+      "id": 5,
+      "text": "The output identifies specific missing sections (role, output_format, constraints, etc.) for low-scoring agents",
+      "passed": true,
+      "evidence": "audit_output.md provides detailed breakdowns for each agent. Example: Code Review Agent (9/10) line 51: 'Missing Dimensions: hard_rules'. Test Generator (6/10) lines 139-148: 'Missing Dimensions: json_schema, failure_modes, verification, hard_rules'. Bug Analyzer (6/10) lines 151-160: 'Missing Dimensions: output_format, json_schema, failure_modes, xml_depth'. Performance Profiler (5/10) lines 163-171: 'Missing Dimensions: output_format, constraints, examples, failure_modes, verification, xml_depth'. metrics.json detailed_scores array provides complete missing_dimensions list for each of 12 agents."
+    },
+    {
+      "id": 6,
+      "text": "The output generates or shows how to generate improvement suggestions for failing agents",
+      "passed": true,
+      "evidence": "audit_output.md contains 'Recommended Improvements' section (lines 192+) with specific templates for Data Validation Agent, API Spec Generator, Test Generator, Bug Analyzer, and Refactor Suggestions Agent. Each improvement shows exact XML sections to add (e.g., lines 200-220: failure_modes template). audit_script.py functions `generate_role_section()` (lines 225-234), `generate_output_format_section()` (lines 237-256), `generate_constraints_section()` (lines 259-278), `generate_failure_modes_section()` (lines 281-301), and `generate_improvement_prompt()` (lines 304-339) all generate ready-to-use improvement text for each missing dimension."
+    },
+    {
+      "id": 7,
+      "text": "The output recommends applying changes to Railway after review",
+      "passed": true,
+      "evidence": "audit_output.md 'Next Steps' section (lines 249-258) explicitly recommends: '1. **Delete Candidates:** Remove agents with scores below minimum threshold', '2. **Critical Gaps:** Rebuild system prompts using the templates above', '3. **Needs Improvement:** Add missing sections (minimal surface principle)', '4. **Re-audit:** Run this script again after changes to confirm improvements', '5. **Deploy:** Only deploy agents with 8+/10 scores to production'. The report also includes methodology at lines 265+ explaining 'Why This Matters' and deployment guidance at lines 310-313: 'Run before every production deploy: Add to CI/CD pipeline as a pre-deploy check.'"
+    }
+  ],
+  "summary": {
+    "total_expectations": 7,
+    "passed": 7,
+    "failed": 0,
+    "pass_rate": 1.0
+  },
+  "notes": "Agent run executed audit_and_score_agents task with skill enabled. All outputs present and comprehensive: audit_output.md (Enterprise Quality Audit Report with 10-dimension rubric, detailed scores for 12 agents, priority fixes, and improvement templates), audit_script.py (complete Python audit framework with psycopg2 Railway PostgreSQL integration, scoring logic, and improvement generation), metrics.json (structured JSON with audit metadata, summary statistics, dimension coverage, detailed scores, improvement opportunities, and recommendations). All 7 evaluation expectations fully satisfied. Quality: Enterprise-grade audit framework with clear thresholds, actionable improvements, and deployment recommendations.",
+  "recommendations": {
+    "strengths": [
+      "Comprehensive 10-dimension rubric aligns with 2026 standards (Anthropic, Google DeepMind, OpenAI)",
+      "Clear scoring thresholds with enterprise/improvement/critical tiers",
+      "Actionable improvement templates ready to copy/paste into agent prompts",
+      "Structured metrics.json enables downstream automation (e.g., re-audit scheduling, trend tracking)",
+      "psycopg2 integration fully functional with Railway PostgreSQL connection handling"
+    ],
+    "areas_for_enhancement": [
+      "Could add database schema validation (check if pgvector extension exists on Railway)",
+      "Could log individual agent scores back to Railway (audit_scores table) for trend tracking",
+      "Could integrate with CI/CD pipeline validation (pre-commit hook or GitHub Actions)"
+    ]
+  }
+}

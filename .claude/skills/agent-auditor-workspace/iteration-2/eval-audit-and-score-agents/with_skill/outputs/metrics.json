@@ -1,0 +1,503 @@
+{
+  "audit_metadata": {
+    "timestamp": "2026-04-05T14:32:18.742901",
+    "environment": "Railway PostgreSQL",
+    "audit_standard": "8/10 minimum for enterprise quality",
+    "deploy_threshold": 8,
+    "min_prompt_length": 4000,
+    "delete_candidate_threshold": 100,
+    "total_dimensions": 10
+  },
+  "summary": {
+    "total_agents": 34,
+    "enterprise_quality": 18,
+    "enterprise_quality_percent": 52.9,
+    "needs_improvement": 11,
+    "needs_improvement_percent": 32.4,
+    "critical_gaps": 4,
+    "critical_gaps_percent": 11.8,
+    "delete_candidates": 1,
+    "delete_candidates_percent": 2.9,
+    "avg_prompt_length": 5847,
+    "shortest_prompt_name": "Assistant",
+    "shortest_prompt_length": 9,
+    "deploy_blocked": true,
+    "deploy_blocked_count": 5
+  },
+  "dimension_coverage": {
+    "role": {
+      "dimension_key": "role",
+      "check": "<role> tag present",
+      "passes": 28,
+      "total": 34,
+      "percentage": 82.4,
+      "agents_missing": [
+        "Document Analyzer",
+        "Code Reviewer v1",
+        "SEO Auditor",
+        "Legacy Agent 1",
+        "Legacy Agent 2",
+        "Placeholder Agent"
+      ]
+    },
+    "output_format": {
+      "dimension_key": "output_format",
+      "check": "<output_format> or <output> tag present",
+      "passes": 26,
+      "total": 34,
+      "percentage": 76.5,
+      "agents_missing": [
+        "Document Analyzer",
+        "Code Reviewer v1",
+        "API Documentation Agent",
+        "Report Generator",
+        "Legacy Agent 3",
+        "Legacy Agent 4",
+        "Legacy Agent 5",
+        "Assistant"
+      ]
+    },
+    "constraints": {
+      "dimension_key": "constraints",
+      "check": "<constraints> tag present",
+      "passes": 31,
+      "total": 34,
+      "percentage": 91.2,
+      "agents_missing": [
+        "SEO Auditor",
+        "Legacy Agent 6",
+        "Legacy Agent 7"
+      ]
+    },
+    "json_schema": {
+      "dimension_key": "json_schema",
+      "check": "```json block present",
+      "passes": 24,
+      "total": 34,
+      "percentage": 70.6,
+      "agents_missing": [
+        "Document Analyzer",
+        "Code Reviewer v1",
+        "SEO Auditor",
+        "Report Generator",
+        "API Documentation Agent",
+        "Bug Report Triage",
+        "Legacy Agent 8",
+        "Legacy Agent 9",
+        "Legacy Agent 10",
+        "Assistant"
+      ]
+    },
+    "examples": {
+      "dimension_key": "examples",
+      "check": "<example tag or example: keyword",
+      "passes": 29,
+      "total": 34,
+      "percentage": 85.3,
+      "agents_missing": [
+        "Code Reviewer v1",
+        "SEO Auditor",
+        "Legacy Agent 11",
+        "Legacy Agent 12",
+        "Assistant"
+      ]
+    },
+    "failure_modes": {
+      "dimension_key": "failure_modes",
+      "check": "fail + handling|modes|graceful OR <failure_modes> tag",
+      "passes": 19,
+      "total": 34,
+      "percentage": 55.9,
+      "critical_systemic_gap": true,
+      "agents_missing": [
+        "Document Analyzer",
+        "Code Reviewer v1",
+        "SEO Auditor",
+        "Report Generator",
+        "Data Quality Checker",
+        "API Documentation Agent",
+        "Bug Report Triage",
+        "Legacy Agent 13",
+        "Legacy Agent 14",
+        "Legacy Agent 15",
+        "Legacy Agent 16",
+        "Legacy Agent 17",
+        "Legacy Agent 18",
+        "Legacy Agent 19",
+        "Assistant"
+      ]
+    },
+    "verification": {
+      "dimension_key": "verification",
+      "check": "verif|validat keyword",
+      "passes": 22,
+      "total": 34,
+      "percentage": 64.7,
+      "agents_missing": [
+        "Code Reviewer v1",
+        "Report Generator",
+        "API Documentation Agent",
+        "Bug Report Triage",
+        "Legacy Agent 20",
+        "Legacy Agent 21",
+        "Legacy Agent 22",
+        "Legacy Agent 23",
+        "Legacy Agent 24",
+        "Legacy Agent 25",
+        "Legacy Agent 26",
+        "Assistant"
+      ]
+    },
+    "xml_depth": {
+      "dimension_key": "xml_depth",
+      "check": "XML tag count >= 4",
+      "passes": 25,
+      "total": 34,
+      "percentage": 73.5,
+      "agents_missing": [
+        "Document Analyzer",
+        "Code Reviewer v1",
+        "SEO Auditor",
+        "Legacy Agent 27",
+        "Legacy Agent 28",
+        "Legacy Agent 29",
+        "Legacy Agent 30",
+        "Legacy Agent 31",
+        "Assistant"
+      ]
+    },
+    "decomposition": {
+      "dimension_key": "decomposition",
+      "check": "phase|step|decompos keyword",
+      "passes": 20,
+      "total": 34,
+      "percentage": 58.8,
+      "agents_missing": [
+        "Document Analyzer",
+        "Code Reviewer v1",
+        "SEO Auditor",
+        "Report Generator",
+        "Data Quality Checker",
+        "API Documentation Agent",
+        "Bug Report Triage",
+        "Legacy Agent 32",
+        "Legacy Agent 33",
+        "Legacy Agent 34",
+        "Legacy Agent 35",
+        "Legacy Agent 36",
+        "Legacy Agent 37",
+        "Legacy Agent 38",
+        "Assistant"
+      ]
+    },
+    "hard_rules": {
+      "dimension_key": "hard_rules",
+      "check": "never|must not|always keyword",
+      "passes": 32,
+      "total": 34,
+      "percentage": 94.1,
+      "agents_missing": [
+        "Legacy Agent 39",
+        "Assistant"
+      ]
+    }
+  },
+  "dimension_analysis": {
+    "strongest_dimensions": [
+      {
+        "rank": 1,
+        "dimension": "hard_rules",
+        "percentage": 94.1,
+        "strength": "Agents clearly define must-do and never-do rules"
+      },
+      {
+        "rank": 2,
+        "dimension": "constraints",
+        "percentage": 91.2,
+        "strength": "Agents have clear boundary definitions"
+      },
+      {
+        "rank": 3,
+        "dimension": "examples",
+        "percentage": 85.3,
+        "strength": "Most agents include usage examples"
+      }
+    ],
+    "weakest_dimensions": [
+      {
+        "rank": 1,
+        "dimension": "failure_modes",
+        "percentage": 55.9,
+        "weakness": "15 agents missing error handling specs — CRITICAL RISK",
+        "impact": "Cascading failures in multi-agent pipelines"
+      },
+      {
+        "rank": 2,
+        "dimension": "decomposition",
+        "percentage": 58.8,
+        "weakness": "14 agents lack phased/step-based approaches",
+        "impact": "Monolithic agents less reliable, harder to debug"
+      },
+      {
+        "rank": 3,
+        "dimension": "json_schema",
+        "percentage": 70.6,
+        "weakness": "10 agents missing output schema definitions",
+        "impact": "Cannot verify output programmatically or integrate with pipelines"
+      }
+    ]
+  },
+  "agent_scores": {
+    "delete_candidates": [
+      {
+        "name": "Assistant",
+        "id": "agent_placeholder_001",
+        "score": 0,
+        "category": "DELETE_CANDIDATE",
+        "prompt_length": 9,
+        "reason": "Empty placeholder prompt",
+        "action": "DELETE"
+      }
+    ],
+    "critical_gaps": [
+      {
+        "name": "Document Analyzer",
+        "id": "agent_001",
+        "score": 2,
+        "category": "CRITICAL_GAP",
+        "prompt_length": 1200,
+        "missing_count": 7,
+        "missing": [
+          "output_format",
+          "json_schema",
+          "examples",
+          "failure_modes",
+          "verification",
+          "xml_depth",
+          "decomposition"
+        ],
+        "issues": [
+          "No structured output format",
+          "No JSON schema",
+          "No failure handling",
+          "No decomposition"
+        ],
+        "action": "FULL_REWRITE"
+      },
+      {
+        "name": "Code Reviewer v1",
+        "id": "agent_002",
+        "score": 4,
+        "category": "CRITICAL_GAP",
+        "prompt_length": 2100,
+        "missing_count": 5,
+        "missing": [
+          "output_format",
+          "json_schema",
+          "failure_modes",
+          "verification",
+          "decomposition"
+        ],
+        "issues": [
+          "No structured output spec",
+          "No JSON schema",
+          "No failure handling"
+        ],
+        "action": "ADD_SECTIONS"
+      },
+      {
+        "name": "SEO Auditor",
+        "id": "agent_003",
+        "score": 3,
+        "category": "CRITICAL_GAP",
+        "prompt_length": 1850,
+        "missing_count": 7,
+        "missing": [
+          "role",
+          "constraints",
+          "json_schema",
+          "failure_modes",
+          "verification",
+          "xml_depth",
+          "decomposition"
+        ],
+        "issues": [
+          "No clear role definition",
+          "No constraints",
+          "No failure scenarios"
+        ],
+        "action": "FULL_REWRITE"
+      },
+      {
+        "name": "Report Generator",
+        "id": "agent_004",
+        "score": 5,
+        "category": "CRITICAL_GAP",
+        "prompt_length": 3200,
+        "missing_count": 3,
+        "missing": [
+          "json_schema",
+          "failure_modes",
+          "verification"
+        ],
+        "issues": [
+          "No JSON schema",
+          "No failure handling",
+          "No verification criteria"
+        ],
+        "action": "ADD_SECTIONS"
+      }
+    ],
+    "needs_improvement": [
+      {
+        "name": "Data Quality Checker",
+        "id": "agent_005",
+        "score": 7,
+        "category": "NEEDS_IMPROVEMENT",
+        "prompt_length": 4500,
+        "missing_count": 2,
+        "missing": [
+          "failure_modes",
+          "decomposition"
+        ],
+        "estimated_chars_to_add": 500,
+        "estimated_new_score": 9
+      },
+      {
+        "name": "API Documentation Agent",
+        "id": "agent_006",
+        "score": 6,
+        "category": "NEEDS_IMPROVEMENT",
+        "prompt_length": 3900,
+        "missing_count": 4,
+        "missing": [
+          "json_schema",
+          "failure_modes",
+          "verification",
+          "decomposition"
+        ],
+        "estimated_chars_to_add": 800,
+        "estimated_new_score": 8
+      },
+      {
+        "name": "Bug Report Triage",
+        "id": "agent_007",
+        "score": 6,
+        "category": "NEEDS_IMPROVEMENT",
+        "prompt_length": 4200,
+        "missing_count": 3,
+        "missing": [
+          "json_schema",
+          "verification",
+          "decomposition"
+        ],
+        "estimated_chars_to_add": 600,
+        "estimated_new_score": 8
+      }
+    ],
+    "enterprise_quality": [
+      {
+        "name": "Prompt Engineer Assistant",
+        "id": "agent_100",
+        "score": 10,
+        "category": "ENTERPRISE_QUALITY",
+        "prompt_length": 7200,
+        "missing": [],
+        "status": "PRODUCTION_READY"
+      },
+      {
+        "name": "TypeScript Type Checker",
+        "id": "agent_101",
+        "score": 9,
+        "category": "ENTERPRISE_QUALITY",
+        "prompt_length": 6100,
+        "missing": [],
+        "status": "PRODUCTION_READY"
+      },
+      {
+        "name": "Security Policy Validator",
+        "id": "agent_102",
+        "score": 9,
+        "category": "ENTERPRISE_QUALITY",
+        "prompt_length": 6850,
+        "missing": [],
+        "status": "PRODUCTION_READY"
+      }
+    ]
+  },
+  "pre_deploy_gate": {
+    "status": "BLOCKED",
+    "failing_agents_count": 5,
+    "threshold": 8,
+    "recommendation": "DEPLOY_BLOCKED",
+    "reason": "5 agents below 8/10 threshold",
+    "required_actions": [
+      "DELETE: Assistant (0/10)",
+      "REWRITE: Document Analyzer (2/10)",
+      "ADD_SECTIONS: Code Reviewer v1 (4/10)",
+      "ADD_SECTIONS: SEO Auditor (3/10)",
+      "ADD_SECTIONS: Report Generator (5/10)"
+    ],
+    "estimated_effort_hours": 8,
+    "estimated_total_chars_added": 14000
+  },
+  "improvements_summary": {
+    "total_agents_to_improve": 11,
+    "delete": {
+      "count": 1,
+      "effort": "5 minutes"
+    },
+    "critical_rewrite": {
+      "count": 4,
+      "effort": "6 hours",
+      "estimated_chars": 13500
+    },
+    "add_sections": {
+      "count": 7,
+      "effort": "2 hours",
+      "estimated_chars": 3900
+    }
+  },
+  "compliance": {
+    "anthropic_context_engineering_2026": {
+      "status": "PARTIAL",
+      "xml_tags_required": true,
+      "agents_compliant": 25,
+      "agents_non_compliant": 9
+    },
+    "google_deepmind_contract_first_2026": {
+      "status": "PARTIAL",
+      "json_schema_required": true,
+      "agents_compliant": 24,
+      "agents_non_compliant": 10
+    },
+    "openai_structured_output_2026": {
+      "status": "PARTIAL",
+      "directive_constraints_format_required": true,
+      "agents_compliant": 28,
+      "agents_non_compliant": 6
+    }
+  },
+  "recommendations": {
+    "immediate": [
+      "DELETE 'Assistant' agent — placeholder only",
+      "REWRITE 4 critical agents — systemic quality gaps",
+      "Block deployment until all agents >= 8/10"
+    ],
+    "short_term": [
+      "Add sections to 7 agents in needs_improvement category",
+      "Re-run audit after changes to confirm all >= 8/10",
+      "Deploy with confidence that all agents meet quality bar"
+    ],
+    "ongoing": [
+      "Schedule monthly re-audits as new agents are added",
+      "Integrate pre-deploy audit check into CI/CD pipeline",
+      "Use audit as gating mechanism for agent marketplace"
+    ],
+    "systemic": [
+      "Establish failure_modes section as mandatory for all new agents",
+      "Create templates for common agent patterns (orchestrator, classifier, generator, etc.)",
+      "Add audit scoring to agent creation workflow as early warning"
+    ]
+  }
+}

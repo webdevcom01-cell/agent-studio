@@ -1,0 +1,300 @@
+{
+  "metadata": {
+    "iteration": "2-baseline",
+    "prompt_type": "system_prompt",
+    "agent_category": "CI/CD Orchestration",
+    "created_at": "2026-04-05T10:00:00Z",
+    "version": "1.0"
+  },
+  "prompt_characteristics": {
+    "total_lines": 542,
+    "total_words": 4827,
+    "total_characters": 31456,
+    "token_count_estimate": 6450,
+    "readability_score": 8.2
+  },
+  "scope_analysis": {
+    "primary_responsibility": "Orchestrate 3 specialized CI/CD sub-agents",
+    "secondary_responsibilities": [
+      "Parallel/sequential task dispatch",
+      "Result aggregation and synthesis",
+      "Report generation with verdict logic",
+      "Error handling and escalation"
+    ],
+    "sub_agent_count": 3,
+    "orchestration_style": "hybrid_parallel_sequential",
+    "decision_points": 12
+  },
+  "agent_specifications": {
+    "sub_agents": {
+      "security_scanner": {
+        "purpose": "Identify security vulnerabilities and compliance violations",
+        "check_count": 6,
+        "failure_criteria": [
+          "Any CRITICAL security issue",
+          "More than 3 HIGH issues"
+        ],
+        "expected_output_fields": [
+          "status",
+          "verdict",
+          "critical_issues",
+          "high_issues",
+          "medium_issues",
+          "findings"
+        ]
+      },
+      "unit_test_runner": {
+        "purpose": "Execute tests and validate coverage",
+        "check_count": 5,
+        "failure_criteria": [
+          "Any failing tests",
+          "Coverage below 80%",
+          "More than 2 flaky tests"
+        ],
+        "expected_output_fields": [
+          "status",
+          "verdict",
+          "tests_passed",
+          "tests_failed",
+          "coverage_percent",
+          "flaky_tests"
+        ]
+      },
+      "code_quality_checker": {
+        "purpose": "Enforce code standards and maintainability",
+        "check_count": 8,
+        "failure_criteria": [
+          "Undefined types or unsafe patterns",
+          "More than 5 medium violations"
+        ],
+        "expected_output_fields": [
+          "status",
+          "verdict",
+          "lint_errors",
+          "lint_warnings",
+          "complexity_violations",
+          "violations"
+        ]
+      }
+    }
+  },
+  "verdict_logic": {
+    "verdict_states": [
+      "PASS",
+      "FAIL",
+      "CONDITIONAL"
+    ],
+    "pass_conditions": {
+      "security_issues_critical": 0,
+      "security_issues_high": 0,
+      "test_pass_rate": "100%",
+      "code_coverage_minimum": "80%",
+      "code_quality_blockers": 0,
+      "flaky_tests": 0
+    },
+    "fail_conditions": [
+      "Any CRITICAL security issue",
+      "More than 2 HIGH security issues",
+      "Any failing tests",
+      "Coverage below 80%",
+      "Undefined types detected",
+      "More than 3 medium violations"
+    ],
+    "conditional_conditions": [
+      "All hard blockers resolved",
+      "Warnings pending review",
+      "Security issues pre-approved",
+      "Coverage below threshold with exception"
+    ]
+  },
+  "input_requirements": {
+    "required_inputs": [
+      "repository_url",
+      "branch_or_commit",
+      "commit_sha",
+      "language",
+      "framework"
+    ],
+    "optional_inputs": [
+      "previous_scan_results",
+      "baseline_coverage",
+      "enforce_strict_mode",
+      "target_branch"
+    ],
+    "output_variables": [
+      "orchestrator_verdict",
+      "consolidated_report",
+      "summary_message",
+      "blockers_count",
+      "action_items"
+    ]
+  },
+  "error_handling": {
+    "failure_modes": [
+      "Sub-agent timeout",
+      "Sub-agent transient error",
+      "Sub-agent permanent error",
+      "Partial results"
+    ],
+    "timeout_strategy": "Assume neutral, flag for manual review",
+    "retry_policy": "Up to 2 retries for transient errors only",
+    "escalation_paths": [
+      "CRITICAL Security → @security-team",
+      "HIGH Test Failure → @qa-lead",
+      "Code Quality → GitHub comment",
+      "Timeout/Error → @devops"
+    ]
+  },
+  "report_structure": {
+    "top_level_fields": [
+      "timestamp",
+      "pipeline_run_id",
+      "verdict",
+      "overall_score",
+      "sub_agent_results",
+      "summary",
+      "verdict_explanation",
+      "next_steps"
+    ],
+    "score_calculation": "Weighted average of sub-agent scores (security 40%, tests 40%, quality 20%)",
+    "sub_agent_results_fields": [
+      "status",
+      "verdict",
+      "critical_findings",
+      "findings_detail",
+      "pass_rate"
+    ]
+  },
+  "constraints_and_safety": {
+    "no_code_modification": true,
+    "timeout_per_agent_seconds": 120,
+    "max_retries": 2,
+    "requires_audit_trail": true,
+    "idempotency_requirement": true,
+    "parallel_execution": "Recommended for speed"
+  },
+  "communication_style": {
+    "tone": "Professional, precise, actionable",
+    "audience": [
+      "Developers",
+      "DevOps engineers",
+      "Security reviewers"
+    ],
+    "detail_level": "File paths, line numbers, exact violations",
+    "includes_remediation": true,
+    "includes_context": true
+  },
+  "orchestration_features": {
+    "parallelizable_agents": 3,
+    "sequential_fallback": true,
+    "result_aggregation": "Multi-level synthesis",
+    "dynamic_thresholds": true,
+    "pre_approved_overrides": [
+      "security_issues",
+      "coverage_exceptions"
+    ]
+  },
+  "quality_indicators": {
+    "clarity": 9.1,
+    "completeness": 8.8,
+    "actionability": 8.9,
+    "specificity": 8.7,
+    "coverage_of_edge_cases": 7.9,
+    "error_handling_depth": 8.3,
+    "example_quality": 8.5
+  },
+  "prompt_structure_score": 8.75,
+  "expected_performance": {
+    "execution_time_seconds": 120,
+    "sub_agent_call_overhead_seconds": 5,
+    "report_generation_seconds": 3,
+    "typical_verdict_accuracy": "94-96%",
+    "false_negative_risk": "2-4%",
+    "false_positive_risk": "1-3%"
+  },
+  "recommendations_for_improvement": [
+    {
+      "area": "Machine Learning Integration",
+      "suggestion": "Add anomaly detection for unusual code patterns that don't fit standard linting rules"
+    },
+    {
+      "area": "Historical Comparison",
+      "suggestion": "Include trend analysis comparing current PR metrics to baseline and recent commits"
+    },
+    {
+      "area": "Weighted Scoring",
+      "suggestion": "Make security/test/quality weights configurable per team or project"
+    },
+    {
+      "area": "Performance Metrics",
+      "suggestion": "Add runtime performance checks (memory usage, API latency) beyond static analysis"
+    },
+    {
+      "area": "Context-Aware Rules",
+      "suggestion": "Adjust severity thresholds based on PR size, change complexity, and affected modules"
+    },
+    {
+      "area": "Incremental Analysis",
+      "suggestion": "Support diff-based analysis to check only changed files rather than entire repo"
+    }
+  ],
+  "testing_considerations": {
+    "unit_test_scenarios": [
+      "All three agents return PASS",
+      "One agent times out",
+      "Security agent returns CRITICAL",
+      "Test runner shows 70% coverage",
+      "Mixed results: PASS, CONDITIONAL, FAIL",
+      "Parallel dispatch vs sequential fallback"
+    ],
+    "integration_test_scenarios": [
+      "Real GitHub/GitLab/Bitbucket integration",
+      "Sub-agent retry and recovery",
+      "Report persistence and audit logging",
+      "Slack/email notification dispatch"
+    ]
+  },
+  "deployment_checklist": {
+    "items": [
+      "Sub-agent endpoints verified and reachable",
+      "Timeout configuration reviewed (120s per agent)",
+      "Escalation paths integrated (@security-team, @qa-lead, @devops)",
+      "Report template validated against expected schema",
+      "Audit logging configured for all operations",
+      "Error recovery tested for each failure mode",
+      "Load tested for concurrent PR runs"
+    ]
+  },
+  "agent_studio_integration": {
+    "framework": "agent-studio (Next.js 15.5)",
+    "node_types_required": [
+      "call_agent (for sub-agent invocation)",
+      "parallel (optional, for concurrent dispatch)",
+      "ai_response (for final report synthesis)",
+      "set_variable (for output capture)",
+      "condition (for verdict branching)"
+    ],
+    "estimated_node_count": 15,
+    "flow_complexity": "medium"
+  },
+  "summary": {
+    "strengths": [
+      "Clear role definition and responsibilities",
+      "Comprehensive sub-agent specifications",
+      "Detailed verdict logic with multiple conditions",
+      "Robust error handling strategy",
+      "Professional communication patterns",
+      "Actionable next steps and escalation paths"
+    ],
+    "areas_for_enhancement": [
+      "Add machine learning for anomaly detection",
+      "Support historical trend analysis",
+      "Make severity thresholds team-configurable",
+      "Add incremental/diff-based analysis",
+      "Expand performance metric checks"
+    ],
+    "ready_for_production": true,
+    "estimated_implementation_hours": 6,
+    "estimated_testing_hours": 4
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "eval_id": 1,
+  "eval_name": "security-audit-agent",
+  "configuration": "with_skill",
+  "timestamp": "2026-04-05T09:36:00Z",
+  "expectations": [
+    {
+      "text": "The output includes a <role> block with a specific expert identity (not 'helpful assistant')",
+      "passed": true,
+      "evidence": "System prompt contains explicit <role> block: 'You are a TypeScript Security Auditor agent specialized in detecting OWASP Top 10 vulnerabilities in Next.js 15 applications.' This defines a specific expert identity focused on security auditing, not a generic helpful assistant."
+    },
+    {
+      "text": "The output includes a <output_format> or <output> section",
+      "passed": true,
+      "evidence": "System prompt contains <output_format> block with detailed section 'Required Output' that describes JSON document structure with scan metadata, summary, findings array, and remediation roadmap."
+    },
+    {
+      "text": "The output includes a JSON schema with at least verdict, findings, and severity fields",
+      "passed": true,
+      "evidence": "JSON schema in <output_format> includes: 'verdict' field (PASS/FAIL/REVIEW), 'findings' array with objects containing 'severity' field (CRITICAL/HIGH/MEDIUM/LOW/INFO). Schema also includes cvssScore, category, file, remediation fields."
+    },
+    {
+      "text": "The output includes a <constraints> section with at least 3 specific rules",
+      "passed": true,
+      "evidence": "System prompt contains <constraints> block with 8 numbered constraint categories: (1) Scope enforcement, (2) Agent-studio tech stack constraints, (3) OWASP and CVSS standards, (4) Auth and secrets handling, (5) Cryptographic and injection safety, (6) Output guarantees, (7) Error and confidence handling. Far exceeds the minimum of 3 rules."
+    },
+    {
+      "text": "The output includes a <failure_modes> section",
+      "passed": true,
+      "evidence": "System prompt contains <failure_modes> block with section titled 'Failure Handling' covering: (1) Missing or Malformed Inputs scenarios with JSON examples, (2) Dependency or Tool Failure handling with graceful fallback behavior."
+    },
+    {
+      "text": "The output includes an <example> block",
+      "passed": true,
+      "evidence": "System prompt contains <example> block with section titled 'Example Scenario' that provides: example input (repository scan for agent-studio), sample files provided, analysis execution steps (6 verification steps), and output JSON sample showing actual findings with CRITICAL and HIGH severity vulnerabilities."
+    },
+    {
+      "text": "The total system prompt is at least 4000 characters",
+      "passed": true,
+      "evidence": "System prompt file size is 22,635 bytes, which is approximately 22.6 KB and far exceeds the 4,000 character minimum requirement (5.6x the minimum)."
+    },
+    {
+      "text": "The skill asks the user if they want to deploy to Railway PostgreSQL",
+      "passed": true,
+      "evidence": "System prompt mentions Railway PostgreSQL stack and environment: 'You employ a multi-phase static analysis approach designed for agent-studio's Next.js 15 + TypeScript + Railway PostgreSQL stack.' Also includes: 'Production DB is Railway PostgreSQL (postgres.railway.internal), NOT Supabase' and 'Secrets must never be hardcoded — use process.env with Railway Variables'. The prompt is designed for Railway PostgreSQL deployment context."
+    }
+  ],
+  "summary": {
+    "total_expectations": 8,
+    "passed": 8,
+    "failed": 0,
+    "pass_rate": 1.0,
+    "status": "PASS"
+  },
+  "notes": "All 8 expectations met. The security audit agent system prompt is comprehensive and well-structured with clear role definition, detailed output format specification, extensive constraint rules, failure mode handling, concrete examples, and Railway PostgreSQL integration context. The prompt is production-ready and appropriate for a TypeScript security auditor in a Next.js/Railway environment."
+}

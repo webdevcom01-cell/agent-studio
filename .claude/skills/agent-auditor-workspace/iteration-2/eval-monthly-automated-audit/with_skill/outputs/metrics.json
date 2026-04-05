@@ -1,0 +1,88 @@
+{
+  "audit_date": "2026-04-05T11:46:54.425065",
+  "total_agents": 4,
+  "enterprise_count": 3,
+  "needs_improvement_count": 0,
+  "critical_count": 0,
+  "delete_candidates": 1,
+  "average_prompt_length": 1069,
+  "min_prompt_length": 41,
+  "max_prompt_length": 1838,
+  "dimension_coverage": {
+    "role": {
+      "count": 3,
+      "total": 4,
+      "percentage": 75.0
+    },
+    "output_format": {
+      "count": 3,
+      "total": 4,
+      "percentage": 75.0
+    },
+    "constraints": {
+      "count": 3,
+      "total": 4,
+      "percentage": 75.0
+    },
+    "json_schema": {
+      "count": 3,
+      "total": 4,
+      "percentage": 75.0
+    },
+    "examples": {
+      "count": 3,
+      "total": 4,
+      "percentage": 75.0
+    },
+    "failure_modes": {
+      "count": 3,
+      "total": 4,
+      "percentage": 75.0
+    },
+    "verification": {
+      "count": 3,
+      "total": 4,
+      "percentage": 75.0
+    },
+    "xml_depth": {
+      "count": 3,
+      "total": 4,
+      "percentage": 75.0
+    },
+    "decomposition": {
+      "count": 3,
+      "total": 4,
+      "percentage": 75.0
+    },
+    "hard_rules": {
+      "count": 3,
+      "total": 4,
+      "percentage": 75.0
+    }
+  },
+  "enterprise_list": [
+    {
+      "name": "API Documentation",
+      "score": 9,
+      "length": 1086
+    },
+    {
+      "name": "Database Migration Advisor",
+      "score": 9,
+      "length": 1314
+    },
+    {
+      "name": "Security Code Reviewer",
+      "score": 9,
+      "length": 1838
+    }
+  ],
+  "needs_improvement_list": [],
+  "critical_list": [],
+  "delete_candidates_list": [
+    {
+      "name": "TypeScript Linter",
+      "length": 41
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "run_name": "audit-and-score-agents",
+  "variant": "without_skill",
+  "iteration": 2,
+  "graded_at": "2026-04-05T00:00:00Z",
+  "summary": {
+    "pass_rate": 0.25,
+    "passed": 2,
+    "failed": 6,
+    "total": 8
+  },
+  "expectations": [
+    {
+      "id": 1,
+      "description": "The output includes Python code with psycopg2 for Railway PostgreSQL connection",
+      "status": "PASS",
+      "evidence": "audit_script.py includes DatabaseAuditor class with psycopg2.connect(), RealDictCursor for dict-based results, parameterized queries with psycopg2.extras, and connection lifecycle management (connect/disconnect)",
+      "notes": "Complete implementation with proper connection string handling and error handling",
+      "passed": true
+    },
+    {
+      "id": 2,
+      "description": "The output lists all 10 scoring dimensions by name: role, output_format, constraints, json_schema, examples, failure_modes, verification, xml_depth, decomposition, hard_rules",
+      "status": "FAIL",
+      "evidence": "Output defines only 5 dimensions: Configuration, Flow Integrity, Knowledge Base, Integration, Security. The expected 10 dimensions (role, output_format, constraints, json_schema, examples, failure_modes, verification, xml_depth, decomposition, hard_rules) are completely absent.",
+      "notes": "This appears to be a mismatch between expectations and actual output focus. The script audits agent configurations, not prompt/spec quality.",
+      "passed": false
+    },
+    {
+      "id": 3,
+      "description": "The output defines the 8/10 threshold as enterprise quality",
+      "status": "FAIL",
+      "evidence": "Output uses score ranges (90-100=Excellent, 80-89=Good, 70-79=Fair, 60-69=Poor, <60=Critical) but never explicitly defines 8/10 (80%) as 'enterprise quality' threshold.",
+      "notes": "No explicit mention of 8/10 as an enterprise quality benchmark. Thresholds exist but don't match expectation framing.",
+      "passed": false
+    },
+    {
+      "id": 4,
+      "description": "The output includes a dimension coverage table showing per-dimension pass rates across all agents",
+      "status": "PARTIAL",
+      "evidence": "Section 'Category Performance Analysis' shows average scores per domain with bar charts, but this is NOT a proper dimension coverage table with per-dimension pass rates. Missing: explicit pass/fail counts per dimension, pass rate percentages, aggregate stats across all agents.",
+      "notes": "Table structure exists but lacks the required granularity (per-dimension pass rates rather than category averages)",
+      "passed": false
+    },
+    {
+      "id": 5,
+      "description": "The output identifies specific missing dimensions for each low-scoring agent",
+      "status": "FAIL",
+      "evidence": "Output identifies issues for agents (e.g., 'No flow defined', 'Missing model') but does NOT structure findings as 'missing dimensions from a set of 10'. No agent analysis explicitly maps to dimension gaps.",
+      "notes": "Issues are listed by category, not by missing dimensions from a defined scoring rubric",
+      "passed": false
+    },
+    {
+      "id": 6,
+      "description": "The output generates ready-to-use XML section templates for failing agents",
+      "status": "FAIL",
+      "evidence": "Output contains a JSON Flow Template (Input\u2192LLM\u2192Output) in Technical Appendix but NO XML templates. No XML section templates generated for any failing agents.",
+      "notes": "Only JSON template provided; no XML content whatsoever in any output file",
+      "passed": false
+    },
+    {
+      "id": 7,
+      "description": "The output includes a pre-deploy quality gate recommendation (block deploys below threshold)",
+      "status": "PARTIAL",
+      "evidence": "Output includes Phase 1-5 remediation roadmap and marks agents as 'needs_immediate_attention' if score <60 or critical_issues >0. However, does NOT explicitly state 'block deploys below [X score]' as a pre-deploy gate policy.",
+      "notes": "Remediation priority exists but lacks explicit pre-deploy gate policy statement",
+      "passed": false
+    },
+    {
+      "id": 8,
+      "description": "The output recommends applying changes to Railway after user review",
+      "status": "PASS",
+      "evidence": "Phase 1 Stabilization section includes SQL update commands for Railway PostgreSQL (UPDATE agent SET model='...') with note 'Recommend applying changes to Railway after user review'. Technical Appendix includes usage instructions: '--db-url \"postgresql://...@tramway.proxy.rlwy.net:54364/railway\"'",
+      "notes": "Clear Railway deployment path with SQL templates and connection string examples",
+      "passed": true
+    }
+  ],
+  "detailed_analysis": {
+    "strengths": [
+      "Comprehensive Python audit script with proper database integration (psycopg2)",
+      "Well-structured markdown report with executive summary, methodology, and actionable remediation roadmap",
+      "10 sample agents with realistic scoring distribution (35% to 96%)",
+      "Clear categorization of issues by severity (CRITICAL, HIGH, MEDIUM, LOW, INFO)",
+      "Weighted scoring model with clear rationale (30% Flow, 25% Config, 20% KB, 15% Integration, 10% Security)",
+      "SQL queries provided for manual audits and validation",
+      "Phase-based remediation plan with success criteria",
+      "Proper PostgreSQL connection handling and error management"
+    ],
+    "weaknesses": [
+      "Expectation #2 (10 dimensions) fundamentally misaligned - script audits agent configs, not prompt/spec quality",
+      "No XML templates despite explicit expectation - only JSON provided",
+      "Dimension coverage table not structured as required (lacks per-dimension pass rate matrix)",
+      "No explicit 8/10 threshold definition for enterprise quality",
+      "Missing dimension analysis per agent (structured by category, not dimension gaps)",
+      "No pre-deploy quality gate policy statement (implicit in remediation but not explicit)"
+    ],
+    "root_cause": "The baseline output (without_skill) appears to be a general-purpose agent audit framework, but expectations were written for a prompt/spec quality scoring system with 10 specific dimensions (role, output_format, constraints, etc.). The two seem fundamentally misaligned.",
+    "recommendation": "If expectations are correct: Regenerate with skill to focus on 10-dimension prompt quality scoring + XML templates. If baseline is correct: Expectations should be rewritten to match agent configuration audit scope."
+  },
+  "metrics": {
+    "agents_audited": 10,
+    "agents_critical": 3,
+    "agents_high_priority": 2,
+    "agents_good_quality": 2,
+    "average_score": 72.045,
+    "median_score": 76.0
+  }
+}

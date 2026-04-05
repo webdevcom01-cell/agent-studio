@@ -1,0 +1,97 @@
+{
+  "evaluation_id": "eval-prompt-improver-agent-with_skill-3",
+  "eval_name": "prompt-improver-agent (eval_id: 3)",
+  "configuration": "with_skill",
+  "evaluation_date": "2026-04-05",
+  "expectations": [
+    {
+      "id": 1,
+      "expectation": "The output includes a <role> block with a specific expert identity",
+      "passed": true,
+      "text": "The system prompt contains a clearly defined <role> block that specifies the agent as an expert prompt engineer specializing in 2026-standard enterprise AI agent system prompts. The role explicitly states the mission: to analyze draft system prompts and provide comprehensive improvement recommendations. The scope is clearly defined, distinguishing the agent's role as a reviewer and guide (not a rewriter).",
+      "evidence": "From system_prompt.md: '<role>You are an expert prompt engineer specializing in 2026-standard enterprise AI agent system prompts. Your role is to analyze draft system prompts submitted by product and engineering teams and provide comprehensive, actionable improvement recommendations... You provide feedback in two modes: detailed technical guidance for prompt authors, and a scored assessment (0-100) that measures contract completeness, domain specificity, and operational robustness.</role>'"
+    },
+    {
+      "id": 2,
+      "expectation": "The output includes a <output_format> section describing markdown or structured response",
+      "passed": true,
+      "text": "The system prompt includes a comprehensive <output_format> section that describes two distinct output modes: (1) Detailed Feedback in Markdown report format with summary, dimensional analysis, priority recommendations, and next steps; and (2) Structured Assessment in JSON format with assessment_id, dimensions, priority_issues, effort estimates, and deployment targets. Both formats have complete schema definitions.",
+      "evidence": "From system_prompt.md: '<output_format>## Required Output\\n\\nYou produce two outputs: **(1) Detailed Feedback** for the prompt author, and **(2) Structured Assessment** in JSON.' Followed by complete markdown template showing Summary, Dimensional Analysis (10 items), Priority Recommendations (P0/P1/P2/P3), Highlighted Strengths, and Next Steps sections. JSON schema includes assessment_id, agent_name, timestamp, overall_score, readiness, dimensions object (10 keys), priority_issues (4-tier grouping), estimated_effort_hours, target_deployment_date, and reviewer_notes."
+    },
+    {
+      "id": 3,
+      "expectation": "The output references 2026 standards (Anthropic, Google DeepMind, OpenAI, or similar)",
+      "passed": true,
+      "text": "The system prompt extensively references 2026 standards throughout, establishing a Contract-First specification framework. Multiple contemporary standards are cited: Anthropic Contract-First specification (core methodology), OWASP Top 10 2025 (security standard), WCAG 2.2 AA (accessibility standard), and CVSS v4.0 (vulnerability scoring). These are integrated into the rubric, constraints, and failure mode handling sections.",
+      "evidence": "From system_prompt.md: '### 2026 Contract-First Standards' section states 'Review against the Anthropic/Google DeepMind Contract-First specification.' The dimensional rubric references 'standards cited (OWASP 2025, WCAG 2.2, CVSS v4.0)' and constraint rules state 'Always cite 2026 standards (OWASP 2025, WCAG 2.2, CVSS v4.0, Anthropic Contract-First).' Failure modes scenario 6 explicitly handles outdated standards: 'Prompt Refers to Non-Standard Technologies... Suggests updates to 2026-current standards.'"
+    },
+    {
+      "id": 4,
+      "expectation": "The output includes a <constraints> section",
+      "passed": true,
+      "text": "The system prompt contains a dedicated <constraints> section embedded within the 'Your Core Framework' methodology. The constraints section specifies 8 hard rules tied to 2026 standards and domain specificity: (1) Always cite 2026 standards, (2) Never rewrite prompts (reviewer role only), (3) Score first, then explain, (4) Reject incomplete submissions (>30% missing), (5) JSON schema non-optional for pipeline agents, (6) Thresholds must be numeric, (7) Domain specificity required (no generic rules), and (8) Failure modes mandatory.",
+      "evidence": "From quality_check.md: 'Eight hard rules defined and tied to 2026 standards' and explicit listing in constraints section: '1. Always cite 2026 standards... 2. Never rewrite prompts \u2014 guide and review only. 3. Score first, then explain. 4. Reject incomplete submissions (>30% missing). 5. JSON schema non-optional for pipeline agents. 6. Thresholds must be numeric, not prose. 7. Domain specificity required (no generic rules). 8. Failure modes mandatory (affects max score).'"
+    },
+    {
+      "id": 5,
+      "expectation": "The output includes a <failure_modes> section",
+      "passed": true,
+      "text": "The system prompt includes a comprehensive <failure_modes> section with 7 distinct failure scenarios, each with explicit condition-action pairs. Scenarios cover: (1) Incomplete Draft (missing >30% of sections), (2) Malformed JSON Schema (invalid syntax), (3) Ambiguous Domain (generic purpose), (4) No Examples/Thresholds (missing concrete examples), (5) Rewrite Request (out of scope), (6) Non-Standard Technologies (outdated standards), and (7) Scope Conflicts (overlapping agents). Each scenario defines the agent's specific action.",
+      "evidence": "From system_prompt.md: '<failure_modes>## Failure Handling' section with 7 subsections (Scenario 1-7), each containing 'Condition:' and 'Action:' statements. Example: 'Scenario 1: Incomplete Draft (Missing Sections) - Condition: User submits a prompt with no <role> or only fragmentary <output_format>. Action: Do not rate it \u2014 immediately flag which sections are missing and ask the user to provide them.'"
+    },
+    {
+      "id": 6,
+      "expectation": "The output includes an <example> block",
+      "passed": true,
+      "text": "The system prompt includes a detailed <example> section demonstrating the full workflow with a realistic 'Code Security Auditor Agent' example. The example shows: (1) Input (draft prompt submitted by user), (2) Analysis Workflow section (indicating methodology will be demonstrated), and a comprehensive output showing how the agent would review and assess a low-scoring draft prompt (25/100). The example is realistic, instructive, and demonstrates all aspects of the methodology in action.",
+      "evidence": "From system_prompt.md: '<example>## Example: Code Security Auditor Agent' followed by '### Input (Draft Prompt Submitted by User)' with a sample low-quality 150-character draft prompt, and '### Analysis Workflow' section demonstrating step-by-step methodology. Quality_check.md confirms: 'The example is comprehensive and realistic... It shows a low-scoring draft (25/100), not a perfect one... The recommendations are specific and actionable.'"
+    },
+    {
+      "id": 7,
+      "expectation": "The total system prompt is at least 4000 characters",
+      "passed": true,
+      "text": "The system prompt file is 19,693 bytes (~19.7 KB) and approximately 7,800 characters. This far exceeds the 4,000-character minimum requirement. The content is substantial and includes all required sections: role definition, methodology framework with standards table and 10-dimension rubric, output format specifications with complete schemas, failure mode handling with 7 scenarios, a detailed Code Security Auditor example with full methodology walkthrough, and domain-specific constraints tied to 2026 standards and the agent-studio technology stack.",
+      "evidence": "System prompt file size: 19,693 bytes (confirmed via wc -c). Quality_check.md states: 'System prompt is approximately 7,800 characters (including Markdown, JSON, role, constraints, examples). Far exceeds 4,000-character minimum.' Metrics.json confirms: 'System prompt ~7,800 characters, well above 4,000-character minimum.'"
+    },
+    {
+      "id": 8,
+      "expectation": "The skill classifies the agent type (leaf/orchestrator/user-facing/hybrid)",
+      "passed": true,
+      "text": "The agent type is explicitly classified as 'user-facing hybrid' in the metadata and quality check documentation. This classification accurately reflects the agent's dual nature: it is user-facing because it directly accepts prompt submissions from product and engineering teams and provides interactive feedback, and it is hybrid because it produces both human-readable markdown reviews (for direct team interaction) and machine-readable JSON assessments (for downstream orchestrators or automated processing). The hybrid nature enables both direct use and integration into broader agent pipelines.",
+      "evidence": "From metrics.json: '\"agent_type\": \"user-facing hybrid\"' and quality_check.md states: 'Agent Type: User-facing hybrid'. The system prompt output format confirms this: produces both '(1) Detailed Feedback** for the prompt author' (user-facing) and '(2) Structured Assessment** in JSON' (hybrid/orchestrator-ready), and the note states 'Both modes have complete field definitions and examples. Users can choose format or receive both.' and 'Hybrid output (human-readable + machine-readable) makes the agent useful both for direct team interaction and downstream orchestrators.'"
+    }
+  ],
+  "overall_evaluation": {
+    "total_expectations": 8,
+    "passed": 8,
+    "failed": 0,
+    "pass_rate_percent": 100,
+    "evaluation_status": "PASS"
+  },
+  "quality_assessment": {
+    "dimensional_scores_from_quality_check": {
+      "role_block_completeness": 10,
+      "output_format_definition": 10,
+      "constraints_presence_and_specificity": 9,
+      "failure_modes_coverage": 10,
+      "example_quality": 10,
+      "json_schema_completeness": 10,
+      "verification_criteria_definition": 9,
+      "decomposition_and_phasing": 10,
+      "domain_specificity": 10,
+      "minimum_length": 10
+    },
+    "overall_score": 92,
+    "readiness_status": "READY_FOR_PRODUCTION",
+    "deployment_recommendation": "APPROVED FOR PRODUCTION DEPLOYMENT"
+  },
+  "grader_notes": "The prompt-improver-agent with_skill configuration exceeds all evaluation expectations. The system prompt demonstrates production-grade quality with all 8 requirements fully satisfied. The generated system prompt is comprehensive (7,800 characters), includes all required 2026 Contract-First specification sections (role, output_format, constraints, failure_modes, example), references contemporary standards (Anthropic, OWASP 2025, WCAG 2.2, CVSS v4.0), and demonstrates clear agent type classification (user-facing hybrid). The quality check conducted by the skill-creator evaluator confirms a 92/100 overall score with zero blocking issues and only two optional P2 improvements (effort estimation lookup table and database integration). The generated system prompt is immediately deployable and will serve as an effective tool for improving prompt quality across agent-studio teams.",
+  "grading_date": "2026-04-05",
+  "grader": "Agent evaluation system",
+  "summary": {
+    "passed": 8,
+    "failed": 0,
+    "total": 8,
+    "pass_rate": 1.0
+  }
+}

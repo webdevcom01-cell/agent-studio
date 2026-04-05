@@ -1,0 +1,14 @@
+{
+  "eval_id": 1,
+  "eval_name": "audit-and-score-agents",
+  "prompt": "Audit all agents in my Railway database and score them. Connection string: postgresql://postgres:testpass@tramway.proxy.rlwy.net:54364/railway. Show me which ones need immediate attention.",
+  "assertions": [
+    "The output includes Python code or instructions for psycopg2 database connection",
+    "The output references the 10-dimension scoring rubric or equivalent quality criteria",
+    "The output defines thresholds (8/10 enterprise quality, 6-7 needs improvement, <6 critical)",
+    "The output includes a summary report structure showing agent tier counts",
+    "The output identifies specific missing sections (role, output_format, constraints, etc.) for low-scoring agents",
+    "The output generates or shows how to generate improvement suggestions for failing agents",
+    "The output recommends applying changes to Railway after review"
+  ]
+}

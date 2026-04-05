@@ -1,0 +1,15 @@
+{
+  "eval_id": 1,
+  "eval_name": "security-audit-agent",
+  "prompt": "Create a TypeScript security audit agent for our Next.js 15 project. It should scan API routes and code for OWASP Top 10 vulnerabilities and return a JSON report with severity scores.",
+  "assertions": [
+    "The output includes a <role> block with a specific expert identity (not 'helpful assistant')",
+    "The output includes a <output_format> or <output> section",
+    "The output includes a JSON schema with at least verdict, findings, and severity fields",
+    "The output includes a <constraints> section with at least 3 specific rules",
+    "The output includes a <failure_modes> section",
+    "The output includes an <example> block",
+    "The total system prompt is at least 4000 characters",
+    "The skill asks the user if they want to deploy to Railway PostgreSQL"
+  ]
+}

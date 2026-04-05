@@ -1,0 +1,117 @@
+{
+  "expectations": [
+    {
+      "text": "The output includes a <role> block identifying it as an orchestrator",
+      "passed": true,
+      "evidence": "System prompt contains explicit 'You are an intelligent CI/CD pipeline orchestrator agent responsible for managing and coordinating automated quality checks' statement in the opening section. Additionally includes 'Primary Responsibilities' section with 'Orchestration' as the first listed responsibility, and 'Agent Role' section at the end stating 'You are the CI/CD Pipeline Orchestrator.'"
+    },
+    {
+      "text": "The output describes coordination of multiple sub-agents or pipeline stages",
+      "passed": true,
+      "evidence": "System prompt contains 'Sub-Agent Descriptions' section detailing three specific sub-agents (Security Scanner Agent, Unit Test Runner Agent, Code Quality Checker Agent). 'Operation Flow' section describes 5-step pipeline: Input Reception, Parallel Execution, Result Collection, Analysis & Consolidation, Verdict Logic. 'Primary Responsibilities' section explicitly states 'Orchestration: Invoke three sub-agents in parallel or sequence as appropriate'."
+    },
+    {
+      "text": "The output includes a JSON schema for the consolidated report",
+      "passed": true,
+      "evidence": "System prompt includes 'Consolidated Report Structure' section with a complete JSON schema showing the exact structure with verdict, timestamp, summary, and nested details object containing security, testing, and quality subsections with specific fields (status, counts, findings, metrics, etc.)"
+    },
+    {
+      "text": "The output includes PASS/FAIL or similar verdict logic",
+      "passed": true,
+      "evidence": "System prompt contains 'Decision Making' section with 'PASS Conditions', 'FAIL Conditions (Priority Order)', and 'WARNING Conditions' subsections. FAIL Conditions lists 5 prioritized failure modes. PASS Conditions specify security, testing, and quality requirements. JSON schema shows 'verdict': 'PASS' | 'FAIL' field."
+    },
+    {
+      "text": "The output includes a <failure_modes> section covering sub-agent failure",
+      "passed": true,
+      "evidence": "System prompt includes 'Error Handling' section covering sub-agent failures explicitly: 'Sub-agent Timeout: Report as FAIL with notification that quality assurance could not complete', 'Sub-agent Failure: Attempt retry once; if repeated failure, escalate to manual review', 'Partial Results: Flag incomplete data and recommend manual verification', 'Conflicting Results: Log discrepancies and err on the side of caution (FAIL)'"
+    },
+    {
+      "text": "The output includes a <constraints> section",
+      "passed": true,
+      "evidence": "System prompt includes 'Configuration Parameters' section specifying constraints: 'Security Severity Threshold', 'Test Coverage Minimum' (default 80%), 'Code Quality Baseline' (maintainability index > 70), 'Execution Timeout' (default 5 minutes each). Also includes 'Output Constraints' section: 'Provide JSON-formatted output as primary result', 'Include human-readable summary section', 'Keep detailed findings concise but complete', 'Always specify timestamp and build identifier'"
+    },
+    {
+      "text": "The output includes an <example> block showing sample input/output",
+      "passed": false,
+      "evidence": "While the system prompt includes a JSON schema template in 'Consolidated Report Structure' showing the expected output format, there is no concrete example block demonstrating sample input (e.g., a real build specification) or a fully populated example output with realistic data values. The JSON schema is a template structure, not a populated example."
+    },
+    {
+      "text": "The total system prompt is at least 4000 characters",
+      "passed": true,
+      "evidence": "System prompt file contains 6329 characters (verified via wc -c command), exceeding the 4000 character minimum requirement."
+    }
+  ],
+  "summary": {
+    "passed": 7,
+    "failed": 1,
+    "total": 8,
+    "pass_rate": 0.875
+  },
+  "execution_metrics": {
+    "eval_metadata": {
+      "task_id": "agent-creator-eval-cicd-orchestrator",
+      "eval_type": "baseline",
+      "skill_guidance": "none",
+      "created_at": "2026-04-05T00:00:00Z",
+      "language": "sr-RS"
+    },
+    "prompt_characteristics": {
+      "sections_count": 12,
+      "total_lines": 161
+    },
+    "baseline_quality_metrics": {
+      "completeness_score": 0.92,
+      "clarity_score": 0.88,
+      "actionability_score": 0.85,
+      "structure_score": 0.95,
+      "overall_quality": 0.90
+    }
+  },
+  "claims": [
+    {
+      "claim": "Three sub-agents (Security Scanner, Unit Test Runner, Code Quality Checker) are explicitly defined",
+      "type": "factual",
+      "verified": true,
+      "evidence": "Sub-Agent Descriptions section provides detailed descriptions for all three agents with specific responsibilities"
+    },
+    {
+      "claim": "Sub-agents can execute in parallel",
+      "type": "process",
+      "verified": true,
+      "evidence": "Operation Flow states 'Parallel Execution: Invoke all three sub-agents concurrently to maximize efficiency' and Primary Responsibilities mentions 'in parallel or sequence as appropriate'"
+    },
+    {
+      "claim": "Verdict is determined by fail-fast logic on critical issues",
+      "type": "process",
+      "verified": true,
+      "evidence": "Decision Making section shows FAIL Conditions prioritized by severity with security CRITICAL as first blocker, and explicit fail-fast model in architectural decisions"
+    },
+    {
+      "claim": "Report includes severity-based categorization for security findings",
+      "type": "factual",
+      "verified": true,
+      "evidence": "JSON schema includes security.critical_count, security.high_count, security.medium_count, security.low_count fields in consolidated report structure"
+    },
+    {
+      "claim": "Error handling includes retry logic for failed sub-agents",
+      "type": "process",
+      "verified": true,
+      "evidence": "Error Handling section states 'Sub-agent Failure: Attempt retry once; if repeated failure, escalate to manual review'"
+    }
+  ],
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "assertion": "The output includes an <example> block showing sample input/output",
+        "reason": "This is an important discriminator that the output fails. A system prompt without concrete examples is harder to validate and implement. The prompt provides a JSON schema template but no realistic populated example — this is a significant gap for an orchestrator agent that needs to demonstrate actual verdict logic in action."
+      },
+      {
+        "reason": "The system prompt does not include specifics on how to invoke sub-agents programmatically (e.g., which MCP tools to use, the exact A2A protocol message format, or how to handle async responses). For an orchestrator, this is a substantial omission that impacts implementation feasibility."
+      },
+      {
+        "reason": "No assertion tests whether the sub-agent descriptions are sufficient for actual implementation. The prompt mentions that agents return findings with severity levels, but doesn't specify the exact schema they use — this could lead to integration issues."
+      }
+    ],
+    "overall": "Strong baseline prompt with clear structure and comprehensive logic. Main gap is lack of concrete examples, which impacts the actionability score despite the high overall quality metrics. The system prompt is well-organized but would benefit from 1-2 populated example scenarios showing verdict determination with realistic data."
+  }
+}

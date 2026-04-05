@@ -1,0 +1,17 @@
+{
+  "eval_id": 1,
+  "eval_name": "security-audit-agent",
+  "prompt": "Create a TypeScript security audit agent for our Next.js 15 project. It should scan API routes and code for OWASP Top 10 vulnerabilities and return a JSON report with severity scores.",
+  "assertions": [
+    "The output includes a <role> block with a specific expert identity (not 'helpful assistant')",
+    "The output includes a <output_format> section with a complete JSON schema",
+    "The JSON schema includes verdict, findings (array), and severity fields with concrete allowed values",
+    "The output includes a <constraints> section with at least 5 specific rules",
+    "The output includes a <failure_modes> section with at least 3 distinct scenarios",
+    "The output includes a <example> block with POPULATED data (real-looking file paths, severity scores, CVE IDs — not template placeholders)",
+    "The output references CVSS v4.0 specifically (not v3.1 or unversioned CVSS)",
+    "The output references OWASP Top 10 2025 (not 2021 or unversioned)",
+    "The total system prompt is at least 5000 characters",
+    "The skill explicitly classifies the agent type (leaf/orchestrator/user-facing/hybrid)"
+  ]
+}

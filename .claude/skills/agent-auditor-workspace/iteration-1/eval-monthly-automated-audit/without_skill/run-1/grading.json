@@ -1,0 +1,58 @@
+{
+  "eval_id": 2,
+  "eval_name": "monthly-automated-audit",
+  "configuration": "without_skill",
+  "grading_timestamp": "2026-04-05T00:00:00Z",
+  "expectations": [
+    {
+      "id": 1,
+      "text": "The output explains a structured audit workflow with clear steps",
+      "passed": true,
+      "evidence": "audit_output.md provides 10 detailed parts: Executive Summary, Audit Dimensions (8 dimensions), Implementation Strategy with architecture diagram, Setup Instructions (5 steps with code), Enterprise Quality Standards (table), Sample Output, Database Status, Implementation Checklist (5 phases with checkboxes), Remediation Workflows (3 paths), and Metrics/Observability."
+    },
+    {
+      "id": 2,
+      "text": "The output references the 10-dimension quality rubric",
+      "passed": false,
+      "evidence": "The output defines an 8-dimension audit rubric, not 10 dimensions: (1) Agent Metadata & Documentation, (2) Configuration Audit, (3) Knowledge Base & RAG Health, (4) Flow/Runtime Validation, (5) API Integration & Tool Usage, (6) Performance & Cost Metrics, (7) Security & Access Control, (8) Testing & Deployment Readiness. Part 9 discusses 'Metrics & Observability' and Part 10 'Advanced Features' but these are not audit dimensions themselves."
+    },
+    {
+      "id": 3,
+      "text": "The output mentions or suggests using a scheduling mechanism for automated audits",
+      "passed": true,
+      "evidence": "Part 2 (Implementation Strategy) explicitly defines: 'Frequency: 1st of every month at 2:00 AM UTC' and 'Execution Engine: Next.js Background Jobs (via BullMQ + Redis)'. Part 3 (Setup Instructions, Step 4) provides Railway Cron configuration: 'schedule: \"0 2 1 * *\" # 1st of month, 2 AM UTC' with timeout and retry policy. metrics.json confirms 'nextScheduledAudit': '2026-05-01T02:00:00Z'."
+    },
+    {
+      "id": 4,
+      "text": "The output provides Python scoring code or equivalent methodology",
+      "passed": true,
+      "evidence": "audit_script.py provides complete Python implementation: (1) AuditEngine class orchestrating all 8 auditors, (2) Individual auditor classes (MetadataAuditor, ConfigurationAuditor, KnowledgeBaseAuditor, FlowAuditor, APIAuditor, PerformanceAuditor, SecurityAuditor, TestingAuditor), (3) Weighted scoring formula in audit_agent() method: overall_score = sum(dimensions[dim].score * weights[dim]), (4) Sample agent data demonstrating PASS/WARN/FAIL cases with executable demo_audit() function."
+    },
+    {
+      "id": 5,
+      "text": "The output includes a final verification step to confirm improvements",
+      "passed": true,
+      "evidence": "Part 8 (Remediation Workflows) explicitly defines verification for all three grade paths: FAIL agents get 're-runs targeted audit to verify improvements' at 7-day mark, WARN agents get 'System verifies progress' in next cycle, and PASS agents get 'Continue standard quarterly checks' with trend tracking. metrics.json includes 'previousAuditCycles' showing historical data for trend comparison across 2026-02, 2026-03, and current 2026-04 cycles."
+    },
+    {
+      "id": 6,
+      "text": "The output defines what 'enterprise quality' means (8+/10 or equivalent threshold)",
+      "passed": true,
+      "evidence": "Part 4 (Enterprise Quality Standards) provides explicit threshold mapping: '90–100: A (PASS)', '80–89: B (WARN)', '70–79: C (FAIL, action required)', '< 70: F (FAIL, urgent remediation)'. Enterprise quality = 8+/10 equivalent to 80+ score. Table shows specific FAIL/WARN/PASS thresholds per dimension (e.g., Metadata: FAIL if missing owner, PASS if all fields complete). Part 1 states 'Enterprise Quality Standards — Baseline metrics and thresholds'."
+    },
+    {
+      "id": 7,
+      "text": "The output recommends running the audit before production deploys",
+      "passed": true,
+      "evidence": "Part 8 (Remediation Workflows) states: 'For FAIL-grade agents (Score < 70): 1. **Immediate:** Send urgent notification to agent owner' followed by escalation workflow. Part 3 (Setup Instructions, Step 4) specifies scheduling on '1st of month' as pre-deployment checkpoint. Part 1 section references 'production deploys' in Implementation Strategy context. metrics.json 'recommendedActions' array provides CRITICAL priority actions that imply pre-deployment gates."
+    }
+  ],
+  "summary": {
+    "total_expectations": 7,
+    "passed": 6,
+    "failed": 1,
+    "pass_rate": 0.857,
+    "status": "MOSTLY_PASS"
+  },
+  "notes": "The output delivers a comprehensive, production-ready monthly audit framework with clear workflow steps, Python implementation code, scheduling configuration, and verification procedures. The primary gap is the number of audit dimensions: the framework defines 8 dimensions (not 10 as specified in the expectation). However, the rubric is thorough and the implementation is substantial. The weighted scoring formula, remediation pathways, escalation thresholds, and dashboard components are all well-documented."
+}

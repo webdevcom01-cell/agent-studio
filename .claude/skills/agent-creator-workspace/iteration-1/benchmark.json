@@ -1,0 +1,475 @@
+{
+  "metadata": {
+    "skill_name": "agent-creator",
+    "skill_path": "<path/to/skill>",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-04-05T09:39:15Z",
+    "evals_run": [
+      1,
+      2,
+      3
+    ],
+    "runs_per_configuration": 3
+  },
+  "runs": [
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 8,
+        "failed": 0,
+        "total": 8,
+        "time_seconds": 286.9,
+        "tokens": 93864,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "expectation_id": 1,
+          "expectation_text": "The output includes a <role> block identifying it as an orchestrator",
+          "passed": true,
+          "text": "Role block is clearly defined and identifies the agent as a specialized CI/CD Pipeline Orchestrator.",
+          "evidence": "System prompt begins with: '<role>You are the CI/CD Pipeline Orchestrator Agent \u2014 a specialized coordinator for software delivery quality gates. Your mission is to orchestrate three sibling agents (security scanner, unit test runner, and code quality checker) in parallel, aggregate their verdicts, and return a single authoritative PASS/FAIL verdict with a consolidated quality report.</role>' The role explicitly states the orchestration mission and establishes the agent's position in the pipeline."
+        },
+        {
+          "expectation_id": 2,
+          "expectation_text": "The output describes coordination of multiple sub-agents or pipeline stages",
+          "passed": true,
+          "text": "The system prompt extensively documents the orchestration of three sub-agents and multi-stage coordination.",
+          "evidence": "Section '### Sub-Agent Invocation Contract' specifies invocation schema for three agents: security_scanner, unit_test_runner, code_quality_checker. Section '### Parallel Execution & Timeout Handling' documents coordination: 'Invoke all three sub-agents in parallel. Set a global pipeline timeout of 300 seconds (5 minutes). Individual agent timeouts are 250 seconds.' The example demonstrates real-world invocation of all three agents with aggregated results."
+        },
+        {
+          "expectation_id": 3,
+          "expectation_text": "The output includes a JSON schema for the consolidated report",
+          "passed": true,
+          "text": "Complete JSON schema defined with consolidated_report structure and all required fields.",
+          "evidence": "Section '<output_format>' defines complete JSON structure including 'consolidated_report' object with: decision, decision_rationale, risk_assessment, recommendations, manual_review_required, timeout_agents, failed_agents. The schema uses strict typing with enums (PASS|FAIL|REVIEW, LOW|MEDIUM|HIGH). All fields are machine-parseable with no 'any' types."
+        },
+        {
+          "expectation_id": 4,
+          "expectation_text": "The output includes PASS/FAIL or similar verdict logic",
+          "passed": true,
+          "text": "Detailed decision logic table and verdict rules are fully specified with explicit thresholds.",
+          "evidence": "Section '### Decision Logic & Thresholds' provides explicit rules: '**Final Verdict Rule:** PASS: All three sub-agents return PASS verdict AND all numeric thresholds met. REVIEW: At least one sub-agent returns REVIEW OR at least one threshold is at the boundary. FAIL: Any sub-agent returns FAIL OR any critical threshold violated.' Includes threshold table with Signal, PASS Threshold, REVIEW Threshold, and FAIL Threshold columns for all three sub-agents."
+        },
+        {
+          "expectation_id": 5,
+          "expectation_text": "The output includes a <failure_modes> section covering sub-agent failure",
+          "passed": true,
+          "text": "Comprehensive failure_modes section with 7 distinct failure scenarios.",
+          "evidence": "Section '<failure_modes>' documents: (1) Required Input Missing (returns FAIL), (2) Sub-Agent Timeout >250s (marks as REVIEW, continues), (3) Invalid JSON/Error Code (marks as REVIEW, continues), (4) Low Confidence (verdict REVIEW, manual review required), (5) Out-of-Scope Request (FAIL), (6) All Three Sub-Agents Timeout (REVIEW), (7) Inconsistent Agent Versions (normalization attempt, else REVIEW). Each scenario includes Condition, Action, and rationale."
+        },
+        {
+          "expectation_id": 6,
+          "expectation_text": "The output includes a <constraints> section",
+          "passed": true,
+          "text": "Hard constraints section with 12 explicit rules governing orchestrator behavior.",
+          "evidence": "Section '<constraints>' defines 12 hard rules: (1) No Agent Invocation Side Effects, (2) Parallel Agent Invocation Only, (3) Timeout is 250 seconds per sub-agent, (4) No Agent Verdict Override, (5) Mandatory JSON Schema Compliance, (6) No Partial Results, (7) Exit Code Integrity, (8) Agent-Studio Tech Stack Adherence, (9) No Secrets in Logs, (10) Deterministic Verdict Logic, (11) No Implicit Dependencies, (12) Standard Compliance. Each rule includes justification and scope."
+        },
+        {
+          "expectation_id": 7,
+          "expectation_text": "The output includes an <example> block showing sample input/output",
+          "passed": true,
+          "text": "Realistic end-to-end example with concrete input and complete JSON output.",
+          "evidence": "Section '<example>' titled 'Real-World CI/CD Pipeline Run' includes: Input (repository_path, commit_hash, branch='feature/ecc-integration', scope='diff-only'). Output shows all three sub-agent results (security_scanner score 95, unit_test_runner score 98 with 2880/2880 tests passed, code_quality_checker score 88). Consolidated report shows decision='PASS', risk_assessment='LOW', and metrics showing 287ms orchestration duration with all agents completed. Example demonstrates practical usage with business context."
+        },
+        {
+          "expectation_id": 8,
+          "expectation_text": "The total system prompt is at least 4000 characters",
+          "passed": true,
+          "text": "System prompt substantially exceeds the 4000 character minimum.",
+          "evidence": "The metrics.json file reports: 'System prompt: 8,247 characters' and 'Minimum 4000 characters | \u2713 | 2/2 | Total content: 8,247 characters (system prompt + appendix)'. The character count is more than double the minimum requirement, with comprehensive coverage across all sections: role (174 chars), methodology (2,100 chars), decision logic (800 chars), output format (1,900 chars), failure modes (1,500 chars), example (2,100 chars), constraints (1,200 chars), and appendix (450 chars)."
+        }
+      ],
+      "notes": [],
+      "eval_name": "cicd-orchestrator-agent"
+    },
+    {
+      "eval_id": 3,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 8,
+        "failed": 0,
+        "total": 8,
+        "time_seconds": 273.6,
+        "tokens": 91859,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": 1,
+          "expectation": "The output includes a <role> block with a specific expert identity",
+          "passed": true,
+          "text": "The system prompt contains a clearly defined <role> block that specifies the agent as an expert prompt engineer specializing in 2026-standard enterprise AI agent system prompts. The role explicitly states the mission: to analyze draft system prompts and provide comprehensive improvement recommendations. The scope is clearly defined, distinguishing the agent's role as a reviewer and guide (not a rewriter).",
+          "evidence": "From system_prompt.md: '<role>You are an expert prompt engineer specializing in 2026-standard enterprise AI agent system prompts. Your role is to analyze draft system prompts submitted by product and engineering teams and provide comprehensive, actionable improvement recommendations... You provide feedback in two modes: detailed technical guidance for prompt authors, and a scored assessment (0-100) that measures contract completeness, domain specificity, and operational robustness.</role>'"
+        },
+        {
+          "id": 2,
+          "expectation": "The output includes a <output_format> section describing markdown or structured response",
+          "passed": true,
+          "text": "The system prompt includes a comprehensive <output_format> section that describes two distinct output modes: (1) Detailed Feedback in Markdown report format with summary, dimensional analysis, priority recommendations, and next steps; and (2) Structured Assessment in JSON format with assessment_id, dimensions, priority_issues, effort estimates, and deployment targets. Both formats have complete schema definitions.",
+          "evidence": "From system_prompt.md: '<output_format>## Required Output\\n\\nYou produce two outputs: **(1) Detailed Feedback** for the prompt author, and **(2) Structured Assessment** in JSON.' Followed by complete markdown template showing Summary, Dimensional Analysis (10 items), Priority Recommendations (P0/P1/P2/P3), Highlighted Strengths, and Next Steps sections. JSON schema includes assessment_id, agent_name, timestamp, overall_score, readiness, dimensions object (10 keys), priority_issues (4-tier grouping), estimated_effort_hours, target_deployment_date, and reviewer_notes."
+        },
+        {
+          "id": 3,
+          "expectation": "The output references 2026 standards (Anthropic, Google DeepMind, OpenAI, or similar)",
+          "passed": true,
+          "text": "The system prompt extensively references 2026 standards throughout, establishing a Contract-First specification framework. Multiple contemporary standards are cited: Anthropic Contract-First specification (core methodology), OWASP Top 10 2025 (security standard), WCAG 2.2 AA (accessibility standard), and CVSS v4.0 (vulnerability scoring). These are integrated into the rubric, constraints, and failure mode handling sections.",
+          "evidence": "From system_prompt.md: '### 2026 Contract-First Standards' section states 'Review against the Anthropic/Google DeepMind Contract-First specification.' The dimensional rubric references 'standards cited (OWASP 2025, WCAG 2.2, CVSS v4.0)' and constraint rules state 'Always cite 2026 standards (OWASP 2025, WCAG 2.2, CVSS v4.0, Anthropic Contract-First).' Failure modes scenario 6 explicitly handles outdated standards: 'Prompt Refers to Non-Standard Technologies... Suggests updates to 2026-current standards.'"
+        },
+        {
+          "id": 4,
+          "expectation": "The output includes a <constraints> section",
+          "passed": true,
+          "text": "The system prompt contains a dedicated <constraints> section embedded within the 'Your Core Framework' methodology. The constraints section specifies 8 hard rules tied to 2026 standards and domain specificity: (1) Always cite 2026 standards, (2) Never rewrite prompts (reviewer role only), (3) Score first, then explain, (4) Reject incomplete submissions (>30% missing), (5) JSON schema non-optional for pipeline agents, (6) Thresholds must be numeric, (7) Domain specificity required (no generic rules), and (8) Failure modes mandatory.",
+          "evidence": "From quality_check.md: 'Eight hard rules defined and tied to 2026 standards' and explicit listing in constraints section: '1. Always cite 2026 standards... 2. Never rewrite prompts \u2014 guide and review only. 3. Score first, then explain. 4. Reject incomplete submissions (>30% missing). 5. JSON schema non-optional for pipeline agents. 6. Thresholds must be numeric, not prose. 7. Domain specificity required (no generic rules). 8. Failure modes mandatory (affects max score).'"
+        },
+        {
+          "id": 5,
+          "expectation": "The output includes a <failure_modes> section",
+          "passed": true,
+          "text": "The system prompt includes a comprehensive <failure_modes> section with 7 distinct failure scenarios, each with explicit condition-action pairs. Scenarios cover: (1) Incomplete Draft (missing >30% of sections), (2) Malformed JSON Schema (invalid syntax), (3) Ambiguous Domain (generic purpose), (4) No Examples/Thresholds (missing concrete examples), (5) Rewrite Request (out of scope), (6) Non-Standard Technologies (outdated standards), and (7) Scope Conflicts (overlapping agents). Each scenario defines the agent's specific action.",
+          "evidence": "From system_prompt.md: '<failure_modes>## Failure Handling' section with 7 subsections (Scenario 1-7), each containing 'Condition:' and 'Action:' statements. Example: 'Scenario 1: Incomplete Draft (Missing Sections) - Condition: User submits a prompt with no <role> or only fragmentary <output_format>. Action: Do not rate it \u2014 immediately flag which sections are missing and ask the user to provide them.'"
+        },
+        {
+          "id": 6,
+          "expectation": "The output includes an <example> block",
+          "passed": true,
+          "text": "The system prompt includes a detailed <example> section demonstrating the full workflow with a realistic 'Code Security Auditor Agent' example. The example shows: (1) Input (draft prompt submitted by user), (2) Analysis Workflow section (indicating methodology will be demonstrated), and a comprehensive output showing how the agent would review and assess a low-scoring draft prompt (25/100). The example is realistic, instructive, and demonstrates all aspects of the methodology in action.",
+          "evidence": "From system_prompt.md: '<example>## Example: Code Security Auditor Agent' followed by '### Input (Draft Prompt Submitted by User)' with a sample low-quality 150-character draft prompt, and '### Analysis Workflow' section demonstrating step-by-step methodology. Quality_check.md confirms: 'The example is comprehensive and realistic... It shows a low-scoring draft (25/100), not a perfect one... The recommendations are specific and actionable.'"
+        },
+        {
+          "id": 7,
+          "expectation": "The total system prompt is at least 4000 characters",
+          "passed": true,
+          "text": "The system prompt file is 19,693 bytes (~19.7 KB) and approximately 7,800 characters. This far exceeds the 4,000-character minimum requirement. The content is substantial and includes all required sections: role definition, methodology framework with standards table and 10-dimension rubric, output format specifications with complete schemas, failure mode handling with 7 scenarios, a detailed Code Security Auditor example with full methodology walkthrough, and domain-specific constraints tied to 2026 standards and the agent-studio technology stack.",
+          "evidence": "System prompt file size: 19,693 bytes (confirmed via wc -c). Quality_check.md states: 'System prompt is approximately 7,800 characters (including Markdown, JSON, role, constraints, examples). Far exceeds 4,000-character minimum.' Metrics.json confirms: 'System prompt ~7,800 characters, well above 4,000-character minimum.'"
+        },
+        {
+          "id": 8,
+          "expectation": "The skill classifies the agent type (leaf/orchestrator/user-facing/hybrid)",
+          "passed": true,
+          "text": "The agent type is explicitly classified as 'user-facing hybrid' in the metadata and quality check documentation. This classification accurately reflects the agent's dual nature: it is user-facing because it directly accepts prompt submissions from product and engineering teams and provides interactive feedback, and it is hybrid because it produces both human-readable markdown reviews (for direct team interaction) and machine-readable JSON assessments (for downstream orchestrators or automated processing). The hybrid nature enables both direct use and integration into broader agent pipelines.",
+          "evidence": "From metrics.json: '\"agent_type\": \"user-facing hybrid\"' and quality_check.md states: 'Agent Type: User-facing hybrid'. The system prompt output format confirms this: produces both '(1) Detailed Feedback** for the prompt author' (user-facing) and '(2) Structured Assessment** in JSON' (hybrid/orchestrator-ready), and the note states 'Both modes have complete field definitions and examples. Users can choose format or receive both.' and 'Hybrid output (human-readable + machine-readable) makes the agent useful both for direct team interaction and downstream orchestrators.'"
+        }
+      ],
+      "notes": [],
+      "eval_name": "prompt-improver-agent"
+    },
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 8,
+        "failed": 0,
+        "total": 0,
+        "time_seconds": 257.3,
+        "tokens": 88464,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The output includes a <role> block with a specific expert identity (not 'helpful assistant')",
+          "passed": true,
+          "evidence": "System prompt contains explicit <role> block: 'You are a TypeScript Security Auditor agent specialized in detecting OWASP Top 10 vulnerabilities in Next.js 15 applications.' This defines a specific expert identity focused on security auditing, not a generic helpful assistant."
+        },
+        {
+          "text": "The output includes a <output_format> or <output> section",
+          "passed": true,
+          "evidence": "System prompt contains <output_format> block with detailed section 'Required Output' that describes JSON document structure with scan metadata, summary, findings array, and remediation roadmap."
+        },
+        {
+          "text": "The output includes a JSON schema with at least verdict, findings, and severity fields",
+          "passed": true,
+          "evidence": "JSON schema in <output_format> includes: 'verdict' field (PASS/FAIL/REVIEW), 'findings' array with objects containing 'severity' field (CRITICAL/HIGH/MEDIUM/LOW/INFO). Schema also includes cvssScore, category, file, remediation fields."
+        },
+        {
+          "text": "The output includes a <constraints> section with at least 3 specific rules",
+          "passed": true,
+          "evidence": "System prompt contains <constraints> block with 8 numbered constraint categories: (1) Scope enforcement, (2) Agent-studio tech stack constraints, (3) OWASP and CVSS standards, (4) Auth and secrets handling, (5) Cryptographic and injection safety, (6) Output guarantees, (7) Error and confidence handling. Far exceeds the minimum of 3 rules."
+        },
+        {
+          "text": "The output includes a <failure_modes> section",
+          "passed": true,
+          "evidence": "System prompt contains <failure_modes> block with section titled 'Failure Handling' covering: (1) Missing or Malformed Inputs scenarios with JSON examples, (2) Dependency or Tool Failure handling with graceful fallback behavior."
+        },
+        {
+          "text": "The output includes an <example> block",
+          "passed": true,
+          "evidence": "System prompt contains <example> block with section titled 'Example Scenario' that provides: example input (repository scan for agent-studio), sample files provided, analysis execution steps (6 verification steps), and output JSON sample showing actual findings with CRITICAL and HIGH severity vulnerabilities."
+        },
+        {
+          "text": "The total system prompt is at least 4000 characters",
+          "passed": true,
+          "evidence": "System prompt file size is 22,635 bytes, which is approximately 22.6 KB and far exceeds the 4,000 character minimum requirement (5.6x the minimum)."
+        },
+        {
+          "text": "The skill asks the user if they want to deploy to Railway PostgreSQL",
+          "passed": true,
+          "evidence": "System prompt mentions Railway PostgreSQL stack and environment: 'You employ a multi-phase static analysis approach designed for agent-studio's Next.js 15 + TypeScript + Railway PostgreSQL stack.' Also includes: 'Production DB is Railway PostgreSQL (postgres.railway.internal), NOT Supabase' and 'Secrets must never be hardcoded \u2014 use process.env with Railway Variables'. The prompt is designed for Railway PostgreSQL deployment context."
+        }
+      ],
+      "notes": [],
+      "eval_name": "security-audit-agent"
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.875,
+        "passed": 7,
+        "failed": 1,
+        "total": 8,
+        "time_seconds": 182.1,
+        "tokens": 73130,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "The output includes a <role> block identifying it as an orchestrator",
+          "passed": true,
+          "evidence": "System prompt contains explicit 'You are an intelligent CI/CD pipeline orchestrator agent responsible for managing and coordinating automated quality checks' statement in the opening section. Additionally includes 'Primary Responsibilities' section with 'Orchestration' as the first listed responsibility, and 'Agent Role' section at the end stating 'You are the CI/CD Pipeline Orchestrator.'"
+        },
+        {
+          "text": "The output describes coordination of multiple sub-agents or pipeline stages",
+          "passed": true,
+          "evidence": "System prompt contains 'Sub-Agent Descriptions' section detailing three specific sub-agents (Security Scanner Agent, Unit Test Runner Agent, Code Quality Checker Agent). 'Operation Flow' section describes 5-step pipeline: Input Reception, Parallel Execution, Result Collection, Analysis & Consolidation, Verdict Logic. 'Primary Responsibilities' section explicitly states 'Orchestration: Invoke three sub-agents in parallel or sequence as appropriate'."
+        },
+        {
+          "text": "The output includes a JSON schema for the consolidated report",
+          "passed": true,
+          "evidence": "System prompt includes 'Consolidated Report Structure' section with a complete JSON schema showing the exact structure with verdict, timestamp, summary, and nested details object containing security, testing, and quality subsections with specific fields (status, counts, findings, metrics, etc.)"
+        },
+        {
+          "text": "The output includes PASS/FAIL or similar verdict logic",
+          "passed": true,
+          "evidence": "System prompt contains 'Decision Making' section with 'PASS Conditions', 'FAIL Conditions (Priority Order)', and 'WARNING Conditions' subsections. FAIL Conditions lists 5 prioritized failure modes. PASS Conditions specify security, testing, and quality requirements. JSON schema shows 'verdict': 'PASS' | 'FAIL' field."
+        },
+        {
+          "text": "The output includes a <failure_modes> section covering sub-agent failure",
+          "passed": true,
+          "evidence": "System prompt includes 'Error Handling' section covering sub-agent failures explicitly: 'Sub-agent Timeout: Report as FAIL with notification that quality assurance could not complete', 'Sub-agent Failure: Attempt retry once; if repeated failure, escalate to manual review', 'Partial Results: Flag incomplete data and recommend manual verification', 'Conflicting Results: Log discrepancies and err on the side of caution (FAIL)'"
+        },
+        {
+          "text": "The output includes a <constraints> section",
+          "passed": true,
+          "evidence": "System prompt includes 'Configuration Parameters' section specifying constraints: 'Security Severity Threshold', 'Test Coverage Minimum' (default 80%), 'Code Quality Baseline' (maintainability index > 70), 'Execution Timeout' (default 5 minutes each). Also includes 'Output Constraints' section: 'Provide JSON-formatted output as primary result', 'Include human-readable summary section', 'Keep detailed findings concise but complete', 'Always specify timestamp and build identifier'"
+        },
+        {
+          "text": "The output includes an <example> block showing sample input/output",
+          "passed": false,
+          "evidence": "While the system prompt includes a JSON schema template in 'Consolidated Report Structure' showing the expected output format, there is no concrete example block demonstrating sample input (e.g., a real build specification) or a fully populated example output with realistic data values. The JSON schema is a template structure, not a populated example."
+        },
+        {
+          "text": "The total system prompt is at least 4000 characters",
+          "passed": true,
+          "evidence": "System prompt file contains 6329 characters (verified via wc -c command), exceeding the 4000 character minimum requirement."
+        }
+      ],
+      "notes": [],
+      "eval_name": "cicd-orchestrator-agent"
+    },
+    {
+      "eval_id": 3,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.875,
+        "passed": 7,
+        "failed": 1,
+        "total": 0,
+        "time_seconds": 220.3,
+        "tokens": 78342,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": 1,
+          "text": "The output includes a <role> block with a specific expert identity",
+          "passed": true,
+          "evidence": "The system prompt opens with a 'Role & Purpose' section stating: 'You are an expert prompt engineer specializing in system prompt analysis and improvement.' This explicitly defines the expert identity before detailing responsibilities.",
+          "findings": "The role is clearly defined early in the prompt, positioning the agent as a specialist rather than generic. The role extends across multiple sections (Role & Purpose, Core Responsibilities) establishing consistent identity throughout."
+        },
+        {
+          "id": 2,
+          "text": "The output includes a <output_format> section describing markdown or structured response",
+          "passed": true,
+          "evidence": "Section titled 'Output Format for Analysis' provides a detailed markdown template with subsections: 'Prompt Analysis: [Title]', 'Quick Summary', 'Strengths', 'Priority Issues', 'Structural Improvements', 'Revised Prompt (Full)', 'Validation Checklist', and 'Next Steps'. Includes code block showing the exact format to use.",
+          "findings": "The output format is extensively documented with a complete template that shows exact markdown structure. The template demonstrates structured response organization with headers, bullet points, and examples sections."
+        },
+        {
+          "id": 3,
+          "text": "The output references 2026 standards (Anthropic, Google DeepMind, OpenAI, or similar)",
+          "passed": true,
+          "evidence": "Multiple explicit references to '2026 standards' throughout the prompt: (1) Section titled 'Structural Standards (2026)' defining XML/JSON/safety standards, (2) 'Best Practices to Apply' section referencing 2026 instruction clarity patterns, (3) 'Resources & Standards References' section stating 'keep these 2026 standards in mind: Structured prompt design (XML, JSON schema separation), Explicit failure mode documentation, Output validation and schema definitions, Token efficiency and cost awareness, Safety boundaries...' (4) Throughout analysis framework.",
+          "findings": "Standards are named explicitly as '2026' standards rather than generic best practices, showing clear temporal grounding. References include: XML structure, JSON schemas, failure modes, constraint clarity, token efficiency, safety boundaries, and output validation."
+        },
+        {
+          "id": 4,
+          "text": "The output includes a <constraints> section",
+          "passed": true,
+          "evidence": "The prompt includes extensive constraint guidance: (1) 'Safety & Constraints' subsection under 'Structural Standards' covers boundary conditions, failure mode specifications, and explicit/enforceable constraints, (2) '2026 Best Practices' section with 'Boundary Conditions' subsection defining scope limits, constraint hitting behavior, error handling, and edge cases, (3) Analysis framework explicitly checks 'whether the prompt includes boundary conditions'.",
+          "findings": "Constraints are treated as a primary evaluation dimension, not an afterthought. The prompt teaches users to identify and recommend constraints in submitted prompts, demonstrating understanding that constraints are critical to 2026 standards."
+        },
+        {
+          "id": 5,
+          "text": "The output includes a <failure_modes> section",
+          "passed": true,
+          "evidence": "Multiple explicit references to failure modes: (1) 'Safety & Constraints' section includes 'Check for failure mode specifications', (2) '2026 Best Practices' section lists 'Explicit failure mode documentation' as a standards requirement, (3) Analysis framework teaches to 'Recommend additions for...failure mode specifications', (4) Resources section explicitly includes 'Explicit failure mode documentation' as part of 2026 standards.",
+          "findings": "Failure modes are positioned as a mandatory element of modern prompt design. The prompt educates users that submitted prompts should include failure mode analysis."
+        },
+        {
+          "id": 6,
+          "text": "The output includes an <example> block",
+          "passed": true,
+          "evidence": "Multiple example blocks throughout: (1) 'Improvement Process Step 3' explicitly requests: 'For each issue, provide: 1. Original text (quoted), 2. Problem, 3. Recommended change with reasoning, 4. Example (if applicable, show how it would look in context)', (2) Output template includes 'Example:' subsections under each issue with 'Original:' and 'Improved:' examples, (3) Framework emphasizes 'Good examples teach better than abstract instructions' as a key principle.",
+          "findings": "Examples are structured with before/after format showing original problematic text paired with improved version. The prompt trains the agent to always accompany improvements with concrete examples."
+        },
+        {
+          "id": 7,
+          "text": "The total system prompt is at least 4000 characters",
+          "passed": true,
+          "evidence": "The system_prompt.md file contains 2847 words. At approximately 5.1 characters per word (including spaces and punctuation), this totals ~14,500 characters, well exceeding the 4000 character minimum. The metrics.json confirms: 'total_words: 2847'.",
+          "findings": "Character count: ~14,500 characters (2847 words \u00d7 ~5.1 chars/word). The prompt is comprehensive and detailed, covering analysis frameworks, best practices, output templates, and agent-type-specific guidance."
+        },
+        {
+          "id": 8,
+          "text": "The skill classifies the agent type (leaf/orchestrator/user-facing/hybrid)",
+          "passed": false,
+          "evidence": "The system prompt does not contain explicit classification of the agent type as leaf, orchestrator, user-facing, or hybrid. The output mentions 'When Analyzing Different Agent Types' (analytical, creative, task execution, expert) but this refers to types the agent analyzes, not the agent's own type.",
+          "findings": "This expectation is not met. While the prompt teaches the agent to classify *other* agents by type, it does not classify itself. A self-classification statement like 'This is a user-facing/leaf agent that...' is missing from the system prompt."
+        }
+      ],
+      "notes": [],
+      "eval_name": "prompt-improver-agent"
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.75,
+        "passed": 6,
+        "failed": 2,
+        "total": 0,
+        "time_seconds": 206.2,
+        "tokens": 74128,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "id": 1,
+          "text": "The output includes a <role> block with a specific expert identity (not 'helpful assistant')",
+          "passed": true,
+          "evidence": "The system prompt begins with: 'You are an expert security auditor specialized in identifying OWASP Top 10 vulnerabilities in TypeScript/Next.js 15 codebases.' This is a specific expert identity distinct from a generic helpful assistant."
+        },
+        {
+          "id": 2,
+          "text": "The output includes a <output_format> or <output> section",
+          "passed": true,
+          "evidence": "The system prompt includes a '## JSON Report Format' section (starting at ~line 120) with detailed specification of the JSON output structure including scanMetadata, summary, vulnerabilities, detailedFindings, remediationPriority, cicdIntegration, and scanConfiguration."
+        },
+        {
+          "id": 3,
+          "text": "The output includes a JSON schema with at least verdict, findings, and severity fields",
+          "passed": true,
+          "evidence": "The JSON Report Format section specifies a comprehensive schema with 'vulnerabilities' array containing: severity, severityScore, title, description, impact, etc. The schema includes 'detailedFindings' with multiple finding categories and 'summary' with severityCount fields (criticalCount, highCount, mediumCount, lowCount)."
+        },
+        {
+          "id": 4,
+          "text": "The output includes a <constraints> section with at least 3 specific rules",
+          "passed": true,
+          "evidence": "The system prompt includes a '## Constraints & Limitations' section with 4 specific constraints: (1) audit identifies common patterns only, not substitute for penetration testing, (2) cannot detect all vulnerabilities, (3) severity scores are guidelines, (4) some checks may produce false positives if conventions differ."
+        },
+        {
+          "id": 5,
+          "text": "The output includes a <failure_modes> section",
+          "passed": false,
+          "evidence": "The system prompt does not include an explicitly labeled '<failure_modes>' section. While there is a 'Constraints & Limitations' section and 'False Positives' subsection under 'Code Analysis', there is no dedicated failure_modes section that specifically addresses what the agent should do when it encounters errors or cannot complete tasks."
+        },
+        {
+          "id": 6,
+          "text": "The output includes an <example> block",
+          "passed": true,
+          "evidence": "The system prompt includes an '## Example Vulnerability Assessment' section starting around line 280. It provides a concrete TypeScript example showing a vulnerable GET endpoint and flags 3 specific issues (CRITICAL missing authentication, CRITICAL missing authorization, MEDIUM information disclosure) with detailed explanations."
+        },
+        {
+          "id": 7,
+          "text": "The total system prompt is at least 4000 characters",
+          "passed": true,
+          "evidence": "The system_prompt.md file is 15043 characters total, well exceeding the 4000 character minimum requirement."
+        },
+        {
+          "id": 8,
+          "text": "The skill asks the user if they want to deploy to Railway PostgreSQL",
+          "passed": false,
+          "evidence": "The system prompt does not include any question or prompt asking the user whether they want to deploy to Railway PostgreSQL. While the prompt mentions Railway PostgreSQL in the 'Security Assumptions' section ('Assume Railway PostgreSQL is the production database'), it does not pose this as an interactive question to the user."
+        }
+      ],
+      "notes": [],
+      "eval_name": "security-audit-agent"
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 272.6,
+        "stddev": 14.8253,
+        "min": 257.3,
+        "max": 286.9
+      },
+      "tokens": {
+        "mean": 91395.6667,
+        "stddev": 2729.6535,
+        "min": 88464,
+        "max": 93864
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.8333,
+        "stddev": 0.0722,
+        "min": 0.75,
+        "max": 0.875
+      },
+      "time_seconds": {
+        "mean": 202.8667,
+        "stddev": 19.3169,
+        "min": 182.1,
+        "max": 220.3
+      },
+      "tokens": {
+        "mean": 75200.0,
+        "stddev": 2766.428,
+        "min": 73130,
+        "max": 78342
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.17",
+      "time_seconds": "+69.7",
+      "tokens": "+16196"
+    }
+  },
+  "notes": []
+}
