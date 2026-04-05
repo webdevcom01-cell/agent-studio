@@ -112,3 +112,4 @@ pre-deployment-audit-prompt.md
 agents.csv
 agents_export.csv
 test_write_check
+agents_dump.json
