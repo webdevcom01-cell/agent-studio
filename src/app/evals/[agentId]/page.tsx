@@ -199,7 +199,7 @@ function CreateSuiteDialog({
           <Button
             onClick={handleCreate}
             disabled={!name.trim() || isCreating}
-            className="bg-foreground hover:bg-foreground/90 text-foreground"
+            className="bg-foreground hover:bg-foreground/90 text-primary-foreground"
           >
             {isCreating ? "Creating..." : "Create Suite"}
           </Button>
@@ -578,7 +578,7 @@ export default function EvalsPage({ params }: PageProps) {
               <p className="text-muted-foreground/60 text-xs">No suites yet</p>
               <Button
                 size="sm"
-                className="mt-2 bg-foreground hover:bg-foreground/90 text-foreground text-xs w-full"
+                className="mt-2 bg-foreground hover:bg-foreground/90 text-primary-foreground text-xs w-full"
                 onClick={() => setShowGenerateDialog(true)}
               >
                 <Sparkles className="size-3.5 mr-1" /> Generate with AI
@@ -685,7 +685,7 @@ export default function EvalsPage({ params }: PageProps) {
               </p>
               {suites.length === 0 && (
                 <Button
-                  className="mt-4 bg-foreground hover:bg-foreground/90 text-foreground"
+                  className="mt-4 bg-foreground hover:bg-foreground/90 text-primary-foreground"
                   onClick={() => setShowCreateDialog(true)}
                 >
                   <Plus className="size-4 mr-2" /> Create Eval Suite
@@ -785,7 +785,7 @@ export default function EvalsPage({ params }: PageProps) {
                       <p className="text-muted-foreground/40 text-xs mt-1">Run your eval suite to see results here</p>
                       <Button
                         size="sm"
-                        className="mt-4 bg-foreground hover:bg-foreground/90 text-foreground"
+                        className="mt-4 bg-foreground hover:bg-foreground/90 text-primary-foreground"
                         onClick={() => { setActiveTab("cases"); }}
                       >
                         Go to Test Cases
@@ -916,7 +916,7 @@ export default function EvalsPage({ params }: PageProps) {
             <Button
               onClick={handleSaveSchedule}
               disabled={isSavingSchedule}
-              className="bg-foreground hover:bg-foreground/90 text-foreground"
+              className="bg-foreground hover:bg-foreground/90 text-primary-foreground"
             >
               {isSavingSchedule ? "Saving..." : "Save Schedule"}
             </Button>
@@ -1007,7 +1007,7 @@ export default function EvalsPage({ params }: PageProps) {
                 <Button
                   onClick={handleRunComparison}
                   disabled={isComparing || !compareA || !compareB || compareA === compareB}
-                  className="bg-foreground hover:bg-foreground/90 text-foreground"
+                  className="bg-foreground hover:bg-foreground/90 text-primary-foreground"
                 >
                   {isComparing ? (
                     <><Loader2 className="size-3.5 mr-1.5 animate-spin" /> Running...</>
