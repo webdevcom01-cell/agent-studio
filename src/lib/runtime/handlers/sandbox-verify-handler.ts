@@ -3,6 +3,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import type { NodeHandler } from "../types";
 import { runVerificationCommands } from "../verification-commands";
+import { validateAgainstSchema } from "@/lib/sdlc/schemas";
 import { logger } from "@/lib/logger";
 
 const DEFAULT_CHECKS = ["forbidden_patterns"];
@@ -26,6 +27,7 @@ const BUILT_IN_FORBIDDEN_PATTERNS: ForbiddenPattern[] = [
 
 export const sandboxVerifyHandler: NodeHandler = async (node, context) => {
   const inputVariable = (node.data.inputVariable as string) || "generatedCode";
+  const inputSchemaName = node.data.inputSchema as string | undefined;
   const checks: string[] = Array.isArray(node.data.checks)
     ? (node.data.checks as string[])
     : DEFAULT_CHECKS;
@@ -42,6 +44,19 @@ export const sandboxVerifyHandler: NodeHandler = async (node, context) => {
         "FAIL: input variable is empty",
       );
     }
+
+    // ── Schema validation (3.3) ───────────────────────────────────────────
+    if (inputSchemaName && typeof codeInput === "object") {
+      const validation = validateAgainstSchema(inputSchemaName, codeInput);
+      if (!validation.success) {
+        return failResult(
+          resultVar,
+          [`Input schema validation failed (${inputSchemaName}): ${validation.error}`],
+          `FAIL: input does not match ${inputSchemaName} schema`,
+        );
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     const codeFiles = extractCodeFiles(codeInput);
     if (codeFiles.length === 0) {

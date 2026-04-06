@@ -1,4 +1,4 @@
-import { generateText, stepCountIs } from "ai";
+import { generateText, generateObject, stepCountIs } from "ai";
 import { getModel, getModelByTier, DEFAULT_MODEL } from "@/lib/ai";
 import { classifyTaskComplexity, complexityToTier } from "@/lib/cost/ecomode";
 import { logger } from "@/lib/logger";
@@ -11,6 +11,7 @@ import { reformulateWithHistory } from "@/lib/knowledge/query-reformulation";
 import { composeSkillPipeline, formatSkillPipelineForPrompt } from "@/lib/ecc/skill-composer";
 import { routeToSkill, formatRoutedSkillsForPrompt } from "@/lib/ecc/skill-router";
 import type { NodeHandler } from "../types";
+import { resolveSchema } from "@/lib/sdlc/schemas";
 import { emitHook } from "../hooks";
 import { resolveTemplate } from "../template";
 import { checkInputSafety, checkOutputSafety } from "@/lib/safety/engine-safety-middleware";
@@ -78,6 +79,7 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
   const temperature = (node.data.temperature as number) ?? 0.7;
   const maxTokens = (node.data.maxTokens as number) ?? 4000;
   const outputVariable = (node.data.outputVariable as string) ?? "";
+  const outputSchemaName = node.data.outputSchema as string | undefined;
   const enableAgentTools = (node.data.enableAgentTools as boolean) ?? false;
   // enableRAG defaults to true — agents with a KB always use it unless explicitly disabled
   const enableRAG = (node.data.enableRAG as boolean) ?? true;
@@ -215,6 +217,56 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
             : undefined,
         };
       }
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
+    // ── Structured output branch (outputSchema) ───────────────────────────
+    if (outputSchemaName) {
+      const schema = resolveSchema(outputSchemaName);
+      if (!schema) {
+        throw new Error(`Unknown outputSchema "${outputSchemaName}" — available: CodeGenOutput, PRGateOutput`);
+      }
+
+      const startMsObj = Date.now();
+      const { object, usage: objUsage } = await generateObject({
+        model,
+        schema,
+        messages: [
+          ...(effectiveSystemPrompt ? [{ role: "system" as const, content: effectiveSystemPrompt }] : []),
+          ...historyMessages,
+        ],
+        temperature,
+        maxOutputTokens: maxTokens,
+      });
+      const durationMsObj = Date.now() - startMsObj;
+
+      const inputTokensObj = objUsage?.inputTokens ?? 0;
+      const outputTokensObj = objUsage?.outputTokens ?? 0;
+
+      recordChatLatency(context.agentId, modelId, durationMsObj);
+      if (inputTokensObj > 0 || outputTokensObj > 0) {
+        recordTokenUsage(context.agentId, modelId, inputTokensObj, outputTokensObj);
+      }
+
+      writeAuditLog({
+        userId: context.userId,
+        action: "AI_CALL",
+        resourceType: "Agent",
+        resourceId: context.agentId,
+        after: { model: modelId, inputTokensObj, outputTokensObj, durationMsObj, nodeId: node.id, outputSchema: outputSchemaName },
+      }).catch(() => {});
+
+      const obj = object as Record<string, unknown>;
+      const summary = typeof obj.summary === "string"
+        ? obj.summary
+        : `${outputSchemaName} generated successfully`;
+
+      return {
+        messages: [{ role: "assistant", content: summary }],
+        nextNodeId: null,
+        waitForInput: false,
+        updatedVariables: outputVariable ? { [outputVariable]: object } : undefined,
+      };
     }
     // ─────────────────────────────────────────────────────────────────────
 

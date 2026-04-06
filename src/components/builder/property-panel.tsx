@@ -336,6 +336,28 @@ export function PropertyPanel({
                   </p>
                 )}
               </div>
+              <div className="space-y-2">
+                <Label>Output Schema</Label>
+                <Select
+                  value={(data.outputSchema as string) || "__none__"}
+                  onValueChange={(v) => update("outputSchema", v === "__none__" ? "" : v)}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="None (free text)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None (free text)</SelectItem>
+                    <SelectItem value="CodeGenOutput">CodeGenOutput</SelectItem>
+                    <SelectItem value="PRGateOutput">PRGateOutput</SelectItem>
+                  </SelectContent>
+                </Select>
+                {data.outputSchema ? (
+                  <p className="rounded bg-muted/10 px-2 py-1.5 text-xs text-muted-foreground">
+                    Uses <code>generateObject</code> — returns structured JSON, not free text.
+                    Output variable will contain the typed object.
+                  </p>
+                ) : null}
+              </div>
             </PropertySection>
           </>
         )}
@@ -6524,6 +6546,29 @@ function SandboxVerifyProperties({ data, update, variables = [] }: SubPanelProps
         <p className="text-xs text-muted-foreground">
           Variable containing generated code (string or <code>{"{ files: [{path, content}] }"}</code>).
         </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Input Schema Validation</Label>
+        <Select
+          value={(data.inputSchema as string) || "__none__"}
+          onValueChange={(v) => update("inputSchema", v === "__none__" ? "" : v)}
+        >
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue placeholder="None (skip validation)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">None (skip validation)</SelectItem>
+            <SelectItem value="CodeGenOutput">CodeGenOutput</SelectItem>
+            <SelectItem value="PRGateOutput">PRGateOutput</SelectItem>
+          </SelectContent>
+        </Select>
+        {data.inputSchema ? (
+          <p className="text-xs text-muted-foreground">
+            Validates input against the <code>{String(data.inputSchema)}</code> schema before running checks.
+            Flow stops with FAIL if validation fails.
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-2">
