@@ -33,6 +33,7 @@ export const SELF_ROUTING_NODES = new Set([
   "semantic_router",
   "cache",
   "verification",
+  "sandbox_verify",
 ]);
 
 /**

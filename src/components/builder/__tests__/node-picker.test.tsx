@@ -164,8 +164,8 @@ describe("NodePicker", () => {
 
   // ── Node definitions completeness ─────────────────────────────────────
 
-  it("has exactly 60 node definitions", () => {
-    expect(NODE_DEFINITIONS.length).toBe(60);
+  it("has exactly 61 node definitions", () => {
+    expect(NODE_DEFINITIONS.length).toBe(61);
   });
 
   it("every node has a usageExample", () => {
@@ -229,7 +229,7 @@ describe("NodePicker", () => {
     expect(counts.logic).toBe(13);
     expect(counts.integrations).toBe(11);
     expect(counts.messaging).toBe(6);
-    expect(counts.utilities).toBe(11);
+    expect(counts.utilities).toBe(12);
   });
 
   // ── Node rendering per category ───────────────────────────────────────

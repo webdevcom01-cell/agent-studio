@@ -59,6 +59,7 @@ import { verificationHandler } from "./verification-handler";
 import { astTransformHandler } from "./ast-transform-handler";
 import { lspQueryHandler } from "./lsp-query-handler";
 import { projectContextHandler } from "./project-context-handler";
+import { sandboxVerifyHandler } from "./sandbox-verify-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -121,6 +122,7 @@ const handlers: Record<string, NodeHandler> = {
   ast_transform: astTransformHandler,
   lsp_query: lspQueryHandler,
   project_context: projectContextHandler,
+  sandbox_verify: sandboxVerifyHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

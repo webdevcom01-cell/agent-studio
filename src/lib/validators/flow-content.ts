@@ -62,6 +62,7 @@ const NODE_TYPES = [
   "ast_transform",
   "lsp_query",
   "project_context",
+  "sandbox_verify",
 ] as const;
 
 const VARIABLE_TYPES = ["string", "number", "boolean", "object"] as const;

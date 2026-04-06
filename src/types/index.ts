@@ -89,4 +89,5 @@ export type NodeType =
   | "verification"
   | "ast_transform"
   | "lsp_query"
-  | "project_context";
+  | "project_context"
+  | "sandbox_verify";

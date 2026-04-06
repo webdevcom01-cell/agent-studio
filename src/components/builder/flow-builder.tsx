@@ -87,6 +87,7 @@ import { VerificationNode } from "./nodes/verification-node";
 import { AstTransformNode } from "./nodes/ast-transform-node";
 import { LspQueryNode } from "./nodes/lsp-query-node";
 import { ProjectContextNode } from "./nodes/project-context-node";
+import { SandboxVerifyNode } from "./nodes/sandbox-verify-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -166,6 +167,7 @@ const NODE_TYPES: NodeTypes = {
   ast_transform: AstTransformNode,
   lsp_query: LspQueryNode,
   project_context: ProjectContextNode,
+  sandbox_verify: SandboxVerifyNode,
 };
 
 // Debug-wrapped versions of all node types (stable reference, created once)

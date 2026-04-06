@@ -1245,6 +1245,24 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       outputVariable: "projectContext",
     },
   },
+  {
+    type: "sandbox_verify",
+    label: "Sandbox Verify",
+    description:
+      "Run deterministic checks on generated code before LLM review — forbidden patterns, TypeScript compilation, ESLint",
+    usageExample:
+      "Block code that uses @prisma/client, any types, or console.log from reaching the PR Gate agent",
+    icon: ShieldCheck,
+    color: "green",
+    category: "utilities",
+    defaultData: {
+      label: "Sandbox Verify",
+      inputVariable: "generatedCode",
+      checks: ["forbidden_patterns"],
+      forbiddenPatterns: [],
+      outputVariable: "sandboxResult",
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------

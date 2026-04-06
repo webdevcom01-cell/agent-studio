@@ -736,6 +736,9 @@ export function PropertyPanel({
         {node.type === "project_context" && (
           <ProjectContextProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "sandbox_verify" && (
+          <SandboxVerifyProperties data={data} update={update} variables={variables} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -806,6 +809,7 @@ const OUTPUT_VAR_TYPES = new Set([
   "lsp_query",
   "code_interpreter",
   "project_context",
+  "sandbox_verify",
 ]);
 
 /**
@@ -6475,6 +6479,118 @@ function ProjectContextProperties({ data, update }: SubPanelProps) {
         />
         <p className="text-xs text-muted-foreground">
           Reference in downstream prompts as <code>{"{{projectContext}}"}</code>.
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ─── SandboxVerifyProperties ──────────────────────────────────────────────────
+
+function SandboxVerifyProperties({ data, update, variables = [] }: SubPanelProps) {
+  const checks = Array.isArray(data.checks) ? (data.checks as string[]) : ["forbidden_patterns"];
+  const customPatterns = Array.isArray(data.forbiddenPatterns)
+    ? (data.forbiddenPatterns as { pattern: string; message: string }[])
+    : [];
+
+  const CHECK_OPTIONS = [
+    { id: "forbidden_patterns", label: "Forbidden Patterns" },
+    { id: "typecheck", label: "TypeScript (tsc)" },
+    { id: "lint", label: "ESLint" },
+  ];
+
+  const toggleCheck = (id: string) => {
+    const next = checks.includes(id) ? checks.filter((c) => c !== id) : [...checks, id];
+    update("checks", next);
+  };
+
+  const addPattern = () =>
+    update("forbiddenPatterns", [...customPatterns, { pattern: "", message: "" }]);
+  const removePattern = (idx: number) =>
+    update("forbiddenPatterns", customPatterns.filter((_, i) => i !== idx));
+  const updatePattern = (idx: number, field: "pattern" | "message", value: string) =>
+    update("forbiddenPatterns", customPatterns.map((p, i) => (i === idx ? { ...p, [field]: value } : p)));
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Input Variable</Label>
+        <VariableInput
+          value={(data.inputVariable as string) ?? "generatedCode"}
+          onChange={(v) => update("inputVariable", v)}
+          variables={variables}
+          placeholder="generatedCode"
+        />
+        <p className="text-xs text-muted-foreground">
+          Variable containing generated code (string or <code>{"{ files: [{path, content}] }"}</code>).
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Checks</Label>
+        <div className="space-y-1.5">
+          {CHECK_OPTIONS.map(({ id, label }) => (
+            <label key={id} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={checks.includes(id)}
+                onChange={() => toggleCheck(id)}
+                className="size-3.5 accent-foreground"
+              />
+              <span className="text-xs">{label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Custom Forbidden Patterns</Label>
+        <p className="text-xs text-muted-foreground">
+          Additional regex patterns to block. Built-in patterns (@prisma/client, any types, console.*) always run.
+        </p>
+        <div className="space-y-2">
+          {customPatterns.map((p, idx) => (
+            <div key={idx} className="space-y-1 rounded-md border p-2">
+              <div className="flex items-center gap-1.5">
+                <Input
+                  className="h-7 text-xs font-mono flex-1"
+                  placeholder="regex pattern"
+                  value={p.pattern}
+                  onChange={(e) => updatePattern(idx, "pattern", e.target.value)}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="size-7 p-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => removePattern(idx)}
+                >
+                  ×
+                </Button>
+              </div>
+              <Input
+                className="h-7 text-xs"
+                placeholder="Error message for developers"
+                value={p.message}
+                onChange={(e) => updatePattern(idx, "message", e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+        <Button variant="outline" size="sm" className="w-full" onClick={addPattern}>
+          + Add Pattern
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "sandboxResult"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="sandboxResult"
+        />
+        <p className="text-xs text-muted-foreground">
+          Stores <code>"PASS"</code> or <code>"FAIL"</code>. Also sets{" "}
+          <code>sandboxErrors</code> (string[]) and <code>sandboxSummary</code>.
         </p>
       </div>
     </>
