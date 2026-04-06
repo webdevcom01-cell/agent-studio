@@ -4244,6 +4244,7 @@ function EmbeddingsProperties({ data, update, variables = [] }: SubPanelProps) {
 // ── Retry ─────────────────────────────────────────────────────────────────
 
 function RetryProperties({ data, update }: Omit<SubPanelProps, "variables">) {
+  const escalationEnabled = (data.enableEscalation as boolean) ?? false;
   return (
     <>
       <div className="space-y-2">
@@ -4282,6 +4283,41 @@ function RetryProperties({ data, update }: Omit<SubPanelProps, "variables">) {
         </p>
       </div>
       <div className="space-y-2">
+        <Label>Failure Variable</Label>
+        <Input
+          value={(data.failureVariable as string) ?? ""}
+          onChange={(e) => update("failureVariable", e.target.value)}
+          placeholder="sandboxResult"
+        />
+        <p className="text-xs text-muted-foreground">
+          Variable to check for structured failure (e.g. sandboxResult). Leave blank to use
+          default error detection.
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label>Failure Values</Label>
+        <Input
+          value={
+            Array.isArray(data.failureValues)
+              ? (data.failureValues as string[]).join(", ")
+              : "FAIL, BLOCK"
+          }
+          onChange={(e) =>
+            update(
+              "failureValues",
+              e.target.value
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean),
+            )
+          }
+          placeholder="FAIL, BLOCK"
+        />
+        <p className="text-xs text-muted-foreground">
+          Comma-separated values that indicate failure
+        </p>
+      </div>
+      <div className="space-y-2">
         <Label>Output Variable</Label>
         <Input
           value={(data.outputVariable as string) ?? "retry_result"}
@@ -4289,6 +4325,63 @@ function RetryProperties({ data, update }: Omit<SubPanelProps, "variables">) {
           placeholder="retry_result"
         />
       </div>
+
+      <PropertySection title="Escalating Context">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="enableEscalation"
+              checked={escalationEnabled}
+              onChange={(e) => update("enableEscalation", e.target.checked)}
+              className="size-4 rounded border-border"
+            />
+            <Label htmlFor="enableEscalation">Enable escalation feedback</Label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Each retry injects richer feedback into{" "}
+            <code>{"{{__retry_escalation}}"}</code>. Retry 1 adds PR Gate fixes +
+            project context. Retry 2+ adds sandbox errors + code examples.
+          </p>
+
+          {escalationEnabled ? (
+            <>
+              <div className="space-y-2">
+                <Label>PR Gate variable</Label>
+                <Input
+                  value={(data.prGateVariable as string) ?? "gateResult"}
+                  onChange={(e) => update("prGateVariable", e.target.value)}
+                  placeholder="gateResult"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Sandbox errors variable</Label>
+                <Input
+                  value={(data.sandboxErrorsVariable as string) ?? "sandboxErrors"}
+                  onChange={(e) => update("sandboxErrorsVariable", e.target.value)}
+                  placeholder="sandboxErrors"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Project context variable</Label>
+                <Input
+                  value={(data.projectContextVariable as string) ?? "projectContext"}
+                  onChange={(e) => update("projectContextVariable", e.target.value)}
+                  placeholder="projectContext"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Code examples variable</Label>
+                <Input
+                  value={(data.codeExamplesVariable as string) ?? "codeExamples"}
+                  onChange={(e) => update("codeExamplesVariable", e.target.value)}
+                  placeholder="codeExamples"
+                />
+              </div>
+            </>
+          ) : null}
+        </div>
+      </PropertySection>
     </>
   );
 }
