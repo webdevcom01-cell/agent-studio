@@ -47,26 +47,87 @@ Report count immediately: "Found N agents in Railway PostgreSQL."
 
 Score each agent on these 10 binary checks (1 point each, max 10):
 
-| # | Dimension | How to check |
-|---|---|---|
-| 1 | `<role>` block present | `'<role>' in prompt` |
-| 2 | `<output_format>` or `<output>` section | tag present |
-| 3 | `<constraints>` section | tag present |
-| 4 | JSON schema defined | ` ```json ` block present |
-| 5 | Examples present | `<example` tag or `example:` keyword |
-| 6 | Failure modes defined | `fail` + `handling/modes/graceful` OR `<failure_modes>` |
-| 7 | Verification criteria | `verif` or `validat` keyword |
-| 8 | XML structure depth (≥4 XML tags total) | `prompt.count('<') > 4` |
-| 9 | Phased/decomposed approach | `phase` or `step` or `decompos` keyword |
-| 10 | Hard rules (never/must/always) | `never` or `must not` or `always` keyword |
+| # | Dimension | How to check | Applies to |
+|---|---|---|---|
+| 1 | `<role>` block present | `'<role>' in prompt` | All agents |
+| 2 | `<output_format>` or `<output>` section | tag present | All agents |
+| 3 | `<constraints>` section | tag present | All agents |
+| 4 | JSON schema defined | ` ```json ` block present | All agents |
+| 5 | Examples present | `<example` tag or `example:` keyword | All agents |
+| 6 | Failure modes defined | `fail` + `handling/modes/graceful` OR `<failure_modes>` | All agents |
+| 7 | Verification criteria | `verif` or `validat` keyword | All agents |
+| 8 | XML structure depth (≥4 XML tags total) | `prompt.count('<') > 4` | All agents |
+| 9 | Phased/decomposed approach | `phase` or `step` or `decompos` keyword | All agents |
+| 10 | Hard rules (never/must/always) | `never` or `must not` or `always` keyword | All agents |
+| 11 | `outputSchema` configured | agent has `defaultOutputSchema` field set | Pipeline leaf agents only |
+| 12 | `project_context` in pipeline | flow has `project_context` node at start | Code-analysis agents only |
+| 13 | `enableEscalation` on retry | retry node has `enableEscalation: true` | Code-gen pipeline agents only |
+
+**Scoring note:** Dimensions 11–13 are N/A for agents outside SDLC pipelines (chief-of-staff,
+doc-updater, language reviewers, etc.). Count only applicable dimensions in the max score.
+A user-facing agent with no pipeline role scores out of 10, not 13.
 
 **Thresholds:**
-- ✅ Enterprise quality: **8–10 / 10**
-- 🔧 Needs improvement: **6–7 / 10**
-- ⚠️ Critical gap: **< 6 / 10**
+- ✅ Enterprise quality: **8+** (of applicable dimensions)
+- 🔧 Needs improvement: **6–7** (of applicable dimensions)
+- ⚠️ Critical gap: **< 6** (of applicable dimensions)
 - 🗑️ Delete candidate: prompt ≤ 100 chars OR is "You are a helpful assistant."
 
 **Length check:** Minimum 4000 characters. Below this = automatic flag regardless of score.
+
+---
+
+## Step 2b — Phase 1-6 Pipeline Compliance Check
+
+For agents that participate in SDLC pipelines, run these 5 checks after the rubric score.
+Skip entirely for non-SDLC agents (chief-of-staff, doc-updater, language reviewers, etc.).
+
+**How to identify SDLC agents:** look for code review, code generation, security review,
+architecture, or reality check in the agent's description or system prompt.
+
+### Check 1 — `project_context` node present
+For code-reviewer, security-reviewer, reality-checker, architect agents:
+- ✅ Flow starts with a `project_context` node
+- ❌ Flow starts directly with `ai_response` — agent has no project convention awareness
+- **Risk if missing:** agent generates code that violates project rules (imports `@prisma/client`,
+  uses `any` types, calls `console.log`) because it doesn't know the project conventions
+
+### Check 2 — `outputSchema` matches registry
+For pipeline leaf agents (code-reviewer, security-reviewer, reality-checker, code-gen, architect):
+- ✅ `defaultOutputSchema` is set to one of: `"CodeGenOutput"`, `"PRGateOutput"`, `"ArchitectureOutput"`
+- ❌ Field is missing, empty, or set to an unregistered name (e.g., `"CodeReviewOutput"`)
+- **Risk if wrong name:** `resolveSchema()` returns `null`, validation is silently skipped,
+  orchestrators receive unvalidated output and may fail on malformed data downstream
+
+### Check 3 — `sandbox_verify` in code-gen pipeline
+For flows that include a Code Generation agent:
+- ✅ `sandbox_verify` node sits between Code Gen and PR Gate, with both handles connected
+- ❌ Flow goes Code Gen → PR Gate directly, skipping deterministic checks
+- **Risk if missing:** TypeScript errors, ESLint violations, and forbidden patterns
+  (`@prisma/client`, `:any`, `console.log`) reach PR Gate and waste AI review tokens
+
+### Check 4 — `enableEscalation` on retry nodes
+For SDLC retry nodes that follow `sandbox_verify` or a PR Gate:
+- ✅ `enableEscalation: true`, `maxRetries: 2`, `failureValues: ["FAIL", "BLOCK"]`
+- ❌ Standard retry with no escalation context — Code Gen gets same prompt every attempt
+- **Risk if missing:** retry sends empty context, Code Gen repeats the same mistake,
+  pipeline hits max retries without progress and pauses with an unhelpful error
+
+### Check 5 — A2A fields for public SDLC agents
+For ecc-code-reviewer, ecc-security-reviewer, ecc-reality-checker, ecc-architect, ecc-tdd-guide:
+- ✅ `isPublic: true` and `skills[]` array with at least one entry containing `id`, `name`,
+  `description`, `inputModes`, `outputModes`
+- ❌ Fields missing — agent is not discoverable via `/.well-known/agent-cards`
+- **Risk if missing:** external A2A clients cannot discover or invoke these agents
+
+### Compliance Report Format
+After checks, append to the agent's rubric row:
+
+```
+ecc-code-reviewer: 9/10 | Phase 1-6: ✅ ctx ✅ schema ✅ sandbox ✅ escalation ✅ a2a
+ecc-architect:     8/10 | Phase 1-6: ✅ ctx ✅ schema N/A sandbox N/A escalation ✅ a2a
+ecc-planner:       8/10 | Phase 1-6: N/A (non-SDLC leaf agent)
+```
 
 ---
 
@@ -141,6 +202,51 @@ Cover the three universal failure scenarios:
 1. Input missing or malformed → what to do
 2. Confidence too low → what to say
 3. Out of scope → how to redirect
+
+### Fixing Phase 1-6 gaps
+
+**Missing `project_context` node:**
+Add as the first node in the flow with:
+```
+contextFiles: ["CLAUDE.md", ".claude/rules/*.md"]
+outputVariable: "projectContext"
+maxTokens: 4000
+```
+Then verify the next node reads `{{projectContext}}` in its prompt template.
+
+**Wrong or missing `outputSchema`:**
+Set `defaultOutputSchema` to the correct registry name. Valid values only:
+- Code generation agents → `"CodeGenOutput"`
+- Code reviewer, security reviewer, reality checker → `"PRGateOutput"`
+- Architecture agents → `"ArchitectureOutput"`
+Any other value means `resolveSchema()` returns `null` and validation is silently skipped.
+
+**Missing `sandbox_verify` node:**
+Add between Code Gen and PR Gate. Configure:
+```
+inputVariable: "generatedCode"   ← must match Code Gen's outputVariable
+inputSchema: "CodeGenOutput"
+checks: ["typecheck", "lint", "forbidden_patterns"]
+```
+Connect BOTH handles: `sourceHandle: "passed"` → PR Gate, `sourceHandle: "failed"` → retry.
+If either handle is unconnected, flow stops silently on that path.
+
+**Missing `enableEscalation` on retry:**
+Update retry node with:
+```
+enableEscalation: true
+maxRetries: 2
+failureVariable: "sandboxResult"
+failureValues: ["FAIL", "BLOCK"]
+prGateVariable: "gateResult"
+sandboxErrorsVariable: "sandboxErrors"
+projectContextVariable: "projectContext"
+```
+All variable names must match what upstream nodes actually write. Verify the chain.
+
+**Missing A2A fields:**
+For public SDLC agents, add `isPublic: true` and a `skills[]` array with at least one
+skill object: `{ id, name, description, inputModes: ["application/json"], outputModes: ["application/json"] }`.
 
 ---
 
@@ -238,6 +344,66 @@ The dimensions we check against are derived from:
 - Directive + constraints + format pattern
 - JSON at token level reduces iteration rate from 38.5% to 12.3%
 - Failure handling prevents cascading failures in multi-agent pipelines
+
+**agent-studio Phase 1-6 (April 2026)**
+- `project_context` node: injects CLAUDE.md + .claude/rules/*.md at pipeline start
+- `sandbox_verify` node: deterministic TypeScript + ESLint + forbidden pattern checks before AI review
+- Typed Output Schemas: `CodeGenOutput`, `PRGateOutput`, `ArchitectureOutput` registered in `src/lib/sdlc/schemas.ts`
+- Escalating Retry: 2-attempt loop with progressively richer feedback (sandbox errors + few-shot examples)
+- A2A Agent Cards v0.3: `isPublic` + `skills[]` on PR Gate agents for external discovery
+- MCP Enforcement: `validateMCPInputArgs` + `validateNamedSchema` applied non-fatally on all MCP tool calls
+
+---
+
+## Variable Chain Audit (B-5)
+
+When auditing SDLC pipeline agents, verify the **variable contract** between nodes.
+A mismatched variable name causes silent failure — node runs but reads/writes nothing.
+
+| Node | Reads | Writes |
+|---|---|---|
+| `project_context` | — | `{{projectContext}}` (via `outputVariable`) |
+| Code Gen `ai_response` | `{{projectContext}}` | `{{generatedCode}}` (via `outputVariable`) |
+| `sandbox_verify` | `{{generatedCode}}` (via `inputVariable`) | `{{sandboxResult}}`, `{{sandboxErrors}}`, `{{sandboxSummary}}` |
+| PR Gate `ai_response` | `{{generatedCode}}`, `{{projectContext}}` | `{{gateResult}}` (via `outputVariable`) |
+| `retry` (escalating) | `{{gateResult}}`, `{{sandboxErrors}}`, `{{projectContext}}` | `{{__retry_escalation}}` (internal) |
+
+**Audit check:** for each node pair, confirm `outputVariable` of node N = `inputVariable` of node N+1.
+Flag any mismatch as a **Critical Gap** — it will cause the pipeline to run but produce wrong output.
+
+---
+
+## Schema Registry Validation (B-6)
+
+When checking `outputSchema` fields, only these names are valid in the registry
+(`src/lib/sdlc/schemas.ts`):
+
+| Schema name | Used by |
+|---|---|
+| `"CodeGenOutput"` | Code Generation agents |
+| `"PRGateOutput"` | Code Reviewer, Security Reviewer, Reality Checker |
+| `"ArchitectureOutput"` | Architecture Decision agents |
+
+Any other value → `resolveSchema()` returns `null` → validation silently skipped.
+Flag unrecognized schema names as **Critical Gap** during audit.
+
+---
+
+## Retry Wiring Audit (B-7)
+
+When `enableEscalation: true` is set on a retry node, all 4 escalation variables
+must point to variables that upstream nodes actually write. Check each:
+
+| Retry field | Default value | Must be written by |
+|---|---|---|
+| `prGateVariable` | `"gateResult"` | PR Gate `ai_response` node |
+| `sandboxErrorsVariable` | `"sandboxErrors"` | `sandbox_verify` node |
+| `projectContextVariable` | `"projectContext"` | `project_context` node |
+| `codeExamplesVariable` | `"codeExamples"` | optional — skip if not set |
+
+If any required variable is not written by an upstream node, escalation sends empty
+strings to Code Gen → retry produces no improvement → pipeline pauses with unhelpful error.
+Flag missing wiring as **High** severity during audit.
 
 ---
 
