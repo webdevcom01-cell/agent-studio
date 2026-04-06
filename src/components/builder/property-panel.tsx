@@ -733,6 +733,9 @@ export function PropertyPanel({
         {node.type === "lsp_query" && (
           <LspQueryProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "project_context" && (
+          <ProjectContextProperties data={data} update={update} variables={variables} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -802,6 +805,7 @@ const OUTPUT_VAR_TYPES = new Set([
   "ast_transform",
   "lsp_query",
   "code_interpreter",
+  "project_context",
 ]);
 
 /**
@@ -6350,6 +6354,127 @@ function LspQueryProperties({ data, update }: SubPanelProps) {
         />
         <p className="text-xs text-muted-foreground">
           Stores <code>{"{ available, operation, result, error? }"}</code>
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ─── ProjectContextProperties ─────────────────────────────────────────────────
+
+function ProjectContextProperties({ data, update }: SubPanelProps) {
+  const contextFiles = Array.isArray(data.contextFiles) ? (data.contextFiles as string[]) : [];
+  const exampleFiles = Array.isArray(data.exampleFiles) ? (data.exampleFiles as string[]) : [];
+
+  const addContextFile = () => update("contextFiles", [...contextFiles, ""]);
+  const removeContextFile = (idx: number) =>
+    update("contextFiles", contextFiles.filter((_, i) => i !== idx));
+  const updateContextFile = (idx: number, value: string) =>
+    update("contextFiles", contextFiles.map((f, i) => (i === idx ? value : f)));
+
+  const addExampleFile = () => update("exampleFiles", [...exampleFiles, ""]);
+  const removeExampleFile = (idx: number) =>
+    update("exampleFiles", exampleFiles.filter((_, i) => i !== idx));
+  const updateExampleFile = (idx: number, value: string) =>
+    update("exampleFiles", exampleFiles.map((f, i) => (i === idx ? value : f)));
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Context Label</Label>
+        <Input
+          value={(data.contextLabel as string) ?? "Project Rules"}
+          onChange={(e) => update("contextLabel", e.target.value)}
+          placeholder="Project Rules"
+        />
+        <p className="text-xs text-muted-foreground">Used in debug messages only.</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Convention Files</Label>
+        <p className="text-xs text-muted-foreground">
+          Paths relative to project root. Supports <code>*</code> wildcard (e.g.{" "}
+          <code>.claude/rules/*.md</code>).
+        </p>
+        <div className="space-y-1.5">
+          {contextFiles.map((f, idx) => (
+            <div key={idx} className="flex items-center gap-1.5">
+              <Input
+                className="h-7 text-xs font-mono flex-1"
+                placeholder="CLAUDE.md"
+                value={f}
+                onChange={(e) => updateContextFile(idx, e.target.value)}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="size-7 p-0 text-muted-foreground hover:text-destructive"
+                onClick={() => removeContextFile(idx)}
+              >
+                ×
+              </Button>
+            </div>
+          ))}
+        </div>
+        <Button variant="outline" size="sm" className="w-full" onClick={addContextFile}>
+          + Add File
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Example Files</Label>
+        <p className="text-xs text-muted-foreground">
+          Source files to include as few-shot examples (e.g. an existing API route).
+        </p>
+        <div className="space-y-1.5">
+          {exampleFiles.map((f, idx) => (
+            <div key={idx} className="flex items-center gap-1.5">
+              <Input
+                className="h-7 text-xs font-mono flex-1"
+                placeholder="src/app/api/agents/route.ts"
+                value={f}
+                onChange={(e) => updateExampleFile(idx, e.target.value)}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="size-7 p-0 text-muted-foreground hover:text-destructive"
+                onClick={() => removeExampleFile(idx)}
+              >
+                ×
+              </Button>
+            </div>
+          ))}
+        </div>
+        <Button variant="outline" size="sm" className="w-full" onClick={addExampleFile}>
+          + Add Example
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Max Tokens</Label>
+        <Input
+          type="number"
+          min={500}
+          max={32000}
+          value={(data.maxTokens as number) ?? 4000}
+          onChange={(e) => update("maxTokens", parseInt(e.target.value, 10) || 4000)}
+          placeholder="4000"
+        />
+        <p className="text-xs text-muted-foreground">
+          Context is truncated if it exceeds this limit.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "projectContext"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="projectContext"
+        />
+        <p className="text-xs text-muted-foreground">
+          Reference in downstream prompts as <code>{"{{projectContext}}"}</code>.
         </p>
       </div>
     </>

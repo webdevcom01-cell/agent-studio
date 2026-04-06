@@ -88,4 +88,5 @@ export type NodeType =
   | "swarm"
   | "verification"
   | "ast_transform"
-  | "lsp_query";
+  | "lsp_query"
+  | "project_context";

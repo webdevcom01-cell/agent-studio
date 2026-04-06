@@ -59,6 +59,7 @@ import {
   CircleCheckBig,
   Braces,
   FileSearch,
+  BookMarked,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -1223,6 +1224,25 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       line: 0,
       character: 0,
       outputVariable: "lsp_result",
+    },
+  },
+  {
+    type: "project_context",
+    label: "Project Context",
+    description:
+      "Load project conventions, rules, and example files into the flow context for downstream AI agents",
+    usageExample:
+      "Feed CLAUDE.md and TypeScript rules to a Code Gen agent so it follows project conventions",
+    icon: BookMarked,
+    color: "indigo",
+    category: "utilities",
+    defaultData: {
+      label: "Project Context",
+      contextFiles: ["CLAUDE.md"],
+      exampleFiles: [],
+      contextLabel: "Project Rules",
+      maxTokens: 4000,
+      outputVariable: "projectContext",
     },
   },
 ];

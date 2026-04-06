@@ -58,6 +58,7 @@ import { swarmHandler } from "./swarm-handler";
 import { verificationHandler } from "./verification-handler";
 import { astTransformHandler } from "./ast-transform-handler";
 import { lspQueryHandler } from "./lsp-query-handler";
+import { projectContextHandler } from "./project-context-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -119,6 +120,7 @@ const handlers: Record<string, NodeHandler> = {
   verification: verificationHandler,
   ast_transform: astTransformHandler,
   lsp_query: lspQueryHandler,
+  project_context: projectContextHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {
