@@ -34,8 +34,10 @@ function isPublicPath(pathname: string): boolean {
 
   if (pathname.match(/^\/api\/agents\/[^/]+\/chat$/)) return true;
 
-  // A2A agent card — public discovery endpoint
+  // A2A agent card — public discovery endpoints
   if (pathname.match(/^\/api\/agents\/[^/]+\/card\.json$/)) return true;
+  if (pathname.match(/^\/api\/a2a\/[^/]+\/agent-card$/)) return true;
+  if (pathname === "/.well-known/agent-cards") return true;
 
   // Inbound webhook trigger — public, authenticated via HMAC-SHA256 signature
   if (pathname.match(/^\/api\/agents\/[^/]+\/trigger\/[^/]+$/)) return true;
