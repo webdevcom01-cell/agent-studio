@@ -268,19 +268,26 @@ export const STARTER_FLOWS: Record<string, FlowContent> = {
 
   "ecc-tdd-pipeline": {
     nodes: [
-      { id: "input",     type: "message",     position: pos(0), data: { label: "Task Input", message: "{{user_input}}" } },
-      { id: "planner",   type: "call_agent",  position: pos(1), data: { label: "Planner", mode: "internal", targetAgentId: "", outputVariable: "plan", inputMapping: [{ key: "task", value: "{{user_input}}" }], onError: "continue" } },
-      { id: "tdd",       type: "call_agent",  position: pos(2), data: { label: "TDD Guide", mode: "internal", targetAgentId: "", outputVariable: "tests_and_code", inputMapping: [{ key: "task", value: "{{plan}}" }], onError: "continue" } },
-      { id: "review",    type: "parallel",    position: ppos(3, 0), data: { label: "Review (parallel)", mergeStrategy: "all", timeoutSeconds: 60, branches: [{ branchId: "b_code", label: "Code Review", outputVariable: "code_review" }, { branchId: "b_sec", label: "Security Review", outputVariable: "sec_review" }] } },
-      { id: "reviewer",  type: "call_agent",  position: ppos(4, -1), data: { label: "Code Reviewer", mode: "internal", targetAgentId: "", outputVariable: "code_review", inputMapping: [{ key: "code", value: "{{tests_and_code}}" }], onError: "continue" } },
-      { id: "security",  type: "call_agent",  position: ppos(4, 1), data: { label: "Security Reviewer", mode: "internal", targetAgentId: "", outputVariable: "sec_review", inputMapping: [{ key: "code", value: "{{tests_and_code}}" }], onError: "continue" } },
-      { id: "summary",   type: "ai_response", position: pos(5), data: { label: "Merge Results", prompt: "Summarize the TDD pipeline results:\n\nPlan: {{plan}}\nCode: {{tests_and_code}}\nCode Review: {{code_review}}\nSecurity Review: {{sec_review}}", outputVariable: "final_output" } },
-      { id: "output",    type: "message",     position: pos(6), data: { label: "Result", message: "{{final_output}}" } },
+      { id: "input",      type: "message",          position: pos(0), data: { label: "Task Input", message: "{{user_input}}" } },
+      { id: "proj_ctx",   type: "project_context",  position: pos(1), data: { label: "Load Project Context", contextFiles: ["CLAUDE.md", ".claude/rules/*.md"], outputVariable: "projectContext" } },
+      { id: "planner",    type: "call_agent",        position: pos(2), data: { label: "Planner", mode: "internal", targetAgentId: "", outputVariable: "plan", inputMapping: [{ key: "task", value: "{{user_input}}" }, { key: "projectContext", value: "{{projectContext}}" }], onError: "continue" } },
+      { id: "tdd",        type: "call_agent",        position: pos(3), data: { label: "TDD Guide", mode: "internal", targetAgentId: "", outputVariable: "tests_and_code", inputMapping: [{ key: "task", value: "{{plan}}" }, { key: "projectContext", value: "{{projectContext}}" }], onError: "continue" } },
+      { id: "codegen",    type: "ai_response",       position: pos(4), data: { label: "Code Generation", model: "deepseek-chat", prompt: "Generate production-ready code based on the TDD plan.\n\nProject Context:\n{{projectContext}}\n\nTDD Plan & Tests:\n{{tests_and_code}}\n\nReturn a CodeGenOutput JSON object.", outputVariable: "generatedCode", outputSchema: "CodeGenOutput" } },
+      { id: "sandbox",    type: "sandbox_verify",    position: pos(5), data: { label: "Sandbox Verify", inputVariable: "generatedCode", checks: ["typecheck", "lint", "forbidden_patterns"], outputVariable: "sandboxResult" } },
+      { id: "retry_node", type: "retry",             position: ppos(6, 1), data: { label: "Escalating Retry", targetNodeId: "codegen", maxRetries: 2, enableEscalation: true, failureVariable: "sandboxResult", failureValues: ["FAIL"], prGateVariable: "gateResult", sandboxErrorsVariable: "sandboxResult", projectContextVariable: "projectContext", outputVariable: "generatedCode" } },
+      { id: "review",     type: "parallel",          position: ppos(6, -1), data: { label: "PR Gate (parallel)", mergeStrategy: "all", timeoutSeconds: 90, branches: [{ branchId: "b_code", label: "Code Review", outputVariable: "code_review" }, { branchId: "b_sec", label: "Security Review", outputVariable: "sec_review" }] } },
+      { id: "reviewer",   type: "call_agent",        position: ppos(7, -1), data: { label: "Code Reviewer", mode: "internal", targetAgentId: "", outputVariable: "code_review", outputSchema: "PRGateOutput", inputMapping: [{ key: "code", value: "{{generatedCode}}" }, { key: "projectContext", value: "{{projectContext}}" }], onError: "continue" } },
+      { id: "security",   type: "call_agent",        position: ppos(7, 0),  data: { label: "Security Reviewer", mode: "internal", targetAgentId: "", outputVariable: "sec_review", outputSchema: "PRGateOutput", inputMapping: [{ key: "code", value: "{{generatedCode}}" }], onError: "continue" } },
+      { id: "summary",    type: "ai_response",       position: pos(8), data: { label: "Pipeline Summary", prompt: "Summarize the TDD pipeline results:\n\nPlan: {{plan}}\nCode: {{generatedCode}}\nSandbox: {{sandboxResult}}\nCode Review: {{code_review}}\nSecurity: {{sec_review}}", outputVariable: "final_output" } },
+      { id: "output",     type: "message",           position: pos(9), data: { label: "Result", message: "{{final_output}}" } },
     ],
     edges: [
-      edge("input", "planner"), edge("planner", "tdd"), edge("tdd", "review"),
-      { id: "e_review_reviewer", source: "review", target: "reviewer", sourceHandle: "b_code" },
-      { id: "e_review_security", source: "review", target: "security", sourceHandle: "b_sec" },
+      edge("input", "proj_ctx"), edge("proj_ctx", "planner"),
+      edge("planner", "tdd"), edge("tdd", "codegen"), edge("codegen", "sandbox"),
+      { id: "e_sandbox_passed", source: "sandbox",    target: "review",     sourceHandle: "passed" },
+      { id: "e_sandbox_failed", source: "sandbox",    target: "retry_node", sourceHandle: "failed" },
+      { id: "e_review_reviewer", source: "review",   target: "reviewer",   sourceHandle: "b_code" },
+      { id: "e_review_security", source: "review",   target: "security",   sourceHandle: "b_sec" },
       edge("review", "summary"), edge("summary", "output"),
     ],
     variables: [],
@@ -331,19 +338,18 @@ export const STARTER_FLOWS: Record<string, FlowContent> = {
 
   "ecc-code-review-pipeline": {
     nodes: [
-      { id: "input",     type: "message",     position: pos(0), data: { label: "Code to Review", message: "{{user_input}}" } },
-      { id: "planner",   type: "call_agent",  position: pos(1), data: { label: "Planner", mode: "internal", targetAgentId: "", outputVariable: "review_plan", inputMapping: [{ key: "task", value: "Review this code: {{user_input}}" }], onError: "continue" } },
-      { id: "reviews",   type: "parallel",    position: ppos(2, 0), data: { label: "Reviews (parallel)", mergeStrategy: "all", timeoutSeconds: 60, branches: [{ branchId: "b_general", label: "General Review", outputVariable: "general_review" }, { branchId: "b_lang", label: "Language-Specific", outputVariable: "lang_review" }] } },
-      { id: "general",   type: "call_agent",  position: ppos(3, -1), data: { label: "Code Reviewer", mode: "internal", targetAgentId: "", outputVariable: "general_review", inputMapping: [{ key: "code", value: "{{user_input}}" }], onError: "continue" } },
-      { id: "lang_rev",  type: "ai_response", position: ppos(3, 1), data: { label: "Language Review", prompt: "Perform a language-specific code review focusing on idioms, patterns, and best practices:\n\n{{user_input}}", outputVariable: "lang_review" } },
-      { id: "summary",   type: "ai_response", position: pos(4), data: { label: "Review Summary", prompt: "Consolidate these code reviews into a single prioritized report:\n\nGeneral: {{general_review}}\nLanguage-specific: {{lang_review}}\nPlan context: {{review_plan}}", outputVariable: "final_review" } },
-      { id: "output",    type: "message",     position: pos(5), data: { label: "Review Report", message: "{{final_review}}" } },
+      { id: "input",     type: "message",         position: pos(0), data: { label: "Code to Review", message: "{{user_input}}" } },
+      { id: "proj_ctx",  type: "project_context", position: pos(1), data: { label: "Load Project Context", contextFiles: ["CLAUDE.md", ".claude/rules/*.md"], outputVariable: "projectContext" } },
+      { id: "review",    type: "call_agent",      position: pos(2), data: { label: "Code Reviewer", mode: "internal", targetAgentId: "", outputVariable: "prGateResult", outputSchema: "PRGateOutput", inputMapping: [{ key: "code", value: "{{user_input}}" }, { key: "projectContext", value: "{{projectContext}}" }], onError: "continue" } },
+      { id: "gate_cond", type: "condition",       position: pos(3), data: { label: "Gate Decision", condition: "{{prGateResult.decision}} === 'BLOCK'", trueLabel: "Block — needs manual review", falseLabel: "Approve / Request Changes" } },
+      { id: "approval",  type: "human_approval",  position: ppos(4, -1), data: { label: "Manual Review Required", prompt: "Code review returned BLOCK decision.\n\nReview Result: {{prGateResult}}\n\nProject Context: {{projectContext}}\n\nDo you want to override and approve?", inputVariable: "prGateResult", outputVariable: "humanDecision", timeoutMinutes: 60, onTimeout: "continue", defaultValue: "APPROVED" } },
+      { id: "output",    type: "message",         position: ppos(4, 1), data: { label: "Review Complete", message: "{{prGateResult}}" } },
     ],
     edges: [
-      edge("input", "planner"), edge("planner", "reviews"),
-      { id: "e_reviews_general", source: "reviews", target: "general", sourceHandle: "b_general" },
-      { id: "e_reviews_lang",    source: "reviews", target: "lang_rev", sourceHandle: "b_lang" },
-      edge("reviews", "summary"), edge("summary", "output"),
+      edge("input", "proj_ctx"), edge("proj_ctx", "review"), edge("review", "gate_cond"),
+      { id: "e_block_true",  source: "gate_cond", target: "approval", sourceHandle: "true" },
+      { id: "e_block_false", source: "gate_cond", target: "output",   sourceHandle: "false" },
+      edge("approval", "output"),
     ],
     variables: [],
   },
@@ -351,374 +357,386 @@ export const STARTER_FLOWS: Record<string, FlowContent> = {
   // ── DevSecOps Pipeline ────────────────────────────────────────────────────
 
   /**
-   * Autonomous DevSecOps Pipeline — full 2026 CI/CD security guard.
+   * DevSecOps Orchestrator — Code Generation + Verification Pipeline.
    *
    * Architecture:
-   *   GitHub PR Webhook
-   *     → Payload Parser (extracts PR context)
-   *     → Parallel Analysis (3 agents simultaneously)
-   *         ├── Code Quality Analyzer    (ESLint / TS / complexity)
-   *         ├── Security Scanner         (OWASP / SAST / secrets)
-   *         └── Test Intelligence Agent  (coverage delta / test gen)
-   *     → Risk Aggregator (calculates score 0-100)
-   *     → Decision Switch
-   *         ├── score ≥ 80  → Auto-approve path
-   *         ├── score 50-79 → Human review path
-   *         └── score < 50  → Auto-block path
-   *     → [Human Approval] (only on NEEDS_REVIEW path)
-   *     → PR Review Publisher (GitHub comment + Slack notification)
-   *     → Done
+   *   project_context → Architecture Planning
+   *     → Parallel Phase (Security Engineer + TDD Planning)
+   *     → Code Generation (outputSchema: CodeGenOutput)
+   *     → sandbox_verify
+   *         ├── passed → Parallel PR Gate (Code Review + Security + Reality Checker)
+   *         └── failed → retry (escalating, max 2) → Code Gen
+   *     → Risk Aggregation → Deploy Decision Switch
+   *         ├── AUTO_APPROVE → Done
+   *         ├── NEEDS_REVIEW → Human Approval → Done
+   *         └── BLOCK        → Done (blocked)
    *
-   * Node count: 15 nodes — complex enough to stress-test the engine.
-   * Uses: webhook_trigger, parallel, call_agent, ai_response, switch,
-   *       human_approval, notification, set_variable, mcp_tool.
+   * Uses: project_context, ai_response, parallel, call_agent, sandbox_verify,
+   *       retry, switch, human_approval, set_variable, end.
    */
   "devsecops-orchestrator": {
     nodes: [
-      // ── Entry: GitHub Webhook ───────────────────────────────────────────
+      // ── Stage 1: Entry ─────────────────────────────────────────────────
       {
-        id: "wh_trigger",
-        type: "webhook_trigger",
+        id: "input",
+        type: "message",
         position: pos(0),
-        data: {
-          label: "GitHub PR Webhook",
-          outputVariable: "pr_payload",
-          eventTypeVariable: "github_event",
-          description: "Receives GitHub pull_request events. Configure webhook at: repo → Settings → Webhooks",
-        },
+        data: { label: "Task / PR Input", message: "{{user_input}}" },
       },
 
-      // ── Stage 1: Parse PR Context ───────────────────────────────────────
+      // ── Stage 2: Project Context ────────────────────────────────────────
       {
-        id: "pr_parser",
-        type: "ai_response",
+        id: "proj_ctx",
+        type: "project_context",
         position: pos(1),
         data: {
-          label: "Parse PR Context",
-          prompt: `Extract and structure the PR context from this GitHub webhook payload.
-
-Webhook payload: {{pr_payload}}
-GitHub event: {{github_event}}
-
-Return a JSON object with:
-{
-  "pr_number": number,
-  "pr_title": string,
-  "pr_url": string,
-  "author": string,
-  "base_branch": string,
-  "head_branch": string,
-  "repo_full_name": string,
-  "files_changed": string[],
-  "additions": number,
-  "deletions": number,
-  "diff_summary": string,
-  "commit_messages": string[],
-  "is_draft": boolean
-}
-
-If the event is not a pull_request open/synchronize event, return { "skip": true, "reason": "not a PR event" }.`,
-          outputVariable: "pr_context",
-          model: "deepseek-chat",
+          label: "Load Project Context",
+          contextFiles: ["CLAUDE.md", ".claude/rules/*.md"],
+          outputVariable: "projectContext",
         },
       },
 
-      // ── Stage 2: Parallel Analysis (3 agents) ──────────────────────────
+      // ── Stage 3: Architecture ────────────────────────────────────────────
       {
-        id: "analysis_parallel",
-        type: "parallel",
+        id: "arch",
+        type: "ai_response",
         position: pos(2),
         data: {
-          label: "Parallel Security Analysis",
+          label: "Architecture Planning",
+          model: "deepseek-reasoner",
+          prompt: `Analyze the task and produce an architecture plan.
+
+Project Context:
+{{projectContext}}
+
+Task:
+{{user_input}}
+
+Output the approach, file structure, key design decisions, and security considerations.`,
+          outputVariable: "architecture",
+        },
+      },
+
+      // ── Stage 4: Parallel Planning (Security + TDD) ──────────────────────
+      {
+        id: "plan_parallel",
+        type: "parallel",
+        position: pos(3),
+        data: {
+          label: "Parallel Planning",
+          mergeStrategy: "all",
+          timeoutSeconds: 90,
+          branches: [
+            { branchId: "b_sec_plan", label: "Security Engineer",  outputVariable: "securityPlan"  },
+            { branchId: "b_tdd",      label: "TDD Planning",        outputVariable: "tddPlan"       },
+          ],
+        },
+      },
+      {
+        id: "security_eng",
+        type: "call_agent",
+        position: ppos(4, -1),
+        data: {
+          label: "Security Engineer",
+          mode: "internal",
+          targetAgentId: "",
+          outputVariable: "securityPlan",
+          inputMapping: [
+            { key: "architecture", value: "{{architecture}}" },
+            { key: "projectContext", value: "{{projectContext}}" },
+          ],
+          onError: "continue",
+        },
+      },
+      {
+        id: "tdd_guide",
+        type: "call_agent",
+        position: ppos(4, 1),
+        data: {
+          label: "TDD Planning",
+          mode: "internal",
+          targetAgentId: "",
+          outputVariable: "tddPlan",
+          inputMapping: [
+            { key: "architecture", value: "{{architecture}}" },
+            { key: "projectContext", value: "{{projectContext}}" },
+          ],
+          onError: "continue",
+        },
+      },
+
+      // ── Stage 5: Code Generation ──────────────────────────────────────────
+      {
+        id: "codegen",
+        type: "ai_response",
+        position: pos(5),
+        data: {
+          label: "Code Generation",
+          model: "deepseek-chat",
+          prompt: `Generate production-ready code.
+
+Project Context:
+{{projectContext}}
+
+Architecture:
+{{architecture}}
+
+Security Requirements:
+{{securityPlan}}
+
+TDD Plan:
+{{tddPlan}}
+
+Task:
+{{user_input}}
+
+Return a CodeGenOutput JSON object with all required files.`,
+          outputVariable: "generatedCode",
+          outputSchema: "CodeGenOutput",
+        },
+      },
+
+      // ── Stage 6: Sandbox Verification ────────────────────────────────────
+      {
+        id: "sandbox",
+        type: "sandbox_verify",
+        position: pos(6),
+        data: {
+          label: "Sandbox Verify",
+          inputVariable: "generatedCode",
+          checks: ["typecheck", "lint", "forbidden_patterns"],
+          outputVariable: "sandboxResult",
+        },
+      },
+
+      // ── Retry path (sandbox failed) ───────────────────────────────────────
+      {
+        id: "retry_node",
+        type: "retry",
+        position: ppos(7, 1),
+        data: {
+          label: "Escalating Retry",
+          targetNodeId: "codegen",
+          maxRetries: 2,
+          enableEscalation: true,
+          failureVariable: "sandboxResult",
+          failureValues: ["FAIL"],
+          prGateVariable: "gateResult",
+          sandboxErrorsVariable: "sandboxResult",
+          projectContextVariable: "projectContext",
+          outputVariable: "generatedCode",
+        },
+      },
+
+      // ── Stage 7: PR Gate (parallel) ────────────────────────────────────────
+      {
+        id: "gate_parallel",
+        type: "parallel",
+        position: ppos(7, -1),
+        data: {
+          label: "PR Gate (parallel)",
           mergeStrategy: "all",
           timeoutSeconds: 120,
           branches: [
-            { branchId: "b_quality",   label: "Code Quality",   outputVariable: "quality_result"   },
-            { branchId: "b_security",  label: "Security Scan",  outputVariable: "security_result"  },
-            { branchId: "b_tests",     label: "Test Coverage",  outputVariable: "test_result"      },
+            { branchId: "b_review",  label: "Code Review",      outputVariable: "codeReview"  },
+            { branchId: "b_sec_rev", label: "Security Review",   outputVariable: "secReview"   },
+            { branchId: "b_reality", label: "Reality Checker",   outputVariable: "realityCheck" },
           ],
         },
       },
-
-      // Branch A: Code Quality Analyzer
       {
-        id: "code_quality",
+        id: "code_reviewer",
         type: "call_agent",
-        position: ppos(3, -1),
+        position: ppos(8, -2),
         data: {
-          label: "Code Quality Analyzer",
+          label: "Code Reviewer",
           mode: "internal",
-          targetAgentId: "",   // → link to devsecops-code-quality agent
-          outputVariable: "quality_result",
+          targetAgentId: "",
+          outputVariable: "codeReview",
+          outputSchema: "PRGateOutput",
           inputMapping: [
-            { key: "pr_context",     value: "{{pr_context}}" },
-            { key: "files_changed",  value: "{{pr_context.files_changed}}" },
-            { key: "diff_summary",   value: "{{pr_context.diff_summary}}" },
+            { key: "code",           value: "{{generatedCode}}" },
+            { key: "projectContext", value: "{{projectContext}}" },
           ],
           onError: "continue",
         },
       },
-
-      // Branch B: Security Scanner
       {
-        id: "security_scan",
+        id: "sec_reviewer",
         type: "call_agent",
-        position: ppos(3, 0),
+        position: ppos(8, 0),
         data: {
-          label: "Security Scanner",
+          label: "Security Reviewer",
           mode: "internal",
-          targetAgentId: "",   // → link to devsecops-security-scanner agent
-          outputVariable: "security_result",
+          targetAgentId: "",
+          outputVariable: "secReview",
+          outputSchema: "PRGateOutput",
           inputMapping: [
-            { key: "pr_context",     value: "{{pr_context}}" },
-            { key: "files_changed",  value: "{{pr_context.files_changed}}" },
-            { key: "diff_summary",   value: "{{pr_context.diff_summary}}" },
-            { key: "repo_name",      value: "{{pr_context.repo_full_name}}" },
+            { key: "code",           value: "{{generatedCode}}" },
+            { key: "securityPlan",   value: "{{securityPlan}}" },
           ],
           onError: "continue",
         },
       },
-
-      // Branch C: Test Intelligence
       {
-        id: "test_intel",
-        type: "call_agent",
-        position: ppos(3, 1),
-        data: {
-          label: "Test Intelligence Agent",
-          mode: "internal",
-          targetAgentId: "",   // → link to devsecops-test-intelligence agent
-          outputVariable: "test_result",
-          inputMapping: [
-            { key: "pr_context",     value: "{{pr_context}}" },
-            { key: "files_changed",  value: "{{pr_context.files_changed}}" },
-            { key: "diff_summary",   value: "{{pr_context.diff_summary}}" },
-          ],
-          onError: "continue",
-        },
-      },
-
-      // ── Stage 3: Risk Aggregator ────────────────────────────────────────
-      {
-        id: "risk_aggregator",
+        id: "reality_checker",
         type: "ai_response",
-        position: pos(4),
+        position: ppos(8, 2),
+        data: {
+          label: "Reality Checker",
+          model: "deepseek-chat",
+          prompt: `Verify the generated code matches the original task requirements.
+
+Task: {{user_input}}
+Generated Code: {{generatedCode}}
+Architecture Plan: {{architecture}}
+
+Check: Are all must-have requirements addressed? Return PASS or FAIL with explanation.`,
+          outputVariable: "realityCheck",
+        },
+      },
+
+      // ── Stage 8: Risk Aggregation ─────────────────────────────────────────
+      {
+        id: "risk_agg",
+        type: "ai_response",
+        position: pos(9),
         data: {
           label: "Risk Aggregator",
-          prompt: `You are the final risk aggregator for a DevSecOps pipeline.
-
-Aggregate these analysis results and produce a final risk assessment:
-
-PR Context: {{pr_context}}
-Code Quality Result: {{quality_result}}
-Security Scan Result: {{security_result}}
-Test Coverage Result: {{test_result}}
-
-Calculate a risk score using this model:
-- Start at 100
-- Critical security vulnerability: -40 pts each (max -80)
-- High severity finding: -20 pts each (max -40)
-- Medium severity finding: -10 pts each (max -20)
-- Lint errors: -5 pts each (max -15)
-- Missing tests for new code: -10 pts
-- Test coverage < 60%: -5 pts
-
-Determine decision:
-- score ≥ 80: "AUTO_APPROVE"
-- score 50-79: "NEEDS_REVIEW"
-- score < 50: "BLOCK"
-
-Return JSON:
-{
-  "risk_score": number,
-  "decision": "AUTO_APPROVE" | "NEEDS_REVIEW" | "BLOCK",
-  "decision_reasoning": string,
-  "critical_findings": string[],
-  "high_findings": string[],
-  "medium_findings": string[],
-  "positive_observations": string[],
-  "recommended_actions": string[],
-  "quality_score": number,
-  "security_score": number,
-  "test_score": number
-}`,
-          outputVariable: "risk_assessment",
           model: "deepseek-chat",
+          prompt: `Aggregate the gate results into a deploy risk assessment.
+
+Code Review: {{codeReview}}
+Security Review: {{secReview}}
+Reality Check: {{realityCheck}}
+Sandbox Result: {{sandboxResult}}
+
+Score 0-100. Decision: AUTO_APPROVE (≥80), NEEDS_REVIEW (50-79), BLOCK (<50).
+
+Return JSON: { risk_score, decision, reasoning, critical_findings, recommended_actions }`,
+          outputVariable: "riskAssessment",
         },
       },
 
-      // ── Stage 4: Decision Gate (Switch) ────────────────────────────────
+      // ── Stage 9: Deploy Decision ──────────────────────────────────────────
       {
-        id: "decision_switch",
+        id: "deploy_switch",
         type: "switch",
-        position: pos(5),
+        position: pos(10),
         data: {
-          label: "Decision Gate",
-          variable: "risk_assessment.decision",
+          label: "Deploy Decision",
+          variable: "riskAssessment.decision",
           operator: "equals",
-          outputVariable: "switch_result",
+          outputVariable: "switchResult",
           cases: [
-            { value: "AUTO_APPROVE", label: "✅ Auto Approve (score ≥ 80)" },
-            { value: "NEEDS_REVIEW", label: "⚠️ Needs Review (score 50-79)" },
-            { value: "BLOCK",        label: "🚫 Block (score < 50)" },
+            { value: "AUTO_APPROVE", label: "Auto Approve (≥80)" },
+            { value: "NEEDS_REVIEW", label: "Needs Review (50-79)" },
+            { value: "BLOCK",        label: "Block (<50)" },
           ],
         },
       },
 
-      // ── Path A: Auto Approve ────────────────────────────────────────────
+      // ── Path A: Auto Approve ───────────────────────────────────────────────
       {
-        id: "set_auto_approve",
+        id: "set_approve",
         type: "set_variable",
-        position: ppos(6, -1),
+        position: ppos(11, -1),
         data: {
           label: "Set: Auto Approve",
-          assignments: [
-            { variable: "final_decision",    value: "AUTO_APPROVE" },
-            { variable: "review_event_type", value: "APPROVE" },
-          ],
+          assignments: [{ variable: "finalDecision", value: "AUTO_APPROVE" }],
         },
       },
 
-      // ── Path B: Human Review ────────────────────────────────────────────
+      // ── Path B: Human Review ───────────────────────────────────────────────
       {
         id: "human_review",
         type: "human_approval",
-        position: ppos(6, 0),
+        position: ppos(11, 0),
         data: {
-          label: "Human Security Review",
-          prompt: `A PR requires your review before merge decision.
+          label: "Human Review Required",
+          prompt: `Pipeline requires your review before deploy.
 
-**PR:** {{pr_context.pr_title}} (#{{pr_context.pr_number}})
-**Author:** {{pr_context.author}}
-**Risk Score:** {{risk_assessment.risk_score}}/100
+Risk Score: {{riskAssessment.risk_score}}/100
+Reasoning: {{riskAssessment.reasoning}}
 
-**Key Findings:**
-{{risk_assessment.high_findings}}
+Critical Findings: {{riskAssessment.critical_findings}}
+Recommended Actions: {{riskAssessment.recommended_actions}}
 
-**Recommended Actions:**
-{{risk_assessment.recommended_actions}}
-
-Do you approve this PR for merge?`,
-          inputVariable: "risk_assessment",
-          outputVariable: "human_decision",
+Do you approve deployment?`,
+          inputVariable: "riskAssessment",
+          outputVariable: "humanDecision",
           timeoutMinutes: 60,
           onTimeout: "continue",
           defaultValue: "APPROVED",
         },
       },
 
-      // ── Path C: Auto Block ──────────────────────────────────────────────
+      // ── Path C: Block ──────────────────────────────────────────────────────
       {
         id: "set_block",
         type: "set_variable",
-        position: ppos(6, 1),
+        position: ppos(11, 1),
         data: {
-          label: "Set: Block PR",
-          assignments: [
-            { variable: "final_decision",    value: "BLOCK" },
-            { variable: "review_event_type", value: "REQUEST_CHANGES" },
-          ],
+          label: "Set: Block",
+          assignments: [{ variable: "finalDecision", value: "BLOCK" }],
         },
       },
 
-      // ── Stage 5: Merge Paths → Publish ─────────────────────────────────
-      {
-        id: "publish_review",
-        type: "call_agent",
-        position: pos(7),
-        data: {
-          label: "PR Review Publisher",
-          mode: "internal",
-          targetAgentId: "",   // → link to devsecops-pr-review-publisher agent
-          outputVariable: "published_review",
-          inputMapping: [
-            { key: "pr_context",     value: "{{pr_context}}"     },
-            { key: "risk_assessment", value: "{{risk_assessment}}" },
-            { key: "quality_result", value: "{{quality_result}}" },
-            { key: "security_result", value: "{{security_result}}" },
-            { key: "test_result",    value: "{{test_result}}"    },
-            { key: "final_decision", value: "{{final_decision}}" },
-            { key: "review_event_type", value: "{{review_event_type}}" },
-          ],
-          onError: "continue",
-        },
-      },
-
-      // ── Stage 6: Slack Notification ────────────────────────────────────
-      {
-        id: "slack_notify",
-        type: "notification",
-        position: pos(8),
-        data: {
-          label: "Slack Notification",
-          message: `🔐 *DevSecOps Pipeline* — PR #{{pr_context.pr_number}}: {{pr_context.pr_title}}
-
-Decision: {{risk_assessment.decision}} (Score: {{risk_assessment.risk_score}}/100)
-Author: @{{pr_context.author}} → \`{{pr_context.head_branch}}\`
-
-{{risk_assessment.decision_reasoning}}
-
-🔗 {{pr_context.pr_url}}`,
-          channel: "webhook",
-          webhookUrl: "",  // → configure with Slack webhook URL
-        },
-      },
-
-      // ── Done ────────────────────────────────────────────────────────────
+      // ── Done ───────────────────────────────────────────────────────────────
       {
         id: "done",
         type: "end",
-        position: pos(9),
+        position: pos(12),
         data: {
           label: "Pipeline Complete",
-          message: "✅ DevSecOps pipeline completed. Decision: {{risk_assessment.decision}} ({{risk_assessment.risk_score}}/100)",
+          message: "DevSecOps pipeline completed. Decision: {{riskAssessment.decision}} ({{riskAssessment.risk_score}}/100)",
         },
       },
     ],
 
     edges: [
-      // Main flow
-      edge("wh_trigger",        "pr_parser"),
-      edge("pr_parser",         "analysis_parallel"),
+      edge("input",        "proj_ctx"),
+      edge("proj_ctx",     "arch"),
+      edge("arch",         "plan_parallel"),
 
-      // Parallel branches
-      { id: "e_parallel_quality",   source: "analysis_parallel", target: "code_quality",  sourceHandle: "b_quality"  },
-      { id: "e_parallel_security",  source: "analysis_parallel", target: "security_scan", sourceHandle: "b_security" },
-      { id: "e_parallel_tests",     source: "analysis_parallel", target: "test_intel",    sourceHandle: "b_tests"    },
+      { id: "e_plan_sec",  source: "plan_parallel", target: "security_eng", sourceHandle: "b_sec_plan" },
+      { id: "e_plan_tdd",  source: "plan_parallel", target: "tdd_guide",    sourceHandle: "b_tdd"      },
 
-      // After parallel merge → risk aggregator
-      edge("analysis_parallel", "risk_aggregator"),
+      edge("plan_parallel", "codegen"),
+      edge("codegen",       "sandbox"),
 
-      // Risk → Switch
-      edge("risk_aggregator", "decision_switch"),
+      { id: "e_sb_passed", source: "sandbox",    target: "gate_parallel", sourceHandle: "passed" },
+      { id: "e_sb_failed", source: "sandbox",    target: "retry_node",    sourceHandle: "failed" },
 
-      // Switch → 3 paths
-      { id: "e_switch_approve", source: "decision_switch", target: "set_auto_approve", sourceHandle: "case_0" },
-      { id: "e_switch_review",  source: "decision_switch", target: "human_review",     sourceHandle: "case_1" },
-      { id: "e_switch_block",   source: "decision_switch", target: "set_block",        sourceHandle: "case_2" },
+      { id: "e_gate_review",  source: "gate_parallel", target: "code_reviewer",  sourceHandle: "b_review"  },
+      { id: "e_gate_sec",     source: "gate_parallel", target: "sec_reviewer",   sourceHandle: "b_sec_rev" },
+      { id: "e_gate_reality", source: "gate_parallel", target: "reality_checker",sourceHandle: "b_reality" },
 
-      // All 3 paths → Publish
-      edge("set_auto_approve", "publish_review"),
-      edge("human_review",     "publish_review"),
-      edge("set_block",        "publish_review"),
+      edge("gate_parallel", "risk_agg"),
+      edge("risk_agg",      "deploy_switch"),
 
-      // Publish → Notify → Done
-      edge("publish_review", "slack_notify"),
-      edge("slack_notify",   "done"),
+      { id: "e_sw_approve", source: "deploy_switch", target: "set_approve",  sourceHandle: "case_0" },
+      { id: "e_sw_review",  source: "deploy_switch", target: "human_review", sourceHandle: "case_1" },
+      { id: "e_sw_block",   source: "deploy_switch", target: "set_block",    sourceHandle: "case_2" },
+
+      edge("set_approve",  "done"),
+      edge("human_review", "done"),
+      edge("set_block",    "done"),
     ],
 
     variables: [
-      { name: "pr_payload",         type: "object" as const, default: null   },
-      { name: "github_event",       type: "string" as const, default: ""     },
-      { name: "pr_context",         type: "object" as const, default: null   },
-      { name: "quality_result",     type: "object" as const, default: null   },
-      { name: "security_result",    type: "object" as const, default: null   },
-      { name: "test_result",        type: "object" as const, default: null   },
-      { name: "risk_assessment",    type: "object" as const, default: null   },
-      { name: "final_decision",     type: "string" as const, default: ""     },
-      { name: "review_event_type",  type: "string" as const, default: "COMMENT" },
-      { name: "human_decision",     type: "string" as const, default: ""     },
-      { name: "published_review",   type: "object" as const, default: null   },
+      { name: "projectContext",  type: "string" as const, default: ""   },
+      { name: "architecture",    type: "string" as const, default: ""   },
+      { name: "securityPlan",    type: "string" as const, default: ""   },
+      { name: "tddPlan",         type: "string" as const, default: ""   },
+      { name: "generatedCode",   type: "object" as const, default: null },
+      { name: "sandboxResult",   type: "string" as const, default: ""   },
+      { name: "codeReview",      type: "object" as const, default: null },
+      { name: "secReview",       type: "object" as const, default: null },
+      { name: "realityCheck",    type: "string" as const, default: ""   },
+      { name: "riskAssessment",  type: "object" as const, default: null },
+      { name: "finalDecision",   type: "string" as const, default: ""   },
+      { name: "humanDecision",   type: "string" as const, default: ""   },
     ],
   },
 
@@ -943,6 +961,399 @@ Use emoji-coded severity: 🚫 Critical, ⚠️ High, 💛 Medium, ℹ️ Low`,
     ],
     edges: [edge("in", "format_review"), edge("format_review", "out")],
     variables: [],
+  },
+
+  // ── SDLC Full Pipeline ────────────────────────────────────────────────
+
+  /**
+   * Full SDLC Pipeline — reference implementation with all Phase 1-6 improvements.
+   *
+   * Architecture:
+   *   project_context
+   *     → Phase 1: Product Discovery
+   *     → Phase 2: Parallel (Architecture + Security Engineer + TDD Guide)
+   *     → Phase 3: Code Generation (outputSchema: CodeGenOutput)
+   *         → sandbox_verify
+   *             ├── passed → Parallel PR Gate (Code Review + Security Review + Reality Checker)
+   *             └── failed → retry (escalating, max 2) → Code Gen
+   *     → Phase 4: CI/CD Generator
+   *     → Phase 5: Deploy Decision → Human Approval
+   *
+   * This flow uses ALL new node types and schemas introduced in phases 1-6.
+   */
+  "sdlc-full-pipeline": {
+    nodes: [
+      // ── Phase 0: Entry + Context ──────────────────────────────────────────
+      {
+        id: "input",
+        type: "message",
+        position: pos(0),
+        data: { label: "Feature Request", message: "{{user_input}}" },
+      },
+      {
+        id: "proj_ctx",
+        type: "project_context",
+        position: pos(1),
+        data: {
+          label: "Load Project Context",
+          contextFiles: ["CLAUDE.md", ".claude/rules/*.md"],
+          outputVariable: "projectContext",
+        },
+      },
+
+      // ── Phase 1: Product Discovery ────────────────────────────────────────
+      {
+        id: "discovery",
+        type: "ai_response",
+        position: pos(2),
+        data: {
+          label: "Product Discovery",
+          model: "deepseek-reasoner",
+          prompt: `You are a product manager. Analyze the feature request and produce a concise product spec.
+
+Project Context:
+{{projectContext}}
+
+Feature Request:
+{{user_input}}
+
+Output: user stories, acceptance criteria, must-have vs nice-to-have, risks.`,
+          outputVariable: "productSpec",
+        },
+      },
+
+      // ── Phase 2: Parallel Architecture + Security + TDD ───────────────────
+      {
+        id: "phase2_parallel",
+        type: "parallel",
+        position: pos(3),
+        data: {
+          label: "Phase 2: Architecture Planning",
+          mergeStrategy: "all",
+          timeoutSeconds: 120,
+          branches: [
+            { branchId: "b_arch", label: "Architecture",      outputVariable: "architecture"    },
+            { branchId: "b_sec",  label: "Security Engineer",  outputVariable: "securityPlan"    },
+            { branchId: "b_tdd",  label: "TDD Guide",          outputVariable: "tddPlan"         },
+          ],
+        },
+      },
+      {
+        id: "architect",
+        type: "call_agent",
+        position: ppos(4, -1),
+        data: {
+          label: "Architect",
+          mode: "internal",
+          targetAgentId: "",
+          outputVariable: "architecture",
+          inputMapping: [
+            { key: "spec",           value: "{{productSpec}}" },
+            { key: "projectContext", value: "{{projectContext}}" },
+          ],
+          onError: "continue",
+        },
+      },
+      {
+        id: "security_eng",
+        type: "call_agent",
+        position: ppos(4, 0),
+        data: {
+          label: "Security Engineer",
+          mode: "internal",
+          targetAgentId: "",
+          outputVariable: "securityPlan",
+          inputMapping: [
+            { key: "spec",           value: "{{productSpec}}" },
+            { key: "projectContext", value: "{{projectContext}}" },
+          ],
+          onError: "continue",
+        },
+      },
+      {
+        id: "tdd_guide",
+        type: "call_agent",
+        position: ppos(4, 1),
+        data: {
+          label: "TDD Guide",
+          mode: "internal",
+          targetAgentId: "",
+          outputVariable: "tddPlan",
+          inputMapping: [
+            { key: "spec",           value: "{{productSpec}}" },
+            { key: "architecture",   value: "{{architecture}}" },
+          ],
+          onError: "continue",
+        },
+      },
+
+      // ── Phase 3: Code Generation ───────────────────────────────────────────
+      {
+        id: "codegen",
+        type: "ai_response",
+        position: pos(5),
+        data: {
+          label: "Code Generation",
+          model: "deepseek-chat",
+          prompt: `Generate production-ready code for the feature.
+
+Project Context:
+{{projectContext}}
+
+Product Spec:
+{{productSpec}}
+
+Architecture:
+{{architecture}}
+
+Security Requirements:
+{{securityPlan}}
+
+TDD Plan (write code to pass these tests):
+{{tddPlan}}
+
+Return a CodeGenOutput JSON object with files array, summary, and language.`,
+          outputVariable: "generatedCode",
+          outputSchema: "CodeGenOutput",
+        },
+      },
+
+      // ── Phase 3a: Sandbox Verification ────────────────────────────────────
+      {
+        id: "sandbox",
+        type: "sandbox_verify",
+        position: pos(6),
+        data: {
+          label: "Sandbox Verify",
+          inputVariable: "generatedCode",
+          checks: ["typecheck", "lint", "forbidden_patterns"],
+          outputVariable: "sandboxResult",
+        },
+      },
+
+      // ── Retry on sandbox failure ───────────────────────────────────────────
+      {
+        id: "retry_node",
+        type: "retry",
+        position: ppos(7, 1),
+        data: {
+          label: "Escalating Retry",
+          targetNodeId: "codegen",
+          maxRetries: 2,
+          enableEscalation: true,
+          failureVariable: "sandboxResult",
+          failureValues: ["FAIL"],
+          prGateVariable: "gateResult",
+          sandboxErrorsVariable: "sandboxResult",
+          projectContextVariable: "projectContext",
+          outputVariable: "generatedCode",
+        },
+      },
+
+      // ── Phase 3b: Parallel PR Gate ─────────────────────────────────────────
+      {
+        id: "gate_parallel",
+        type: "parallel",
+        position: ppos(7, -1),
+        data: {
+          label: "PR Gate (parallel)",
+          mergeStrategy: "all",
+          timeoutSeconds: 120,
+          branches: [
+            { branchId: "b_review",  label: "Code Review",    outputVariable: "codeReview"   },
+            { branchId: "b_secrev",  label: "Security Review", outputVariable: "secReview"    },
+            { branchId: "b_reality", label: "Reality Checker", outputVariable: "realityCheck" },
+          ],
+        },
+      },
+      {
+        id: "code_reviewer",
+        type: "call_agent",
+        position: ppos(8, -2),
+        data: {
+          label: "Code Reviewer",
+          mode: "internal",
+          targetAgentId: "",
+          outputVariable: "codeReview",
+          outputSchema: "PRGateOutput",
+          inputMapping: [
+            { key: "code",           value: "{{generatedCode}}" },
+            { key: "projectContext", value: "{{projectContext}}" },
+            { key: "tddPlan",        value: "{{tddPlan}}" },
+          ],
+          onError: "continue",
+        },
+      },
+      {
+        id: "sec_reviewer",
+        type: "call_agent",
+        position: ppos(8, 0),
+        data: {
+          label: "Security Reviewer",
+          mode: "internal",
+          targetAgentId: "",
+          outputVariable: "secReview",
+          outputSchema: "PRGateOutput",
+          inputMapping: [
+            { key: "code",         value: "{{generatedCode}}" },
+            { key: "securityPlan", value: "{{securityPlan}}" },
+          ],
+          onError: "continue",
+        },
+      },
+      {
+        id: "reality_checker",
+        type: "ai_response",
+        position: ppos(8, 2),
+        data: {
+          label: "Reality Checker",
+          model: "deepseek-chat",
+          prompt: `Verify the code addresses all must-have requirements from the product spec.
+
+Product Spec: {{productSpec}}
+Generated Code: {{generatedCode}}
+Architecture Plan: {{architecture}}
+
+For each must-have requirement: PASS or FAIL. Overall verdict: PASS or FAIL.`,
+          outputVariable: "realityCheck",
+        },
+      },
+
+      // ── Phase 4: CI/CD Generator ───────────────────────────────────────────
+      {
+        id: "cicd_gen",
+        type: "ai_response",
+        position: pos(9),
+        data: {
+          label: "CI/CD Generator",
+          model: "deepseek-chat",
+          prompt: `Generate a CI/CD pipeline configuration for this code.
+
+Project Context: {{projectContext}}
+Generated Code Summary: {{generatedCode}}
+Code Review: {{codeReview}}
+Security Review: {{secReview}}
+
+Output: GitHub Actions workflow YAML, deployment steps, rollback procedure.`,
+          outputVariable: "cicdConfig",
+        },
+      },
+
+      // ── Phase 5: Deploy Decision ───────────────────────────────────────────
+      {
+        id: "deploy_switch",
+        type: "switch",
+        position: pos(10),
+        data: {
+          label: "Deploy Decision",
+          variable: "codeReview.decision",
+          operator: "equals",
+          outputVariable: "deployDecision",
+          cases: [
+            { value: "APPROVE",          label: "Approved — deploy" },
+            { value: "REQUEST_CHANGES",  label: "Changes requested" },
+            { value: "BLOCK",            label: "Blocked" },
+          ],
+        },
+      },
+      {
+        id: "human_approval",
+        type: "human_approval",
+        position: ppos(11, 0),
+        data: {
+          label: "Deploy Approval",
+          prompt: `SDLC pipeline complete. Review results before deploy.
+
+Code Review: {{codeReview}}
+Security Review: {{secReview}}
+Reality Check: {{realityCheck}}
+CI/CD Config: {{cicdConfig}}
+
+Approve deployment?`,
+          inputVariable: "codeReview",
+          outputVariable: "deployApproval",
+          timeoutMinutes: 120,
+          onTimeout: "continue",
+          defaultValue: "APPROVED",
+        },
+      },
+      {
+        id: "auto_deploy",
+        type: "set_variable",
+        position: ppos(11, -1),
+        data: {
+          label: "Auto Deploy",
+          assignments: [{ variable: "deployApproval", value: "AUTO_APPROVED" }],
+        },
+      },
+      {
+        id: "blocked",
+        type: "set_variable",
+        position: ppos(11, 1),
+        data: {
+          label: "Blocked",
+          assignments: [{ variable: "deployApproval", value: "BLOCKED" }],
+        },
+      },
+
+      // ── Done ───────────────────────────────────────────────────────────────
+      {
+        id: "done",
+        type: "end",
+        position: pos(12),
+        data: {
+          label: "SDLC Complete",
+          message: "Full SDLC pipeline completed.\n\nCode: {{generatedCode}}\nCI/CD: {{cicdConfig}}\nDeploy: {{deployApproval}}",
+        },
+      },
+    ],
+
+    edges: [
+      edge("input",    "proj_ctx"),
+      edge("proj_ctx", "discovery"),
+      edge("discovery", "phase2_parallel"),
+
+      { id: "e_p2_arch", source: "phase2_parallel", target: "architect",    sourceHandle: "b_arch" },
+      { id: "e_p2_sec",  source: "phase2_parallel", target: "security_eng", sourceHandle: "b_sec"  },
+      { id: "e_p2_tdd",  source: "phase2_parallel", target: "tdd_guide",    sourceHandle: "b_tdd"  },
+
+      edge("phase2_parallel", "codegen"),
+      edge("codegen", "sandbox"),
+
+      { id: "e_sb_passed", source: "sandbox",    target: "gate_parallel", sourceHandle: "passed" },
+      { id: "e_sb_failed", source: "sandbox",    target: "retry_node",    sourceHandle: "failed" },
+
+      { id: "e_gate_review",  source: "gate_parallel", target: "code_reviewer",   sourceHandle: "b_review"  },
+      { id: "e_gate_sec",     source: "gate_parallel", target: "sec_reviewer",    sourceHandle: "b_secrev"  },
+      { id: "e_gate_reality", source: "gate_parallel", target: "reality_checker", sourceHandle: "b_reality" },
+
+      edge("gate_parallel", "cicd_gen"),
+      edge("cicd_gen", "deploy_switch"),
+
+      { id: "e_sw_approve", source: "deploy_switch", target: "auto_deploy",   sourceHandle: "case_0" },
+      { id: "e_sw_changes", source: "deploy_switch", target: "human_approval", sourceHandle: "case_1" },
+      { id: "e_sw_block",   source: "deploy_switch", target: "blocked",        sourceHandle: "case_2" },
+
+      edge("auto_deploy",    "done"),
+      edge("human_approval", "done"),
+      edge("blocked",        "done"),
+    ],
+
+    variables: [
+      { name: "projectContext", type: "string" as const, default: ""   },
+      { name: "productSpec",    type: "string" as const, default: ""   },
+      { name: "architecture",   type: "string" as const, default: ""   },
+      { name: "securityPlan",   type: "string" as const, default: ""   },
+      { name: "tddPlan",        type: "string" as const, default: ""   },
+      { name: "generatedCode",  type: "object" as const, default: null },
+      { name: "sandboxResult",  type: "string" as const, default: ""   },
+      { name: "codeReview",     type: "object" as const, default: null },
+      { name: "secReview",      type: "object" as const, default: null },
+      { name: "realityCheck",   type: "string" as const, default: ""   },
+      { name: "cicdConfig",     type: "string" as const, default: ""   },
+      { name: "deployDecision", type: "string" as const, default: ""   },
+      { name: "deployApproval", type: "string" as const, default: ""   },
+    ],
   },
 
   // ── Orchestration ─────────────────────────────────────────────────────
