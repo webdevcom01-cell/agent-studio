@@ -12,6 +12,18 @@ interface TaskAnalysis {
   }>;
 }
 
+/**
+ * Enriched pipeline step returned by buildPipelineConfig().
+ * Infrastructure nodes (project_context, sandbox_verify) have type set accordingly.
+ * Agent nodes carry optional outputSchema from the agent template metadata.
+ */
+export interface PipelineStep {
+  id: string;
+  type: "agent" | "project_context" | "sandbox_verify";
+  outputSchema?: string;
+  contextRequired?: boolean;
+}
+
 const TASK_TYPES = [
   "new-feature",
   "bug-fix",
@@ -28,15 +40,43 @@ const TASK_TYPES = [
   "frontend",
 ] as const;
 
+/**
+ * Infrastructure nodes that are not agents — excluded from complexity calculation.
+ * These run as built-in pipeline nodes, not as agent calls.
+ */
+const INFRASTRUCTURE_NODES = new Set(["project_context", "sandbox_verify"]);
+
+/**
+ * Maps agent IDs to their default output schema.
+ * Derived from defaultOutputSchema fields in ecc-agent-templates.json.
+ * Update this map when adding new agents with structured output.
+ */
+const AGENT_OUTPUT_SCHEMA_MAP: Record<string, string> = {
+  "ecc-architect":          "ArchitectureOutput",
+  "ecc-code-reviewer":      "PRGateOutput",
+  "ecc-security-reviewer":  "PRGateOutput",
+  "ecc-reality-checker":    "PRGateOutput",
+};
+
+/**
+ * Maps agent IDs that require project context to be injected before them.
+ * Derived from contextRequired fields in ecc-agent-templates.json.
+ */
+const AGENT_CONTEXT_REQUIRED = new Set([
+  "ecc-code-reviewer",
+  "ecc-security-reviewer",
+  "ecc-reality-checker",
+]);
+
 const ROUTING_TABLE: Record<string, string[]> = {
-  "new-feature":     ["ecc-planner", "ecc-tdd-guide", "ecc-code-reviewer"],
-  "bug-fix":         ["ecc-tdd-guide", "ecc-code-reviewer", "ecc-security-reviewer"],
-  "security-audit":  ["ecc-security-reviewer", "ecc-security-engineer"],
-  "code-review":     ["ecc-code-reviewer"],
+  "new-feature":     ["project_context", "ecc-planner", "ecc-tdd-guide", "sandbox_verify", "ecc-code-reviewer"],
+  "bug-fix":         ["project_context", "ecc-tdd-guide", "sandbox_verify", "ecc-code-reviewer", "ecc-security-reviewer"],
+  "security-audit":  ["project_context", "ecc-security-reviewer", "ecc-security-engineer"],
+  "code-review":     ["project_context", "ecc-code-reviewer"],
   "architecture":    ["ecc-architect", "ecc-planner"],
   "documentation":   ["ecc-doc-updater"],
   "performance":     ["ecc-performance-benchmarker", "ecc-architect"],
-  "refactor":        ["ecc-planner", "ecc-refactor-cleaner", "ecc-code-reviewer"],
+  "refactor":        ["project_context", "ecc-planner", "ecc-refactor-cleaner", "sandbox_verify", "ecc-code-reviewer"],
   "testing":         ["ecc-tdd-guide", "ecc-e2e-runner"],
   "deployment":      ["ecc-workflow-optimizer"],
   "api-design":      ["ecc-planner", "ecc-code-reviewer"],
@@ -156,9 +196,11 @@ function analyzeTaskWithKeywords(description: string): TaskAnalysis {
 
   const pipeline = ROUTING_TABLE[bestMatch] ?? ["ecc-code-reviewer"];
 
-  const complexity = pipeline.length <= 1
+  // Count only agent nodes — infrastructure nodes don't add cognitive complexity
+  const agentCount = pipeline.filter((step) => !INFRASTRUCTURE_NODES.has(step)).length;
+  const complexity = agentCount <= 1
     ? "simple"
-    : pipeline.length <= 3
+    : agentCount <= 3
       ? "moderate"
       : "complex";
 
@@ -166,7 +208,7 @@ function analyzeTaskWithKeywords(description: string): TaskAnalysis {
     taskType: bestMatch,
     complexity,
     pipeline,
-    rationale: `Detected task type "${bestMatch}" from keywords. Routing to ${pipeline.length} agent(s).`,
+    rationale: `Detected task type "${bestMatch}" from keywords. Routing to ${agentCount} agent(s).`,
   };
 }
 
@@ -176,4 +218,40 @@ export function getRoutingTable(): Record<string, string[]> {
 
 export function getAvailablePipelines(): string[] {
   return Object.keys(ROUTING_TABLE);
+}
+
+/**
+ * Enriches a flat pipeline array into structured PipelineStep objects.
+ * For each step:
+ *   - "project_context" and "sandbox_verify" → infrastructure type
+ *   - Agent IDs → type "agent" with outputSchema + contextRequired from template metadata
+ *
+ * Used by the orchestrator to configure node properties when building a flow.
+ *
+ * @example
+ * buildPipelineConfig(["project_context", "ecc-code-reviewer", "sandbox_verify"])
+ * // → [
+ * //     { id: "project_context", type: "project_context" },
+ * //     { id: "ecc-code-reviewer", type: "agent", outputSchema: "PRGateOutput", contextRequired: true },
+ * //     { id: "sandbox_verify", type: "sandbox_verify" },
+ * //   ]
+ */
+export function buildPipelineConfig(pipeline: string[]): PipelineStep[] {
+  return pipeline.map((stepId) => {
+    if (stepId === "project_context") {
+      return { id: stepId, type: "project_context" as const };
+    }
+    if (stepId === "sandbox_verify") {
+      return { id: stepId, type: "sandbox_verify" as const };
+    }
+    const step: PipelineStep = { id: stepId, type: "agent" as const };
+    const outputSchema = AGENT_OUTPUT_SCHEMA_MAP[stepId];
+    if (outputSchema) {
+      step.outputSchema = outputSchema;
+    }
+    if (AGENT_CONTEXT_REQUIRED.has(stepId)) {
+      step.contextRequired = true;
+    }
+    return step;
+  });
 }
