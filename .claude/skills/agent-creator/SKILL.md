@@ -169,6 +169,101 @@ IF any sub-agent times out → mark it as REVIEW, continue with partial results
 - Retry policy (e.g., 0 retries — fail fast for CI/CD, or 1 retry for user-facing)
 - What happens when a sub-agent fails: exclude from verdict? mark as REVIEW? fail the pipeline?
 
+### A2A Agent Card (for public SDLC agents)
+
+If the agent participates in the PR Gate (code review, security review, reality check,
+architecture) and should be discoverable by external systems via A2A v0.3, set:
+
+```json
+"isPublic": true,
+"skills": [
+  {
+    "id": "code-review",              // unique skill ID (kebab-case)
+    "name": "Code Quality Review",    // human-readable
+    "description": "Reviews code for quality and convention compliance. Returns PRGateOutput with APPROVE/BLOCK decision and compositeScore.",
+    "inputModes": ["application/json"],
+    "outputModes": ["application/json"]
+  }
+]
+```
+
+**Which agents get `isPublic: true`:** ecc-code-reviewer, ecc-security-reviewer,
+ecc-reality-checker, ecc-architect, ecc-tdd-guide.
+
+**Which agents stay private:** orchestrators, doc-updater, chief-of-staff, build resolvers,
+language-specific reviewers, meta-orchestrator. These are internal and not discoverable.
+
+---
+
+## Step 3c — Pipeline Node Configuration (2026 standard)
+
+For any agent that participates in a SDLC pipeline, configure the following node types
+in the flow. These are infrastructure nodes — they run deterministically, not via AI.
+
+### `project_context` node
+
+Place at the **START** of every flow that involves code review, code generation, or
+code analysis. Gives all downstream agents full awareness of project conventions.
+
+```
+node.data:
+  contextFiles:   ["CLAUDE.md", ".claude/rules/*.md"]   # files to read (glob supported)
+  exampleFiles:   []                                     # shown in code blocks (optional)
+  contextLabel:   "Project Context"                      # label for log messages
+  maxTokens:      4000                                   # truncation limit (default)
+  outputVariable: "projectContext"                       # MUST match downstream reads
+```
+
+### `sandbox_verify` node
+
+Place **after Code Generation**, **before PR Gate**. Runs TypeScript, ESLint, and
+forbidden pattern checks deterministically — before spending AI tokens on review.
+
+```
+node.data:
+  inputVariable:    "generatedCode"          # MUST match Code Gen outputVariable
+  inputSchema:      "CodeGenOutput"          # optional: Zod pre-validation of input
+  checks:           ["typecheck", "lint", "forbidden_patterns"]
+  forbiddenPatterns: []                      # optional: [{pattern: "regex", message: "..."}]
+  outputVariable:   "sandboxResult"          # sets "PASS" or "FAIL"
+```
+
+⚠️ **Handle routing** — `sandbox_verify` does NOT use standard edges. It routes via handles:
+- Edge with `sourceHandle: "passed"` → next node when all checks pass
+- Edge with `sourceHandle: "failed"` → retry node when any check fails
+
+Both handles **must** be connected or the flow stops silently.
+
+### `retry` node with escalation
+
+Use `enableEscalation: true` for SDLC pipelines. On each attempt, injects richer
+feedback into the Code Gen agent's context.
+
+```
+node.data:
+  enableEscalation:       true
+  maxRetries:             2
+  failureVariable:        "sandboxResult"       # variable to check
+  failureValues:          ["FAIL", "BLOCK"]     # values that trigger retry
+  prGateVariable:         "gateResult"          # reads PRGateOutput for fix fields
+  sandboxErrorsVariable:  "sandboxErrors"       # reads sandbox error list
+  projectContextVariable: "projectContext"      # reads project context
+```
+
+Attempt 1 context: PR Gate fix fields + `{{projectContext}}`
+Attempt 2 context: above + `{{sandboxErrors}}` + few-shot code examples
+
+### `outputSchema` on `ai_response` nodes
+
+Set `outputSchema` on every pipeline leaf agent to enforce structured JSON output.
+Use only names registered in `src/lib/sdlc/schemas.ts`:
+
+| Agent type | outputSchema value |
+|---|---|
+| Code Generation | `"CodeGenOutput"` |
+| Code Reviewer, Security Reviewer, Reality Checker | `"PRGateOutput"` |
+| Architect | `"ArchitectureOutput"` |
+
 ---
 
 ## Step 4 — Quality Check
@@ -187,8 +282,29 @@ Before delivering, score the prompt against the 10-dimension rubric. Aim for 8+/
 | Decomposition / phased approach | Yes / No / N/A |
 | Domain-specific rules (not generic) | Yes / No |
 | Minimum 4000 characters | Yes / No |
+| `outputSchema` configured (pipeline leaf agents) | Yes / No / N/A |
+| `project_context` at pipeline start (code-analysis flows) | Yes / No / N/A |
+| A2A fields (`isPublic`, `skills[]`) for public SDLC agents | Yes / No / N/A |
 
-If the score is below 8, expand the weakest sections before delivering.
+If the score is below 8 (counting only applicable dimensions), expand the weakest sections before delivering.
+
+---
+
+## Variable Chain Reference
+
+The following variables form an **implicit contract** between pipeline nodes.
+A wrong variable name causes silent failure — the node runs but reads/writes nothing.
+
+| Node | Reads | Writes |
+|---|---|---|
+| `project_context` | — | `{{projectContext}}` (configurable via `outputVariable`) |
+| Code Gen `ai_response` | `{{projectContext}}` | `{{generatedCode}}` (configurable via `outputVariable`) |
+| `sandbox_verify` | `{{generatedCode}}` (via `inputVariable`) | `{{sandboxResult}}`, `{{sandboxErrors}}`, `{{sandboxSummary}}` |
+| PR Gate `ai_response` | `{{generatedCode}}`, `{{projectContext}}` | `{{gateResult}}` (configurable via `outputVariable`) |
+| `retry` (escalating) | `{{gateResult}}` (`prGateVariable`), `{{sandboxErrors}}` (`sandboxErrorsVariable`), `{{projectContext}}` (`projectContextVariable`) | `{{__retry_escalation}}` (internal) |
+
+**Rule:** `outputVariable` of one node must exactly match `inputVariable` of the next.
+Default values are shown above. If you change one, change the other to match.
 
 ---
 
@@ -242,3 +358,10 @@ When writing constraints for agents that work with agent-studio code, always inc
 **Standards**
 - WCAG 2.2 AA for accessibility (not 2.1)
 - OWASP LLM Top 10 2025 for AI/LLM security
+
+**Pipeline Nodes (2026 — required for SDLC agents)**
+- `project_context` node: must be first node in any code-analysis or code-generation flow
+- `sandbox_verify` node: must sit between Code Gen and PR Gate; uses handle routing ("passed"/"failed")
+- `outputSchema` on `ai_response` nodes: use only registered names — `"CodeGenOutput"`, `"PRGateOutput"`, `"ArchitectureOutput"`
+- `enableEscalation: true` on retry nodes in SDLC pipelines — wires sandboxErrors + projectContext into retry context
+- Variable names are a contract — see Step 3c Variable Chain table; mismatches cause silent failures
