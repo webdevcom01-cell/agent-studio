@@ -62,11 +62,46 @@ export const PRGateOutputSchema = z.object({
 
 export type PRGateOutput = z.infer<typeof PRGateOutputSchema>;
 
+// ─── Architecture Output ──────────────────────────────────────────────────────
+
+export const ArchitectureTechStackItemSchema = z.object({
+  category: z.string().describe("e.g. Database, Auth, API, Frontend"),
+  choice: z.string().describe("e.g. PostgreSQL, NextAuth v5, tRPC"),
+  justification: z.string().describe("Why this choice fits the project"),
+});
+
+export const ArchitectureOutputSchema = z.object({
+  techStack: z
+    .array(ArchitectureTechStackItemSchema)
+    .min(1)
+    .describe("Technology choices with justifications"),
+  systemDesign: z.string().describe("High-level system design narrative"),
+  databaseSchema: z
+    .string()
+    .optional()
+    .describe("Prisma schema additions or table design, if applicable"),
+  apiDesign: z
+    .string()
+    .optional()
+    .describe("API contract outline: routes, methods, request/response shapes"),
+  securityConsiderations: z
+    .array(z.string())
+    .default([])
+    .describe("Security controls and threat mitigations"),
+  deploymentStrategy: z
+    .string()
+    .describe("How this will be deployed (Railway, Vercel, Docker, etc.)"),
+  summary: z.string().describe("Short human-readable architecture decision summary"),
+});
+
+export type ArchitectureOutput = z.infer<typeof ArchitectureOutputSchema>;
+
 // ─── Schema registry ───────────────────────────────────────────────────────────
 
 const SCHEMA_REGISTRY: Record<string, z.ZodTypeAny> = {
   CodeGenOutput: CodeGenOutputSchema,
   PRGateOutput: PRGateOutputSchema,
+  ArchitectureOutput: ArchitectureOutputSchema,
 };
 
 export const AVAILABLE_SCHEMAS = Object.keys(SCHEMA_REGISTRY);
