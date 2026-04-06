@@ -112,6 +112,8 @@ vi.mock("lucide-react", () => {
     Database: Icon,
     Plug: Icon,
     Zap: Icon,
+    Scale: Icon,
+    Brain: Icon,
     ChevronDown: Icon,
     Check: Icon,
     AlertTriangle: Icon,

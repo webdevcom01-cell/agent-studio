@@ -13,6 +13,14 @@ interface RouteParams {
   params: Promise<{ agentId: string }>;
 }
 
+class LockConflictError extends Error {
+  readonly serverLockVersion: number;
+  constructor(serverLockVersion: number) {
+    super("Flow was modified in another session");
+    this.serverLockVersion = serverLockVersion;
+  }
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: RouteParams
@@ -40,12 +48,18 @@ export async function GET(
       );
     }
 
+    const lockRows = await prisma.$queryRaw<{ lockVersion: number }[]>`
+      SELECT "lockVersion" FROM "Flow" WHERE "agentId" = ${agentId}
+    `;
+    const lockVersion = lockRows[0]?.lockVersion ?? 1;
+
     const activeVersion = flow.versions[0] ?? null;
 
     return NextResponse.json({
       success: true,
       data: {
         ...flow,
+        lockVersion,
         activeVersion: activeVersion
           ? { id: activeVersion.id, version: activeVersion.version }
           : null,
@@ -94,12 +108,33 @@ export async function PUT(
     }
 
     const content = validation.data;
+    const clientLockVersion =
+      typeof body.clientLockVersion === "number" ? body.clientLockVersion : undefined;
+
     const { flow, version } = await prisma.$transaction(async (tx) => {
+      if (clientLockVersion !== undefined) {
+        const lockRows = await tx.$queryRaw<{ lockVersion: number }[]>`
+          SELECT "lockVersion" FROM "Flow" WHERE "agentId" = ${agentId}
+        `;
+        if (lockRows.length > 0 && lockRows[0].lockVersion !== clientLockVersion) {
+          throw new LockConflictError(lockRows[0].lockVersion);
+        }
+      }
+
       const savedFlow = await tx.flow.upsert({
         where: { agentId },
         update: { content: JSON.parse(JSON.stringify(content)) },
         create: { agentId, content: JSON.parse(JSON.stringify(content)) },
       });
+
+      await tx.$executeRaw`
+        UPDATE "Flow" SET "lockVersion" = COALESCE("lockVersion", 0) + 1 WHERE "agentId" = ${agentId}
+      `;
+
+      const newLockRows = await tx.$queryRaw<{ lockVersion: number }[]>`
+        SELECT "lockVersion" FROM "Flow" WHERE "agentId" = ${agentId}
+      `;
+      const newLockVersion = newLockRows[0]?.lockVersion ?? 1;
 
       const savedVersion = await VersionService.createVersion(
         savedFlow.id,
@@ -109,7 +144,7 @@ export async function PUT(
         tx
       ).catch(() => null);
 
-      return { flow: savedFlow, version: savedVersion };
+      return { flow: { ...savedFlow, lockVersion: newLockVersion }, version: savedVersion };
     });
 
     const baseUrl = new URL(request.url).origin;
@@ -127,6 +162,16 @@ export async function PUT(
       },
     });
   } catch (err) {
+    if (err instanceof LockConflictError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Flow was modified in another session",
+          serverLockVersion: err.serverLockVersion,
+        },
+        { status: 409 }
+      );
+    }
     const message = sanitizeErrorMessage(err, "Failed to save flow");
     return NextResponse.json(
       { success: false, error: message },
