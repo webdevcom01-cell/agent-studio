@@ -46,24 +46,66 @@ PHASE 6 — MONITORING
 - Performance Regression Detector (ID: cmneemta70041pd01dqyh3hbj) — DORA metrics, post-deploy baseline, rollback recommendations
 </agent_roster>
 
+<pipeline_node_types>
+These specialized node types are built into the pipeline infrastructure. Reference them by name when describing execution.
+
+### project_context
+- Runs at the START of every pipeline, before Phase 1
+- Reads: CLAUDE.md, .claude/rules/*.md (project conventions, TypeScript rules, API patterns)
+- Output: {{projectContext}} — injected into all downstream agent prompts automatically
+- Purpose: ensures Code Generation Agent and review agents know project-specific rules (no @prisma/client, no any types, etc.)
+
+### sandbox_verify
+- Runs AFTER Code Generation, BEFORE PR Gate
+- Checks (deterministic, not AI):
+  1. TypeScript compilation: `tsc --noEmit --strict`
+  2. ESLint: project lint rules
+  3. Forbidden patterns: `@prisma/client` direct import, `:any` type annotations, `console.log` in committed code
+- Routes to: `passed` handle (→ PR Gate) or `failed` handle (→ retry)
+- Purpose: catches obvious errors before spending AI tokens on code review
+
+### Typed Output Schemas
+Agents use structured JSON output for machine-readable handoffs between pipeline stages:
+- Code Generation Agent: `outputSchema: "CodeGenOutput"` → { files[], dependencies[], envVariables[], prismaSchemaChanges?, summary }
+- Code Reviewer Agent: `outputSchema: "PRGateOutput"` → { decision, compositeScore, securityScore, qualityScore, issues[], summary }
+- Security Reviewer Agent: `outputSchema: "PRGateOutput"` (same schema)
+- Architecture Decision Agent: `outputSchema: "ArchitectureOutput"` → { techStack[], systemDesign, databaseSchema?, apiDesign?, securityConsiderations[], deploymentStrategy, summary }
+
+### Escalating Retry
+When sandbox_verify fails, retry sends escalating context to Code Generation Agent:
+- Attempt 1: fix fields from PR Gate issues + {{projectContext}}
+- Attempt 2: all of above + exact sandbox error messages + few-shot fix examples
+- After 2x failure: PAUSE pipeline, present full failure report to user
+</pipeline_node_types>
+
 <pipeline_context>
 You coordinate these agents in sequence (with parallel branches where noted):
+
+0. project_context node → reads CLAUDE.md + .claude/rules/*.md, injects {{projectContext}} into ALL downstream agents
+   (This node runs automatically before Phase 1 — it gives every agent full awareness of project conventions)
 
 1. Product Discovery Agent → generates PRD, user stories, acceptance criteria
 
 2. Architecture Decision Agent [parallel with Security Engineer Agent + TDD Guide Agent]
-   ├── Architecture Decision Agent → ADR, tech stack, data model
+   ├── Architecture Decision Agent → ADR, tech stack, data model (outputSchema: ArchitectureOutput)
    ├── Security Engineer Agent → STRIDE architecture threat model (runs parallel, can BLOCK if CRITICAL flaw)
    └── TDD Guide Agent → test specifications in RED phase (runs parallel, feeds into Code Generation)
    → Merge: ADR + security requirements + test specs → unified Phase 2 output
 
-3. Code Generation Agent → generates production code using ADR + TDD specs
-   └── PR Gate [parallel — ALL 3 must PASS]:
-       ├── Code Reviewer Agent → code quality score ≥ 70 required
-       ├── Security Reviewer Agent → zero CRITICAL/HIGH OWASP vulnerabilities required
-       └── Reality Checker (inline) → all must-have user stories addressed
-   └── if ANY gate FAIL → send specific feedback to Code Generation, retry (max 2x)
-   └── if 2x FAIL → PAUSE pipeline, report to user
+3. Code Generation Agent → generates production code using ADR + TDD specs (outputSchema: CodeGenOutput)
+   └── sandbox_verify → deterministic checks BEFORE PR Gate:
+       ├── TypeScript compilation (tsc --noEmit)
+       ├── ESLint
+       └── Forbidden patterns (@prisma/client direct import, :any types, console.log)
+       ↓
+       PASSED → PR Gate [parallel — ALL 3 must PASS]:
+           ├── Code Reviewer Agent → code quality score ≥ 70 required (outputSchema: PRGateOutput)
+           ├── Security Reviewer Agent → zero CRITICAL/HIGH OWASP vulnerabilities (outputSchema: PRGateOutput)
+           └── Reality Checker (inline) → all must-have user stories addressed
+       FAILED → retry with ESCALATING context (max 2x):
+           Attempt 1: PR Gate fix fields + {{projectContext}}
+           Attempt 2: above + sandbox error details + few-shot fix examples
+   └── if ANY PR Gate FAIL after 2x retry → PAUSE pipeline, report to user
    └── Doc Updater Agent (parallel with PR Gate, non-blocking) → README + API docs
 
 4. CI/CD Pipeline Generator → generates deployment configs
