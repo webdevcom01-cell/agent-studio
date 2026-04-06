@@ -1,5 +1,6 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
+import { validateNamedSchema } from "@/lib/mcp/schema-validator";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
@@ -188,6 +189,33 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
 
   const providerOverride = (node.data.providerOverride as string) || "";
   const retryConfig = parseRetryConfig(node.data.retryConfig);
+  const inputSchemaName = node.data.inputSchema as string | undefined;
+  const outputSchemaName = node.data.outputSchema as string | undefined;
+
+  // ── Schema enforcement: validate resolved input before calling sub-agent ──
+  if (inputSchemaName) {
+    const inputCheck = validateNamedSchema(inputSchemaName, resolvedInput, "Input");
+    if (!inputCheck.valid) {
+      logger.warn("call_agent input failed schema validation", {
+        agentId: context.agentId,
+        targetAgentId,
+        schema: inputSchemaName,
+        errors: inputCheck.errors,
+      });
+      return {
+        messages: [
+          {
+            role: "assistant",
+            content: `Agent input does not match schema "${inputSchemaName}": ${inputCheck.errors.join("; ")}`,
+          },
+        ],
+        nextNodeId: null,
+        waitForInput: false,
+        updatedVariables: { [outputVariable]: null },
+      };
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   // Retry loop: attempt 0 is the first try, then up to maxRetries additional attempts
   for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
@@ -210,6 +238,35 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
     );
 
     if (attemptResult.success) {
+      // ── Schema enforcement: validate sub-agent output ──────────────────────
+      if (outputSchemaName) {
+        const rawOutput = attemptResult.result.updatedVariables?.[outputVariable];
+        const parsedOutput = (() => {
+          if (typeof rawOutput !== "string") return rawOutput;
+          try { return JSON.parse(rawOutput); } catch { return rawOutput; }
+        })();
+        const outputCheck = validateNamedSchema(outputSchemaName, parsedOutput, "Output");
+        if (!outputCheck.valid) {
+          logger.warn("call_agent output failed schema validation", {
+            agentId: context.agentId,
+            targetAgentId,
+            schema: outputSchemaName,
+            errors: outputCheck.errors,
+          });
+          return {
+            messages: [
+              {
+                role: "assistant",
+                content: `Agent output does not match schema "${outputSchemaName}": ${outputCheck.errors.join("; ")}`,
+              },
+            ],
+            nextNodeId: null,
+            waitForInput: false,
+            updatedVariables: { [outputVariable]: null },
+          };
+        }
+      }
+      // ──────────────────────────────────────────────────────────────────────
       return attemptResult.result;
     }
 

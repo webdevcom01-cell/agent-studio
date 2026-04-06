@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { auditMCPToolCall } from "@/lib/security/audit";
 import { enforceSkillAccess, RBACError } from "@/lib/security/rbac";
 import { isECCEnabled } from "@/lib/ecc/feature-flag";
+import { validateMCPInputArgs, validateNamedSchema } from "@/lib/mcp/schema-validator";
 
 const ECC_MCP_URL = process.env.ECC_MCP_URL ?? "";
 
@@ -17,6 +18,8 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
   const toolName = node.data.toolName as string | undefined;
   const inputMapping = (node.data.inputMapping as Record<string, string>) ?? {};
   const outputVariable = (node.data.outputVariable as string) ?? "mcp_result";
+  const inputSchemaName = node.data.inputSchema as string | undefined;
+  const outputSchemaName = node.data.outputSchema as string | undefined;
 
   if (!mcpServerId || !toolName) {
     return {
@@ -106,6 +109,61 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
 
   const MAX_RESULT_LENGTH = 10_000;
 
+  // ── Schema enforcement: validate input args ───────────────────────────────
+  // 1. Native MCP JSON Schema check (required fields + types) from toolsCache
+  // 2. Named Zod schema check from node.data.inputSchema
+  try {
+    const toolDef = await fetchToolSchema(mcpServerId, toolName);
+    if (toolDef) {
+      const nativeCheck = validateMCPInputArgs(resolvedArgs, toolDef);
+      if (!nativeCheck.valid) {
+        logger.warn("MCP tool input failed native schema validation", {
+          agentId: context.agentId,
+          mcpServerId,
+          toolName,
+          errors: nativeCheck.errors,
+        });
+        return {
+          messages: [],
+          nextNodeId: null,
+          waitForInput: false,
+          updatedVariables: {
+            ...context.variables,
+            [outputVariable]: `[Error: Input validation failed — ${nativeCheck.errors.join("; ")}]`,
+          },
+        };
+      }
+    }
+
+    const namedInputCheck = validateNamedSchema(inputSchemaName, resolvedArgs, "Input");
+    if (!namedInputCheck.valid) {
+      logger.warn("MCP tool input failed named schema validation", {
+        agentId: context.agentId,
+        mcpServerId,
+        toolName,
+        schema: inputSchemaName,
+        errors: namedInputCheck.errors,
+      });
+      return {
+        messages: [],
+        nextNodeId: null,
+        waitForInput: false,
+        updatedVariables: {
+          ...context.variables,
+          [outputVariable]: `[Error: ${namedInputCheck.errors.join("; ")}]`,
+        },
+      };
+    }
+  } catch {
+    // Schema fetch/validation errors are non-fatal: log and continue
+    logger.warn("MCP schema pre-validation failed, continuing", {
+      agentId: context.agentId,
+      mcpServerId,
+      toolName,
+    });
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   try {
     const result = await callMCPTool(mcpServerId, toolName, resolvedArgs);
 
@@ -115,6 +173,33 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
     const sanitized = typeof result === "string"
       ? result.slice(0, MAX_RESULT_LENGTH)
       : JSON.stringify(result).slice(0, MAX_RESULT_LENGTH);
+
+    // ── Schema enforcement: validate output ─────────────────────────────────
+    if (outputSchemaName) {
+      const parsedResult = (() => {
+        try { return typeof result === "string" ? JSON.parse(result) : result; } catch { return result; }
+      })();
+      const outputCheck = validateNamedSchema(outputSchemaName, parsedResult, "Output");
+      if (!outputCheck.valid) {
+        logger.warn("MCP tool output failed schema validation", {
+          agentId: context.agentId,
+          mcpServerId,
+          toolName,
+          schema: outputSchemaName,
+          errors: outputCheck.errors,
+        });
+        return {
+          messages: [],
+          nextNodeId: null,
+          waitForInput: false,
+          updatedVariables: {
+            ...context.variables,
+            [outputVariable]: `[Error: Output validation failed — ${outputCheck.errors.join("; ")}]`,
+          },
+        };
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
 
     return {
       messages: [],
@@ -172,5 +257,31 @@ async function checkMCPToolAccess(
   } catch {
     // DB error — allow through to avoid blocking on transient failures
     return { allowed: true };
+  }
+}
+
+/**
+ * Fetches the JSON Schema for a specific tool from the MCP server's toolsCache.
+ * Returns null when the server or tool cannot be found — caller treats this as
+ * "no schema available" and skips native validation (backward compatible).
+ */
+async function fetchToolSchema(
+  mcpServerId: string,
+  toolName: string,
+): Promise<unknown | null> {
+  try {
+    const server = await prisma.mCPServer.findUnique({
+      where: { id: mcpServerId },
+      select: { toolsCache: true },
+    });
+
+    if (!server?.toolsCache || !Array.isArray(server.toolsCache)) return null;
+
+    const tool = (server.toolsCache as { name: string; inputSchema?: unknown }[])
+      .find((t) => t.name === toolName);
+
+    return tool?.inputSchema ?? null;
+  } catch {
+    return null;
   }
 }

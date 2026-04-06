@@ -1220,6 +1220,47 @@ function MCPToolProperties({ data, update, variables = [] }: SubPanelProps) {
           placeholder="e.g. mcp_result"
         />
       </div>
+
+      <PropertySection title="Schema Enforcement">
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label>Input Schema</Label>
+            <Select
+              value={(data.inputSchema as string) ?? "__none__"}
+              onValueChange={(v) => update("inputSchema", v === "__none__" ? "" : v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None (skip validation)</SelectItem>
+                <SelectItem value="CodeGenOutput">CodeGenOutput</SelectItem>
+                <SelectItem value="PRGateOutput">PRGateOutput</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Output Schema</Label>
+            <Select
+              value={(data.outputSchema as string) ?? "__none__"}
+              onValueChange={(v) => update("outputSchema", v === "__none__" ? "" : v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None (skip validation)</SelectItem>
+                <SelectItem value="CodeGenOutput">CodeGenOutput</SelectItem>
+                <SelectItem value="PRGateOutput">PRGateOutput</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Validate inputs/outputs against a Zod schema. Flow stops with an error if
+            validation fails.
+          </p>
+        </div>
+      </PropertySection>
     </>
   );
 }
@@ -1776,6 +1817,49 @@ function CallAgentProperties({ data, update, variables = [], currentAgentId }: C
               </p>
             </>
           )}
+        </div>
+      </PropertySection>
+
+      <PropertySection title="Schema Enforcement">
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label>Input Schema</Label>
+            <Select
+              value={(data.inputSchema as string) ?? "__none__"}
+              onValueChange={(v) => update("inputSchema", v === "__none__" ? "" : v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None (skip validation)</SelectItem>
+                <SelectItem value="CodeGenOutput">CodeGenOutput</SelectItem>
+                <SelectItem value="PRGateOutput">PRGateOutput</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Validate resolved input against this schema before calling the sub-agent.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label>Output Schema</Label>
+            <Select
+              value={(data.outputSchema as string) ?? "__none__"}
+              onValueChange={(v) => update("outputSchema", v === "__none__" ? "" : v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None (skip validation)</SelectItem>
+                <SelectItem value="CodeGenOutput">CodeGenOutput</SelectItem>
+                <SelectItem value="PRGateOutput">PRGateOutput</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Validate sub-agent output. Flow stops with an error if validation fails.
+            </p>
+          </div>
         </div>
       </PropertySection>
     </>
