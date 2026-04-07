@@ -1356,6 +1356,448 @@ Approve deployment?`,
     ],
   },
 
+  // ── Autonomous SDLC Pipeline ──────────────────────────────────────────
+
+  /**
+   * Fully autonomous SDLC pipeline — spec → code → test → git → deploy.
+   *
+   * Phases:
+   *   0. Input + project context
+   *   1. Product discovery (deepseek-reasoner)
+   *   2. Parallel: Architecture (ArchitectureOutput) + Security + TDD planning
+   *   3. Code generation (CodeGenOutput) + sandbox verify + escalating retry
+   *   3b. Parallel PR Gate: Code Review + Security Review (PRGateOutput each)
+   *   4. Gate decision (switch on codeReview.decision)
+   *   5. file_writer  — writes CodeGenOutput.files to disk
+   *   6. process_runner — runs pnpm typecheck + pnpm test --run
+   *   7. git_node  — git add + commit + push
+   *   8. deploy_trigger — Vercel REST API deploy + poll
+   */
+  "sdlc-autonomous-pipeline": {
+    nodes: [
+      // ── Phase 0: Input + Context ────────────────────────────────────────
+      {
+        id: "input",
+        type: "message",
+        position: pos(0),
+        data: { label: "Feature Request", message: "{{user_input}}" },
+      },
+      {
+        id: "proj_ctx",
+        type: "project_context",
+        position: pos(1),
+        data: {
+          label: "Load Project Context",
+          contextFiles: ["CLAUDE.md", ".claude/rules/*.md"],
+          outputVariable: "projectContext",
+        },
+      },
+
+      // ── Phase 1: Product Discovery ──────────────────────────────────────
+      {
+        id: "discovery",
+        type: "ai_response",
+        position: pos(2),
+        data: {
+          label: "Product Discovery",
+          model: "deepseek-reasoner",
+          prompt: `You are a senior product manager. Analyse the feature request and produce a concise product spec.
+
+Project Context:
+{{projectContext}}
+
+Feature Request:
+{{user_input}}
+
+Output JSON with fields: title (string), userStories (string[]), acceptanceCriteria (string[]), mustHave (string[]), niceToHave (string[]), risks (string[]).`,
+          outputVariable: "productSpec",
+        },
+      },
+
+      // ── Phase 2: Parallel Architecture + Security + TDD ─────────────────
+      {
+        id: "phase2_parallel",
+        type: "parallel",
+        position: pos(3),
+        data: {
+          label: "Phase 2: Planning",
+          mergeStrategy: "all",
+          timeoutSeconds: 120,
+          branches: [
+            { branchId: "b_arch", label: "Architecture",      outputVariable: "architecture" },
+            { branchId: "b_sec",  label: "Security Engineer",  outputVariable: "securityPlan" },
+            { branchId: "b_tdd",  label: "TDD Guide",          outputVariable: "tddPlan"      },
+          ],
+        },
+      },
+      {
+        id: "architect",
+        type: "call_agent",
+        position: ppos(4, -1),
+        data: {
+          label: "Architect",
+          mode: "internal",
+          targetAgentId: "",
+          outputVariable: "architecture",
+          outputSchema: "ArchitectureOutput",
+          inputMapping: [
+            { key: "spec",           value: "{{productSpec}}" },
+            { key: "projectContext", value: "{{projectContext}}" },
+          ],
+          onError: "continue",
+        },
+      },
+      {
+        id: "security_eng",
+        type: "call_agent",
+        position: ppos(4, 0),
+        data: {
+          label: "Security Engineer",
+          mode: "internal",
+          targetAgentId: "",
+          outputVariable: "securityPlan",
+          inputMapping: [
+            { key: "spec",           value: "{{productSpec}}" },
+            { key: "projectContext", value: "{{projectContext}}" },
+          ],
+          onError: "continue",
+        },
+      },
+      {
+        id: "tdd_guide",
+        type: "call_agent",
+        position: ppos(4, 1),
+        data: {
+          label: "TDD Guide",
+          mode: "internal",
+          targetAgentId: "",
+          outputVariable: "tddPlan",
+          inputMapping: [
+            { key: "spec",         value: "{{productSpec}}" },
+            { key: "architecture", value: "{{architecture}}" },
+          ],
+          onError: "continue",
+        },
+      },
+
+      // ── Phase 3: Code Generation ────────────────────────────────────────
+      {
+        id: "codegen",
+        type: "ai_response",
+        position: pos(5),
+        data: {
+          label: "Code Generation",
+          model: "deepseek-chat",
+          prompt: `Generate production-ready code for this feature.
+
+Project Context:
+{{projectContext}}
+
+Product Spec:
+{{productSpec}}
+
+Architecture:
+{{architecture}}
+
+Security Requirements:
+{{securityPlan}}
+
+TDD Plan (write code to pass these tests):
+{{tddPlan}}
+
+{{#if __retry_escalation}}
+RETRY CONTEXT — previous attempt failed:
+{{__retry_escalation}}
+{{/if}}
+
+Return a valid CodeGenOutput JSON with files[], dependencies[], envVariables[], and summary.`,
+          outputVariable: "generatedCode",
+          outputSchema: "CodeGenOutput",
+        },
+      },
+
+      // ── Phase 3a: Sandbox Verify ────────────────────────────────────────
+      {
+        id: "sandbox",
+        type: "sandbox_verify",
+        position: pos(6),
+        data: {
+          label: "Sandbox Verify",
+          inputVariable: "generatedCode",
+          checks: ["typecheck", "lint", "forbidden_patterns"],
+          outputVariable: "sandboxResult",
+        },
+      },
+      {
+        id: "retry_sandbox",
+        type: "retry",
+        position: ppos(7, 1),
+        data: {
+          label: "Retry on Sandbox Fail",
+          targetNodeId: "codegen",
+          maxRetries: 2,
+          enableEscalation: true,
+          failureVariable: "sandboxResult",
+          failureValues: ["FAIL"],
+          sandboxErrorsVariable: "sandboxResult",
+          projectContextVariable: "projectContext",
+          outputVariable: "generatedCode",
+        },
+      },
+
+      // ── Phase 3b: Parallel PR Gate ──────────────────────────────────────
+      {
+        id: "gate_parallel",
+        type: "parallel",
+        position: ppos(7, -1),
+        data: {
+          label: "PR Gate",
+          mergeStrategy: "all",
+          timeoutSeconds: 120,
+          branches: [
+            { branchId: "b_review", label: "Code Review",    outputVariable: "codeReview" },
+            { branchId: "b_secrev", label: "Security Review", outputVariable: "secReview"  },
+          ],
+        },
+      },
+      {
+        id: "code_reviewer",
+        type: "call_agent",
+        position: ppos(8, -2),
+        data: {
+          label: "Code Reviewer",
+          mode: "internal",
+          targetAgentId: "",
+          outputVariable: "codeReview",
+          outputSchema: "PRGateOutput",
+          inputMapping: [
+            { key: "code",           value: "{{generatedCode}}" },
+            { key: "projectContext", value: "{{projectContext}}" },
+            { key: "tddPlan",        value: "{{tddPlan}}" },
+          ],
+          onError: "continue",
+        },
+      },
+      {
+        id: "sec_reviewer",
+        type: "call_agent",
+        position: ppos(8, 0),
+        data: {
+          label: "Security Reviewer",
+          mode: "internal",
+          targetAgentId: "",
+          outputVariable: "secReview",
+          outputSchema: "PRGateOutput",
+          inputMapping: [
+            { key: "code",         value: "{{generatedCode}}" },
+            { key: "securityPlan", value: "{{securityPlan}}" },
+          ],
+          onError: "continue",
+        },
+      },
+
+      // ── Phase 4: Gate Decision ──────────────────────────────────────────
+      {
+        id: "gate_switch",
+        type: "switch",
+        position: pos(9),
+        data: {
+          label: "Gate Decision",
+          variable: "codeReview.decision",
+          operator: "equals",
+          cases: [
+            { value: "APPROVE",            label: "Approved — proceed" },
+            { value: "APPROVE_WITH_NOTES", label: "Approved with notes" },
+            { value: "BLOCK",              label: "Blocked" },
+          ],
+        },
+      },
+      {
+        id: "blocked_end",
+        type: "end",
+        position: ppos(10, 1),
+        data: {
+          label: "Blocked by PR Gate",
+          message: "Deployment blocked.\n\nCode Review Decision: BLOCK\n\nIssues:\n{{codeReview}}",
+        },
+      },
+
+      // ── Phase 5: Write Files to Disk ────────────────────────────────────
+      {
+        id: "file_write",
+        type: "file_writer",
+        position: pos(10),
+        data: {
+          label: "Write Files to Disk",
+          inputVariable: "generatedCode",
+          baseDir: ".",
+          nextNodeId: "run_tests",
+          onErrorNodeId: "file_err",
+          outputVariable: "fileWriteResult",
+        },
+      },
+      {
+        id: "file_err",
+        type: "end",
+        position: ppos(11, 1),
+        data: {
+          label: "File Write Error",
+          message: "Failed to write generated files to disk.\n\n{{fileWriteResult}}",
+        },
+      },
+
+      // ── Phase 6: Run Tests ───────────────────────────────────────────────
+      {
+        id: "run_tests",
+        type: "process_runner",
+        position: pos(11),
+        data: {
+          label: "Run Tests",
+          commands: ["pnpm typecheck", "pnpm test --run"],
+          timeoutMs: 120000,
+          outputVariable: "testResult",
+        },
+      },
+      {
+        id: "retry_tests",
+        type: "retry",
+        position: ppos(12, 1),
+        data: {
+          label: "Retry on Test Failure",
+          targetNodeId: "codegen",
+          maxRetries: 1,
+          enableEscalation: true,
+          failureVariable: "generatedCode",
+          failureValues: ["[Error:"],
+          sandboxErrorsVariable: "testResult",
+          projectContextVariable: "projectContext",
+          outputVariable: "generatedCode",
+        },
+      },
+
+      // ── Phase 7: Git Commit + Push ──────────────────────────────────────
+      {
+        id: "git_commit",
+        type: "git_node",
+        position: pos(12),
+        data: {
+          label: "Git Commit & Push",
+          operation: "commit_and_push",
+          commitMessage: "feat: autonomous pipeline — {{productSpec}}",
+          branch: "main",
+          nextNodeId: "deploy",
+          onErrorNodeId: "git_err",
+          outputVariable: "gitResult",
+        },
+      },
+      {
+        id: "git_err",
+        type: "end",
+        position: ppos(13, 1),
+        data: {
+          label: "Git Error",
+          message: "Git operation failed.\n\n{{gitResult}}",
+        },
+      },
+
+      // ── Phase 8: Deploy to Vercel ───────────────────────────────────────
+      {
+        id: "deploy",
+        type: "deploy_trigger",
+        position: pos(13),
+        data: {
+          label: "Deploy to Vercel",
+          projectId: "",
+          teamId: "",
+          target: "production",
+          outputVariable: "deployResult",
+        },
+      },
+      {
+        id: "deploy_err",
+        type: "end",
+        position: ppos(14, 1),
+        data: {
+          label: "Deploy Failed",
+          message: "Vercel deployment failed.\n\n{{deployResult}}",
+        },
+      },
+
+      // ── Done ─────────────────────────────────────────────────────────────
+      {
+        id: "done",
+        type: "end",
+        position: pos(14),
+        data: {
+          label: "Pipeline Complete ✓",
+          message: "Autonomous SDLC pipeline completed successfully.\n\nCode: {{generatedCode.summary}}\nFiles written: {{fileWriteResult.filesWritten}}\nGit: {{gitResult.commitHash}}\nDeploy URL: {{deployResult.url}}",
+        },
+      },
+    ],
+
+    edges: [
+      // Phase 0-2
+      edge("input",    "proj_ctx"),
+      edge("proj_ctx", "discovery"),
+      edge("discovery", "phase2_parallel"),
+
+      // Phase 2 parallel branches
+      { id: "e_p2_arch", source: "phase2_parallel", target: "architect",    sourceHandle: "b_arch" },
+      { id: "e_p2_sec",  source: "phase2_parallel", target: "security_eng", sourceHandle: "b_sec"  },
+      { id: "e_p2_tdd",  source: "phase2_parallel", target: "tdd_guide",    sourceHandle: "b_tdd"  },
+
+      // Phase 3: codegen → sandbox
+      edge("phase2_parallel", "codegen"),
+      edge("codegen", "sandbox"),
+
+      // Sandbox routing
+      { id: "e_sb_passed", source: "sandbox",    target: "gate_parallel", sourceHandle: "passed" },
+      { id: "e_sb_failed", source: "sandbox",    target: "retry_sandbox", sourceHandle: "failed" },
+
+      // Phase 3b: PR Gate parallel branches
+      { id: "e_gate_review", source: "gate_parallel", target: "code_reviewer", sourceHandle: "b_review" },
+      { id: "e_gate_sec",    source: "gate_parallel", target: "sec_reviewer",  sourceHandle: "b_secrev" },
+
+      // Gate switch routing (case_0=APPROVE, case_1=APPROVE_WITH_NOTES, case_2=BLOCK)
+      edge("gate_parallel", "gate_switch"),
+      { id: "e_sw_approve", source: "gate_switch", target: "file_write",  sourceHandle: "case_0" },
+      { id: "e_sw_notes",   source: "gate_switch", target: "file_write",  sourceHandle: "case_1" },
+      { id: "e_sw_block",   source: "gate_switch", target: "blocked_end", sourceHandle: "case_2" },
+
+      // Phase 5: file_write (visual edge — routing via data.nextNodeId)
+      edge("file_write", "run_tests"),
+      edge("file_write", "file_err"),
+
+      // Phase 6: process_runner routing
+      { id: "e_tests_passed", source: "run_tests", target: "git_commit",   sourceHandle: "passed" },
+      { id: "e_tests_failed", source: "run_tests", target: "retry_tests",  sourceHandle: "failed" },
+
+      // Phase 7: git_node (visual edge — routing via data.nextNodeId)
+      edge("git_commit", "deploy"),
+      edge("git_commit", "git_err"),
+
+      // Phase 8: deploy_trigger routing
+      { id: "e_deploy_passed", source: "deploy", target: "done",       sourceHandle: "passed" },
+      { id: "e_deploy_failed", source: "deploy", target: "deploy_err", sourceHandle: "failed" },
+    ],
+
+    variables: [
+      { name: "projectContext",  type: "string" as const, default: ""   },
+      { name: "productSpec",     type: "object" as const, default: null },
+      { name: "architecture",    type: "object" as const, default: null },
+      { name: "securityPlan",    type: "string" as const, default: ""   },
+      { name: "tddPlan",         type: "string" as const, default: ""   },
+      { name: "generatedCode",   type: "object" as const, default: null },
+      { name: "sandboxResult",   type: "string" as const, default: ""   },
+      { name: "codeReview",      type: "object" as const, default: null },
+      { name: "secReview",       type: "object" as const, default: null },
+      { name: "fileWriteResult", type: "object" as const, default: null },
+      { name: "testResult",      type: "object" as const, default: null },
+      { name: "gitResult",       type: "object" as const, default: null },
+      { name: "deployResult",    type: "object" as const, default: null },
+    ],
+  },
+
   // ── Orchestration ─────────────────────────────────────────────────────
 
   "orchestration-plan-and-execute-pipeline": {
