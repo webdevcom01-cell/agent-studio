@@ -448,10 +448,10 @@ Inspired by: OMC verification protocol, OMC `omc ask` cross-provider delegation.
 
 **Tasks:**
 
-- [ ] D0 — **PREREQUISITE**: Extract `validateCommand()` + `runVerificationCommands()` from
+- [x] D0 — **PREREQUISITE**: Extract `validateCommand()` + `runVerificationCommands()` from
   `reflexive-loop-handler.ts` → `src/lib/runtime/verification-commands.ts` (shared module).
   Both `reflexive-loop-handler.ts` and new `verification-handler.ts` import from shared module.
-- [ ] D1.1 — Create `src/lib/runtime/handlers/verification-handler.ts`:
+- [x] D1.1 — Create `src/lib/runtime/handlers/verification-handler.ts`:
   - New node type: `verification`
   - Config: `checks: Array<{ type: "build" | "test" | "lint" | "custom", command: string, label?: string }>`
   - Execution: `execFile` + whitelist (imports from `verification-commands.ts`)
@@ -459,24 +459,24 @@ Inspired by: OMC verification protocol, OMC `omc ask` cross-provider delegation.
   - Output variable: `verificationResults: Array<{ type, command, label, exitCode, output, durationMs }>`
   - Routes: `findNextNode(context, node.id, "passed")` or `findNextNode(context, node.id, "failed")`
   - **Design deviation**: Uses `execFile` (not sandbox) — same rationale as A3.2
-- [ ] D1.2 — Register `verification` node type:
+- [x] D1.2 — Register `verification` node type:
   - `src/types/index.ts` → add `"verification"` to NodeType union
   - `src/lib/validators/flow-content.ts` → add to NODE_TYPES array
   - `src/lib/runtime/handlers/index.ts` → register handler
   - `src/components/builder/flow-builder.tsx` → add to NODE_TYPES map
   - Do NOT add to SELF_ROUTING_NODES (uses sourceHandles via findNextNode)
-- [ ] D1.3 — Create `src/components/builder/nodes/verification-node.tsx`:
+- [x] D1.3 — Create `src/components/builder/nodes/verification-node.tsx`:
   - Icon: `CircleCheckBig` (NOT ShieldCheck — already used by guardrails)
   - Theme: green (`bg-green-950 border-green-600`)
   - Shows: list of checks with type badges
-- [ ] D1.4 — Add to node picker + property panel:
+- [x] D1.4 — Add to node picker + property panel:
   - Node picker: category `"utilities"` (alongside guardrails), count 56→57
   - Property panel: checks CRUD (add/remove/edit rows), command + label input
   - OUTPUT_VAR_TYPES: add `"verification"`
   - Mock `CircleCheckBig` in `node-picker.test.tsx`, update counts
-- [ ] D1.5 — Starter flow template `"verification-pipeline"` in `src/data/starter-flows.ts`:
+- [x] D1.5 — Starter flow template `"verification-pipeline"` in `src/data/starter-flows.ts`:
   - `ai_response` → `verification` (checks: npm run build, npm run test) → passed: end / failed: ai_response (fix)
-- [ ] D1.6 — Tests:
+- [x] D1.6 — Tests:
   - `src/lib/runtime/__tests__/verification-commands.test.ts` — shared module (whitelist, metachar blocking)
   - `src/lib/runtime/handlers/__tests__/verification-handler.test.ts` — handler (all pass → passed, one fail → failed, timeout, empty checks → passed, output variable)
 
@@ -517,20 +517,20 @@ Inspired by: OMC verification protocol, OMC `omc ask` cross-provider delegation.
 
 **Tasks:**
 
-- [ ] D2.1 — Add `providerOverride` option to `call_agent` handler:
+- [x] D2.1 — Add `providerOverride` option to `call_agent` handler:
   - New config field: `providerOverride?: string` (model ID)
   - In internal mode: after loading calleeFlowContent, override `data.model` on all
     `ai_response` nodes in-memory (identical to chat route.ts evalModelOverride logic)
   - Log audit with `providerOverride` value for traceability
   - Graceful fallback: if providerOverride model unavailable, log warning and use original
-- [ ] D2.2 — Create `"cross-provider-synthesis"` starter flow in `src/data/starter-flows.ts`:
+- [x] D2.2 — Create `"cross-provider-synthesis"` starter flow in `src/data/starter-flows.ts`:
   - `message` → `parallel` (3 branches, each `ai_response` with different model: claude-sonnet-4-6,
     deepseek-chat, gemini-2.5-flash) → `ai_response` (synthesizer, merges outputs) → `end`
   - No `call_agent` dependency — works without pre-existing agents
-- [ ] D2.3 — Property panel: add `Provider Override` select to `call_agent` node editor:
+- [x] D2.3 — Property panel: add `Provider Override` select to `call_agent` node editor:
   - Model dropdown (nullable — "Use agent default" option)
   - Provider badge shown next to selected agent when providerOverride is set
-- [ ] D2.4 — Tests in `src/lib/runtime/handlers/__tests__/cross-provider.test.ts`:
+- [x] D2.4 — Tests in `src/lib/runtime/handlers/__tests__/cross-provider.test.ts`:
   - providerOverride applied to callee's ai_response nodes
   - Without providerOverride — original model unchanged
   - Override does not persist to DB
@@ -558,21 +558,21 @@ Inspired by: clawhip typed event pipeline, renderer/sink split, session.* events
 
 **Tasks:**
 
-- [ ] E1.1 — Define `SessionEventType` in `src/lib/runtime/types.ts`:
+- [x] E1.1 — Define `SessionEventType` in `src/lib/runtime/types.ts`:
   - `session.started` | `session.blocked` | `session.finished` | `session.failed` |
     `session.timeout` | `session.verification_passed` | `session.verification_failed`
-- [ ] E1.2 — Emit session events from engine.ts and engine-streaming.ts:
+- [x] E1.2 — Emit session events from engine.ts and engine-streaming.ts:
   - `session.started` at flow start
   - `session.finished` at successful flow end
   - `session.failed` on flow error
   - `session.timeout` on MAX_ITERATIONS hit
   - `session.blocked` on human_approval waitForInput
-- [ ] E1.3 — Auto-fire notifications for session events (configurable per agent):
+- [x] E1.3 — Auto-fire notifications for session events (configurable per agent):
   - Agent config: `sessionNotifications: { events: SessionEventType[], channel: "webhook" | "in_app", webhookUrl?: string }`
-- [ ] E1.4 — Add Discord and Slack webhook presets to notification config:
+- [x] E1.4 — Add Discord and Slack webhook presets to notification config:
   - Discord: format message with embed (title, color by event type, fields)
   - Slack: format as Block Kit message
-- [ ] E1.5 — Write tests for each session event type emission
+- [x] E1.5 — Write tests for each session event type emission
 
 **Files to modify:**
 - `src/lib/runtime/types.ts`
@@ -593,20 +593,20 @@ Inspired by: clawhip typed event pipeline, renderer/sink split, session.* events
 
 **Tasks:**
 
-- [ ] E2.1 — Refactor notification-handler.ts into renderer + sink pattern:
+- [x] E2.1 — Refactor notification-handler.ts into renderer + sink pattern:
   - `NotificationRenderer` interface: `render(event, options) -> RenderedMessage`
   - `NotificationSink` interface: `deliver(rendered, config) -> DeliveryResult`
-- [ ] E2.2 — Create renderers:
+- [x] E2.2 — Create renderers:
   - `PlainTextRenderer` — current behavior
   - `DiscordRenderer` — Discord embed format (rich)
   - `SlackRenderer` — Slack Block Kit format (mrkdwn)
   - `MarkdownRenderer` — for in-app display
-- [ ] E2.3 — Create sinks:
+- [x] E2.3 — Create sinks:
   - `WebhookSink` — current HTTP POST behavior
   - `InAppSink` — current in-app behavior
   - `LogSink` — current logger behavior
-- [ ] E2.4 — Config: `{ renderer: "plain" | "discord" | "slack" | "markdown", sink: "webhook" | "in_app" | "log" }`
-- [ ] E2.5 — Write tests for each renderer x sink combination
+- [x] E2.4 — Config: `{ renderer: "plain" | "discord" | "slack" | "markdown", sink: "webhook" | "in_app" | "log" }`
+- [x] E2.5 — Write tests for each renderer x sink combination
 
 **Files to modify:**
 - `src/lib/runtime/handlers/notification-handler.ts` (refactor)
@@ -648,18 +648,18 @@ Inspired by: clawhip typed event pipeline, renderer/sink split, session.* events
 
 **Tasks:**
 
-- [ ] F3.1 — Create `src/lib/ecc/skill-router.ts`:
+- [x] F3.1 — Create `src/lib/ecc/skill-router.ts`:
   - `getCachedSkillEmbedding(skillId, description)` → `number[]` — in-memory Map + Redis 600s TTL
   - `routeToSkill(prompt, agentId, topN=3)` → `Promise<Skill[]>` — cosine similarity, threshold 0.35
   - `invalidateSkillCache(skillId)` — call on skill update/delete
   - Uses `generateEmbedding()` from `embeddings.ts`, `cosineSimilarity()` from `semantic.ts`
   - Respects `acquireEmbeddingSemaphore()` / `releaseEmbeddingSemaphore()` for batch init
   - Guard: `isECCEnabled()` returns `[]` immediately when ECC disabled
-- [ ] F3.2 — Integrate into both ai-response handlers (step 5 replacement):
+- [x] F3.2 — Integrate into both ai-response handlers (step 5 replacement):
   - `if (isECCEnabled() && routedSkills.length > 0)` → inject routed skills
   - else → fall back to `composeSkillPipeline()` (non-breaking, C2.3 preserved)
   - Non-fatal: router error always falls back to static, never blocks AI call
-- [ ] F3.3 — Tests (12 tests):
+- [x] F3.3 — Tests (12 tests):
   - `src/lib/ecc/__tests__/skill-router.test.ts` — cache hit/miss, cosine threshold, topN,
     ECC disabled → `[]`, error swallowing, semaphore, invalidation
   - `src/lib/ecc/__tests__/skill-router-integration.test.ts` — handler uses routed skills,
@@ -693,8 +693,8 @@ Inspired by: clawhip typed event pipeline, renderer/sink split, session.* events
 
 **Tasks:**
 
-- [ ] F2.1 — Add `@ast-grep/napi` as optional dependency (`pnpm add @ast-grep/napi`)
-- [ ] F2.2 — Create `src/lib/ast/pattern-matcher.ts`:
+- [x] F2.1 — Add `@ast-grep/napi` as optional dependency (`pnpm add @ast-grep/napi`)
+- [x] F2.2 — Create `src/lib/ast/pattern-matcher.ts`:
   - `loadAstGrep()` → module | null — dynamic import, try/catch, logger.warn on fail
   - `isAstGrepAvailable()` → boolean
   - `matchPattern(code, pattern, language: SgLang)` → `AstMatch[]` — graceful `[]` if unavailable
@@ -702,24 +702,24 @@ Inspired by: clawhip typed event pipeline, renderer/sink split, session.* events
   - `getSupportedLanguages()` → `SgLang[]`
   - `SgLang = "TypeScript" | "JavaScript" | "Python" | "Rust" | "Go" | "Java" | "Css" | "Html"`
   - `AstMatch = { text, range: { start, end }, metaVariables: Record<string,string> }`
-- [ ] F2.3 — Extend `code-interpreter-handler.ts`:
+- [x] F2.3 — Extend `code-interpreter-handler.ts`:
   - New `mode` field: `"eval" | "ast_match" | "ast_replace"` (default `"eval"`)
   - New fields: `pattern?: string`, `replacement?: string`, `language?: SgLang`
   - `ast_match` output: `{ matches: AstMatch[], count: number }`
   - `ast_replace` output: `{ result: string, originalLength: number, newLength: number }`
   - Fallback: if ast-grep unavailable and mode != `"eval"` → return warning in output
-- [ ] F2.4 — Create `ast_transform` node type (58th):
+- [x] F2.4 — Create `ast_transform` node type (58th):
   - Config: `operation: "match" | "replace"`, `pattern`, `replacement?`, `language`,
     `inputVariable`, `outputVariable`
   - Icon: `Braces` (FREE — verified), theme: purple (`bg-purple-950 border-purple-600`)
   - Register in: `types/index.ts`, `flow-content.ts`, `handlers/index.ts`, `flow-builder.tsx`
   - NOT in `SELF_ROUTING_NODES`
   - Add `"ast_transform"` to `OUTPUT_VAR_TYPES`; also add missing `"code_interpreter"` (bug fix)
-- [ ] F2.5 — Update node picker + property panel + tests:
+- [x] F2.5 — Update node picker + property panel + tests:
   - `node-picker.tsx`: add `ast_transform` to utilities (57→58, utilities 8→9, import `Braces`)
   - `property-panel.tsx`: `AstTransformProperties` + `mode/pattern/replacement` for code_interpreter
   - `node-picker.test.tsx`: count 57→58, add `"Braces"` to lucide mock (55→56 icons)
-- [ ] F2.6 — Tests (20 tests):
+- [x] F2.6 — Tests (20 tests):
   - `src/lib/ast/__tests__/pattern-matcher.test.ts` — match/replace, graceful unavailable,
     metaVariables capture, all language enum values, empty input, invalid pattern
   - `src/lib/runtime/handlers/__tests__/ast-transform-handler.test.ts` — match/replace operations,
@@ -771,10 +771,10 @@ Inspired by: clawhip typed event pipeline, renderer/sink split, session.* events
 
 **Tasks:**
 
-- [ ] F1.1 — Package setup + Dockerfile:
+- [x] F1.1 — Package setup + Dockerfile:
   - `pnpm add vscode-languageserver-protocol`
   - Add `RUN npm install -g typescript-language-server typescript` to Dockerfile
-- [ ] F1.2 — Create LSP infrastructure (`src/lib/lsp/`):
+- [x] F1.2 — Create LSP infrastructure (`src/lib/lsp/`):
   - `src/lib/lsp/types.ts` — LSP type re-exports + local interfaces (`LSPConnection`, `LSPQueryResult`)
   - `src/lib/lsp/pool.ts` — `LSPConnectionPool`: MAX=3, TTL=300s, cleanup=30s, LRU eviction,
     SIGTERM graceful shutdown, dead connection detection. Pattern: `src/lib/mcp/pool.ts`.
@@ -787,21 +787,21 @@ Inspired by: clawhip typed event pipeline, renderer/sink split, session.* events
     - `hoverInfo(agentId, file, line, character)` → `string` — 15s timeout
     - `stopLSPServer(agentId)` — evict from pool
     - `validateWorkspacePath(path, agentId)` — security guard
-- [ ] F1.3 — Create `lsp_query` node type (58th or 59th — current+1):
+- [x] F1.3 — Create `lsp_query` node type (58th or 59th — current+1):
   - Config: `operation: "definition" | "references" | "diagnostics" | "hover"`,
     `fileVariable`, `contentVariable?`, `lineVariable?`, `characterVariable?`, `outputVariable`
   - Icon: `FileSearch` (FREE — verified), theme: violet (`bg-violet-950 border-violet-600`)
   - Sets `__lsp_context` variable with formatted LSP result
   - Register in: `types/index.ts`, `flow-content.ts`, `handlers/index.ts`, `flow-builder.tsx`
   - NOT in `SELF_ROUTING_NODES`; add `"lsp_query"` to `OUTPUT_VAR_TYPES`
-- [ ] F1.4 — Integrate LSP context into ai_response handlers:
+- [x] F1.4 — Integrate LSP context into ai_response handlers:
   - Check `context.variables["__lsp_context"]` — if set, prepend `<lsp_context>...</lsp_context>`
   - Non-fatal: missing variable → no change to prompt
-- [ ] F1.5 — Update node picker + property panel + tests:
+- [x] F1.5 — Update node picker + property panel + tests:
   - `node-picker.tsx`: add `lsp_query` to utilities (count +1, import `FileSearch`)
   - `property-panel.tsx`: `LSPQueryProperties` component
   - `node-picker.test.tsx`: count +1, add `"FileSearch"` to lucide mock (+1 icon)
-- [ ] F1.6 — Tests (25 tests):
+- [x] F1.6 — Tests (25 tests):
   - `src/lib/lsp/__tests__/client.test.ts` — mock LSP server over stdio: initialize handshake,
     all 4 operations, 15s timeout enforcement, pool LRU eviction, dead connection cleanup,
     validateWorkspacePath blocks `..` traversal
