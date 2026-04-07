@@ -11,7 +11,7 @@ import { reformulateWithHistory } from "@/lib/knowledge/query-reformulation";
 import { composeSkillPipeline, formatSkillPipelineForPrompt } from "@/lib/ecc/skill-composer";
 import { routeToSkill, formatRoutedSkillsForPrompt } from "@/lib/ecc/skill-router";
 import type { NodeHandler } from "../types";
-import { resolveSchema } from "@/lib/sdlc/schemas";
+import { resolveSchema, AVAILABLE_SCHEMAS } from "@/lib/sdlc/schemas";
 import { emitHook } from "../hooks";
 import { resolveTemplate } from "../template";
 import { checkInputSafety, checkOutputSafety } from "@/lib/safety/engine-safety-middleware";
@@ -224,7 +224,7 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     if (outputSchemaName) {
       const schema = resolveSchema(outputSchemaName);
       if (!schema) {
-        throw new Error(`Unknown outputSchema "${outputSchemaName}" — available: CodeGenOutput, PRGateOutput`);
+        throw new Error(`Unknown outputSchema "${outputSchemaName}" — available: ${AVAILABLE_SCHEMAS.join(", ")}`);
       }
 
       const startMsObj = Date.now();
@@ -262,7 +262,14 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
         : `${outputSchemaName} generated successfully`;
 
       return {
-        messages: [{ role: "assistant", content: summary }],
+        messages: [{
+          role: "assistant",
+          content: summary,
+          metadata: {
+            structuredOutput: obj,
+            schemaName: outputSchemaName,
+          },
+        }],
         nextNodeId: null,
         waitForInput: false,
         updatedVariables: outputVariable ? { [outputVariable]: object } : undefined,

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Send, Bot, RotateCcw, X, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStreamingChat } from "@/components/chat/use-streaming-chat";
+import { StructuredOutputMessage } from "@/components/chat/structured-output-message";
 
 function EmbedChatContent({ agentId }: { agentId: string }) {
   const searchParams = useSearchParams();
@@ -175,6 +176,25 @@ function EmbedChatContent({ agentId }: { agentId: string }) {
                     loading="lazy"
                   />
                 ))}
+              {msg.role === "assistant" && (() => {
+                const meta = msg.metadata as Record<string, unknown> | undefined;
+                const structuredOutput = meta?.structuredOutput;
+                const schemaName = meta?.schemaName;
+                if (
+                  structuredOutput !== null &&
+                  typeof structuredOutput === "object" &&
+                  !Array.isArray(structuredOutput) &&
+                  typeof schemaName === "string"
+                ) {
+                  return (
+                    <StructuredOutputMessage
+                      schemaName={schemaName}
+                      data={structuredOutput as Record<string, unknown>}
+                    />
+                  );
+                }
+                return null;
+              })()}
             </div>
           </div>
         ))}

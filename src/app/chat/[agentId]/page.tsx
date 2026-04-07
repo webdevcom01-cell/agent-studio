@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useStreamingChat, type ChatMessage } from "@/components/chat/use-streaming-chat";
 import { PipelineProgress } from "@/components/chat/pipeline-progress";
+import { StructuredOutputMessage } from "@/components/chat/structured-output-message";
 
 interface ConversationSummary {
   id: string;
@@ -264,6 +265,25 @@ export default function ChatPage({
                             />
                           </div>
                         ))}
+                        {(() => {
+                          const meta = msg.metadata as Record<string, unknown> | undefined;
+                          const structuredOutput = meta?.structuredOutput;
+                          const schemaName = meta?.schemaName;
+                          if (
+                            structuredOutput !== null &&
+                            typeof structuredOutput === "object" &&
+                            !Array.isArray(structuredOutput) &&
+                            typeof schemaName === "string"
+                          ) {
+                            return (
+                              <StructuredOutputMessage
+                                schemaName={schemaName}
+                                data={structuredOutput as Record<string, unknown>}
+                              />
+                            );
+                          }
+                          return null;
+                        })()}
                       </>
                     ) : (
                       msg.content
