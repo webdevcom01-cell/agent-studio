@@ -159,6 +159,8 @@ model Flow {
   agentId         String        @unique
   agent           Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
   versions        FlowVersion[]
+  /// Optimistic locking counter — incremented on every save to detect concurrent edits.
+  lockVersion     Int           @default(1)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 }

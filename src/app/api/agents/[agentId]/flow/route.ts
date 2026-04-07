@@ -48,10 +48,15 @@ export async function GET(
       );
     }
 
-    const lockRows = await prisma.$queryRaw<{ lockVersion: number }[]>`
-      SELECT "lockVersion" FROM "Flow" WHERE "agentId" = ${agentId}
-    `;
-    const lockVersion = lockRows[0]?.lockVersion ?? 1;
+    let lockVersion = 1;
+    try {
+      const lockRows = await prisma.$queryRaw<{ lockVersion: number }[]>`
+        SELECT "lockVersion" FROM "Flow" WHERE "agentId" = ${agentId}
+      `;
+      lockVersion = lockRows[0]?.lockVersion ?? 1;
+    } catch {
+      // lockVersion column may not exist yet (pending db:push) — use default 1
+    }
 
     const activeVersion = flow.versions[0] ?? null;
 
@@ -112,12 +117,19 @@ export async function PUT(
       typeof body.clientLockVersion === "number" ? body.clientLockVersion : undefined;
 
     const { flow, version } = await prisma.$transaction(async (tx) => {
+      // Optimistic locking check — only when client sends a lockVersion
       if (clientLockVersion !== undefined) {
-        const lockRows = await tx.$queryRaw<{ lockVersion: number }[]>`
-          SELECT "lockVersion" FROM "Flow" WHERE "agentId" = ${agentId}
-        `;
-        if (lockRows.length > 0 && lockRows[0].lockVersion !== clientLockVersion) {
-          throw new LockConflictError(lockRows[0].lockVersion);
+        try {
+          const lockRows = await tx.$queryRaw<{ lockVersion: number }[]>`
+            SELECT "lockVersion" FROM "Flow" WHERE "agentId" = ${agentId}
+          `;
+          if (lockRows.length > 0 && lockRows[0].lockVersion !== clientLockVersion) {
+            throw new LockConflictError(lockRows[0].lockVersion);
+          }
+        } catch (err) {
+          // Re-throw LockConflictError so the caller handles it; swallow DB column errors
+          if (err instanceof LockConflictError) throw err;
+          // lockVersion column missing — skip conflict check
         }
       }
 
@@ -127,14 +139,18 @@ export async function PUT(
         create: { agentId, content: JSON.parse(JSON.stringify(content)) },
       });
 
-      await tx.$executeRaw`
-        UPDATE "Flow" SET "lockVersion" = COALESCE("lockVersion", 0) + 1 WHERE "agentId" = ${agentId}
-      `;
-
-      const newLockRows = await tx.$queryRaw<{ lockVersion: number }[]>`
-        SELECT "lockVersion" FROM "Flow" WHERE "agentId" = ${agentId}
-      `;
-      const newLockVersion = newLockRows[0]?.lockVersion ?? 1;
+      let newLockVersion = 1;
+      try {
+        await tx.$executeRaw`
+          UPDATE "Flow" SET "lockVersion" = COALESCE("lockVersion", 0) + 1 WHERE "agentId" = ${agentId}
+        `;
+        const newLockRows = await tx.$queryRaw<{ lockVersion: number }[]>`
+          SELECT "lockVersion" FROM "Flow" WHERE "agentId" = ${agentId}
+        `;
+        newLockVersion = newLockRows[0]?.lockVersion ?? 1;
+      } catch {
+        // lockVersion column missing (pending db:push) — continue without incrementing
+      }
 
       const savedVersion = await VersionService.createVersion(
         savedFlow.id,
