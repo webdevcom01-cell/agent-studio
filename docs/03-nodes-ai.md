@@ -11,6 +11,7 @@ Fields:
 - Model — AI model to use (deepseek-chat, gpt-4.1-mini, claude-haiku-4-5, etc.)
 - Max Tokens — maximum number of tokens in the response (default: 500)
 - Output Variable — name of the variable where the response is stored (e.g. ai_response)
+- Output Schema — optional named schema to enforce on the response. When set, uses `generateObject` for structured output. Available schemas: `CodeGenOutput` (files array + summary), `PRGateOutput` (decision + scores + issues), `ArchitectureOutput` (techStack + systemDesign + securityConsiderations). If the model response doesn't match the schema, an error message is returned instead.
 
 Example System Prompt:
 ```
@@ -22,7 +23,13 @@ If you don't have enough information, direct the user to support@company.com.
 
 Important: The AI Response node automatically uses the entire conversation history and the kb_context variable (if KB Search was executed earlier in the flow).
 
-When to use: At the end of the flow or loop, after a KB Search node, to generate answers to user questions.
+Typed Output Schemas (SDLC Pipelines):
+- Use `outputSchema: "CodeGenOutput"` on code-generation nodes to enforce `{ files: [{path, content, language, isNew}], summary }` structure
+- Use `outputSchema: "PRGateOutput"` on code-review nodes to enforce `{ decision, compositeScore, securityScore, qualityScore, issues, summary }` structure
+- Use `outputSchema: "ArchitectureOutput"` on architecture planning nodes
+- Schema definitions and validation: `src/lib/sdlc/schemas.ts`
+
+When to use: At the end of the flow or loop, after a KB Search node, to generate answers to user questions. In SDLC pipelines, always set outputSchema on code-gen and review nodes to enable downstream schema validation.
 
 Typical connection: KB Search → AI Response → End (or back to Capture for a loop)
 

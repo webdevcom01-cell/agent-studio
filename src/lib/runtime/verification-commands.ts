@@ -70,6 +70,7 @@ export interface CommandResult {
 export async function runVerificationCommands(
   commands: string[],
   agentId: string,
+  timeoutMs = 60_000,
 ): Promise<{ allPassed: boolean; output: string; results: CommandResult[] }> {
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
@@ -96,7 +97,7 @@ export async function runVerificationCommands(
 
     try {
       const { stdout, stderr } = await execFileAsync(cmd, args, {
-        timeout: 60_000,
+        timeout: timeoutMs,
         maxBuffer: 1024 * 512, // 512KB
         env: { ...process.env, CI: "true", FORCE_COLOR: "0" },
       });

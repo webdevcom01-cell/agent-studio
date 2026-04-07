@@ -88,6 +88,10 @@ import { AstTransformNode } from "./nodes/ast-transform-node";
 import { LspQueryNode } from "./nodes/lsp-query-node";
 import { ProjectContextNode } from "./nodes/project-context-node";
 import { SandboxVerifyNode } from "./nodes/sandbox-verify-node";
+import { FileWriterNode } from "./nodes/file-writer-node";
+import { ProcessRunnerNode } from "./nodes/process-runner-node";
+import { GitNodeNode } from "./nodes/git-node-node";
+import { DeployTriggerNode } from "./nodes/deploy-trigger-node";
 import { FlowErrorBoundary } from "./flow-error-boundary";
 import { VersionPanel } from "./version-panel";
 import { DeployDialog } from "./deploy-dialog";
@@ -168,6 +172,10 @@ const NODE_TYPES: NodeTypes = {
   lsp_query: LspQueryNode,
   project_context: ProjectContextNode,
   sandbox_verify: SandboxVerifyNode,
+  file_writer: FileWriterNode,
+  process_runner: ProcessRunnerNode,
+  git_node: GitNodeNode,
+  deploy_trigger: DeployTriggerNode,
 };
 
 // Debug-wrapped versions of all node types (stable reference, created once)

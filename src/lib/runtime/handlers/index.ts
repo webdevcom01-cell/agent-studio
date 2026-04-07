@@ -60,6 +60,10 @@ import { astTransformHandler } from "./ast-transform-handler";
 import { lspQueryHandler } from "./lsp-query-handler";
 import { projectContextHandler } from "./project-context-handler";
 import { sandboxVerifyHandler } from "./sandbox-verify-handler";
+import { fileWriterHandler } from "./file-writer-handler";
+import { processRunnerHandler } from "./process-runner-handler";
+import { gitNodeHandler } from "./git-node-handler";
+import { deployTriggerHandler } from "./deploy-trigger-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -123,6 +127,10 @@ const handlers: Record<string, NodeHandler> = {
   lsp_query: lspQueryHandler,
   project_context: projectContextHandler,
   sandbox_verify: sandboxVerifyHandler,
+  file_writer: fileWriterHandler,
+  process_runner: processRunnerHandler,
+  git_node: gitNodeHandler,
+  deploy_trigger: deployTriggerHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

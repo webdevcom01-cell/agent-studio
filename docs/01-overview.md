@@ -7,7 +7,7 @@ Agent Studio is a visual builder for creating AI agents with multi-agent orchest
 ## Main Components
 
 ### 1. Flow Builder
-A visual editor (XyFlow) where you connect nodes to define conversation and automation flows. 55 node types available — from basic message/condition nodes to AI response, MCP tool calls, parallel execution, loops, webhooks, guardrails, cost monitoring, and the Learn node for continuous improvement.
+A visual editor (XyFlow) where you connect nodes to define conversation and automation flows. 61 node types available — from basic message/condition nodes to AI response, MCP tool calls, parallel execution, loops, webhooks, guardrails, cost monitoring, and the Learn node for continuous improvement. Includes `project_context` (load CLAUDE.md / rules files) and `sandbox_verify` (deterministic TypeScript + lint + pattern checks on generated code).
 
 ### 2. Knowledge Base (KB)
 RAG pipeline: add URLs, upload files (PDF/DOCX), or paste text. Content is automatically scraped, chunked (400 tokens, 20% overlap), embedded (OpenAI text-embedding-3-small), and stored in pgvector. Hybrid search combines semantic cosine similarity (70%) + BM25 keyword search (30%) with optional LLM re-ranking.
@@ -39,24 +39,36 @@ Discover and share agents at `/discover`. Faceted search by category, tags, mode
 AI response nodes can dynamically call sibling agents as tools. Circuit breaker, rate limiter, circular call detection, depth limiting (max 3), and audit logging protect the call chain.
 
 ### 10. A2A Protocol
-Agent-to-agent communication following Google A2A v0.3 spec. Agent Cards for discovery, task-based communication between agents.
+Agent-to-agent communication following Google A2A v0.3 spec. Agent Cards served at `/api/a2a/[agentId]/agent-card` (JSON-LD, v0.3). Discovery index at `/.well-known/agent-cards`. Public agents are automatically discoverable.
+
+### 11. SDLC Pipeline — Phase 1-6 Improvements
+
+Production-grade code generation pipeline with deterministic verification:
+
+- **project_context node** — injects `CLAUDE.md` + `.claude/rules/*.md` into every pipeline so agents never drift from project conventions
+- **sandbox_verify node** — runs TypeScript type-check + ESLint + forbidden-pattern scan on generated code before any AI review
+- **Typed output schemas** — `CodeGenOutput` and `PRGateOutput` enforce structured JSON between agents; `ArchitectureOutput` for architecture planning
+- **Escalating retry** — on sandbox failure, retry node sends PR Gate fix fields (attempt 1) and sandbox errors + code examples (attempt 2) to the code-gen agent
+- **MCP schema enforcement** — `mcp_tool` nodes validate input args against native JSON Schema (from `toolsCache`) and named Zod schemas; `call_agent` nodes validate inter-agent messages
+- **sdlc-full-pipeline** — reference starter flow implementing all 6 phases: Discovery → Architecture+Security+TDD (parallel) → Code Gen → sandbox_verify → PR Gate (parallel) → CI/CD Generator → Deploy Decision
 
 ---
 
 ## ECC Integration — everything-claude-code
 
-### Developer Agents (25 templates)
-25 specialized developer agent templates in the "Developer Agents" category, imported from the ECC framework. Model routing: Opus for complex reasoning (planner, architect), Sonnet for balanced tasks (code-reviewer, tdd-guide), Haiku for fast operations (doc-updater, test-writer).
+### Developer Agents (29 templates)
+29 specialized developer agent templates in the "Developer Agents" category, imported from the ECC framework. Model routing: Opus for complex reasoning (planner, architect), Sonnet for balanced tasks (code-reviewer, tdd-guide), Haiku for fast operations (doc-updater, test-writer).
 
 ### Skills Browser
 Browse 60+ skill modules at `/skills`. Skills are parsed from SKILL.md files with YAML frontmatter, stored in the Skill model, and vectorized into the Knowledge Base (255 chunks) for RAG retrieval. Faceted filters by language, category, and agent.
 
 ### Meta-Orchestrator
-Autonomous agent routing based on the ECC chief-of-staff pattern. 4 pre-built flow templates:
-1. **TDD Pipeline**: Planner → TDD Guide → parallel[Code Reviewer + Security] → end
+Autonomous agent routing based on the ECC chief-of-staff pattern. 5 pre-built flow templates:
+1. **TDD Pipeline**: project_context → Planner → TDD Guide → Code Gen (CodeGenOutput) → sandbox_verify → [passed] parallel[Code Reviewer (PRGateOutput) + Security] / [failed] escalating retry → end
 2. **Full Dev Workflow**: Planner → Architect → parallel[Backend+Security+Docs] → Reviewer → end
 3. **Security Audit**: Security Reviewer → parallel[OWASP + Secret scan + Deps] → Doc Updater → end
-4. **Code Review Pipeline**: Planner → parallel[Reviewer + language-specific] → summary → end
+4. **Code Review Pipeline**: project_context → Code Reviewer (PRGateOutput) → condition[BLOCK?] → human_approval / end
+5. **SDLC Full Pipeline**: project_context → Discovery → parallel[Arch+Security+TDD] → Code Gen → sandbox_verify → parallel PR Gate → CI/CD → Deploy Decision → end
 
 ### Learn Node and Continuous Learning
 The Learn node extracts patterns from AgentExecution history into instincts. Instincts accumulate confidence scores (0.0–1.0) and frequency counters. When confidence exceeds 0.85, instincts are promoted to full KB skills via the `/api/skills/evolve` endpoint (runs daily at 3 AM via cron).

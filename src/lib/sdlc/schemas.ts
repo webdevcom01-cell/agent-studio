@@ -96,12 +96,65 @@ export const ArchitectureOutputSchema = z.object({
 
 export type ArchitectureOutput = z.infer<typeof ArchitectureOutputSchema>;
 
+// ─── Process Run Output ────────────────────────────────────────────────────────
+
+export const ProcessRunOutputSchema = z.object({
+  success: z.boolean(),
+  command: z.string(),
+  stdout: z.string().default(""),
+  stderr: z.string().default(""),
+  exitCode: z.number().default(0),
+  durationMs: z.number().default(0),
+});
+
+export type ProcessRunOutput = z.infer<typeof ProcessRunOutputSchema>;
+
+// ─── File Write Output ────────────────────────────────────────────────────────
+
+export const FileWriteOutputSchema = z.object({
+  filesWritten: z.array(z.string()),
+  errors: z.array(z.string()).default([]),
+  targetDir: z.string(),
+  success: z.boolean(),
+});
+
+export type FileWriteOutput = z.infer<typeof FileWriteOutputSchema>;
+
+// ─── Git Output ───────────────────────────────────────────────────────────────
+
+export const GitOutputSchema = z.object({
+  branch: z.string(),
+  commitHash: z.string().optional(),
+  pushed: z.boolean().default(false),
+  success: z.boolean(),
+  message: z.string(),
+});
+
+export type GitOutput = z.infer<typeof GitOutputSchema>;
+
+// ─── Deploy Output ────────────────────────────────────────────────────────────
+
+export const DeployOutputSchema = z.object({
+  deploymentId: z.string(),
+  url: z.string(),
+  status: z.enum(["READY", "ERROR", "BUILDING", "CANCELED"]),
+  target: z.enum(["staging", "production"]),
+  durationMs: z.number().default(0),
+  logs: z.string().default(""),
+});
+
+export type DeployOutput = z.infer<typeof DeployOutputSchema>;
+
 // ─── Schema registry ───────────────────────────────────────────────────────────
 
 const SCHEMA_REGISTRY: Record<string, z.ZodTypeAny> = {
   CodeGenOutput: CodeGenOutputSchema,
   PRGateOutput: PRGateOutputSchema,
   ArchitectureOutput: ArchitectureOutputSchema,
+  ProcessRunOutput: ProcessRunOutputSchema,
+  FileWriteOutput: FileWriteOutputSchema,
+  GitOutput: GitOutputSchema,
+  DeployOutput: DeployOutputSchema,
 };
 
 export const AVAILABLE_SCHEMAS = Object.keys(SCHEMA_REGISTRY);

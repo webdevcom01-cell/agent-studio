@@ -144,9 +144,14 @@ describe("validateAgainstSchema", () => {
     }
   });
 
-  it("AVAILABLE_SCHEMAS lists both schemas", () => {
+  it("AVAILABLE_SCHEMAS lists all registered schemas", () => {
     expect(AVAILABLE_SCHEMAS).toContain("CodeGenOutput");
     expect(AVAILABLE_SCHEMAS).toContain("PRGateOutput");
-    expect(AVAILABLE_SCHEMAS.length).toBe(2);
+    expect(AVAILABLE_SCHEMAS).toContain("ArchitectureOutput");
+    expect(AVAILABLE_SCHEMAS).toContain("ProcessRunOutput");
+    expect(AVAILABLE_SCHEMAS).toContain("FileWriteOutput");
+    expect(AVAILABLE_SCHEMAS).toContain("GitOutput");
+    expect(AVAILABLE_SCHEMAS).toContain("DeployOutput");
+    expect(AVAILABLE_SCHEMAS.length).toBe(7);
   });
 });

@@ -761,6 +761,18 @@ export function PropertyPanel({
         {node.type === "sandbox_verify" && (
           <SandboxVerifyProperties data={data} update={update} variables={variables} />
         )}
+        {node.type === "file_writer" && (
+          <FileWriterProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "process_runner" && (
+          <ProcessRunnerProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "git_node" && (
+          <GitNodeProperties data={data} update={update} variables={variables} />
+        )}
+        {node.type === "deploy_trigger" && (
+          <DeployTriggerProperties data={data} update={update} variables={variables} />
+        )}
       </div>
 
       <div className="border-t p-4">
@@ -832,6 +844,10 @@ const OUTPUT_VAR_TYPES = new Set([
   "code_interpreter",
   "project_context",
   "sandbox_verify",
+  "file_writer",
+  "process_runner",
+  "git_node",
+  "deploy_trigger",
 ]);
 
 /**
@@ -6811,8 +6827,268 @@ function SandboxVerifyProperties({ data, update, variables = [] }: SubPanelProps
           placeholder="sandboxResult"
         />
         <p className="text-xs text-muted-foreground">
-          Stores <code>"PASS"</code> or <code>"FAIL"</code>. Also sets{" "}
+          Stores <code>&quot;PASS&quot;</code> or <code>&quot;FAIL&quot;</code>. Also sets{" "}
           <code>sandboxErrors</code> (string[]) and <code>sandboxSummary</code>.
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ─── FileWriterProperties ──────────────────────────────────────────────────────
+
+function FileWriterProperties({ data, update, variables = [] }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Input Variable</Label>
+        <VariableInput
+          value={(data.inputVariable as string) ?? "codeOutput"}
+          onChange={(v) => update("inputVariable", v)}
+          variables={variables}
+          placeholder="codeOutput"
+        />
+        <p className="text-xs text-muted-foreground">
+          Variable containing a <code>{"CodeGenOutput"}</code> object with a{" "}
+          <code>{"files"}</code> array.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Target Directory</Label>
+        <Input
+          value={(data.targetDir as string) ?? ""}
+          onChange={(e) => update("targetDir", e.target.value)}
+          placeholder="/absolute/path/to/project"
+          className="font-mono text-xs"
+        />
+        <p className="text-xs text-muted-foreground">
+          Absolute path to the project where files will be written.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "fileWriteResult"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="fileWriteResult"
+        />
+        <p className="text-xs text-muted-foreground">
+          Stores a <code>{"FileWriteOutput"}</code> object with{" "}
+          <code>filesWritten</code>, <code>errors</code>, and <code>success</code>.
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ─── ProcessRunnerProperties ───────────────────────────────────────────────────
+
+function ProcessRunnerProperties({ data, update }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Command</Label>
+        <Input
+          value={(data.command as string) ?? ""}
+          onChange={(e) => update("command", e.target.value)}
+          placeholder="pnpm build"
+          className="font-mono text-xs"
+        />
+        <p className="text-xs text-muted-foreground">
+          Shell command to run. Must start with an allowed prefix: pnpm, npm, npx, tsc, eslint, vitest, etc.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Working Directory</Label>
+        <Input
+          value={(data.workingDir as string) ?? ""}
+          onChange={(e) => update("workingDir", e.target.value)}
+          placeholder="/absolute/path/to/project"
+          className="font-mono text-xs"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Timeout (ms)</Label>
+        <Input
+          type="number"
+          value={(data.timeoutMs as number) ?? 300000}
+          onChange={(e) => update("timeoutMs", parseInt(e.target.value, 10))}
+          placeholder="300000"
+        />
+        <p className="text-xs text-muted-foreground">Default: 300,000ms (5 min).</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "processResult"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="processResult"
+        />
+        <p className="text-xs text-muted-foreground">
+          Stores a <code>{"ProcessRunOutput"}</code> object with{" "}
+          <code>success</code>, <code>stdout</code>, <code>exitCode</code>.
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ─── GitNodeProperties ─────────────────────────────────────────────────────────
+
+function GitNodeProperties({ data, update }: SubPanelProps) {
+  const operations: string[] = Array.isArray(data.operations)
+    ? (data.operations as string[])
+    : ["checkout_branch", "add", "commit", "push"];
+
+  const GIT_OPS = [
+    { id: "checkout_branch", label: "Checkout branch (-B)" },
+    { id: "add", label: "Stage all (git add -A)" },
+    { id: "commit", label: "Commit" },
+    { id: "push", label: "Push to origin" },
+  ];
+
+  const toggleOp = (id: string) => {
+    const next = operations.includes(id)
+      ? operations.filter((o) => o !== id)
+      : [...operations, id];
+    update("operations", next);
+  };
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Working Directory</Label>
+        <Input
+          value={(data.workingDir as string) ?? ""}
+          onChange={(e) => update("workingDir", e.target.value)}
+          placeholder="/absolute/path/to/repo"
+          className="font-mono text-xs"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Branch</Label>
+        <Input
+          value={(data.branch as string) ?? "feat/autonomous-{{timestamp}}"}
+          onChange={(e) => update("branch", e.target.value)}
+          placeholder="feat/autonomous-{{timestamp}}"
+          className="font-mono text-xs"
+        />
+        <p className="text-xs text-muted-foreground">Supports {"{{variable}}"} interpolation.</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Commit Message</Label>
+        <Input
+          value={(data.commitMessage as string) ?? "feat: autonomous pipeline code generation"}
+          onChange={(e) => update("commitMessage", e.target.value)}
+          placeholder="feat: autonomous pipeline code generation"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Operations</Label>
+        <div className="space-y-1.5">
+          {GIT_OPS.map(({ id, label }) => (
+            <label key={id} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={operations.includes(id)}
+                onChange={() => toggleOp(id)}
+                className="size-3.5 accent-foreground"
+              />
+              <span className="text-xs">{label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "gitResult"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="gitResult"
+        />
+        <p className="text-xs text-muted-foreground">
+          Stores a <code>{"GitOutput"}</code> object with{" "}
+          <code>branch</code>, <code>commitHash</code>, <code>pushed</code>, <code>success</code>.
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ─── DeployTriggerProperties ───────────────────────────────────────────────────
+
+function DeployTriggerProperties({ data, update }: SubPanelProps) {
+  return (
+    <>
+      <div className="space-y-2">
+        <Label>Target</Label>
+        <Select
+          value={(data.target as string) || "staging"}
+          onValueChange={(v) => update("target", v)}
+        >
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="staging">Staging</SelectItem>
+            <SelectItem value="production">Production</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Vercel Project ID</Label>
+        <Input
+          value={(data.projectId as string) ?? ""}
+          onChange={(e) => update("projectId", e.target.value)}
+          placeholder="prj_xxxxxxxxxxxx"
+          className="font-mono text-xs"
+        />
+        <p className="text-xs text-muted-foreground">
+          Falls back to <code>VERCEL_PROJECT_ID</code> env var if empty.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Poll Interval (ms)</Label>
+        <Input
+          type="number"
+          value={(data.pollIntervalMs as number) ?? 5000}
+          onChange={(e) => update("pollIntervalMs", parseInt(e.target.value, 10))}
+          placeholder="5000"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Timeout (ms)</Label>
+        <Input
+          type="number"
+          value={(data.timeoutMs as number) ?? 300000}
+          onChange={(e) => update("timeoutMs", parseInt(e.target.value, 10))}
+          placeholder="300000"
+        />
+        <p className="text-xs text-muted-foreground">Default: 300,000ms (5 min).</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Output Variable</Label>
+        <Input
+          value={(data.outputVariable as string) ?? "deployResult"}
+          onChange={(e) => update("outputVariable", e.target.value)}
+          placeholder="deployResult"
+        />
+        <p className="text-xs text-muted-foreground">
+          Stores a <code>{"DeployOutput"}</code> object with{" "}
+          <code>status</code>, <code>url</code>, <code>deploymentId</code>.
         </p>
       </div>
     </>

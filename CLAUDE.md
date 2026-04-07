@@ -69,7 +69,7 @@ Detailed reference documentation lives in `.claude/docs/`. Read these when worki
 ## 4. KEY PATTERNS (summary)
 
 ### Runtime Engine
-- 59 node handlers in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants)
+- 61 node handlers in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants)
 - Safety limits: MAX_ITERATIONS=50, MAX_HISTORY=100
 - Handlers return `ExecutionResult`, never throw — always graceful fallback
 
@@ -188,7 +188,7 @@ Run `pnpm precheck` before every commit+push. All 4 checks must PASS: TypeScript
 - Unit tests: Vitest, `__tests__/` folders next to source, `.test.ts` extension
 - E2E tests: Playwright, `e2e/tests/` folder, `.spec.ts` extension
 - Run: `pnpm test` (unit), `pnpm test:e2e` (E2E)
-- 2880+ unit tests across 215 test files
+- 3211+ unit tests across 245 test files
 - Test behavior, not implementation details
 
 ### AI Model Config

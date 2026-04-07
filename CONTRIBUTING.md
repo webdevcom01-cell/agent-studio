@@ -133,15 +133,19 @@ Without Redis, the worker exits immediately. The web app degrades gracefully —
 
 ## Adding a New Flow Node Type
 
-The project has 55 node types (see `NodeType` in `src/types/index.ts`). To add a new one, follow this checklist in order:
+The project has 61 node types (see `NodeType` in `src/types/index.ts`). To add a new one, follow this checklist in order:
 
 1. Add the type to the `NodeType` union in `src/types/index.ts`
-2. Create the handler in `src/lib/runtime/handlers/<name>-handler.ts`
-3. Register the handler in `src/lib/runtime/handlers/index.ts`
-4. Create the display component in `src/components/builder/nodes/<name>-node.tsx`
-5. Add the type to the node picker in `src/components/builder/node-picker.tsx`
-6. Add the property editor in `src/components/builder/property-panel.tsx`
-7. Write unit tests in `src/lib/runtime/handlers/__tests__/<name>-handler.test.ts`
+2. Add the type string to `NODE_TYPES` array in `src/lib/validators/flow-content.ts`
+3. Create the handler in `src/lib/runtime/handlers/<name>-handler.ts`
+4. Register the handler in `src/lib/runtime/handlers/index.ts`
+5. Create the display component in `src/components/builder/nodes/<name>-node.tsx`
+6. Register the component in the `NODE_TYPES` map in `src/components/builder/flow-builder.tsx`
+7. Add the type to the node picker in `src/components/builder/node-picker.tsx`
+8. Add the property editor in `src/components/builder/property-panel.tsx`
+9. If the node sets an output variable, add it to `OUTPUT_VAR_TYPES` in `property-panel.tsx`
+10. Write unit tests in `src/lib/runtime/handlers/__tests__/<name>-handler.test.ts`
+11. Update the node count in `src/components/builder/__tests__/node-picker.test.tsx`
 
 Every handler must return `ExecutionResult` and never throw — wrap everything in try/catch and return a graceful fallback message on failure.
 

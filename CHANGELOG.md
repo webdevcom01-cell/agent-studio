@@ -9,6 +9,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **SDLC Phase 1-6 pipeline improvements** — `project_context` node (load CLAUDE.md + rules files), `sandbox_verify` node (TypeScript + ESLint + forbidden-pattern checks), escalating retry (`enableEscalation` injects PR Gate fixes + sandbox errors + code examples on each attempt), typed output schemas (`CodeGenOutput`, `PRGateOutput`, `ArchitectureOutput` via Zod registry in `src/lib/sdlc/schemas.ts`), MCP enforcement layer (native JSON Schema + named Zod validation on `mcp_tool` and `call_agent` nodes)
+- **`sdlc-full-pipeline` starter flow** — reference implementation: Discovery → parallel(Architecture + Security + TDD) → Code Gen → sandbox_verify → parallel PR Gate → CI/CD Generator → Deploy Decision
+- **A2A Agent Cards v0.3** — `GET /api/a2a/[agentId]/agent-card` (JSON-LD), `GET /.well-known/agent-cards` discovery index; both public endpoints added to middleware matcher
+- **Optimistic locking on flow saves** (restored) — GET returns `lockVersion` via `$queryRaw`, PUT checks `clientLockVersion` inside transaction, increments via `$executeRaw`, returns 409 with `serverLockVersion` on conflict
+- **Session events + renderer/sink notification system** (Phase E) — `session-events.ts` pub/sub for flow execution lifecycle hooks
+- **`ecc-tdd-pipeline` and `ecc-code-review-pipeline` updated** — both now start with `project_context`, use typed schemas, and route through `sandbox_verify` + escalating retry
+
+### Changed
+- Node count: 55 → 61 (added `project_context`, `sandbox_verify`, `ast_transform`, `lsp_query`, plus earlier additions)
+- Test suite: 2880 → 3211 tests across 244 test files
+
+---
+
+## [0.6.0-unreleased-prev]
+
+### Added
 - **Multi-tenancy** — Organization, OrganizationMember, Invitation models with OWNER/ADMIN/MEMBER roles
 - **GDPR compliance** — account deletion (30-day grace), data export, configurable retention policies (`src/lib/gdpr/`)
 - **Safety middleware** — prompt injection detection, PII redaction, content moderation on all AI calls (`src/lib/safety/`)

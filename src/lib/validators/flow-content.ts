@@ -63,6 +63,10 @@ const NODE_TYPES = [
   "lsp_query",
   "project_context",
   "sandbox_verify",
+  "file_writer",
+  "process_runner",
+  "git_node",
+  "deploy_trigger",
 ] as const;
 
 const VARIABLE_TYPES = ["string", "number", "boolean", "object"] as const;

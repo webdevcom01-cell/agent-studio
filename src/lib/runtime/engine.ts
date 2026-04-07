@@ -34,6 +34,8 @@ export const SELF_ROUTING_NODES = new Set([
   "cache",
   "verification",
   "sandbox_verify",
+  "process_runner",
+  "deploy_trigger",
 ]);
 
 /**

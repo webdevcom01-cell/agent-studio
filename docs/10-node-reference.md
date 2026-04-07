@@ -1,4 +1,4 @@
-# Node Reference — All 55 Node Types
+# Node Reference — All 61 Node Types
 
 This document covers every node type in Agent Studio with all configurable fields. Open the Properties panel by clicking any node in the Builder.
 
@@ -180,9 +180,12 @@ Generates text using a language model. The primary node for conversational AI, R
 | Model | — | `deepseek-chat` | The AI model to use. See [Supported Models](../README.md#supported-ai-providers). |
 | Max Tokens | — | `500` | Maximum response length in tokens. |
 | Output Variable | — | — | If set, stores the response in this variable for later use. |
+| Output Schema | — | — | Named schema to enforce on the response JSON: `CodeGenOutput`, `PRGateOutput`, `ArchitectureOutput`. When set, uses `generateObject` to force structured output. If the response doesn't match the schema, an error is returned. |
 | Enable Agent Orchestration | — | off | When on, the AI can call sibling agents as tools during generation. |
 
 > **Tip:** When connected downstream from a KB Search node, `{{kb_context}}` is automatically available in the system prompt — no manual wiring needed.
+
+> **Typed output schemas:** Use `outputSchema: "CodeGenOutput"` on code-generation nodes and `outputSchema: "PRGateOutput"` on review nodes to get validated, parseable JSON between agents. Schema definitions live in `src/lib/sdlc/schemas.ts`.
 
 ---
 
@@ -358,6 +361,10 @@ Deterministically calls a specific tool on a connected MCP server. Unlike the AI
 | Tool | ✅ | — | Dropdown of available tools on the selected server. Use "Test Connection" to refresh the tools cache. |
 | Input Mapping | — | — | Maps tool parameters to values. Each row: parameter name (left) + template value (right, e.g. `{{user_question}}`). |
 | Output Variable | ✅ | — | Variable where the tool result is stored. |
+| Input Schema | — | — | Named schema (e.g. `CodeGenOutput`) to validate input args before calling the tool. Rejects the call with `[Error: Input validation failed ...]` if invalid. |
+| Output Schema | — | — | Named schema (e.g. `PRGateOutput`) to validate the tool's response. Sets output variable to `[Error: Output validation failed ...]` if invalid. |
+
+**Schema enforcement:** If the MCP server's `toolsCache` contains a JSON Schema for the tool's input parameters, those are automatically validated before the call (checks required fields and types). Named schemas use the Zod registry in `src/lib/sdlc/schemas.ts`.
 
 **Example pattern:** Capture → MCP Tool (`search` tool with `{{user_question}}`) → AI Response (uses `{{search_results}}` in system prompt).
 
@@ -370,8 +377,11 @@ Calls another agent and waits for its response. Use it for agent-to-agent orches
 | Field | Required | Default | Description |
 |---|:---:|---|---|
 | Agent | ✅ | — | Searchable dropdown of available agents in your workspace. |
-| Input | — | — | Message or context to send to the called agent. Supports `{{variables}}`. |
+| Input Mapping | — | — | Key-value pairs sent to the called agent (e.g. `code → {{generatedCode}}`). |
 | Output Variable | — | `agent_result` | Variable where the called agent's response is stored. |
+| Input Schema | — | — | Named schema to validate the input mapping before calling the agent. Call is rejected if invalid. |
+| Output Schema | — | — | Named schema (e.g. `PRGateOutput`) to validate the agent's response. Sets output variable to `null` and adds an error message if the response doesn't match. |
+| On Error | — | `continue` | `continue` — flow proceeds with error in variable, `stop` — halts flow on failure. |
 
 > Protected by circuit breaker (OPEN/CLOSED/HALF_OPEN), rate limiter, and cycle detection. Maximum call depth: 3.
 
@@ -610,18 +620,6 @@ Evaluates multi-step agent reasoning trajectories for coherence, efficiency, and
 
 ---
 
-### switch — Switch
-
-Multi-way branching with case matching. More powerful than Condition for routing across 3+ paths.
-
-| Field | Required | Default | Description |
-|---|:---:|---|---|
-| Input Variable | ✅ | — | Variable to evaluate. |
-| Cases | ✅ | — | List of case values and their output handles. |
-| Default Handle | — | `default` | Route taken when no case matches. |
-| Operator | — | `equals` | Comparison operator: `equals`, `contains`, `startsWith`, `regex`. |
-
----
 
 ### ab_test — A/B Test
 
@@ -652,14 +650,30 @@ Routes messages to different branches based on semantic similarity to intent lab
 
 ### retry — Retry
 
-Wraps a sub-flow segment and retries it on failure with exponential backoff.
+Executes a target node and retries it on failure with exponential backoff. Supports escalating context injection for SDLC pipelines — each retry adds richer feedback to guide the model toward a correct result.
 
 | Field | Required | Default | Description |
 |---|:---:|---|---|
-| Max Attempts | — | `3` | Maximum retry count. |
+| Target Node ID | ✅ | — | ID of the node to execute and retry (e.g. `codegen`). |
+| Max Retries | — | `3` | Maximum number of retry attempts after the initial failure. |
 | Base Delay (ms) | — | `1000` | Initial delay before first retry. |
-| Backoff Multiplier | — | `2` | Delay multiplier per attempt (exponential). |
-| On Final Failure | — | `fail` | Route when all retries exhausted: `fail` or `continue`. |
+| Backoff Multiplier | — | `2` | Delay multiplier per attempt (exponential backoff). |
+| Failure Variable | — | — | Variable to check for structured failure (e.g. `sandboxResult`). |
+| Failure Values | — | `["FAIL","BLOCK"]` | Values of Failure Variable that trigger a retry. |
+| Output Variable | — | — | Target node's output variable name (used for error tagging on exhaustion). |
+| **Escalating Context** | | | |
+| Enable Escalation | — | off | When on, injects progressively richer context into the target node on each retry. |
+| PR Gate Variable | — | `gateResult` | Variable holding PR Gate review issues (injected on attempt 1+). |
+| Sandbox Errors Variable | — | `sandboxResult` | Variable holding sandbox failure details (injected on attempt 2+). |
+| Project Context Variable | — | `projectContext` | Variable holding project context loaded by `project_context` node. |
+| Code Examples Variable | — | `codeExamples` | Variable with few-shot code examples (injected on attempt 2+). |
+
+**Escalation logic:**
+- Attempt 1: injects PR Gate fix fields + project context into `__retry_escalation` variable
+- Attempt 2+: above + sandbox error details + code examples
+- On exhaustion: sets output variable to `[Error: Failed after N attempts: ...]` and stops flow (`nextNodeId: null`)
+
+**Example:** `sandbox_verify (failed) → retry (targetNodeId: "codegen", enableEscalation: true, maxRetries: 2)`
 
 ---
 
@@ -833,16 +847,111 @@ Executes long-running MCP tasks with progress tracking. Unlike the MCP Tool node
 
 ---
 
-### learn — Learn (ECC)
 
-Extracts reusable patterns from `AgentExecution` history and stores them as Instincts. High-confidence instincts (≥0.85) are promoted to skills automatically.
+### verification — Verification
+
+Runs a set of deterministic checks against generated artifacts (build, lint, tests). Routes to `passed` or `failed` based on results. Unlike `sandbox_verify` (which works on `CodeGenOutput` objects), this node runs arbitrary shell commands.
 
 | Field | Required | Default | Description |
 |---|:---:|---|---|
-| Source Variable | — | — | Variable with execution data to analyze. |
-| Pattern Category | — | `general` | Category tag for extracted instincts. |
-| Min Confidence | — | `0.7` | Minimum confidence threshold to store an instinct. |
+| Checks | ✅ | — | List of checks to run. Each has: `type` (`build`/`lint`/`test`), `command` (shell cmd), `label` (display name). |
+| Output Variable | — | `verificationResults` | Variable with structured results: `{ passed, failed, details[] }`. |
 
-> **Note:** Requires `ECC_ENABLED=true` in environment variables.
+**Routes:** `passed` → all checks passed, `failed` → at least one check failed.
+
+---
+
+### ast_transform — AST Transform
+
+Applies structural code transformations using AST (Abstract Syntax Tree) analysis via `@ast-grep/napi`. Use it for automated refactoring, pattern detection, and code normalization at the syntax level.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Input Variable | ✅ | — | Variable holding the source code string to transform. |
+| Pattern | ✅ | — | AST pattern to match (ast-grep syntax). |
+| Replacement | — | — | Replacement template. Omit to use as a detector only. |
+| Language | — | `typescript` | Source language: `typescript`, `javascript`, `python`, `go`, `rust`. |
+| Output Variable | — | `transformResult` | Variable with `{ transformed, matchCount, code }`. |
+
+---
+
+### lsp_query — LSP Query
+
+Queries a Language Server Protocol (LSP) endpoint for semantic code intelligence: hover info, go-to-definition, find-references, diagnostics. Use it in code analysis pipelines to provide AI agents with accurate type and symbol information.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| LSP Server URL | ✅ | — | URL of the LSP server (e.g. `http://localhost:2089`). |
+| Query Type | ✅ | — | Operation: `hover`, `definition`, `references`, `diagnostics`, `completion`. |
+| File Path | ✅ | — | Repository-relative path of the file to query (e.g. `src/lib/auth.ts`). |
+| Line | — | — | 0-based line number for positional queries. |
+| Character | — | — | 0-based character offset for positional queries. |
+| Output Variable | — | `lspResult` | Variable with the LSP response payload. |
+
+---
+
+### swarm — Swarm
+
+Spawns multiple parallel agent instances that share a scratchpad and collectively solve a task. Agents can read/write to shared state, delegate to each other, and self-organize. Experimental — use for research or batch processing tasks that benefit from collective intelligence.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Agent Count | — | `3` | Number of parallel agent instances to spawn. |
+| Task Prompt | ✅ | — | The task description shared with all agents. Supports `{{variables}}`. |
+| Shared Variables | — | — | Variables made available to all agents in the swarm's shared context. |
+| Max Rounds | — | `5` | Maximum coordination rounds between agents. |
+| Output Variable | — | `swarmResult` | Variable with the synthesized final answer. |
+
+---
+
+### code_interpreter — Code Interpreter
+
+Executes Python code in an isolated sandbox and returns the result. Use it for data analysis, mathematical computations, and custom scripting that would be unreliable if delegated to an LLM.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Code | ✅ | — | Python code to execute. Supports `{{variables}}` interpolation. |
+| Input Variables | — | — | Variables injected into the sandbox's scope before execution. |
+| Output Variable | — | `codeResult` | Variable with stdout output and any returned value. |
+| Timeout (ms) | — | `10000` | Maximum execution time before kill. |
+
+> Runs in a separate process with no network access and read-only filesystem. `pandas`, `numpy`, and `json` are pre-installed.
+
+---
+
+### project_context — Project Context
+
+Reads files from the project directory and injects their content into a flow variable. Place at the start of any pipeline to give downstream agents awareness of coding conventions, rules, and CLAUDE.md instructions.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Context Files | — | `["CLAUDE.md"]` | Glob patterns or exact paths to load (e.g. `["CLAUDE.md", ".claude/rules/*.md"]`). |
+| Example Files | — | — | Additional files loaded as fenced code blocks (e.g. reference implementations). |
+| Context Label | — | `Project Context` | Human-readable label for the loaded context. |
+| Max Tokens | — | `4000` | Truncation limit. Loaded content is trimmed to this many tokens. |
+| Output Variable | — | `projectContext` | Variable with the concatenated file contents. |
+
+**Typical use:** First node in SDLC and DevSecOps pipelines — ensures Code Gen, Review, and Retry agents all see project conventions.
+
+---
+
+### sandbox_verify — Sandbox Verify
+
+Runs deterministic quality checks on generated code before it reaches the PR Gate. Catches TypeScript errors, ESLint violations, and forbidden patterns (e.g. `@prisma/client`, `any` types, `console.log`) without spending AI tokens.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Input Variable | ✅ | `generatedCode` | Variable holding a `CodeGenOutput` JSON object (with a `files` array). |
+| Checks | — | `["forbidden_patterns"]` | Which checks to run: `typecheck`, `lint`, `forbidden_patterns`. |
+| Forbidden Patterns | — | Built-in set | Extra regex patterns to flag as failures. |
+| Input Schema | — | — | Optional named schema (e.g. `CodeGenOutput`) to validate the input before running checks. |
+| Output Variable | — | `sandboxResult` | Variable with `PASS` or `FAIL: <details>`. |
+
+**Routes:** `passed` → next node on success, `failed` → retry or failure branch.
+
+**Built-in forbidden patterns:**
+- `@prisma/client` — use `@/generated/prisma` instead
+- `: any` — no `any` types allowed
+- `console.log/warn/error` — use `logger` from `@/lib/logger`
 
 ---

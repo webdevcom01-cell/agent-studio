@@ -90,4 +90,8 @@ export type NodeType =
   | "ast_transform"
   | "lsp_query"
   | "project_context"
-  | "sandbox_verify";
+  | "sandbox_verify"
+  | "file_writer"
+  | "process_runner"
+  | "git_node"
+  | "deploy_trigger";

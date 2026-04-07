@@ -148,7 +148,7 @@ const FLUSH_INTERVAL_MS = 2_000;
 const MAX_RETRIES = 3;
 const RETRY_BASE_MS = 200;
 
-let spanQueue: SpanData[] = [];
+const spanQueue: SpanData[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 function enqueueSpan(spanData: SpanData): void {
