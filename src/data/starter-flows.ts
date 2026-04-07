@@ -1675,16 +1675,71 @@ Return a valid CodeGenOutput JSON with files[], dependencies[], envVariables[], 
         },
       },
 
+      // ── Phase 6b: Human Approval before commit ─────────────────────────
+      {
+        id: "code_approval",
+        type: "human_approval",
+        position: ppos(12, 0),
+        data: {
+          label: "Review Before Commit",
+          prompt: `Tests passed ✅ — review the generated code before committing.
+
+Generated Code Summary:
+{{generatedCode.summary}}
+
+Files to be written:
+{{fileWriteResult.filesWritten}}
+
+Test Results:
+{{testResult}}
+
+Code Review:
+{{codeReview.summary}}
+
+Security Review:
+{{secReview.summary}}
+
+Approve to commit and deploy, or reject to stop here.`,
+          outputVariable: "commitApproval",
+          timeoutMinutes: 60,
+          onTimeout: "stop",
+          defaultValue: "PENDING",
+        },
+      },
+      {
+        id: "approval_check",
+        type: "switch",
+        position: pos(13),
+        data: {
+          label: "Approval Decision",
+          variable: "commitApproval",
+          operator: "equals",
+          cases: [
+            { value: "APPROVED", label: "Approved — commit & deploy" },
+            { value: "REJECTED", label: "Rejected — stop" },
+          ],
+        },
+      },
+      {
+        id: "rejected_end",
+        type: "end",
+        position: ppos(14, 1),
+        data: {
+          label: "Rejected by Developer",
+          message: "Pipeline stopped. Developer rejected the generated code.\n\nReview issues and restart with updated requirements.",
+        },
+      },
+
       // ── Phase 7: Git Commit + Push ──────────────────────────────────────
       {
         id: "git_commit",
         type: "git_node",
-        position: pos(12),
+        position: pos(14),
         data: {
           label: "Git Commit & Push",
           operation: "commit_and_push",
           commitMessage: "feat: autonomous pipeline — {{productSpec}}",
-          branch: "main",
+          branch: "feature/sdlc-pipeline",
           nextNodeId: "deploy",
           onErrorNodeId: "git_err",
           outputVariable: "gitResult",
@@ -1693,7 +1748,7 @@ Return a valid CodeGenOutput JSON with files[], dependencies[], envVariables[], 
       {
         id: "git_err",
         type: "end",
-        position: ppos(13, 1),
+        position: ppos(15, 1),
         data: {
           label: "Git Error",
           message: "Git operation failed.\n\n{{gitResult}}",
@@ -1704,7 +1759,7 @@ Return a valid CodeGenOutput JSON with files[], dependencies[], envVariables[], 
       {
         id: "deploy",
         type: "deploy_trigger",
-        position: pos(13),
+        position: pos(15),
         data: {
           label: "Deploy to Vercel",
           projectId: "",
@@ -1716,7 +1771,7 @@ Return a valid CodeGenOutput JSON with files[], dependencies[], envVariables[], 
       {
         id: "deploy_err",
         type: "end",
-        position: ppos(14, 1),
+        position: ppos(16, 1),
         data: {
           label: "Deploy Failed",
           message: "Vercel deployment failed.\n\n{{deployResult}}",
@@ -1727,10 +1782,10 @@ Return a valid CodeGenOutput JSON with files[], dependencies[], envVariables[], 
       {
         id: "done",
         type: "end",
-        position: pos(14),
+        position: pos(16),
         data: {
           label: "Pipeline Complete ✓",
-          message: "Autonomous SDLC pipeline completed successfully.\n\nCode: {{generatedCode.summary}}\nFiles written: {{fileWriteResult.filesWritten}}\nGit: {{gitResult.commitHash}}\nDeploy URL: {{deployResult.url}}",
+          message: "Autonomous SDLC pipeline completed successfully.\n\nCode: {{generatedCode.summary}}\nFiles written: {{fileWriteResult.filesWritten}}\nGit commit: {{gitResult.commitHash}} (branch: feature/sdlc-pipeline)\nDeploy URL: {{deployResult.url}}",
         },
       },
     ],
@@ -1769,8 +1824,13 @@ Return a valid CodeGenOutput JSON with files[], dependencies[], envVariables[], 
       edge("file_write", "file_err"),
 
       // Phase 6: process_runner routing
-      { id: "e_tests_passed", source: "run_tests", target: "git_commit",   sourceHandle: "passed" },
-      { id: "e_tests_failed", source: "run_tests", target: "retry_tests",  sourceHandle: "failed" },
+      { id: "e_tests_passed", source: "run_tests",     target: "code_approval", sourceHandle: "passed" },
+      { id: "e_tests_failed", source: "run_tests",     target: "retry_tests",   sourceHandle: "failed" },
+
+      // Phase 6b: human approval → approval_check switch
+      edge("code_approval", "approval_check"),
+      { id: "e_appr_approved", source: "approval_check", target: "git_commit",   sourceHandle: "case_0" },
+      { id: "e_appr_rejected", source: "approval_check", target: "rejected_end", sourceHandle: "case_1" },
 
       // Phase 7: git_node (visual edge — routing via data.nextNodeId)
       edge("git_commit", "deploy"),
@@ -1793,6 +1853,7 @@ Return a valid CodeGenOutput JSON with files[], dependencies[], envVariables[], 
       { name: "secReview",       type: "object" as const, default: null },
       { name: "fileWriteResult", type: "object" as const, default: null },
       { name: "testResult",      type: "object" as const, default: null },
+      { name: "commitApproval",  type: "string" as const, default: ""   },
       { name: "gitResult",       type: "object" as const, default: null },
       { name: "deployResult",    type: "object" as const, default: null },
     ],
