@@ -1,9 +1,35 @@
+import { existsSync } from "fs";
+import { join } from "path";
 import type { NodeHandler } from "../types";
 import { runVerificationCommands } from "../verification-commands";
 import { resolveTemplate } from "../template";
 import { logger } from "@/lib/logger";
 
 const DEFAULT_TIMEOUT_MS = 300_000;
+// Fallback writable workspace used by file-writer when /app is read-only (Railway)
+const SDLC_TMP = "/tmp/sdlc";
+
+/**
+ * For each resolved arg that looks like a relative file path, check if the file
+ * exists at the original location. If not, try the /tmp/sdlc fallback directory
+ * (where file-writer puts files when /app is read-only on Railway/Docker).
+ */
+function resolveArgPaths(args: string[]): string[] {
+  return args.map((arg) => {
+    // Only attempt to remap relative paths that look like TS/JS files
+    if (arg.startsWith("-") || arg.startsWith("/") || !arg.match(/\.(ts|js|tsx|jsx|mts|mjs)$/)) {
+      return arg;
+    }
+    if (!existsSync(arg)) {
+      const tmpVariant = join(SDLC_TMP, arg);
+      if (existsSync(tmpVariant)) {
+        logger.info("process-runner: remapping arg to /tmp/sdlc fallback", { original: arg, resolved: tmpVariant });
+        return tmpVariant;
+      }
+    }
+    return arg;
+  });
+}
 
 export const processRunnerHandler: NodeHandler = async (node, context) => {
   // Resolve templates in command and args array
@@ -15,7 +41,9 @@ export const processRunnerHandler: NodeHandler = async (node, context) => {
 
   // Resolve templates so {{testFilePath}} etc. get substituted before execution
   const resolvedCommand = resolveTemplate(rawCommand, context.variables);
-  const resolvedArgs = rawArgs.map((arg) => resolveTemplate(arg, context.variables));
+  const templateResolvedArgs = rawArgs.map((arg) => resolveTemplate(arg, context.variables));
+  // Remap relative file paths to /tmp/sdlc when the original location is unwritable
+  const resolvedArgs = resolveArgPaths(templateResolvedArgs);
 
   // Build the full command string (runVerificationCommands splits by whitespace internally)
   const fullCommand = resolvedArgs.length > 0

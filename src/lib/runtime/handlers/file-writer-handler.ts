@@ -50,28 +50,39 @@ export const fileWriterHandler: NodeHandler = async (node, context) => {
         };
       }
 
+      // SDLC_TMP is the fallback writable workspace for Railway/container environments
+      // where /app may be read-only. All pipeline files land in /tmp/sdlc/<relPath>.
+      const SDLC_TMP = "/tmp/sdlc";
+
+      let actualPath = join(targetDir, resolvedPath);
       try {
-        const fullPath = join(targetDir, resolvedPath);
-        mkdirSync(dirname(fullPath), { recursive: true });
-        writeFileSync(fullPath, resolvedContent, "utf-8");
-        const result = { filesWritten: [fullPath], errors: [] as string[], targetDir, success: true };
-        logger.info("file-writer direct-mode completed", { nodeId: node.id, agentId: context.agentId, path: fullPath });
-        return {
-          messages: [{ role: "assistant", content: `Wrote file: ${fullPath}` }],
-          nextNodeId: (node.data.nextNodeId as string) ?? null,
-          waitForInput: false,
-          updatedVariables: { [outputVariable]: result },
-        };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        const result = { filesWritten: [] as string[], errors: [message], targetDir, success: false };
-        return {
-          messages: [{ role: "assistant", content: `File writer error: ${message}` }],
-          nextNodeId: (node.data.onErrorNodeId as string) ?? null,
-          waitForInput: false,
-          updatedVariables: { [outputVariable]: result },
-        };
+        mkdirSync(dirname(actualPath), { recursive: true });
+        writeFileSync(actualPath, resolvedContent, "utf-8");
+      } catch (firstErr) {
+        const errCode = (firstErr as NodeJS.ErrnoException).code;
+        if (errCode === "EACCES" || errCode === "EROFS" || errCode === "EPERM") {
+          // Target dir is read-only (common on Railway/Docker) — fall back to /tmp/sdlc
+          actualPath = join(SDLC_TMP, resolvedPath);
+          logger.warn("file-writer: EACCES on targetDir, falling back to /tmp/sdlc", {
+            nodeId: node.id,
+            agentId: context.agentId,
+            original: join(targetDir, resolvedPath),
+            fallback: actualPath,
+          });
+          mkdirSync(dirname(actualPath), { recursive: true });
+          writeFileSync(actualPath, resolvedContent, "utf-8");
+        } else {
+          throw firstErr;
+        }
       }
+      const result = { filesWritten: [actualPath], errors: [] as string[], targetDir: dirname(actualPath), writtenPath: actualPath, success: true };
+      logger.info("file-writer direct-mode completed", { nodeId: node.id, agentId: context.agentId, path: actualPath });
+      return {
+        messages: [{ role: "assistant", content: `Wrote file: ${actualPath}` }],
+        nextNodeId: (node.data.nextNodeId as string) ?? null,
+        waitForInput: false,
+        updatedVariables: { [outputVariable]: result },
+      };
     }
     // ─────────────────────────────────────────────────────────────────────────────
 
