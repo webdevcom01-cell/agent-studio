@@ -235,21 +235,16 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
         try {
           const startMsObj = Date.now();
           // Double the token budget — JSON-wrapped code can be 2× larger than plain text.
-          // Disable OpenAI Structured Outputs (strict json_schema mode) and fall back to
-          // json_object mode which is more forgiving with complex Zod schemas that have
-          // .default() values or .optional() fields.
-          // json_object mode requires the word "JSON" in the system prompt — inject it here.
-          const structuredSystemPrompt = effectiveSystemPrompt
-            ? `${effectiveSystemPrompt}\n\nIMPORTANT: You MUST respond with a valid JSON object.`
-            : "You MUST respond with a valid JSON object.";
+          // Use strictJsonSchema: false so OpenAI accepts complex Zod schemas that
+          // include .default() values and .optional() fields (strict mode rejects these).
           const { object, usage: objUsage } = await generateObject({
             model,
             schema,
             providerOptions: {
-              openai: { structuredOutputs: false },
+              openai: { strictJsonSchema: false },
             },
             messages: [
-              { role: "system" as const, content: structuredSystemPrompt },
+              ...(effectiveSystemPrompt ? [{ role: "system" as const, content: effectiveSystemPrompt }] : []),
               ...historyMessages,
             ],
             temperature,
