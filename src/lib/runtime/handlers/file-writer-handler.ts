@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import type { NodeHandler } from "../types";
 import { logger } from "@/lib/logger";
+import { resolveTemplate } from "../template";
 
 interface CodeFile {
   path: string;
@@ -12,6 +13,11 @@ export const fileWriterHandler: NodeHandler = async (node, context) => {
   const inputVariable = (node.data.inputVariable as string) || "codeOutput";
   const targetDir = (node.data.targetDir as string) || "";
   const outputVariable = (node.data.outputVariable as string) || "fileWriteResult";
+
+  // Direct mode: filePath + content are set directly on the node (with template syntax)
+  const directFilePathTemplate = node.data.filePath as string | undefined;
+  const directContentTemplate = node.data.content as string | undefined;
+  const isDirectMode = directFilePathTemplate !== undefined && directContentTemplate !== undefined;
 
   try {
     if (!targetDir) {
@@ -28,6 +34,46 @@ export const fileWriterHandler: NodeHandler = async (node, context) => {
         updatedVariables: { [outputVariable]: result },
       };
     }
+
+    // ── Direct mode: single-file write via filePath + content on node.data ──────
+    if (isDirectMode) {
+      const resolvedPath = resolveTemplate(directFilePathTemplate, context.variables);
+      const resolvedContent = resolveTemplate(directContentTemplate, context.variables);
+
+      if (!resolvedPath || resolvedPath.startsWith("{{")) {
+        const result = { filesWritten: [] as string[], errors: [`filePath template did not resolve: ${directFilePathTemplate}`], targetDir, success: false };
+        return {
+          messages: [{ role: "assistant", content: `File writer: filePath not resolved (${directFilePathTemplate}).` }],
+          nextNodeId: (node.data.onErrorNodeId as string) ?? null,
+          waitForInput: false,
+          updatedVariables: { [outputVariable]: result },
+        };
+      }
+
+      try {
+        const fullPath = join(targetDir, resolvedPath);
+        mkdirSync(dirname(fullPath), { recursive: true });
+        writeFileSync(fullPath, resolvedContent, "utf-8");
+        const result = { filesWritten: [fullPath], errors: [] as string[], targetDir, success: true };
+        logger.info("file-writer direct-mode completed", { nodeId: node.id, agentId: context.agentId, path: fullPath });
+        return {
+          messages: [{ role: "assistant", content: `Wrote file: ${fullPath}` }],
+          nextNodeId: (node.data.nextNodeId as string) ?? null,
+          waitForInput: false,
+          updatedVariables: { [outputVariable]: result },
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const result = { filesWritten: [] as string[], errors: [message], targetDir, success: false };
+        return {
+          messages: [{ role: "assistant", content: `File writer error: ${message}` }],
+          nextNodeId: (node.data.onErrorNodeId as string) ?? null,
+          waitForInput: false,
+          updatedVariables: { [outputVariable]: result },
+        };
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────────
 
     const codeInput = context.variables[inputVariable];
     if (!codeInput) {
