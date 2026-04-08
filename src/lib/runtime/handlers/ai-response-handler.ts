@@ -224,56 +224,72 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     if (outputSchemaName) {
       const schema = resolveSchema(outputSchemaName);
       if (!schema) {
-        throw new Error(`Unknown outputSchema "${outputSchemaName}" — available: ${AVAILABLE_SCHEMAS.join(", ")}`);
+        logger.warn("Unknown outputSchema — falling through to text generation", {
+          outputSchemaName,
+          available: AVAILABLE_SCHEMAS,
+          agentId: context.agentId,
+          nodeId: node.id,
+        });
+        // Fall through to regular generateText below
+      } else {
+        try {
+          const startMsObj = Date.now();
+          const { object, usage: objUsage } = await generateObject({
+            model,
+            schema,
+            messages: [
+              ...(effectiveSystemPrompt ? [{ role: "system" as const, content: effectiveSystemPrompt }] : []),
+              ...historyMessages,
+            ],
+            temperature,
+            maxOutputTokens: maxTokens,
+          });
+          const durationMsObj = Date.now() - startMsObj;
+
+          const inputTokensObj = objUsage?.inputTokens ?? 0;
+          const outputTokensObj = objUsage?.outputTokens ?? 0;
+
+          recordChatLatency(context.agentId, modelId, durationMsObj);
+          if (inputTokensObj > 0 || outputTokensObj > 0) {
+            recordTokenUsage(context.agentId, modelId, inputTokensObj, outputTokensObj);
+          }
+
+          writeAuditLog({
+            userId: context.userId,
+            action: "AI_CALL",
+            resourceType: "Agent",
+            resourceId: context.agentId,
+            after: { model: modelId, inputTokensObj, outputTokensObj, durationMsObj, nodeId: node.id, outputSchema: outputSchemaName },
+          }).catch(() => {});
+
+          const obj = object as Record<string, unknown>;
+          const summary = typeof obj.summary === "string"
+            ? obj.summary
+            : `${outputSchemaName} generated successfully`;
+
+          return {
+            messages: [{
+              role: "assistant",
+              content: summary,
+              metadata: {
+                structuredOutput: obj,
+                schemaName: outputSchemaName,
+              },
+            }],
+            nextNodeId: null,
+            waitForInput: false,
+            updatedVariables: outputVariable ? { [outputVariable]: object } : undefined,
+          };
+        } catch (genObjError) {
+          logger.warn("generateObject failed — falling through to generateText", {
+            outputSchemaName,
+            error: genObjError instanceof Error ? genObjError.message : String(genObjError),
+            agentId: context.agentId,
+            nodeId: node.id,
+          });
+          // Fall through to regular generateText below
+        }
       }
-
-      const startMsObj = Date.now();
-      const { object, usage: objUsage } = await generateObject({
-        model,
-        schema,
-        messages: [
-          ...(effectiveSystemPrompt ? [{ role: "system" as const, content: effectiveSystemPrompt }] : []),
-          ...historyMessages,
-        ],
-        temperature,
-        maxOutputTokens: maxTokens,
-      });
-      const durationMsObj = Date.now() - startMsObj;
-
-      const inputTokensObj = objUsage?.inputTokens ?? 0;
-      const outputTokensObj = objUsage?.outputTokens ?? 0;
-
-      recordChatLatency(context.agentId, modelId, durationMsObj);
-      if (inputTokensObj > 0 || outputTokensObj > 0) {
-        recordTokenUsage(context.agentId, modelId, inputTokensObj, outputTokensObj);
-      }
-
-      writeAuditLog({
-        userId: context.userId,
-        action: "AI_CALL",
-        resourceType: "Agent",
-        resourceId: context.agentId,
-        after: { model: modelId, inputTokensObj, outputTokensObj, durationMsObj, nodeId: node.id, outputSchema: outputSchemaName },
-      }).catch(() => {});
-
-      const obj = object as Record<string, unknown>;
-      const summary = typeof obj.summary === "string"
-        ? obj.summary
-        : `${outputSchemaName} generated successfully`;
-
-      return {
-        messages: [{
-          role: "assistant",
-          content: summary,
-          metadata: {
-            structuredOutput: obj,
-            schemaName: outputSchemaName,
-          },
-        }],
-        nextNodeId: null,
-        waitForInput: false,
-        updatedVariables: outputVariable ? { [outputVariable]: object } : undefined,
-      };
     }
     // ─────────────────────────────────────────────────────────────────────
 
