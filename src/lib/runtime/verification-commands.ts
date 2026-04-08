@@ -71,10 +71,12 @@ export async function runVerificationCommands(
   commands: string[],
   agentId: string,
   timeoutMs = 60_000,
+  cwd?: string,
 ): Promise<{ allPassed: boolean; output: string; results: CommandResult[] }> {
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
   const execFileAsync = promisify(execFile);
+  const effectiveCwd = cwd ?? process.cwd();
 
   const outputLines: string[] = [];
   const results: CommandResult[] = [];
@@ -100,6 +102,7 @@ export async function runVerificationCommands(
         timeout: timeoutMs,
         maxBuffer: 1024 * 512, // 512KB
         env: { ...process.env, CI: "true", FORCE_COLOR: "0" },
+        cwd: effectiveCwd,
       });
 
       const output = (stdout + (stderr ? `\nstderr: ${stderr}` : "")).trim();

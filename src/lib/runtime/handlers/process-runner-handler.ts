@@ -1,4 +1,4 @@
-import { existsSync } from "fs";
+import { existsSync, symlinkSync } from "fs";
 import { join } from "path";
 import type { NodeHandler } from "../types";
 import { runVerificationCommands } from "../verification-commands";
@@ -10,12 +10,37 @@ const DEFAULT_TIMEOUT_MS = 300_000;
 const SDLC_TMP = "/tmp/sdlc";
 
 /**
+ * Set up /tmp/sdlc as a self-contained workspace by symlinking the app's
+ * src/ and node_modules/ so that test files there can resolve imports correctly.
+ * Called only when at least one arg was remapped to /tmp/sdlc.
+ */
+function ensureSdlcWorkspace(): void {
+  const links: Array<[string, string]> = [
+    ["/app/src", join(SDLC_TMP, "src")],
+    ["/app/node_modules", join(SDLC_TMP, "node_modules")],
+    ["/app/tsconfig.json", join(SDLC_TMP, "tsconfig.json")],
+  ];
+  for (const [target, linkPath] of links) {
+    if (!existsSync(linkPath) && existsSync(target)) {
+      try {
+        symlinkSync(target, linkPath);
+        logger.info("process-runner: created symlink for sdlc workspace", { target, linkPath });
+      } catch (e) {
+        logger.warn("process-runner: could not create symlink", { target, linkPath, error: String(e) });
+      }
+    }
+  }
+}
+
+/**
  * For each resolved arg that looks like a relative file path, check if the file
  * exists at the original location. If not, try the /tmp/sdlc fallback directory
  * (where file-writer puts files when /app is read-only on Railway/Docker).
+ * Returns the remapped args and a flag indicating whether any were remapped.
  */
-function resolveArgPaths(args: string[]): string[] {
-  return args.map((arg) => {
+function resolveArgPaths(args: string[]): { resolved: string[]; anyRemapped: boolean } {
+  let anyRemapped = false;
+  const resolved = args.map((arg) => {
     // Only attempt to remap relative paths that look like TS/JS files
     if (arg.startsWith("-") || arg.startsWith("/") || !arg.match(/\.(ts|js|tsx|jsx|mts|mjs)$/)) {
       return arg;
@@ -24,11 +49,14 @@ function resolveArgPaths(args: string[]): string[] {
       const tmpVariant = join(SDLC_TMP, arg);
       if (existsSync(tmpVariant)) {
         logger.info("process-runner: remapping arg to /tmp/sdlc fallback", { original: arg, resolved: tmpVariant });
-        return tmpVariant;
+        anyRemapped = true;
+        // Return the relative path (strip /tmp/sdlc/ prefix) so vitest root works
+        return arg;
       }
     }
     return arg;
   });
+  return { resolved, anyRemapped };
 }
 
 export const processRunnerHandler: NodeHandler = async (node, context) => {
@@ -43,7 +71,19 @@ export const processRunnerHandler: NodeHandler = async (node, context) => {
   const resolvedCommand = resolveTemplate(rawCommand, context.variables);
   const templateResolvedArgs = rawArgs.map((arg) => resolveTemplate(arg, context.variables));
   // Remap relative file paths to /tmp/sdlc when the original location is unwritable
-  const resolvedArgs = resolveArgPaths(templateResolvedArgs);
+  const { resolved: resolvedArgs, anyRemapped } = resolveArgPaths(templateResolvedArgs);
+
+  // When any arg was remapped to /tmp/sdlc, run the command from /tmp/sdlc so
+  // vitest can find the test files and relative imports resolve correctly.
+  let effectiveCwd = workingDir;
+  if (anyRemapped) {
+    ensureSdlcWorkspace();
+    effectiveCwd = SDLC_TMP;
+    logger.info("process-runner: using /tmp/sdlc as cwd for remapped test files", {
+      nodeId: node.id,
+      agentId: context.agentId,
+    });
+  }
 
   // Build the full command string (runVerificationCommands splits by whitespace internally)
   const fullCommand = resolvedArgs.length > 0
@@ -76,6 +116,7 @@ export const processRunnerHandler: NodeHandler = async (node, context) => {
       [fullCommand],
       context.agentId,
       timeoutMs,
+      effectiveCwd,
     );
 
     const durationMs = Date.now() - startMs;
