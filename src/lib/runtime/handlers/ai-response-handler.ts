@@ -234,15 +234,26 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
       } else {
         try {
           const startMsObj = Date.now();
+          // Double the token budget — JSON-wrapped code can be 2× larger than plain text.
+          // Disable OpenAI Structured Outputs (strict json_schema mode) and fall back to
+          // json_object mode which is more forgiving with complex Zod schemas that have
+          // .default() values or .optional() fields.
+          // json_object mode requires the word "JSON" in the system prompt — inject it here.
+          const structuredSystemPrompt = effectiveSystemPrompt
+            ? `${effectiveSystemPrompt}\n\nIMPORTANT: You MUST respond with a valid JSON object.`
+            : "You MUST respond with a valid JSON object.";
           const { object, usage: objUsage } = await generateObject({
             model,
             schema,
+            providerOptions: {
+              openai: { structuredOutputs: false },
+            },
             messages: [
-              ...(effectiveSystemPrompt ? [{ role: "system" as const, content: effectiveSystemPrompt }] : []),
+              { role: "system" as const, content: structuredSystemPrompt },
               ...historyMessages,
             ],
             temperature,
-            maxOutputTokens: maxTokens,
+            maxOutputTokens: Math.min(maxTokens * 2, 16000),
           });
           const durationMsObj = Date.now() - startMsObj;
 
@@ -413,12 +424,43 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     }
     // ─────────────────────────────────────────────────────────────────────
 
+    // ── generateObject fallback: try to extract structured output from text ──
+    // When generateObject failed and fell through to generateText, attempt to
+    // parse a JSON code block from the text so outputVariable gets a proper
+    // structured object rather than a raw string.
+    let structuredFallback: unknown = undefined;
+    if (outputSchemaName && outputVariable) {
+      const schemaForExtract = resolveSchema(outputSchemaName);
+      if (schemaForExtract) {
+        try {
+          const jsonBlock = responseText.match(/```(?:json)?\s*\n([\s\S]*?)\n```/);
+          const jsonRaw = responseText.match(/(\{[\s\S]*\})/);
+          const jsonStr = jsonBlock?.[1] ?? jsonRaw?.[1];
+          if (jsonStr) {
+            const parsed: unknown = JSON.parse(jsonStr);
+            const validated = schemaForExtract.safeParse(parsed);
+            if (validated.success) {
+              structuredFallback = validated.data;
+              logger.info("Extracted structured output from text fallback", {
+                agentId: context.agentId,
+                nodeId: node.id,
+                outputSchemaName,
+              });
+            }
+          }
+        } catch {
+          // Cannot extract — leave as text
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     return {
       messages: [{ role: "assistant", content: responseText }],
       nextNodeId: null,
       waitForInput: false,
       updatedVariables: outputVariable
-        ? { [outputVariable]: responseText }
+        ? { [outputVariable]: structuredFallback ?? responseText }
         : undefined,
     };
   } catch (error) {
