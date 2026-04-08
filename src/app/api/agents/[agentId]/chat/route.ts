@@ -218,6 +218,70 @@ export async function POST(
     }
     const agentModel = evalModelOverride ?? agent?.model;
 
+    // ── Sub-agent resume: when this conversation is waiting on a nested agent ──
+    // The call_agent handler stores _pendingSubConversation when a sub-agent pauses
+    // at a human_approval node.  Instead of re-running the parent flow, forward the
+    // user's message directly to the paused sub-agent conversation, then continue the
+    // parent flow once the sub-agent finishes.
+    const pendingSubConvId = context.variables._pendingSubConversation as string | undefined;
+    const pendingSubAgentId = context.variables._pendingSubAgentId as string | undefined;
+
+    if (pendingSubConvId && pendingSubAgentId) {
+      logger.info("chat: forwarding message to pending sub-agent conversation", {
+        agentId,
+        parentConvId: context.conversationId,
+        subConvId: pendingSubConvId,
+        subAgentId: pendingSubAgentId,
+      });
+
+      const subContext = await loadContext(pendingSubAgentId, pendingSubConvId);
+      const subResult = await executeFlow(subContext, message);
+
+      if (subResult.waitingForInput) {
+        // Sub-agent still waiting (e.g. user typed "reject" and it asked again)
+        return NextResponse.json(
+          {
+            success: true,
+            data: {
+              conversationId: context.conversationId,
+              messages: subResult.messages,
+              waitForInput: true,
+            },
+          },
+          { headers: rateLimitHeaders }
+        );
+      }
+
+      // Sub-agent finished — update parent variables and resume parent flow
+      const outputVar = (context.variables._pendingOutputVariable as string | undefined) ?? "pipelineResult";
+      const subLastMsg = subResult.messages.filter((m) => m.role === "assistant").pop()?.content;
+
+      context.variables = {
+        ...context.variables,
+        [outputVar]: subLastMsg ?? null,
+        _pendingSubConversation: null,
+        _pendingSubAgentId: null,
+        _pendingOutputVariable: null,
+      };
+
+      // Continue the parent Orchestrator flow from its saved currentNodeId
+      // (already advanced to the node after call_agent by the waitForInput logic)
+      const parentResult = await executeFlow(context);
+
+      return NextResponse.json(
+        {
+          success: true,
+          data: {
+            conversationId: context.conversationId,
+            messages: [...subResult.messages, ...parentResult.messages],
+            waitForInput: parentResult.waitingForInput,
+          },
+        },
+        { headers: rateLimitHeaders }
+      );
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
     if (isStreaming) {
       const innerStream = executeFlowStreaming(context, message);
       const timeToFirstTokenMs = Date.now() - startTime;

@@ -363,6 +363,56 @@ async function executeCallAttempt(
         providerOverride: providerOverride || undefined,
       });
       output = subResult.output;
+
+      // ── Sub-agent paused at human_approval (or any waitForInput node) ──────
+      // Propagate the wait state upward: store the sub-conversation ID in the
+      // parent context so the chat route can forward the next user message to
+      // the sub-agent instead of re-running the parent flow from scratch.
+      // We also compute the edge-based next node so the engine advances the
+      // parent's currentNodeId past this call_agent node when saving state.
+      if (subResult.waitingForInput) {
+        recordSuccess(context.agentId, calleeId);
+
+        const defaultEdge = context.flowContent.edges.find(
+          (e) => e.source === node.id && !e.sourceHandle,
+        );
+        const resumeNodeId = defaultEdge?.target ?? null;
+
+        await prisma.agentCallLog
+          .update({
+            where: { id: callLog.id },
+            data: { status: "WORKING", durationMs: Date.now() - startTime },
+          })
+          .catch(() => {});
+
+        logger.info("call_agent: sub-agent waiting for human input — propagating waitForInput", {
+          nodeId: node.id,
+          agentId: context.agentId,
+          subConversationId: subResult.conversationId,
+          resumeNodeId,
+        });
+
+        return {
+          success: true,
+          result: {
+            messages: [
+              {
+                role: "assistant" as const,
+                content: typeof output === "string" ? output : JSON.stringify(output),
+              },
+            ],
+            nextNodeId: resumeNodeId,
+            waitForInput: true,
+            updatedVariables: {
+              [outputVariable]: output,
+              _pendingSubConversation: subResult.conversationId,
+              _pendingSubAgentId: targetAgentId,
+              _pendingOutputVariable: outputVariable,
+            },
+          },
+        };
+      }
+      // ────────────────────────────────────────────────────────────────────────
     }
 
     recordSuccess(context.agentId, calleeId);
@@ -731,6 +781,10 @@ interface SubAgentParams {
 
 interface SubAgentResult {
   output: unknown;
+  /** True when the sub-agent paused at a human_approval (or any waitForInput) node */
+  waitingForInput: boolean;
+  /** The sub-agent's conversation ID, needed to resume it later */
+  conversationId: string;
 }
 
 async function executeSubAgent(params: SubAgentParams): Promise<SubAgentResult> {
@@ -839,6 +893,8 @@ async function executeSubAgent(params: SubAgentParams): Promise<SubAgentResult> 
 
   return {
     output: lastAssistantMessage?.content ?? null,
+    waitingForInput: result.waitingForInput,
+    conversationId: conversation.id,
   };
 }
 
