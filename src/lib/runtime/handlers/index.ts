@@ -64,6 +64,7 @@ import { fileWriterHandler } from "./file-writer-handler";
 import { processRunnerHandler } from "./process-runner-handler";
 import { gitNodeHandler } from "./git-node-handler";
 import { deployTriggerHandler } from "./deploy-trigger-handler";
+import { codeReviewHandler } from "./code-review-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -131,6 +132,7 @@ const handlers: Record<string, NodeHandler> = {
   process_runner: processRunnerHandler,
   git_node: gitNodeHandler,
   deploy_trigger: deployTriggerHandler,
+  code_review: codeReviewHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

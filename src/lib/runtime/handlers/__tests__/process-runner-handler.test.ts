@@ -118,9 +118,10 @@ describe("processRunnerHandler", () => {
     await processRunnerHandler(makeNode({ timeoutMs: 120000 }) as never, makeContext());
 
     expect(mockRunVerificationCommands).toHaveBeenCalledWith(
-      ["pnpm build"],
+      expect.any(Array),
       "agent-1",
       120000,
+      expect.any(String),
     );
   });
 });

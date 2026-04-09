@@ -107,6 +107,21 @@ export async function POST(
       return response;
     }
 
+    // v2: Async dispatch — job enqueued, worker will execute the flow
+    if (result.queued) {
+      const response = NextResponse.json(
+        {
+          success: true,
+          queued: true,
+          executionId: result.executionId,
+          message: "Webhook accepted — execution queued",
+        },
+        { status: 202 }
+      );
+      applySecurityHeaders(response, pathname);
+      return response;
+    }
+
     const response = NextResponse.json(
       {
         success: result.success,

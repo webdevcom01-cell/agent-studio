@@ -47,6 +47,12 @@ export interface WebhookExecuteOptions {
    * this execution record in-place rather than creating a new one.
    */
   retryExecutionId?: string;
+  /**
+   * v2: When true, this call originates from the BullMQ async worker.
+   * Skips the async-dispatch path so we don't infinitely re-queue.
+   * Also skips idempotency and rate-limit checks (already done in the route).
+   */
+  isAsyncWorker?: boolean;
 }
 
 export interface WebhookExecuteResult {
@@ -57,6 +63,8 @@ export interface WebhookExecuteResult {
   error?: string;
   /** When true, caller should respond with 409 Conflict (idempotent skip) */
   skipped?: boolean;
+  /** v2: When true, execution was queued async (status 202). Worker will run the flow. */
+  queued?: boolean;
 }
 
 /**
@@ -213,7 +221,17 @@ async function scheduleWebhookRetry(
 export async function executeWebhookTrigger(
   opts: WebhookExecuteOptions
 ): Promise<WebhookExecuteResult> {
-  const { agentId, webhookId, rawBody, headers, sourceIp, isReplay = false, replayOf, retryExecutionId } = opts;
+  const {
+    agentId,
+    webhookId,
+    rawBody,
+    headers,
+    sourceIp,
+    isReplay = false,
+    replayOf,
+    retryExecutionId,
+    isAsyncWorker = false,
+  } = opts;
   const isRetry = retryExecutionId !== undefined;
   const startedAt = Date.now();
 
@@ -228,6 +246,8 @@ export async function executeWebhookTrigger(
       bodyMappings: true,
       headerMappings: true,
       eventFilters: true,
+      asyncExecution: true,
+      issueKeyTemplate: true,
     },
   });
 
@@ -294,8 +314,8 @@ export async function executeWebhookTrigger(
   }
 
   // ── 4. Rate limiting ──────────────────────────────────────────────────────
-  // Retries are dispatched by the internal BullMQ worker — no rate limiting needed.
-  if (!isRetry) {
+  // Retries and async workers are dispatched internally — no rate limiting needed.
+  if (!isRetry && !isAsyncWorker) {
     const rl = checkRateLimit(`webhook:${webhookId}`, WEBHOOK_RATE_LIMIT);
     if (!rl.allowed) {
       return {
@@ -420,6 +440,59 @@ export async function executeWebhookTrigger(
     };
   }
 
+  // ── 5b. Issue-level idempotency (v2) ──────────────────────────────────────
+  // Prevents duplicate pipeline runs for the same business event (e.g. same
+  // GitHub issue re-opened multiple times in quick succession).
+  // Only active when issueKeyTemplate is configured on the webhook and we're
+  // not already inside a retry or async worker path.
+  let issueKey: string | null = null;
+  const issueKeyTemplate = (webhookConfig as Record<string, unknown>).issueKeyTemplate as string | null | undefined;
+
+  if (issueKeyTemplate && !isRetry && !isAsyncWorker) {
+    // Interpolate {{variable}} placeholders using the already-resolved webhookVariables
+    issueKey = issueKeyTemplate.replace(/\{\{(\w+)\}\}/g, (_, k: string) => {
+      const val = webhookVariables[k];
+      return val !== undefined && val !== null ? String(val) : "";
+    });
+
+    // Only enforce if all placeholders resolved to non-empty strings
+    if (issueKey && !issueKey.includes("{{")) {
+      const existingByIssue = await prisma.webhookExecution.findFirst({
+        where: {
+          webhookConfigId: webhookId,
+          issueKey,
+          status: { in: ["PENDING", "QUEUED", "RUNNING"] },
+        },
+        select: { id: true, conversationId: true },
+      });
+
+      if (existingByIssue) {
+        logger.info("Webhook issue-level idempotency skip", {
+          webhookId,
+          agentId,
+          issueKey,
+          existingExecutionId: existingByIssue.id,
+        });
+        return {
+          success: true,
+          status: 409,
+          executionId: existingByIssue.id,
+          conversationId: existingByIssue.conversationId ?? undefined,
+          skipped: true,
+        };
+      }
+    } else {
+      // Template didn't fully resolve — log a warning, fall through without
+      // issue-level dedup so the event is not silently dropped.
+      logger.warn("Webhook issueKeyTemplate did not fully resolve — skipping issue dedup", {
+        webhookId,
+        issueKeyTemplate,
+        resolvedKey: issueKey,
+      });
+      issueKey = null;
+    }
+  }
+
   // ── 6. Execution record ────────────────────────────────────────────────────
   const sanitizedHeaders = sanitizeHeadersForStorage(headers);
 
@@ -444,6 +517,7 @@ export async function executeWebhookTrigger(
         data: {
           webhookConfigId: webhookId,
           idempotencyKey,
+          issueKey,
           status: "PENDING",
           triggeredAt: new Date(),
           sourceIp: sourceIp ?? null,
@@ -457,6 +531,57 @@ export async function executeWebhookTrigger(
         },
         select: { id: true },
       });
+
+  // ── 6b. Async dispatch (v2) ───────────────────────────────────────────────
+  // When asyncExecution=true on the webhook config, enqueue a BullMQ job and
+  // return 202 immediately. The worker will call executeWebhookTrigger again
+  // with isAsyncWorker=true to do the actual flow execution.
+  // This is required for slow pipelines (>10s) triggered by GitHub/Slack which
+  // have strict response-time requirements.
+  const isAsync = (webhookConfig as Record<string, unknown>).asyncExecution === true;
+  if (isAsync && !isAsyncWorker && !isRetry) {
+    try {
+      const { addWebhookExecuteJob } = await import("@/lib/queue");
+      const flatHeaders = Object.fromEntries(
+        Object.entries(headers).map(([k, v]) => [k, Array.isArray(v) ? v[0] : (v ?? "")])
+      );
+      await addWebhookExecuteJob({
+        agentId,
+        webhookId,
+        executionId: execution.id,
+        rawBody,
+        headers: flatHeaders,
+        sourceIp,
+      });
+
+      await prisma.webhookExecution.update({
+        where: { id: execution.id },
+        data: { status: "QUEUED" },
+      });
+
+      logger.info("Webhook async dispatch: job enqueued, returning 202", {
+        webhookId,
+        agentId,
+        executionId: execution.id,
+      });
+
+      return {
+        success: true,
+        status: 202,
+        executionId: execution.id,
+        queued: true,
+      };
+    } catch (queueErr) {
+      // Queue unavailable — fall through to synchronous execution so the
+      // webhook is not silently dropped.
+      logger.warn("Webhook async queue unavailable, falling back to sync execution", {
+        webhookId,
+        agentId,
+        executionId: execution.id,
+        error: queueErr,
+      });
+    }
+  }
 
   // ── 7. Execute flow ───────────────────────────────────────────────────────
   let conversationId: string | undefined;

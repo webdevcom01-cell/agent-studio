@@ -223,8 +223,8 @@ export async function POST(
     // at a human_approval node.  Instead of re-running the parent flow, forward the
     // user's message directly to the paused sub-agent conversation, then continue the
     // parent flow once the sub-agent finishes.
-    const pendingSubConvId = context.variables._pendingSubConversation as string | undefined;
-    const pendingSubAgentId = context.variables._pendingSubAgentId as string | undefined;
+    const pendingSubConvId = context.variables?._pendingSubConversation as string | undefined;
+    const pendingSubAgentId = context.variables?._pendingSubAgentId as string | undefined;
 
     if (pendingSubConvId && pendingSubAgentId) {
       logger.info("chat: forwarding message to pending sub-agent conversation", {

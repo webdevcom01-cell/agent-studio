@@ -14,7 +14,7 @@
 
 import { Worker, type Job } from "bullmq";
 import { logger } from "@/lib/logger";
-import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData } from "./index";
+import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData, WebhookExecuteJobData } from "./index";
 
 const QUEUE_NAME = "agent-studio";
 const CONCURRENCY = 5;
@@ -37,6 +37,8 @@ async function processJob(job: Job<JobData>): Promise<unknown> {
       return processWebhookRetryJob(job as Job<WebhookRetryJobData>);
     case "kb.ingest":
       return processKBIngestJob(job as Job<KBIngestJobData>);
+    case "webhook.execute":
+      return processWebhookExecuteJob(job as Job<WebhookExecuteJobData>);
     default:
       throw new Error(`Unknown job type: ${(data as Record<string, unknown>).type}`);
   }
@@ -169,6 +171,41 @@ async function processKBIngestJob(job: Job<KBIngestJobData>): Promise<unknown> {
   });
 
   return { sourceId, success: true };
+}
+
+/**
+ * v2: Processes async webhook execution jobs.
+ * Called when asyncExecution=true on the webhook config — the route returns 202
+ * and this worker handles the actual flow execution.
+ */
+async function processWebhookExecuteJob(job: Job<WebhookExecuteJobData>): Promise<unknown> {
+  const { agentId, webhookId, executionId, rawBody, headers, sourceIp } = job.data;
+
+  const { executeWebhookTrigger } = await import("@/lib/webhooks/execute");
+
+  await job.updateProgress(10);
+
+  const result = await executeWebhookTrigger({
+    agentId,
+    webhookId,
+    rawBody,
+    headers,
+    sourceIp,
+    isAsyncWorker: true,
+    retryExecutionId: executionId,
+  });
+
+  await job.updateProgress(100);
+
+  logger.info("Async webhook execute job completed", {
+    jobId: job.id,
+    executionId,
+    webhookId,
+    agentId,
+    success: result.success,
+  });
+
+  return result;
 }
 
 export function createWorker(): Worker<JobData> {

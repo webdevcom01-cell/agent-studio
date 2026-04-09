@@ -152,6 +152,7 @@ describe("validateAgainstSchema", () => {
     expect(AVAILABLE_SCHEMAS).toContain("FileWriteOutput");
     expect(AVAILABLE_SCHEMAS).toContain("GitOutput");
     expect(AVAILABLE_SCHEMAS).toContain("DeployOutput");
-    expect(AVAILABLE_SCHEMAS.length).toBe(7);
+    expect(AVAILABLE_SCHEMAS).toContain("CodeReviewOutput");
+    expect(AVAILABLE_SCHEMAS.length).toBe(8);
   });
 });

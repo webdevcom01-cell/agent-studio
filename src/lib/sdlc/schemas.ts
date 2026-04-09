@@ -145,6 +145,43 @@ export const DeployOutputSchema = z.object({
 
 export type DeployOutput = z.infer<typeof DeployOutputSchema>;
 
+// ─── Code Review Output (v2 SDLC pipeline) ────────────────────────────────────
+// Used by the code_review node in the Autonomous Pipeline to gate the human_approval
+// step. Decision == "BLOCK" routes into the fix loop; APPROVE* proceeds to approval.
+
+export const CodeReviewIssueSchema = z.object({
+  severity: z.enum(["CRITICAL", "HIGH", "MEDIUM", "LOW"]),
+  category: z.enum(["security", "quality", "convention", "performance"]),
+  file: z.string().describe("Relative file path where the issue was found"),
+  line: z.number().optional().describe("Approximate line number, if determinable"),
+  message: z.string().describe("Clear description of the issue"),
+  fix: z.string().describe("Concrete, actionable fix — not just a diagnosis"),
+});
+
+export const CodeReviewOutputSchema = z.object({
+  decision: z
+    .enum(["APPROVE", "APPROVE_WITH_NOTES", "BLOCK"])
+    .describe(
+      "APPROVE = merge-ready, APPROVE_WITH_NOTES = minor issues (proceed), BLOCK = must fix before proceeding"
+    ),
+  compositeScore: z.number().min(0).max(100).describe("Overall code quality score 0–100"),
+  securityScore: z.number().min(0).max(100),
+  qualityScore: z.number().min(0).max(100),
+  conventionScore: z.number().min(0).max(100).describe("Adherence to project conventions"),
+  issues: z.array(CodeReviewIssueSchema).describe("All identified issues with concrete fixes"),
+  blockingIssues: z
+    .array(CodeReviewIssueSchema)
+    .describe("Subset of issues that must be resolved before APPROVE"),
+  summary: z.string().describe("Short review summary (2–4 sentences) for the developer"),
+  fixInstructions: z
+    .string()
+    .optional()
+    .describe("If BLOCK: precise instructions for the fix loop to resolve blocking issues"),
+});
+
+export type CodeReviewIssue = z.infer<typeof CodeReviewIssueSchema>;
+export type CodeReviewOutput = z.infer<typeof CodeReviewOutputSchema>;
+
 // ─── Schema registry ───────────────────────────────────────────────────────────
 
 const SCHEMA_REGISTRY: Record<string, z.ZodTypeAny> = {
@@ -155,6 +192,7 @@ const SCHEMA_REGISTRY: Record<string, z.ZodTypeAny> = {
   FileWriteOutput: FileWriteOutputSchema,
   GitOutput: GitOutputSchema,
   DeployOutput: DeployOutputSchema,
+  CodeReviewOutput: CodeReviewOutputSchema,
 };
 
 export const AVAILABLE_SCHEMAS = Object.keys(SCHEMA_REGISTRY);

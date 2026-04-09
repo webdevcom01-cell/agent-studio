@@ -52,11 +52,27 @@ export interface KBIngestJobData {
   content?: string;
 }
 
+/**
+ * v2: Async webhook execution job.
+ * Dispatched by the webhook route when asyncExecution=true on the WebhookConfig.
+ * The worker calls executeWebhookTrigger with isAsyncWorker=true.
+ */
+export interface WebhookExecuteJobData {
+  type: "webhook.execute";
+  agentId: string;
+  webhookId: string;
+  executionId: string;
+  rawBody: string;
+  headers: Record<string, string>;
+  sourceIp?: string;
+}
+
 export type JobData =
   | FlowExecuteJobData
   | EvalRunJobData
   | WebhookRetryJobData
-  | KBIngestJobData;
+  | KBIngestJobData
+  | WebhookExecuteJobData;
 
 const PRIORITY_MAP: Record<string, number> = {
   chat: 1,
@@ -222,6 +238,40 @@ export async function getJobStatus(jobId: string): Promise<{
     result: job.returnvalue,
     failedReason: job.failedReason,
   };
+}
+
+/**
+ * v2: Enqueue an async webhook execution job.
+ * Called by the webhook route when asyncExecution=true so it can return 202 immediately.
+ */
+export async function addWebhookExecuteJob(
+  data: Omit<WebhookExecuteJobData, "type">,
+): Promise<string> {
+  const q = getQueue();
+
+  const job = await q.add(
+    "webhook.execute",
+    { ...data, type: "webhook.execute" as const },
+    {
+      // Priority 2: between live chat (1) and pipeline (5) — webhook triggers
+      // are user-facing but not as latency-sensitive as interactive chat.
+      priority: 2,
+      // Stable job ID prevents double-scheduling if the route is called twice
+      // for the same execution record.
+      jobId: `webhook-exec-${data.executionId}`,
+      removeOnComplete: { age: 86400 },
+      removeOnFail: { age: 604800 },
+    },
+  );
+
+  logger.info("Webhook execute job enqueued", {
+    jobId: job.id,
+    executionId: data.executionId,
+    agentId: data.agentId,
+    webhookId: data.webhookId,
+  });
+
+  return job.id ?? `webhook-exec-${data.executionId}`;
 }
 
 export async function closeQueue(): Promise<void> {

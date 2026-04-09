@@ -144,6 +144,11 @@ model Agent {
   /// Valid range: 5–600 s.  null = use AGENT_TIMEOUT_PROFILES name-pattern.
   expectedDurationSeconds Int?
 
+  /// v2 SDLC pipeline version flag.
+  /// "v1" = original single-agent pipeline (default, backward-compat).
+  /// "v2" = webhook + RAG + code-review + async execution.
+  pipelineVersion String @default("v1")
+
   @@index([userId])
   @@index([userId, updatedAt])
   @@index([organizationId])
@@ -685,6 +690,8 @@ model ScheduledExecution {
 
 enum WebhookExecutionStatus {
   PENDING
+  /// v2: Async path — job added to BullMQ, waiting for worker pickup
+  QUEUED
   RUNNING
   COMPLETED
   FAILED
@@ -735,6 +742,16 @@ model WebhookConfig {
   /// Null for webhooks created manually via API.
   nodeId String?
 
+  /// v2: When true, webhook POST returns 202 immediately and flow runs in BullMQ worker.
+  /// Required for slow flows (>10s) triggered by GitHub/Slack which expect fast ACK.
+  asyncExecution Boolean @default(false)
+
+  /// v2: Template for deriving a business-level idempotency key (issue dedup).
+  /// Supports {{variable}} interpolation from bodyMappings output.
+  /// Example: "github-{{repo}}-{{issueNumber}}-{{action}}"
+  /// When null, falls back to payload-level x-webhook-id header dedup.
+  issueKeyTemplate String?
+
   /// Aggregate stats
   triggerCount Int      @default(0)
   failureCount Int      @default(0)
@@ -760,6 +777,11 @@ model WebhookExecution {
   /// x-webhook-id header value (Standard Webhooks spec).
   /// Unique constraint enforces idempotency — same event ID is never processed twice.
   idempotencyKey  String               @unique
+
+  /// v2: Business-level idempotency key derived from issueKeyTemplate.
+  /// Example value: "github-org/repo-42-opened"
+  /// Prevents duplicate pipeline runs for the same issue event even across retries.
+  issueKey        String?
 
   status          WebhookExecutionStatus @default(PENDING)
 
@@ -803,6 +825,9 @@ model WebhookExecution {
   @@index([webhookConfigId])
   @@index([webhookConfigId, createdAt])
   @@index([status])
+  /// v2: Prevents duplicate pipeline runs for same business event (e.g. same GitHub issue).
+  /// Scoped per webhook config so different webhooks can reuse the same issue keys.
+  @@unique([webhookConfigId, issueKey], name: "unique_issue_per_webhook")
 }
 
 /// Dead-letter store for webhook executions that exhausted all retry attempts.
