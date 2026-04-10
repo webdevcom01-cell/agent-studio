@@ -94,4 +94,5 @@ export type NodeType =
   | "file_writer"
   | "process_runner"
   | "git_node"
-  | "deploy_trigger";
+  | "deploy_trigger"
+  | "claude_agent_sdk";

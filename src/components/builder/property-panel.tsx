@@ -613,6 +613,10 @@ export function PropertyPanel({
           <CallAgentProperties data={data} update={update} variables={variables} currentAgentId={agentId ?? ""} />
         )}
 
+        {node.type === "claude_agent_sdk" && (
+          <ClaudeAgentSdkProperties data={data} update={update} variables={variables} />
+        )}
+
         {node.type === "human_approval" && (
           <HumanApprovalProperties data={data} update={update} variables={variables} />
         )}
@@ -848,6 +852,7 @@ const OUTPUT_VAR_TYPES = new Set([
   "process_runner",
   "git_node",
   "deploy_trigger",
+  "claude_agent_sdk",
 ]);
 
 /**
@@ -7091,6 +7096,172 @@ function DeployTriggerProperties({ data, update }: SubPanelProps) {
           <code>status</code>, <code>url</code>, <code>deploymentId</code>.
         </p>
       </div>
+    </>
+  );
+}
+
+// ── Claude Agent SDK Properties ────────────────────────────────────────────
+
+function ClaudeAgentSdkProperties({ data, update, variables = [] }: SubPanelProps) {
+  const enableSessionResume = (data.enableSessionResume as boolean) ?? false;
+  const enableSubAgents = (data.enableSubAgents as boolean) ?? false;
+  const enableMCP = (data.enableMCP as boolean) ?? true;
+
+  return (
+    <>
+      <PropertySection title="Task">
+        <div className="space-y-2">
+          <Label>Task / Instruction</Label>
+          <VariableTextarea
+            value={(data.task as string) ?? ""}
+            onChange={(val) => update("task", val)}
+            variables={variables}
+            placeholder="Describe what the agent should accomplish. Supports {{variable}} templates."
+            rows={4}
+          />
+          <p className="text-xs text-muted-foreground">
+            The task Claude will execute. If empty, uses the latest user message.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label>System Prompt</Label>
+          <VariableTextarea
+            value={(data.systemPrompt as string) ?? ""}
+            onChange={(val) => update("systemPrompt", val)}
+            variables={variables}
+            placeholder="Optional system prompt to guide agent behavior."
+            rows={3}
+          />
+        </div>
+      </PropertySection>
+
+      <PropertySection title="Model">
+        <div className="space-y-2">
+          <Label>Model</Label>
+          <ModelSelect
+            value={(data.model as string) ?? "claude-sonnet-4-6"}
+            onChange={(val) => update("model", val)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Max Tool Steps</Label>
+          <Input
+            type="number"
+            min={1}
+            max={50}
+            value={(data.maxSteps as number) ?? 20}
+            onChange={(e) => update("maxSteps", parseInt(e.target.value, 10))}
+            placeholder="20"
+          />
+          <p className="text-xs text-muted-foreground">
+            Maximum number of tool-use steps before stopping (1–50).
+          </p>
+        </div>
+      </PropertySection>
+
+      <PropertySection title="Tools & Subagents">
+        <div className="flex items-center justify-between rounded-lg border border-border p-3">
+          <div>
+            <p className="text-sm font-medium">MCP Tools</p>
+            <p className="text-xs text-muted-foreground">
+              Inject this agent&apos;s connected MCP tools
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enableMCP}
+            onClick={() => update("enableMCP", !enableMCP)}
+            className={`relative h-5 w-9 rounded-full transition-colors ${
+              enableMCP ? "bg-primary" : "bg-muted"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${
+                enableMCP ? "translate-x-4" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg border border-border p-3">
+          <div>
+            <p className="text-sm font-medium">Subagents</p>
+            <p className="text-xs text-muted-foreground">
+              Expose sibling agents as callable tools
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enableSubAgents}
+            onClick={() => update("enableSubAgents", !enableSubAgents)}
+            className={`relative h-5 w-9 rounded-full transition-colors ${
+              enableSubAgents ? "bg-primary" : "bg-muted"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${
+                enableSubAgents ? "translate-x-4" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        </div>
+      </PropertySection>
+
+      <PropertySection title="Session Resume">
+        <div className="flex items-center justify-between rounded-lg border border-border p-3">
+          <div>
+            <p className="text-sm font-medium">Enable Session Resume</p>
+            <p className="text-xs text-muted-foreground">
+              Persist conversation state and resume across invocations
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enableSessionResume}
+            onClick={() => update("enableSessionResume", !enableSessionResume)}
+            className={`relative h-5 w-9 rounded-full transition-colors ${
+              enableSessionResume ? "bg-primary" : "bg-muted"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${
+                enableSessionResume ? "translate-x-4" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        </div>
+
+        {enableSessionResume && (
+          <div className="space-y-2">
+            <Label>Session Variable Name</Label>
+            <Input
+              value={(data.sessionVarName as string) ?? "__sdk_session"}
+              onChange={(e) => update("sessionVarName", e.target.value)}
+              placeholder="__sdk_session"
+            />
+            <p className="text-xs text-muted-foreground">
+              Flow variable used to store and load session messages.
+            </p>
+          </div>
+        )}
+      </PropertySection>
+
+      <PropertySection title="Output">
+        <div className="space-y-2">
+          <Label>Output Variable</Label>
+          <Input
+            value={(data.outputVariable as string) ?? "agent_result"}
+            onChange={(e) => update("outputVariable", e.target.value)}
+            placeholder="agent_result"
+          />
+          <p className="text-xs text-muted-foreground">
+            Stores the agent&apos;s final text response.
+          </p>
+        </div>
+      </PropertySection>
     </>
   );
 }

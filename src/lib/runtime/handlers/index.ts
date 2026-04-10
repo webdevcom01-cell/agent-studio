@@ -65,6 +65,7 @@ import { processRunnerHandler } from "./process-runner-handler";
 import { gitNodeHandler } from "./git-node-handler";
 import { deployTriggerHandler } from "./deploy-trigger-handler";
 import { codeReviewHandler } from "./code-review-handler";
+import { claudeAgentSdkHandler } from "./claude-agent-sdk-handler";
 
 const handlers: Record<string, NodeHandler> = {
   message: messageHandler,
@@ -133,6 +134,7 @@ const handlers: Record<string, NodeHandler> = {
   git_node: gitNodeHandler,
   deploy_trigger: deployTriggerHandler,
   code_review: codeReviewHandler,
+  claude_agent_sdk: claudeAgentSdkHandler,
 };
 
 export function getHandler(nodeType: string): NodeHandler | null {

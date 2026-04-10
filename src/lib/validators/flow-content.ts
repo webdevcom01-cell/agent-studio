@@ -67,6 +67,7 @@ const NODE_TYPES = [
   "process_runner",
   "git_node",
   "deploy_trigger",
+  "claude_agent_sdk",
 ] as const;
 
 const VARIABLE_TYPES = ["string", "number", "boolean", "object"] as const;

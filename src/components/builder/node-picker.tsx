@@ -62,6 +62,7 @@ import {
   Braces,
   FileSearch,
   BookMarked,
+  BotMessageSquare,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -1034,6 +1035,28 @@ const NODE_DEFINITIONS: NodeDefinition[] = [
       maxDurationMs: 3600000,
       retryOnFailure: true,
       outputVariable: "task_result",
+    },
+  },
+  {
+    type: "claude_agent_sdk",
+    label: "Claude Agent SDK",
+    description: "Delegate a task to Claude with subagents, MCP tools, and session resume",
+    usageExample:
+      "Run a multi-step research task, orchestrate subagents in parallel, or resume a long-running agent session",
+    icon: BotMessageSquare,
+    color: "violet",
+    category: "integrations",
+    defaultData: {
+      label: "Claude Agent SDK",
+      task: "",
+      systemPrompt: "",
+      model: "claude-sonnet-4-6",
+      maxSteps: 20,
+      enableMCP: true,
+      enableSubAgents: false,
+      enableSessionResume: false,
+      sessionVarName: "__sdk_session",
+      outputVariable: "agent_result",
     },
   },
 

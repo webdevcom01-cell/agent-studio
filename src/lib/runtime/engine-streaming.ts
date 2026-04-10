@@ -16,6 +16,7 @@ import { emitSessionEvent } from "./session-events";
 import { injectHotMemoryIntoContext } from "@/lib/memory/hot-cold-tier";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
+import { claudeAgentSdkStreamingHandler } from "./handlers/claude-agent-sdk-streaming-handler";
 import { parallelStreamingHandler } from "./handlers/parallel-streaming-handler";
 import {
   initDebugSession,
@@ -308,7 +309,48 @@ export function executeFlowStreaming(
               );
               continue;
             }
-          // ── Codepath 2: parallel ─────────────────────────────────────────
+          // ── Codepath 2: claude_agent_sdk ─────────────────────────────────
+          } else if (node.type === "claude_agent_sdk") {
+            try {
+              result = await claudeAgentSdkStreamingHandler(node, context, writer);
+              try {
+                debugEmitNodeEnd(writer, context, node.id, "success", Date.now() - nodeStartMs,
+                  result.messages[0]?.content);
+              } catch { /* stream closed by client */ }
+            } catch (error) {
+              const errDuration = Date.now() - nodeStartMs;
+              const errorMsg = error instanceof Error ? error.message : String(error);
+              emitHook(context, "afterNodeExecute", {
+                nodeId: node.id, nodeType: node.type, durationMs: errDuration, error: errorMsg,
+              });
+              emitHook(context, "onFlowError", {
+                nodeId: node.id, nodeType: node.type, error: errorMsg,
+              });
+              emitSessionEvent(context, "session.failed", {
+                durationMs: Date.now() - flowStartMs, iterations,
+                error: errorMsg, meta: { nodeId: node.id, nodeType: node.type },
+              });
+              logger.error("Claude Agent SDK streaming handler error", error, {
+                agentId: context.agentId, nodeId: node.id,
+              });
+              nodesFailed++;
+              try {
+                debugEmitNodeEnd(writer, context, node.id, "error", errDuration,
+                  undefined, errorMsg);
+              } catch { /* stream closed by client */ }
+              const msg: OutputMessage = {
+                role: "assistant",
+                content: "There was an issue with the Claude Agent SDK node. Continuing with the remaining steps.",
+              };
+              allMessages.push(msg);
+              try { writer.write({ type: "error", content: msg.content }); } catch { /* stream closed */ }
+              context.currentNodeId = resolveNextNodeId(
+                { nextNodeId: null }, node.id, node.type,
+                context.flowContent.edges, nodeMap,
+              );
+              continue;
+            }
+          // ── Codepath 3: parallel ─────────────────────────────────────────
           } else if (node.type === "parallel") {
             try {
               try { writer.write({ type: "heartbeat" }); } catch { /* stream closed */ }

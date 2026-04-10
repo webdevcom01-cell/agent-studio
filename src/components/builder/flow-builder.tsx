@@ -45,6 +45,7 @@ import { AIExtractNode } from "./nodes/ai-extract-node";
 import { AISummarizeNode } from "./nodes/ai-summarize-node";
 import { MCPToolNode } from "./nodes/mcp-tool-node";
 import { CallAgentNode } from "./nodes/call-agent-node";
+import { ClaudeAgentSdkNode } from "./nodes/claude-agent-sdk-node";
 import { HumanApprovalNode } from "./nodes/human-approval-node";
 import { LoopNode } from "./nodes/loop-node";
 import { ParallelNode } from "./nodes/parallel-node";
@@ -129,6 +130,7 @@ const NODE_TYPES: NodeTypes = {
   ai_summarize: AISummarizeNode,
   mcp_tool: MCPToolNode,
   call_agent: CallAgentNode,
+  claude_agent_sdk: ClaudeAgentSdkNode,
   human_approval: HumanApprovalNode,
   loop: LoopNode,
   parallel: ParallelNode,
