@@ -41,6 +41,7 @@
     "@ai-sdk/openai": "^3.0.50",
     "@ast-grep/napi": "^0.42.1",
     "@asteasolutions/zod-to-openapi": "^7.3.4",
+    "@auth/core": "^0.34.3",
     "@auth/prisma-adapter": "^2.11.1",
     "@aws-sdk/client-s3": "^3.1024.0",
     "@aws-sdk/s3-request-presigner": "^3.1024.0",
