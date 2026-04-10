@@ -60,7 +60,17 @@ function buildOIDCProvider() {
 const oidcProvider = buildOIDCProvider();
 
 const providers = [
-  ...(process.env.AUTH_GITHUB_ID ? [GitHub] : []),
+  ...(process.env.AUTH_GITHUB_ID
+    ? [
+        GitHub({
+          // GitHub now returns `iss: "https://github.com"` in OAuth callbacks
+          // (RFC 9207). @auth/core defaults to "https://authjs.dev" when no
+          // issuer is set, causing an `unexpected "iss"` validation error in
+          // oauth4webapi. Setting the correct issuer fixes the mismatch.
+          issuer: "https://github.com",
+        }),
+      ]
+    : []),
   ...(process.env.AUTH_GOOGLE_ID ? [Google] : []),
   ...(oidcProvider ? [oidcProvider] : []),
 ];
