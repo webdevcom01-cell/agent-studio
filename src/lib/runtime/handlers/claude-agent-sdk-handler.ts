@@ -11,6 +11,7 @@ import {
   updateSdkSession,
   type SessionMessage,
 } from "@/lib/sdk-sessions/persistence";
+import { fireSdkLearnHook } from "@/lib/ecc/sdk-learn-hook";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 
@@ -213,6 +214,20 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
     }
 
     const responseText = result.text || "Agent completed task.";
+
+    // ── P3: Fire-and-forget ECC Learn Hook ───────────────────────────────────
+    void fireSdkLearnHook({
+      agentId: context.agentId,
+      userId: context.userId,
+      task: userMessage,
+      response: responseText,
+      modelId,
+      durationMs,
+      inputTokens,
+      outputTokens,
+      sessionId: activeDbSessionId ?? (sdkSessionId || undefined),
+      traceId: context.otelTraceId,
+    });
 
     // ── Session persistence ────────────────────────────────────────────────
     const updatedVariables: Record<string, unknown> = {};
