@@ -14,7 +14,8 @@
 
 import { Worker, type Job } from "bullmq";
 import { logger } from "@/lib/logger";
-import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData, WebhookExecuteJobData } from "./index";
+import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData, WebhookExecuteJobData, ManagedTaskRunJobData } from "./index";
+import type { TaskInput } from "@/lib/managed-tasks/manager";
 
 const QUEUE_NAME = "agent-studio";
 const CONCURRENCY = 5;
@@ -39,6 +40,8 @@ async function processJob(job: Job<JobData>): Promise<unknown> {
       return processKBIngestJob(job as Job<KBIngestJobData>);
     case "webhook.execute":
       return processWebhookExecuteJob(job as Job<WebhookExecuteJobData>);
+    case "managed.task.run":
+      return processManagedTaskJob(job as Job<ManagedTaskRunJobData>);
     default:
       throw new Error(`Unknown job type: ${(data as Record<string, unknown>).type}`);
   }
@@ -206,6 +209,194 @@ async function processWebhookExecuteJob(job: Job<WebhookExecuteJobData>): Promis
   });
 
   return result;
+}
+
+/**
+ * P4: Processes long-running managed agent task jobs.
+ * Uses the Vercel AI SDK generateText with streaming step hooks to support
+ * pause/cancel checks between tool-use steps.
+ */
+async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<unknown> {
+  const { taskId, agentId, userId } = job.data;
+
+  const {
+    getTask,
+    markRunning,
+    markCompleted,
+    markFailed,
+    isCancelled,
+    isPaused,
+    updateProgress: updateTaskProgress,
+  } = await import("@/lib/managed-tasks/manager");
+  const { getModel } = await import("@/lib/ai");
+  const { generateText, stepCountIs } = await import("ai");
+  const { fireSdkLearnHook } = await import("@/lib/ecc/sdk-learn-hook");
+
+  // Load the task record
+  const task = await getTask(taskId);
+  if (!task) {
+    throw new Error(`Managed task ${taskId} not found`);
+  }
+
+  const input = task.input as TaskInput;
+
+  // Mark task as running
+  await markRunning(taskId, job.id ?? `managed-task-${taskId}`);
+  await job.updateProgress(5);
+
+  const modelId = input.model ?? "claude-sonnet-4-6";
+  const model = getModel(modelId);
+  const startedAt = Date.now();
+
+  let currentStep = 0;
+  const maxSteps = input.maxSteps ?? 50;
+
+  try {
+    // Check cancellation before starting
+    if (await isCancelled(taskId)) {
+      logger.info("Managed task cancelled before start", { taskId });
+      return { taskId, cancelled: true };
+    }
+
+    const result = await generateText({
+      model,
+      prompt: input.task,
+      stopWhen: stepCountIs(maxSteps),
+      onStepFinish: async ({ finishReason, usage }) => {
+        currentStep++;
+        // Progress: 5% start → 90% max across all steps
+        const stepProgress = Math.min(5 + Math.floor((currentStep / maxSteps) * 85), 90);
+        await Promise.allSettled([
+          job.updateProgress(stepProgress),
+          updateTaskProgress(taskId, stepProgress),
+        ]);
+
+        logger.info("Managed task step finished", {
+          taskId,
+          finishReason,
+          step: currentStep,
+          inputTokens: usage?.inputTokens,
+          outputTokens: usage?.outputTokens,
+        });
+
+        // Honour pause between steps
+        let pauseChecks = 0;
+        while (await isPaused(taskId)) {
+          pauseChecks++;
+          if (pauseChecks > 300) {
+            // 5 minutes max pause wait (1s interval × 300)
+            throw new Error("Task pause timeout exceeded");
+          }
+          await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+        }
+
+        // Honour cancel between steps
+        if (await isCancelled(taskId)) {
+          throw new Error("TASK_CANCELLED");
+        }
+      },
+    });
+
+    const durationMs = Date.now() - startedAt;
+    const inputTokens = result.usage.inputTokens ?? 0;
+    const outputTokens = result.usage.outputTokens ?? 0;
+    const responseText = result.text;
+
+    const output = {
+      result: responseText,
+      inputTokens,
+      outputTokens,
+      durationMs,
+      sessionId: input.sdkSessionId,
+    };
+
+    await markCompleted(taskId, output);
+    await job.updateProgress(100);
+
+    // Fire learn hook (fire-and-forget)
+    void fireSdkLearnHook({
+      agentId,
+      userId: userId ?? undefined,
+      task: input.task,
+      response: responseText,
+      modelId,
+      durationMs,
+      inputTokens,
+      outputTokens,
+    });
+
+    // Fire callback webhook if configured
+    if (task.callbackUrl) {
+      void fireTaskCallback(task.callbackUrl, {
+        taskId,
+        agentId,
+        status: "COMPLETED",
+        output,
+      });
+    }
+
+    logger.info("Managed task job completed", {
+      jobId: job.id,
+      taskId,
+      agentId,
+      durationMs,
+      inputTokens,
+      outputTokens,
+      steps: currentStep,
+    });
+
+    return output;
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+
+    if (errorMsg === "TASK_CANCELLED") {
+      logger.info("Managed task was cancelled mid-execution", { taskId });
+      // Task record already set to CANCELLED by the user action
+      return { taskId, cancelled: true };
+    }
+
+    const durationMs = Date.now() - startedAt;
+    await markFailed(taskId, errorMsg);
+
+    if (task.callbackUrl) {
+      void fireTaskCallback(task.callbackUrl, {
+        taskId,
+        agentId,
+        status: "FAILED",
+        error: errorMsg,
+      });
+    }
+
+    logger.error("Managed task job failed", { jobId: job.id, taskId, agentId, error: err });
+    throw err; // Re-throw so BullMQ records the failure
+  }
+}
+
+/**
+ * Fire-and-forget HTTP POST to the task's callbackUrl.
+ * Errors are logged but never propagated.
+ */
+async function fireTaskCallback(
+  url: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      logger.warn("Managed task callback returned non-2xx", {
+        url,
+        status: res.status,
+        taskId: payload.taskId,
+      });
+    }
+  } catch (err) {
+    logger.warn("Managed task callback failed", { url, taskId: payload.taskId, error: err });
+  }
 }
 
 export function createWorker(): Worker<JobData> {

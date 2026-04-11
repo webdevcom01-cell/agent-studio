@@ -5,10 +5,12 @@
  *   - flow.execute: Execute a flow (chat message or direct trigger)
  *   - flow.execute.streaming: Execute with NDJSON streaming
  *   - eval.run: Run an eval suite
+ *   - managed.task.run: Run a ManagedAgentTask (P4 — long-running async tasks)
  *
  * Priority levels:
  *   1 (highest): chat — user is waiting for response
  *   5 (normal): pipeline — background flow execution
+ *   8 (background): managed — long-running tasks
  *   10 (low): eval — batch testing
  */
 
@@ -67,16 +69,26 @@ export interface WebhookExecuteJobData {
   sourceIp?: string;
 }
 
+/** P4 — Managed Agent Task (long-running async execution via claude_agent_sdk) */
+export interface ManagedTaskRunJobData {
+  type: "managed.task.run";
+  taskId: string;
+  agentId: string;
+  userId?: string;
+}
+
 export type JobData =
   | FlowExecuteJobData
   | EvalRunJobData
   | WebhookRetryJobData
   | KBIngestJobData
-  | WebhookExecuteJobData;
+  | WebhookExecuteJobData
+  | ManagedTaskRunJobData;
 
 const PRIORITY_MAP: Record<string, number> = {
   chat: 1,
   pipeline: 5,
+  managed: 8,
   eval: 10,
 };
 
@@ -272,6 +284,36 @@ export async function addWebhookExecuteJob(
   });
 
   return job.id ?? `webhook-exec-${data.executionId}`;
+}
+
+/**
+ * P4: Enqueue a managed agent task for async execution.
+ * Priority 8 — background, below pipeline (5), above eval (10).
+ */
+export async function addManagedTaskJob(
+  data: Omit<ManagedTaskRunJobData, "type">
+): Promise<string> {
+  const q = getQueue();
+
+  const job = await q.add(
+    "managed.task.run",
+    { ...data, type: "managed.task.run" as const },
+    {
+      priority: PRIORITY_MAP.managed,
+      jobId: `managed-task-${data.taskId}`,
+      attempts: 1, // managed tasks do not auto-retry — failure is explicit
+      removeOnComplete: { age: 86400 },
+      removeOnFail: { age: 604800 },
+    }
+  );
+
+  logger.info("Managed task job enqueued", {
+    jobId: job.id,
+    taskId: data.taskId,
+    agentId: data.agentId,
+  });
+
+  return job.id ?? `managed-task-${data.taskId}`;
 }
 
 export async function closeQueue(): Promise<void> {

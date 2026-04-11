@@ -150,6 +150,7 @@ model Agent {
   pipelineVersion String @default("v1")
 
   sdkSessions     AgentSdkSession[]
+  managedTasks    ManagedAgentTask[]
 
   @@index([userId])
   @@index([userId, updatedAt])
@@ -168,6 +169,54 @@ enum SdkSessionStatus {
   ACTIVE
   COMPLETED
   ABANDONED
+}
+
+// ---------------------------------------------------------------------------
+// Managed Agent Tasks (P4) — long-running async tasks via BullMQ worker
+// ---------------------------------------------------------------------------
+
+enum ManagedTaskStatus {
+  PENDING
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model ManagedAgentTask {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  status      ManagedTaskStatus @default(PENDING)
+
+  /// BullMQ job ID — null while the task is still PENDING (before enqueue)
+  jobId       String?           @unique
+
+  /// Task input: task string, model, tools config, etc.
+  input       Json
+  /// Final output — populated on COMPLETED
+  output      Json?
+  /// Error message — populated on FAILED
+  error       String?
+  /// Progress 0–100 (updated by worker via BullMQ job.updateProgress)
+  progress    Int               @default(0)
+
+  /// Optional webhook URL called on COMPLETED or FAILED
+  callbackUrl String?
+
+  agentId     String
+  agent       Agent             @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  userId      String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([agentId, status])
+  @@index([userId])
+  @@index([status, createdAt])
 }
 
 model AgentSdkSession {
