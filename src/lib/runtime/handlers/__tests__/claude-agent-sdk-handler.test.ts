@@ -16,6 +16,9 @@ const mockTraceGenAI = vi.hoisted(() =>
 const mockRecordChatLatency = vi.hoisted(() => vi.fn());
 const mockRecordTokenUsage = vi.hoisted(() => vi.fn());
 const mockStepCountIs = vi.hoisted(() => vi.fn(() => "stopCondition"));
+const mockLoadSdkSession = vi.hoisted(() => vi.fn());
+const mockCreateSdkSession = vi.hoisted(() => vi.fn());
+const mockUpdateSdkSession = vi.hoisted(() => vi.fn());
 
 vi.mock("ai", () => ({
   generateText: mockGenerateText,
@@ -47,6 +50,12 @@ vi.mock("@/lib/logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 
+vi.mock("@/lib/sdk-sessions/persistence", () => ({
+  loadSdkSession: mockLoadSdkSession,
+  createSdkSession: mockCreateSdkSession,
+  updateSdkSession: mockUpdateSdkSession,
+}));
+
 vi.mock("../template", () => ({
   resolveTemplate: vi.fn((s: string) => s),
 }));
@@ -71,6 +80,7 @@ function makeNode(overrides?: Partial<FlowNode["data"]>): FlowNode {
       enableMCP: false,
       enableSubAgents: false,
       enableSessionResume: false,
+      sdkSessionId: "",
       sessionVarName: "__sdk_session",
       outputVariable: "result",
       nextNodeId: "node-2",
@@ -102,6 +112,9 @@ describe("claudeAgentSdkHandler", () => {
     mockGetModel.mockReturnValue(fakeModel);
     mockGetMCPToolsForAgent.mockResolvedValue({});
     mockGetAgentToolsForAgent.mockResolvedValue({});
+    mockLoadSdkSession.mockResolvedValue(null);
+    mockCreateSdkSession.mockResolvedValue({ id: "new-session-1" });
+    mockUpdateSdkSession.mockResolvedValue({ id: "existing-session-1" });
     mockGenerateText.mockResolvedValue({
       text: "Agent result text",
       finishReason: "stop",
@@ -346,5 +359,183 @@ describe("claudeAgentSdkHandler", () => {
 
     expect(mockRecordChatLatency).toHaveBeenCalledWith("agent-1", "claude-sonnet-4-6", expect.any(Number));
     expect(mockRecordTokenUsage).toHaveBeenCalledWith("agent-1", "claude-sonnet-4-6", 100, 50);
+  });
+
+  // 9. DB-backed session persistence ───────────────────────────────────────
+  it("loads DB session when sdkSessionId is set and enableSessionResume is true", async () => {
+    mockLoadSdkSession.mockResolvedValue({
+      id: "sess-db-1",
+      agentId: "agent-1",
+      messages: [
+        { role: "user", content: "previous DB question" },
+        { role: "assistant", content: "previous DB answer" },
+      ],
+      resumeCount: 2,
+    });
+
+    const node = makeNode({
+      enableSessionResume: true,
+      sdkSessionId: "sess-db-1",
+      task: "follow-up",
+    });
+    const ctx = makeContext();
+
+    await claudeAgentSdkHandler(node, ctx);
+
+    expect(mockLoadSdkSession).toHaveBeenCalledWith("sess-db-1");
+    const callMessages = mockGenerateText.mock.calls[0][0].messages as Array<{
+      role: string;
+      content: string;
+    }>;
+    expect(callMessages[0].content).toBe("previous DB question");
+    expect(callMessages[1].content).toBe("previous DB answer");
+    expect(callMessages[2].content).toBe("follow-up");
+  });
+
+  it("updates existing DB session after execution", async () => {
+    mockLoadSdkSession.mockResolvedValue({
+      id: "sess-db-1",
+      agentId: "agent-1",
+      messages: [
+        { role: "user", content: "q" },
+        { role: "assistant", content: "a" },
+      ],
+      resumeCount: 1,
+    });
+
+    const node = makeNode({
+      enableSessionResume: true,
+      sdkSessionId: "sess-db-1",
+      task: "more work",
+    });
+    const ctx = makeContext();
+
+    await claudeAgentSdkHandler(node, ctx);
+
+    expect(mockUpdateSdkSession).toHaveBeenCalledWith(
+      "sess-db-1",
+      expect.objectContaining({
+        messages: expect.arrayContaining([
+          expect.objectContaining({ role: "user", content: "more work" }),
+          expect.objectContaining({ role: "assistant", content: "Agent result text" }),
+        ]),
+        inputTokensDelta: 100,
+        outputTokensDelta: 50,
+      })
+    );
+  });
+
+  it("auto-creates new DB session when no sdkSessionId is set", async () => {
+    const node = makeNode({
+      enableSessionResume: true,
+      sdkSessionId: "",
+      task: "first task",
+      outputVariable: "result",
+    });
+    const ctx = makeContext();
+
+    const result = await claudeAgentSdkHandler(node, ctx);
+
+    expect(mockCreateSdkSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: "agent-1",
+        messages: expect.arrayContaining([
+          expect.objectContaining({ role: "user", content: "first task" }),
+          expect.objectContaining({ role: "assistant", content: "Agent result text" }),
+        ]),
+      })
+    );
+    expect(result.updatedVariables?.__sdk_session_id).toBe("new-session-1");
+  });
+
+  it("skips DB session when agent IDs do not match", async () => {
+    mockLoadSdkSession.mockResolvedValue({
+      id: "sess-db-1",
+      agentId: "different-agent",
+      messages: [{ role: "user", content: "stolen data" }],
+      resumeCount: 0,
+    });
+
+    const node = makeNode({
+      enableSessionResume: true,
+      sdkSessionId: "sess-db-1",
+      task: "my task",
+    });
+    const ctx = makeContext();
+
+    await claudeAgentSdkHandler(node, ctx);
+
+    // Should NOT use the mismatched session messages
+    const callMessages = mockGenerateText.mock.calls[0][0].messages as Array<{
+      role: string;
+      content: string;
+    }>;
+    const userMsgs = callMessages.filter((m) => m.role === "user");
+    expect(userMsgs).toHaveLength(1);
+    expect(userMsgs[0].content).toBe("my task");
+    // Should NOT try to update the mismatched session
+    expect(mockUpdateSdkSession).not.toHaveBeenCalled();
+  });
+
+  it("falls back gracefully when DB session load fails", async () => {
+    mockLoadSdkSession.mockRejectedValue(new Error("DB connection failed"));
+
+    const node = makeNode({
+      enableSessionResume: true,
+      sdkSessionId: "sess-db-broken",
+      task: "still works",
+    });
+    const ctx = makeContext();
+
+    const result = await claudeAgentSdkHandler(node, ctx);
+
+    expect(result.messages[0].content).toBe("Agent result text");
+  });
+
+  it("falls back gracefully when DB session create fails", async () => {
+    mockCreateSdkSession.mockRejectedValue(new Error("DB write failed"));
+
+    const node = makeNode({
+      enableSessionResume: true,
+      sdkSessionId: "",
+      task: "my task",
+      outputVariable: "result",
+    });
+    const ctx = makeContext();
+
+    const result = await claudeAgentSdkHandler(node, ctx);
+
+    // Should still return result, just without __sdk_session_id
+    expect(result.messages[0].content).toBe("Agent result text");
+    expect(result.updatedVariables?.__sdk_session_id).toBeUndefined();
+    // Variable fallback should still work
+    expect(result.updatedVariables?.__sdk_session).toBeDefined();
+  });
+
+  it("keeps variable fallback alongside DB session", async () => {
+    mockLoadSdkSession.mockResolvedValue({
+      id: "sess-db-1",
+      agentId: "agent-1",
+      messages: [],
+      resumeCount: 0,
+    });
+
+    const node = makeNode({
+      enableSessionResume: true,
+      sdkSessionId: "sess-db-1",
+      sessionVarName: "__sdk_session",
+      task: "task",
+      outputVariable: "result",
+    });
+    const ctx = makeContext();
+
+    const result = await claudeAgentSdkHandler(node, ctx);
+
+    // Should have both DB update and variable fallback
+    expect(mockUpdateSdkSession).toHaveBeenCalled();
+    const session = result.updatedVariables?.__sdk_session as Array<{
+      role: string;
+    }>;
+    expect(Array.isArray(session)).toBe(true);
   });
 });

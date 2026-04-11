@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
+import useSWR from "swr";
 import { PropertySection } from "./property-section";
 import { VariableInput, VariableTextarea } from "./variable-input";
 import { type Node } from "@xyflow/react";
-import { Trash2, X, Plus, Search, Database, Plug, Zap, Scale, Brain, AlertTriangle, Clipboard, Check } from "lucide-react";
+import { Trash2, X, Plus, Search, Database, Plug, Zap, Scale, Brain, AlertTriangle, Clipboard, Check, History, RefreshCw, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ALL_MODELS } from "@/lib/models";
+import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DESKTOP_APPS, getDesktopApp } from "@/lib/constants/desktop-apps";
 
@@ -614,7 +616,7 @@ export function PropertyPanel({
         )}
 
         {node.type === "claude_agent_sdk" && (
-          <ClaudeAgentSdkProperties data={data} update={update} variables={variables} />
+          <ClaudeAgentSdkProperties data={data} update={update} variables={variables} agentId={agentId ?? ""} />
         )}
 
         {node.type === "human_approval" && (
@@ -7102,10 +7104,66 @@ function DeployTriggerProperties({ data, update }: SubPanelProps) {
 
 // ── Claude Agent SDK Properties ────────────────────────────────────────────
 
-function ClaudeAgentSdkProperties({ data, update, variables = [] }: SubPanelProps) {
+interface ClaudeAgentSdkPropertiesProps extends SubPanelProps {
+  agentId: string;
+}
+
+interface SdkSessionListItem {
+  id: string;
+  title: string | null;
+  status: string;
+  resumeCount: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  updatedAt: string;
+}
+
+interface SdkSessionListResponse {
+  success: boolean;
+  data?: { sessions: SdkSessionListItem[]; total: number };
+}
+
+const sdkSessionFetcher = (url: string) =>
+  fetch(url).then((r) => r.json() as Promise<SdkSessionListResponse>);
+
+function formatTokenCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k`;
+  return String(count);
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function ClaudeAgentSdkProperties({ data, update, variables = [], agentId }: ClaudeAgentSdkPropertiesProps) {
   const enableSessionResume = (data.enableSessionResume as boolean) ?? false;
   const enableSubAgents = (data.enableSubAgents as boolean) ?? false;
   const enableMCP = (data.enableMCP as boolean) ?? true;
+  const sdkSessionId = (data.sdkSessionId as string) ?? "";
+
+  // Fetch existing DB sessions when session resume is enabled
+  const {
+    data: sessionsRes,
+    isLoading: sessionsLoading,
+    mutate: refreshSessions,
+  } = useSWR<SdkSessionListResponse>(
+    enableSessionResume && agentId
+      ? `/api/agents/${agentId}/sdk-sessions?status=ACTIVE&limit=50`
+      : null,
+    sdkSessionFetcher
+  );
+
+  const sessions = sessionsRes?.success ? sessionsRes.data?.sessions ?? [] : [];
 
   return (
     <>
@@ -7214,7 +7272,7 @@ function ClaudeAgentSdkProperties({ data, update, variables = [] }: SubPanelProp
           <div>
             <p className="text-sm font-medium">Enable Session Resume</p>
             <p className="text-xs text-muted-foreground">
-              Persist conversation state and resume across invocations
+              Persist conversation state across invocations
             </p>
           </div>
           <button
@@ -7235,16 +7293,104 @@ function ClaudeAgentSdkProperties({ data, update, variables = [] }: SubPanelProp
         </div>
 
         {enableSessionResume && (
-          <div className="space-y-2">
-            <Label>Session Variable Name</Label>
-            <Input
-              value={(data.sessionVarName as string) ?? "__sdk_session"}
-              onChange={(e) => update("sessionVarName", e.target.value)}
-              placeholder="__sdk_session"
-            />
-            <p className="text-xs text-muted-foreground">
-              Flow variable used to store and load session messages.
-            </p>
+          <div className="space-y-3">
+            {/* DB-backed session picker */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Resume Session</Label>
+                {agentId && (
+                  <button
+                    type="button"
+                    onClick={() => void refreshSessions()}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    title="Refresh sessions"
+                  >
+                    <RefreshCw className={cn("size-3.5", sessionsLoading && "animate-spin")} />
+                  </button>
+                )}
+              </div>
+
+              <Select
+                value={sdkSessionId || "__new__"}
+                onValueChange={(val) =>
+                  update("sdkSessionId", val === "__new__" ? "" : val)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="New session (auto-create)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__new__">
+                    <span className="flex items-center gap-2">
+                      <Plus className="size-3.5 text-muted-foreground" />
+                      New session (auto-create)
+                    </span>
+                  </SelectItem>
+
+                  {sessionsLoading && (
+                    <SelectItem value="__loading__" disabled>
+                      Loading sessions…
+                    </SelectItem>
+                  )}
+
+                  {sessions.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>Existing Sessions</SelectLabel>
+                      {sessions.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          <span className="flex flex-col gap-0.5">
+                            <span className="truncate text-sm">
+                              {s.title || "Untitled session"}
+                            </span>
+                            <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <History className="size-3" />
+                                {s.resumeCount}x
+                              </span>
+                              <span>
+                                {formatTokenCount(s.totalInputTokens + s.totalOutputTokens)} tokens
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="size-3" />
+                                {formatRelativeTime(s.updatedAt)}
+                              </span>
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+
+                  {!sessionsLoading && sessions.length === 0 && agentId && (
+                    <SelectItem value="__empty__" disabled>
+                      No active sessions found
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+
+              <p className="text-xs text-muted-foreground">
+                {sdkSessionId
+                  ? "Will resume the selected session, appending new messages to its history."
+                  : "A new DB-backed session will be created on first invocation."}
+              </p>
+            </div>
+
+            {/* Legacy variable fallback — collapsible */}
+            <div className="space-y-2 border-t border-border pt-3">
+              <Label className="text-xs text-muted-foreground">
+                Variable Fallback (legacy)
+              </Label>
+              <Input
+                value={(data.sessionVarName as string) ?? "__sdk_session"}
+                onChange={(e) => update("sessionVarName", e.target.value)}
+                placeholder="__sdk_session"
+                className="text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                Flow variable for backward-compatible session storage.
+              </p>
+            </div>
           </div>
         )}
       </PropertySection>

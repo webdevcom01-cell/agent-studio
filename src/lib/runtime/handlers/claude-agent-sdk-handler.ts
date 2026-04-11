@@ -5,16 +5,17 @@ import { getMCPToolsForAgent } from "@/lib/mcp/client";
 import { getAgentToolsForAgent, type AgentToolContext } from "@/lib/agents/agent-tools";
 import { traceGenAI } from "@/lib/observability/tracer";
 import { recordChatLatency, recordTokenUsage } from "@/lib/observability/metrics";
+import {
+  loadSdkSession,
+  createSdkSession,
+  updateSdkSession,
+  type SessionMessage,
+} from "@/lib/sdk-sessions/persistence";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 
 const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_STEPS = 20;
-
-interface SessionMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
-}
 
 function isSessionMessageArray(value: unknown): value is SessionMessage[] {
   if (!Array.isArray(value)) return false;
@@ -83,30 +84,63 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
   const enableMCP = (node.data.enableMCP as boolean) ?? true;
   const enableSubAgents = (node.data.enableSubAgents as boolean) ?? false;
   const enableSessionResume = (node.data.enableSessionResume as boolean) ?? false;
-  const sessionVarName = ((node.data.sessionVarName as string) || "__sdk_session");
   const outputVariable = (node.data.outputVariable as string) ?? "";
   const nextNodeId = (node.data.nextNodeId as string | null) ?? null;
+
+  // Session config — sdkSessionId takes precedence (DB-backed), sessionVarName is legacy fallback
+  const sdkSessionId = (node.data.sdkSessionId as string) || "";
+  const sessionVarName = (node.data.sessionVarName as string) || "__sdk_session";
 
   try {
     const model = getModel(modelId);
 
-    // ── Session resume: load previous messages ─────────────────────────────
+    // ── Session resume: load from DB or flow variables ─────────────────────
     let sessionMessages: SessionMessage[] = [];
-    if (enableSessionResume && sessionVarName) {
-      const stored = context.variables[sessionVarName];
-      if (isSessionMessageArray(stored)) {
-        sessionMessages = stored;
-        logger.info("Claude Agent SDK: resuming session", {
-          agentId: context.agentId,
-          nodeId: node.id,
-          sessionVarName,
-          messageCount: sessionMessages.length,
-        });
+    let activeDbSessionId: string | null = null;
+
+    if (enableSessionResume) {
+      if (sdkSessionId) {
+        // DB-backed session (Prioritet 2) — load from AgentSdkSession table
+        try {
+          const dbSession = await loadSdkSession(sdkSessionId);
+          if (dbSession && dbSession.agentId === context.agentId) {
+            sessionMessages = dbSession.messages;
+            activeDbSessionId = dbSession.id;
+            logger.info("Claude Agent SDK: resuming DB session", {
+              agentId: context.agentId,
+              nodeId: node.id,
+              sessionId: dbSession.id,
+              messageCount: sessionMessages.length,
+              resumeCount: dbSession.resumeCount,
+            });
+          } else {
+            logger.warn("Claude Agent SDK: DB session not found or agent mismatch", {
+              sdkSessionId,
+              agentId: context.agentId,
+            });
+          }
+        } catch (err) {
+          logger.warn("Claude Agent SDK: failed to load DB session, continuing without", {
+            sdkSessionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      } else if (sessionVarName) {
+        // Legacy fallback: load from flow variables
+        const stored = context.variables[sessionVarName];
+        if (isSessionMessageArray(stored)) {
+          sessionMessages = stored;
+          logger.info("Claude Agent SDK: resuming from variable", {
+            agentId: context.agentId,
+            nodeId: node.id,
+            sessionVarName,
+            messageCount: sessionMessages.length,
+          });
+        }
       }
     }
 
     // ── Resolve user task ──────────────────────────────────────────────────
-    // If no explicit task configured, fall back to the latest user message.
     const latestUserMsg =
       [...context.messageHistory]
         .reverse()
@@ -127,19 +161,16 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
         : Promise.resolve({}),
     ]);
 
-    // Subagent tools first, MCP overrides name conflicts (MCP is more specific)
     const allTools = { ...subAgentTools, ...mcpTools };
     const hasTools = Object.keys(allTools).length > 0;
 
     if (hasTools && Object.keys(subAgentTools).length >= 2) {
-      // Parallel execution hint for multi-agent orchestration
-      const existingSystem = systemPrompt;
       const parallelHint =
         "\n\n---\n**Parallel Execution:** When multiple subagents can work independently, " +
         "call them simultaneously in a single step rather than sequentially.";
       messages.unshift({
         role: "system",
-        content: (existingSystem ? existingSystem + parallelHint : parallelHint),
+        content: (systemPrompt ? systemPrompt + parallelHint : parallelHint),
       });
     } else if (systemPrompt) {
       messages.unshift({ role: "system", content: systemPrompt });
@@ -183,6 +214,63 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
 
     const responseText = result.text || "Agent completed task.";
 
+    // ── Session persistence ────────────────────────────────────────────────
+    const updatedVariables: Record<string, unknown> = {};
+
+    if (outputVariable) {
+      updatedVariables[outputVariable] = responseText;
+    }
+
+    if (enableSessionResume) {
+      const updatedMessages: SessionMessage[] = [
+        ...sessionMessages,
+        { role: "user", content: userMessage },
+        { role: "assistant", content: responseText },
+      ];
+
+      if (activeDbSessionId) {
+        // Update existing DB session
+        try {
+          await updateSdkSession(activeDbSessionId, {
+            messages: updatedMessages,
+            inputTokensDelta: inputTokens,
+            outputTokensDelta: outputTokens,
+            metadata: { lastModel: modelId, lastDurationMs: durationMs },
+          });
+        } catch (err) {
+          logger.warn("Claude Agent SDK: failed to update DB session", {
+            sessionId: activeDbSessionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      } else if (sdkSessionId === "" || !sdkSessionId) {
+        // Auto-create a new DB session if no specific session ID was given
+        try {
+          const newSession = await createSdkSession({
+            agentId: context.agentId,
+            userId: context.userId,
+            messages: updatedMessages,
+            metadata: { model: modelId, durationMs },
+          });
+          // Expose the new session ID so downstream nodes / UI can reference it
+          updatedVariables["__sdk_session_id"] = newSession.id;
+          logger.info("Claude Agent SDK: auto-created DB session", {
+            sessionId: newSession.id,
+            agentId: context.agentId,
+          });
+        } catch (err) {
+          logger.warn("Claude Agent SDK: failed to create DB session, falling back to variables", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      // Always keep the variable-based copy as fallback
+      if (sessionVarName) {
+        updatedVariables[sessionVarName] = updatedMessages;
+      }
+    }
+
     logger.info("Claude Agent SDK: task completed", {
       agentId: context.agentId,
       nodeId: node.id,
@@ -191,23 +279,8 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
       outputTokens,
       toolSteps: result.steps?.length ?? 0,
       sessionResumed: sessionMessages.length > 0,
+      dbSession: activeDbSessionId ?? undefined,
     });
-
-    // ── Session persistence ────────────────────────────────────────────────
-    const updatedVariables: Record<string, unknown> = {};
-
-    if (outputVariable) {
-      updatedVariables[outputVariable] = responseText;
-    }
-
-    if (enableSessionResume && sessionVarName) {
-      const updatedSession: SessionMessage[] = [
-        ...sessionMessages,
-        { role: "user", content: userMessage },
-        { role: "assistant", content: responseText },
-      ];
-      updatedVariables[sessionVarName] = updatedSession;
-    }
 
     return {
       messages: [{ role: "assistant", content: responseText }],

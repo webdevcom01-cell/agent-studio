@@ -5,17 +5,18 @@ import { getMCPToolsForAgent } from "@/lib/mcp/client";
 import { getAgentToolsForAgent, type AgentToolContext } from "@/lib/agents/agent-tools";
 import { traceGenAI } from "@/lib/observability/tracer";
 import { recordChatLatency, recordTokenUsage } from "@/lib/observability/metrics";
+import {
+  loadSdkSession,
+  createSdkSession,
+  updateSdkSession,
+  type SessionMessage,
+} from "@/lib/sdk-sessions/persistence";
 import type { ExecutionResult, RuntimeContext, StreamWriter } from "../types";
 import type { FlowNode } from "@/types";
 import { resolveTemplate } from "../template";
 
 const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_STEPS = 20;
-
-interface SessionMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
-}
 
 function isSessionMessageArray(value: unknown): value is SessionMessage[] {
   if (!Array.isArray(value)) return false;
@@ -88,25 +89,45 @@ export async function claudeAgentSdkStreamingHandler(
   const enableMCP = (node.data.enableMCP as boolean) ?? true;
   const enableSubAgents = (node.data.enableSubAgents as boolean) ?? false;
   const enableSessionResume = (node.data.enableSessionResume as boolean) ?? false;
-  const sessionVarName = (node.data.sessionVarName as string) || "__sdk_session";
   const outputVariable = (node.data.outputVariable as string) ?? "";
   const nextNodeId = (node.data.nextNodeId as string | null) ?? null;
+
+  // Session config
+  const sdkSessionId = (node.data.sdkSessionId as string) || "";
+  const sessionVarName = (node.data.sessionVarName as string) || "__sdk_session";
 
   try {
     const model = getModel(modelId);
 
-    // ── Session resume ─────────────────────────────────────────────────────
+    // ── Session resume: load from DB or flow variables ─────────────────────
     let sessionMessages: SessionMessage[] = [];
-    if (enableSessionResume && sessionVarName) {
-      const stored = context.variables[sessionVarName];
-      if (isSessionMessageArray(stored)) {
-        sessionMessages = stored;
-        logger.info("Claude Agent SDK streaming: resuming session", {
-          agentId: context.agentId,
-          nodeId: node.id,
-          sessionVarName,
-          messageCount: sessionMessages.length,
-        });
+    let activeDbSessionId: string | null = null;
+
+    if (enableSessionResume) {
+      if (sdkSessionId) {
+        try {
+          const dbSession = await loadSdkSession(sdkSessionId);
+          if (dbSession && dbSession.agentId === context.agentId) {
+            sessionMessages = dbSession.messages;
+            activeDbSessionId = dbSession.id;
+            logger.info("Claude Agent SDK streaming: resuming DB session", {
+              agentId: context.agentId,
+              nodeId: node.id,
+              sessionId: dbSession.id,
+              messageCount: sessionMessages.length,
+            });
+          }
+        } catch (err) {
+          logger.warn("Claude Agent SDK streaming: failed to load DB session", {
+            sdkSessionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      } else if (sessionVarName) {
+        const stored = context.variables[sessionVarName];
+        if (isSessionMessageArray(stored)) {
+          sessionMessages = stored;
+        }
       }
     }
 
@@ -163,7 +184,6 @@ export async function claudeAgentSdkStreamingHandler(
 
     const startMs = Date.now();
 
-    // Emit stream_start
     try {
       writer.write({ type: "stream_start" });
     } catch { /* stream closed */ }
@@ -171,17 +191,15 @@ export async function claudeAgentSdkStreamingHandler(
     const streamResult = streamText(streamOptions);
     let fullText = "";
 
-    // Stream tokens as they arrive
     for await (const delta of streamResult.textStream) {
       fullText += delta;
       try {
         writer.write({ type: "stream_delta", content: delta });
-      } catch { /* stream closed by client — continue accumulating */ }
+      } catch { /* stream closed by client */ }
     }
 
     const durationMs = Date.now() - startMs;
 
-    // Await promises from streamText result object
     const usage = await streamResult.usage;
     const inputTokens = usage?.inputTokens ?? 0;
     const outputTokens = usage?.outputTokens ?? 0;
@@ -203,15 +221,6 @@ export async function claudeAgentSdkStreamingHandler(
       writer.write({ type: "stream_end", content: responseText });
     } catch { /* stream closed */ }
 
-    logger.info("Claude Agent SDK streaming: task completed", {
-      agentId: context.agentId,
-      nodeId: node.id,
-      durationMs,
-      inputTokens,
-      outputTokens,
-      sessionResumed: sessionMessages.length > 0,
-    });
-
     // ── Session persistence ────────────────────────────────────────────────
     const updatedVariables: Record<string, unknown> = {};
 
@@ -219,14 +228,57 @@ export async function claudeAgentSdkStreamingHandler(
       updatedVariables[outputVariable] = responseText;
     }
 
-    if (enableSessionResume && sessionVarName) {
-      const updatedSession: SessionMessage[] = [
+    if (enableSessionResume) {
+      const updatedMessages: SessionMessage[] = [
         ...sessionMessages,
         { role: "user", content: userMessage },
         { role: "assistant", content: responseText },
       ];
-      updatedVariables[sessionVarName] = updatedSession;
+
+      if (activeDbSessionId) {
+        try {
+          await updateSdkSession(activeDbSessionId, {
+            messages: updatedMessages,
+            inputTokensDelta: inputTokens,
+            outputTokensDelta: outputTokens,
+            metadata: { lastModel: modelId, lastDurationMs: durationMs },
+          });
+        } catch (err) {
+          logger.warn("Claude Agent SDK streaming: failed to update DB session", {
+            sessionId: activeDbSessionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      } else if (!sdkSessionId) {
+        try {
+          const newSession = await createSdkSession({
+            agentId: context.agentId,
+            userId: context.userId,
+            messages: updatedMessages,
+            metadata: { model: modelId, durationMs },
+          });
+          updatedVariables["__sdk_session_id"] = newSession.id;
+        } catch (err) {
+          logger.warn("Claude Agent SDK streaming: failed to create DB session", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      if (sessionVarName) {
+        updatedVariables[sessionVarName] = updatedMessages;
+      }
     }
+
+    logger.info("Claude Agent SDK streaming: task completed", {
+      agentId: context.agentId,
+      nodeId: node.id,
+      durationMs,
+      inputTokens,
+      outputTokens,
+      sessionResumed: sessionMessages.length > 0,
+      dbSession: activeDbSessionId ?? undefined,
+    });
 
     return {
       messages: [{ role: "assistant", content: responseText }],

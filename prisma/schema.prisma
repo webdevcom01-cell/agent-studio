@@ -149,11 +149,52 @@ model Agent {
   /// "v2" = webhook + RAG + code-review + async execution.
   pipelineVersion String @default("v1")
 
+  sdkSessions     AgentSdkSession[]
+
   @@index([userId])
   @@index([userId, updatedAt])
   @@index([organizationId])
   @@index([category])
   @@index([isPublic, updatedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Claude Agent SDK Sessions — persistent multi-turn agent sessions that
+// survive across conversations.  A user can resume an SDK session from any
+// chat thread by referencing its id.
+// ---------------------------------------------------------------------------
+
+enum SdkSessionStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+}
+
+model AgentSdkSession {
+  id          String           @id @default(cuid())
+  title       String?          /// Auto-generated from first user message
+  status      SdkSessionStatus @default(ACTIVE)
+  /// Ordered array of {role, content} message pairs (SessionMessage[])
+  messages    Json             @default("[]")
+  /// Model used, cumulative token counts, step counts, etc.
+  metadata    Json?
+  /// Total input tokens consumed across all invocations
+  totalInputTokens  Int        @default(0)
+  /// Total output tokens consumed across all invocations
+  totalOutputTokens Int        @default(0)
+  /// Number of times this session has been resumed
+  resumeCount       Int        @default(0)
+
+  agentId     String
+  agent       Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  userId      String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([agentId])
+  @@index([userId])
+  @@index([agentId, status])
+  @@index([updatedAt])
 }
 
 model Flow {
