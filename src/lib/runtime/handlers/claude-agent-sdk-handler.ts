@@ -15,8 +15,23 @@ import { fireSdkLearnHook } from "@/lib/ecc/sdk-learn-hook";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 
+/** Combine two AbortSignals — aborts when either fires */
+function composeAbortSignals(a: AbortSignal, b: AbortSignal): AbortSignal {
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  if (a.aborted || b.aborted) {
+    controller.abort();
+    return controller.signal;
+  }
+  a.addEventListener("abort", onAbort, { once: true });
+  b.addEventListener("abort", onAbort, { once: true });
+  return controller.signal;
+}
+
 const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
 const DEFAULT_MAX_STEPS = 20;
+const MAX_STEPS_UPPER_BOUND = 50;
+const GENERATE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 function isSessionMessageArray(value: unknown): value is SessionMessage[] {
   if (!Array.isArray(value)) return false;
@@ -81,7 +96,8 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
     context.variables
   );
   const modelId = (node.data.model as string) || DEFAULT_CLAUDE_MODEL;
-  const maxSteps = (node.data.maxSteps as number) ?? DEFAULT_MAX_STEPS;
+  const rawMaxSteps = (node.data.maxSteps as number) ?? DEFAULT_MAX_STEPS;
+  const maxSteps = Math.min(Math.max(1, rawMaxSteps), MAX_STEPS_UPPER_BOUND);
   const enableMCP = (node.data.enableMCP as boolean) ?? true;
   const enableSubAgents = (node.data.enableSubAgents as boolean) ?? false;
   const enableSessionResume = (node.data.enableSessionResume as boolean) ?? false;
@@ -155,12 +171,29 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
     ];
 
     // ── Load tools ─────────────────────────────────────────────────────────
-    const [mcpTools, subAgentTools] = await Promise.all([
+    // Use allSettled so one tool source failing doesn't block the other
+    const toolResults = await Promise.allSettled([
       enableMCP ? loadMCPTools(context.agentId) : Promise.resolve({}),
       enableSubAgents
         ? loadSubAgentTools(context.agentId, context, userMessage)
         : Promise.resolve({}),
     ]);
+
+    const mcpTools = toolResults[0].status === "fulfilled" ? toolResults[0].value : {};
+    const subAgentTools = toolResults[1].status === "fulfilled" ? toolResults[1].value : {};
+
+    if (toolResults[0].status === "rejected") {
+      logger.warn("Claude Agent SDK: MCP tools failed to load (allSettled)", {
+        agentId: context.agentId,
+        error: toolResults[0].reason instanceof Error ? toolResults[0].reason.message : String(toolResults[0].reason),
+      });
+    }
+    if (toolResults[1].status === "rejected") {
+      logger.warn("Claude Agent SDK: SubAgent tools failed to load (allSettled)", {
+        agentId: context.agentId,
+        error: toolResults[1].reason instanceof Error ? toolResults[1].reason.message : String(toolResults[1].reason),
+      });
+    }
 
     const allTools = { ...subAgentTools, ...mcpTools };
     const hasTools = Object.keys(allTools).length > 0;
@@ -194,8 +227,20 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
       "gen_ai.agent.id": context.agentId,
     });
 
+    // Enforce timeout — prevent hung AI provider from blocking the handler
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), GENERATE_TIMEOUT_MS);
+    generateOptions.abortSignal = context.abortSignal
+      ? composeAbortSignals(context.abortSignal, timeoutController.signal)
+      : timeoutController.signal;
+
     const startMs = Date.now();
-    const result = await generateText(generateOptions);
+    let result: Awaited<ReturnType<typeof generateText>>;
+    try {
+      result = await generateText(generateOptions);
+    } finally {
+      clearTimeout(timeoutId);
+    }
     const durationMs = Date.now() - startMs;
 
     const inputTokens = result.usage?.inputTokens ?? 0;
@@ -305,16 +350,25 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
         Object.keys(updatedVariables).length > 0 ? updatedVariables : undefined,
     };
   } catch (error) {
+    const isTimeout = error instanceof Error && error.name === "AbortError";
+    const modelId_ = (node.data.model as string) || DEFAULT_CLAUDE_MODEL;
+    const errorDetail = isTimeout
+      ? `Timed out after ${GENERATE_TIMEOUT_MS / 1000}s`
+      : error instanceof Error ? error.message : String(error);
+
     logger.error("Claude Agent SDK: execution failed", {
       nodeId: node.id,
       agentId: context.agentId,
+      model: modelId_,
+      isTimeout,
       error,
     });
+
     return {
       messages: [
         {
           role: "assistant",
-          content: "An error occurred in the Claude Agent SDK node.",
+          content: `Claude Agent SDK node failed (model: ${modelId_}): ${errorDetail}`,
         },
       ],
       nextNodeId: null,

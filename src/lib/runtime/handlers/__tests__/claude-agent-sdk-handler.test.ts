@@ -330,9 +330,8 @@ describe("claudeAgentSdkHandler", () => {
 
     const result = await claudeAgentSdkHandler(node, ctx);
 
-    expect(result.messages[0].content).toContain(
-      "An error occurred in the Claude Agent SDK node."
-    );
+    expect(result.messages[0].content).toContain("Claude Agent SDK node failed");
+    expect(result.messages[0].content).toContain("API rate limit");
     expect(result.nextNodeId).toBeNull();
     expect(result.waitForInput).toBe(false);
   });
@@ -346,7 +345,7 @@ describe("claudeAgentSdkHandler", () => {
 
     const result = await claudeAgentSdkHandler(node, ctx);
 
-    expect(result.messages[0].content).toContain("An error occurred");
+    expect(result.messages[0].content).toContain("Claude Agent SDK node failed");
     expect(result.nextNodeId).toBeNull();
   });
 
@@ -537,5 +536,73 @@ describe("claudeAgentSdkHandler", () => {
       role: string;
     }>;
     expect(Array.isArray(session)).toBe(true);
+  });
+
+  // 10. maxSteps upper bound ──────────────────────────────────────────────────
+  it("caps maxSteps at 50 even when configured higher", async () => {
+    mockGetMCPToolsForAgent.mockResolvedValue({ search: { execute: vi.fn() } });
+    const node = makeNode({ enableMCP: true, maxSteps: 999 });
+    const ctx = makeContext();
+
+    await claudeAgentSdkHandler(node, ctx);
+
+    expect(mockStepCountIs).toHaveBeenCalledWith(50);
+  });
+
+  it("enforces minimum maxSteps of 1", async () => {
+    mockGetMCPToolsForAgent.mockResolvedValue({ search: { execute: vi.fn() } });
+    const node = makeNode({ enableMCP: true, maxSteps: -5 });
+    const ctx = makeContext();
+
+    await claudeAgentSdkHandler(node, ctx);
+
+    expect(mockStepCountIs).toHaveBeenCalledWith(1);
+  });
+
+  // 11. Timeout error message ─────────────────────────────────────────────────
+  it("returns descriptive error when generateText times out (AbortError)", async () => {
+    const abortError = new Error("The operation was aborted");
+    abortError.name = "AbortError";
+    mockGenerateText.mockRejectedValue(abortError);
+
+    const node = makeNode();
+    const ctx = makeContext();
+
+    const result = await claudeAgentSdkHandler(node, ctx);
+
+    expect(result.messages[0].content).toContain("Timed out");
+    expect(result.nextNodeId).toBeNull();
+  });
+
+  // 12. allSettled — one tool source fails, other still works ─────────────────
+  it("loads MCP tools even when subagent tools throw (allSettled)", async () => {
+    mockGetMCPToolsForAgent.mockResolvedValue({ search: { execute: vi.fn() } });
+    mockGetAgentToolsForAgent.mockRejectedValue(new Error("SubAgent registry down"));
+
+    const node = makeNode({ enableMCP: true, enableSubAgents: true });
+    const ctx = makeContext();
+
+    const result = await claudeAgentSdkHandler(node, ctx);
+
+    expect(result.messages[0].content).toBe("Agent result text");
+    // MCP tools should still be present
+    const options = mockGenerateText.mock.calls[0][0];
+    expect(options.tools).toBeDefined();
+    expect(options.tools).toHaveProperty("search");
+  });
+
+  it("loads subagent tools even when MCP tools throw (allSettled)", async () => {
+    mockGetMCPToolsForAgent.mockRejectedValue(new Error("MCP server offline"));
+    mockGetAgentToolsForAgent.mockResolvedValue({ analyze: { execute: vi.fn() } });
+
+    const node = makeNode({ enableMCP: true, enableSubAgents: true });
+    const ctx = makeContext();
+
+    const result = await claudeAgentSdkHandler(node, ctx);
+
+    expect(result.messages[0].content).toBe("Agent result text");
+    const options = mockGenerateText.mock.calls[0][0];
+    expect(options.tools).toBeDefined();
+    expect(options.tools).toHaveProperty("analyze");
   });
 });
