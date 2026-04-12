@@ -242,16 +242,25 @@ async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<u
 
   const input = task.input as TaskInput;
 
+  // Validate required fields
+  if (!input.task || typeof input.task !== "string" || input.task.trim().length === 0) {
+    throw new Error(`Managed task ${taskId}: missing or empty task description in input`);
+  }
+
   // Mark task as running
   await markRunning(taskId, job.id ?? `managed-task-${taskId}`);
   await job.updateProgress(5);
+
+  const MAX_STEPS_UPPER_BOUND = 100;
+  const GENERATE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
   const modelId = input.model ?? "claude-sonnet-4-6";
   const model = getModel(modelId);
   const startedAt = Date.now();
 
   let currentStep = 0;
-  const maxSteps = input.maxSteps ?? 50;
+  const rawMaxSteps = input.maxSteps ?? 50;
+  const maxSteps = Math.min(Math.max(1, rawMaxSteps), MAX_STEPS_UPPER_BOUND);
 
   try {
     // Check cancellation before starting
@@ -260,44 +269,57 @@ async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<u
       return { taskId, cancelled: true };
     }
 
-    const result = await generateText({
-      model,
-      prompt: input.task,
-      stopWhen: stepCountIs(maxSteps),
-      onStepFinish: async ({ finishReason, usage }) => {
-        currentStep++;
-        // Progress: 5% start → 90% max across all steps
-        const stepProgress = Math.min(5 + Math.floor((currentStep / maxSteps) * 85), 90);
-        await Promise.allSettled([
-          job.updateProgress(stepProgress),
-          updateTaskProgress(taskId, stepProgress),
-        ]);
+    // Timeout controller — prevent hung AI provider from blocking worker slot
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), GENERATE_TIMEOUT_MS);
 
-        logger.info("Managed task step finished", {
-          taskId,
-          finishReason,
-          step: currentStep,
-          inputTokens: usage?.inputTokens,
-          outputTokens: usage?.outputTokens,
-        });
+    let result: Awaited<ReturnType<typeof generateText>>;
+    try {
+      result = await generateText({
+        model,
+        prompt: input.task,
+        stopWhen: stepCountIs(maxSteps),
+        abortSignal: timeoutController.signal,
+        onStepFinish: async ({ finishReason, usage }) => {
+          currentStep++;
+          // Progress: 5% start → 90% max across all steps
+          const stepProgress = Math.min(5 + Math.floor((currentStep / maxSteps) * 85), 90);
+          await Promise.allSettled([
+            job.updateProgress(stepProgress),
+            updateTaskProgress(taskId, stepProgress),
+          ]);
 
-        // Honour pause between steps
-        let pauseChecks = 0;
-        while (await isPaused(taskId)) {
-          pauseChecks++;
-          if (pauseChecks > 300) {
-            // 5 minutes max pause wait (1s interval × 300)
-            throw new Error("Task pause timeout exceeded");
+          logger.info("Managed task step finished", {
+            taskId,
+            finishReason,
+            step: currentStep,
+            inputTokens: usage?.inputTokens,
+            outputTokens: usage?.outputTokens,
+          });
+
+          // Honour pause between steps — max 2 minutes, check every 2s
+          // Shorter than before (was 5min/1s) to avoid blocking worker slots
+          const MAX_PAUSE_CHECKS = 60; // 60 × 2s = 2 minutes
+          let pauseChecks = 0;
+          while (await isPaused(taskId)) {
+            pauseChecks++;
+            if (pauseChecks > MAX_PAUSE_CHECKS) {
+              throw new Error("Task pause timeout exceeded (2 min)");
+            }
+            await new Promise<void>((resolve) => setTimeout(resolve, 2000));
           }
-          await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-        }
 
-        // Honour cancel between steps
-        if (await isCancelled(taskId)) {
-          throw new Error("TASK_CANCELLED");
-        }
-      },
-    });
+          // Honour cancel between steps
+          if (await isCancelled(taskId)) {
+            const cancelError = new Error("Task was cancelled");
+            (cancelError as Error & { code: string }).code = "TASK_CANCELLED";
+            throw cancelError;
+          }
+        },
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     const durationMs = Date.now() - startedAt;
     const inputTokens = result.usage.inputTokens ?? 0;
@@ -351,10 +373,21 @@ async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<u
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
 
-    if (errorMsg === "TASK_CANCELLED") {
+    const isCancel =
+      (err instanceof Error && (err as Error & { code?: string }).code === "TASK_CANCELLED") ||
+      errorMsg === "TASK_CANCELLED"; // backwards compat
+    if (isCancel) {
       logger.info("Managed task was cancelled mid-execution", { taskId });
       // Task record already set to CANCELLED by the user action
       return { taskId, cancelled: true };
+    }
+
+    const isTimeout = err instanceof Error && err.name === "AbortError";
+    if (isTimeout) {
+      const durationMs = Date.now() - startedAt;
+      await markFailed(taskId, `Task timed out after ${Math.round(durationMs / 1000)}s`);
+      logger.error("Managed task timed out", { taskId, agentId, durationMs });
+      throw err;
     }
 
     const durationMs = Date.now() - startedAt;
@@ -454,28 +487,67 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
 
 /**
  * Fire-and-forget HTTP POST to the task's callbackUrl.
- * Errors are logged but never propagated.
+ * Retries once on failure. Errors are logged but never propagated.
+ * Payload is capped at 100KB to prevent oversized POST bodies.
  */
+const CALLBACK_MAX_PAYLOAD_BYTES = 100_000;
+const CALLBACK_MAX_RETRIES = 1;
+
 async function fireTaskCallback(
   url: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
+  let body: string;
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(10_000),
+    body = JSON.stringify(payload);
+    if (body.length > CALLBACK_MAX_PAYLOAD_BYTES) {
+      // Truncate the result field to fit
+      const truncated = { ...payload, output: { ...(payload.output as Record<string, unknown> | undefined), result: "[truncated — output too large for callback]" } };
+      body = JSON.stringify(truncated);
+      logger.warn("Managed task callback payload truncated", {
+        url,
+        taskId: payload.taskId,
+        originalSize: JSON.stringify(payload).length,
+      });
+    }
+  } catch (err) {
+    logger.warn("Managed task callback payload serialization failed", {
+      url,
+      taskId: payload.taskId,
+      error: err instanceof Error ? err.message : String(err),
     });
-    if (!res.ok) {
+    return;
+  }
+
+  for (let attempt = 0; attempt <= CALLBACK_MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (res.ok) return; // success
+
       logger.warn("Managed task callback returned non-2xx", {
         url,
         status: res.status,
         taskId: payload.taskId,
+        attempt,
+      });
+    } catch (err) {
+      logger.warn("Managed task callback failed", {
+        url,
+        taskId: payload.taskId,
+        attempt,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
-  } catch (err) {
-    logger.warn("Managed task callback failed", { url, taskId: payload.taskId, error: err });
+
+    // Wait 2s before retry
+    if (attempt < CALLBACK_MAX_RETRIES) {
+      await new Promise<void>((r) => setTimeout(r, 2000));
+    }
   }
 }
 
