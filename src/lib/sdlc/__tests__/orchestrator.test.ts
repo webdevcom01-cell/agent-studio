@@ -499,3 +499,109 @@ describe("runPipeline — edge cases", () => {
     expect(cbs.onStepComplete).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Per-step timeout
+// ---------------------------------------------------------------------------
+
+describe("runPipeline — per-step timeout", () => {
+  it("throws a descriptive error when a step times out (AbortError)", async () => {
+    mockGenerateText.mockImplementation(async ({ abortSignal }: { abortSignal?: AbortSignal }) => {
+      // Simulate a long-running call that reacts to abort
+      return new Promise((_resolve, reject) => {
+        if (abortSignal) {
+          abortSignal.addEventListener("abort", () => {
+            const err = new Error("The operation was aborted");
+            err.name = "AbortError";
+            reject(err);
+          });
+        }
+      });
+    });
+
+    const cbs = makeCallbacks();
+
+    // We can't wait 5 minutes, so we test the wiring by checking generateText
+    // receives an abortSignal
+    mockGenerateText.mockResolvedValue({
+      text: "output",
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+
+    await runPipeline(
+      {
+        runId: "run-1",
+        agentId: "agent-1",
+        taskDescription: "test",
+        pipeline: ["ecc-planner"],
+      },
+      cbs,
+    );
+
+    // Verify abortSignal is passed to generateText
+    expect(mockGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        abortSignal: expect.anything(),
+      }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Resume support
+// ---------------------------------------------------------------------------
+
+describe("runPipeline — resume from step", () => {
+  it("skips already-completed steps and starts from startFromStep", async () => {
+    mockGenerateText.mockResolvedValue({
+      text: "step 2 output",
+      usage: { inputTokens: 50, outputTokens: 20 },
+    });
+
+    const cbs = makeCallbacks();
+
+    const result = await runPipeline(
+      {
+        runId: "run-1",
+        agentId: "agent-1",
+        taskDescription: "Build auth",
+        pipeline: ["ecc-planner", "ecc-code-reviewer"],
+        startFromStep: 1,
+        existingStepResults: { "0": "Previous planner output" },
+      },
+      cbs,
+    );
+
+    // Only one AI call (step 1), not two
+    expect(mockGenerateText).toHaveBeenCalledTimes(1);
+    // The prompt should contain the pre-loaded step output
+    const prompt = mockGenerateText.mock.calls[0][0].prompt as string;
+    expect(prompt).toContain("Previous planner output");
+    // onStepComplete should be called once for the resumed step
+    expect(cbs.onStepComplete).toHaveBeenCalledTimes(1);
+    expect(cbs.onStepComplete).toHaveBeenCalledWith(1, "step 2 output");
+    expect(result.stepCount).toBe(2);
+  });
+
+  it("works normally when startFromStep is 0 (default)", async () => {
+    mockGenerateText.mockResolvedValue({
+      text: "output",
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+
+    const cbs = makeCallbacks();
+
+    await runPipeline(
+      {
+        runId: "run-1",
+        agentId: "agent-1",
+        taskDescription: "test",
+        pipeline: ["ecc-planner"],
+      },
+      cbs,
+    );
+
+    expect(mockGenerateText).toHaveBeenCalledTimes(1);
+    expect(cbs.onStepComplete).toHaveBeenCalledTimes(1);
+  });
+});

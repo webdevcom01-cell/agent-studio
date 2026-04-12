@@ -89,6 +89,14 @@ export async function POST(
     let pipeline: string[];
 
     if (pipelineOverride && pipelineOverride.length > 0) {
+      // Validate step IDs before accepting the override
+      const validationResult = buildPipelineConfig(pipelineOverride);
+      if (validationResult.length === 0) {
+        return NextResponse.json(
+          { success: false, error: "Pipeline override produced no valid steps" },
+          { status: 422 },
+        );
+      }
       taskType = "custom";
       complexity = "moderate";
       pipeline = pipelineOverride;

@@ -712,7 +712,7 @@ describe("Edge cases and resilience", () => {
     mockGenerateText.mockRejectedValueOnce(new Error("Rate limit"));
     const result = await claudeAgentSdkHandler(node(), ctx());
     expect(result.nextNodeId).toBeNull();
-    expect(result.messages[0].content).toContain("An error occurred");
+    expect(result.messages[0].content).toContain("Claude Agent SDK node failed");
     expect(result.waitForInput).toBe(false);
   });
 

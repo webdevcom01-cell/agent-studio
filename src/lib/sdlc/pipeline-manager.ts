@@ -172,27 +172,29 @@ export async function advancePipelineStep(
   stepIndex: number,
   stepOutput: string,
 ): Promise<PipelineRun> {
-  // Atomic read-modify-write to update the stepResults JSON map
-  const current = await prisma.pipelineRun.findUnique({
-    where: { id: runId },
-    select: { stepResults: true },
-  });
+  // Atomic read-modify-write inside a transaction to prevent race conditions
+  const row = await prisma.$transaction(async (tx) => {
+    const current = await tx.pipelineRun.findUnique({
+      where: { id: runId },
+      select: { stepResults: true },
+    });
 
-  const existing =
-    current?.stepResults &&
-    typeof current.stepResults === "object" &&
-    !Array.isArray(current.stepResults)
-      ? (current.stepResults as Record<string, string>)
-      : {};
+    const existing =
+      current?.stepResults &&
+      typeof current.stepResults === "object" &&
+      !Array.isArray(current.stepResults)
+        ? (current.stepResults as Record<string, string>)
+        : {};
 
-  const updated = { ...existing, [String(stepIndex)]: stepOutput };
+    const updated = { ...existing, [String(stepIndex)]: stepOutput };
 
-  const row = await prisma.pipelineRun.update({
-    where: { id: runId },
-    data: {
-      currentStep: stepIndex + 1,
-      stepResults: updated as Prisma.InputJsonValue,
-    },
+    return tx.pipelineRun.update({
+      where: { id: runId },
+      data: {
+        currentStep: stepIndex + 1,
+        stepResults: updated as Prisma.InputJsonValue,
+      },
+    });
   });
 
   logger.info("Pipeline step advanced", {
@@ -242,17 +244,25 @@ export async function markPipelineFailed(
   return toRun(row);
 }
 
-/** User cancels a pipeline run — worker checks this flag between steps */
+/** User cancels a pipeline run — worker checks this flag between steps.
+ *  Idempotent: re-cancelling an already-cancelled run returns current state.
+ *  Throws only if run not found or in a non-cancellable terminal state (COMPLETED/FAILED).
+ */
 export async function cancelPipelineRun(runId: string): Promise<PipelineRun> {
   const run = await prisma.pipelineRun.findUnique({
     where: { id: runId },
-    select: { status: true },
   });
 
   if (!run) throw new Error(`Pipeline run not found: ${runId}`);
 
-  const terminal: PipelineRunStatus[] = ["COMPLETED", "FAILED", "CANCELLED"];
-  if (terminal.includes(run.status)) {
+  // Idempotent: already cancelled → return current state
+  if (run.status === "CANCELLED") {
+    logger.info("Pipeline run already cancelled (idempotent)", { runId });
+    return toRun(run);
+  }
+
+  const nonCancellable: PipelineRunStatus[] = ["COMPLETED", "FAILED"];
+  if (nonCancellable.includes(run.status)) {
     throw new Error(`Pipeline run already in terminal status: ${run.status}`);
   }
 

@@ -253,7 +253,8 @@ describe("updateSdkSession", () => {
     await updateSdkSession("sess-1", { inputTokensDelta: 10 });
 
     const updateData = mockPrisma.agentSdkSession.update.mock.calls[0][0].data;
-    const storedMessages = JSON.parse(updateData.messages);
+    // messages is stored as a JS array (via JSON.parse(JSON.stringify(...))), not a raw string
+    const storedMessages = updateData.messages as Array<{ role: string; content: string }>;
     expect(storedMessages).toHaveLength(1);
     expect(storedMessages[0].content).toBe("keep me");
   });

@@ -14,6 +14,7 @@ const mockFindUnique = vi.fn();
 const mockFindMany = vi.fn();
 const mockCount = vi.fn();
 const mockUpdate = vi.fn();
+const mockTransaction = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -24,6 +25,7 @@ vi.mock("@/lib/prisma", () => ({
       count: (...args: unknown[]) => mockCount(...args),
       update: (...args: unknown[]) => mockUpdate(...args),
     },
+    $transaction: (...args: unknown[]) => mockTransaction(...args),
   },
 }));
 
@@ -76,6 +78,15 @@ function makeRow(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // $transaction executes the callback with a proxy that delegates to the same mocks
+  mockTransaction.mockImplementation(async (fn: (tx: Record<string, Record<string, unknown>>) => Promise<unknown>) => {
+    return fn({
+      pipelineRun: {
+        findUnique: mockFindUnique,
+        update: mockUpdate,
+      },
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -223,13 +234,15 @@ describe("markPipelineRunning", () => {
 // ---------------------------------------------------------------------------
 
 describe("advancePipelineStep", () => {
-  it("increments currentStep and records step output", async () => {
+  it("increments currentStep and records step output inside a transaction", async () => {
     mockFindUnique.mockResolvedValue(makeRow({ stepResults: {} }));
     const row = makeRow({ currentStep: 1, stepResults: { "0": "planner output" } });
     mockUpdate.mockResolvedValue(row);
 
     const result = await advancePipelineStep("run-1", 0, "planner output");
 
+    // Must use $transaction for atomicity
+    expect(mockTransaction).toHaveBeenCalledTimes(1);
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -253,6 +266,7 @@ describe("advancePipelineStep", () => {
 
     await advancePipelineStep("run-1", 1, "second step output");
 
+    expect(mockTransaction).toHaveBeenCalledTimes(1);
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -342,9 +356,12 @@ describe("cancelPipelineRun", () => {
     await expect(cancelPipelineRun("run-1")).rejects.toThrow("terminal status");
   });
 
-  it("throws if run is already CANCELLED", async () => {
+  it("returns current state idempotently when already CANCELLED", async () => {
     mockFindUnique.mockResolvedValue(makeRow({ status: "CANCELLED" }));
-    await expect(cancelPipelineRun("run-1")).rejects.toThrow("terminal status");
+    const result = await cancelPipelineRun("run-1");
+    expect(result.status).toBe("CANCELLED");
+    // Should NOT call update — already in desired state
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it("throws if run not found", async () => {

@@ -34,6 +34,16 @@ const INFRA_PROMPTS: Record<string, string> = {
   sandbox_verify: "Verifying sandbox environment...",
 };
 
+/** Per-step timeout for AI calls (5 minutes). Prevents hung pipelines. */
+const STEP_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** Maximum total context document size in characters. Older step outputs are
+ *  summarised (trimmed) once this ceiling is exceeded to prevent prompt bloat. */
+const MAX_CONTEXT_CHARS = 24_000;
+
+/** Per-step output slice when building context for subsequent steps. */
+const CONTEXT_SLICE_PER_STEP = 3_000;
+
 // ---------------------------------------------------------------------------
 // Main entry point — called by the BullMQ worker
 // ---------------------------------------------------------------------------
@@ -45,6 +55,12 @@ export interface OrchestratorInput {
   taskDescription: string;
   pipeline: string[];
   modelId?: string;
+  /** Resume from this step index (0-based). Steps before this are skipped.
+   *  Existing stepResults for skipped steps are loaded into context. */
+  startFromStep?: number;
+  /** Pre-loaded step results from a previous (interrupted) run.
+   *  Keys are stringified step indices, values are the step outputs. */
+  existingStepResults?: Record<string, string>;
 }
 
 export interface OrchestratorResult {
@@ -72,7 +88,11 @@ export async function runPipeline(
     onProgress: (pct: number) => Promise<void>;
   },
 ): Promise<OrchestratorResult> {
-  const { runId, agentId, userId, taskDescription, pipeline, modelId } = input;
+  const {
+    runId, agentId, userId, taskDescription, pipeline, modelId,
+    startFromStep = 0,
+    existingStepResults,
+  } = input;
   const { onStepComplete, isCancelled, onProgress } = callbacks;
 
   const { getModel } = await import("@/lib/ai");
@@ -96,7 +116,25 @@ export async function runPipeline(
 
   const stepOutputs: string[] = [];
 
-  for (let stepIdx = 0; stepIdx < pipeline.length; stepIdx++) {
+  // Resume support: pre-seed context from previous run's step results
+  if (startFromStep > 0 && existingStepResults) {
+    for (let i = 0; i < startFromStep && i < pipeline.length; i++) {
+      const prevOutput = existingStepResults[String(i)];
+      if (prevOutput) {
+        contextParts.push(
+          `# Step ${i + 1} output (${pipeline[i]})\n${prevOutput.slice(0, CONTEXT_SLICE_PER_STEP)}`,
+        );
+        stepOutputs.push(prevOutput);
+      }
+    }
+    logger.info("Pipeline resuming from step", {
+      runId,
+      startFromStep,
+      preloadedSteps: stepOutputs.length,
+    });
+  }
+
+  for (let stepIdx = startFromStep; stepIdx < pipeline.length; stepIdx++) {
     const stepId = pipeline[stepIdx];
 
     // Progress: 5% start → 90% max, spread evenly across steps
@@ -130,7 +168,9 @@ export async function runPipeline(
       // Agent step: load system prompt from ECC templates
       const model = getModel(resolvedModelId);
       const systemPrompt = getAgentSystemPrompt(stepId);
-      const contextDoc = contextParts.join("\n\n---\n\n");
+
+      // Context size management: trim older steps if total exceeds ceiling
+      const contextDoc = buildContextDoc(contextParts);
 
       const prompt = [
         contextDoc,
@@ -139,16 +179,31 @@ export async function runPipeline(
         `Reference and build upon any previous step outputs shown in the context above.`,
       ].join("\n");
 
-      const result = await generateText({
-        model,
-        system: systemPrompt,
-        prompt,
-        maxOutputTokens: 4096,
-      });
+      // Per-step timeout via AbortController
+      const ac = new AbortController();
+      const timeoutId = setTimeout(() => ac.abort(), STEP_TIMEOUT_MS);
 
-      stepOutput = result.text;
-      stepInputTokens = result.usage.inputTokens ?? 0;
-      stepOutputTokens = result.usage.outputTokens ?? 0;
+      try {
+        const result = await generateText({
+          model,
+          system: systemPrompt,
+          prompt,
+          maxOutputTokens: 4096,
+          abortSignal: ac.signal,
+        });
+
+        stepOutput = result.text;
+        stepInputTokens = result.usage.inputTokens ?? 0;
+        stepOutputTokens = result.usage.outputTokens ?? 0;
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          throw new Error(`Pipeline step ${stepIdx} (${stepId}) timed out after ${STEP_TIMEOUT_MS / 1000}s`);
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
       totalInputTokens += stepInputTokens;
       totalOutputTokens += stepOutputTokens;
 
@@ -169,7 +224,7 @@ export async function runPipeline(
 
     // Accumulate context for subsequent steps
     contextParts.push(
-      `# Step ${stepIdx + 1} output (${stepId})\n${stepOutput.slice(0, 3000)}`,
+      `# Step ${stepIdx + 1} output (${stepId})\n${stepOutput.slice(0, CONTEXT_SLICE_PER_STEP)}`,
     );
     stepOutputs.push(stepOutput);
 
@@ -201,6 +256,38 @@ export async function runPipeline(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Build the context document from accumulated parts, respecting MAX_CONTEXT_CHARS.
+ * When total size exceeds the cap, older step outputs are progressively trimmed
+ * (keeping the task description at full length).
+ */
+function buildContextDoc(parts: string[]): string {
+  const joined = parts.join("\n\n---\n\n");
+  if (joined.length <= MAX_CONTEXT_CHARS) return joined;
+
+  // Task description (parts[0]) is never trimmed. Trim step outputs from oldest.
+  const trimmedParts = [parts[0]];
+  let remaining = MAX_CONTEXT_CHARS - parts[0].length - 20; // 20 for separators overhead
+
+  // Walk backwards (most recent first) to prioritise recent context
+  const stepParts = parts.slice(1);
+  const allocated: string[] = new Array(stepParts.length);
+
+  for (let i = stepParts.length - 1; i >= 0; i--) {
+    if (remaining <= 0) {
+      allocated[i] = stepParts[i].split("\n")[0] + "\n[context trimmed]";
+    } else if (stepParts[i].length <= remaining) {
+      allocated[i] = stepParts[i];
+      remaining -= stepParts[i].length;
+    } else {
+      allocated[i] = stepParts[i].slice(0, remaining) + "\n…[trimmed]";
+      remaining = 0;
+    }
+  }
+
+  return [parts[0], ...allocated].join("\n\n---\n\n");
+}
 
 function buildSummary(outputs: string[], pipeline: string[]): string {
   if (outputs.length === 0) return "No steps completed.";
