@@ -129,6 +129,7 @@ vi.mock("lucide-react", () => {
     "BookMarked",
     "FileCode2",
     "Rocket",
+    "BotMessageSquare",
   ];
   const mocks: Record<string, unknown> = {};
   for (const name of icons) {
@@ -167,7 +168,7 @@ describe("NodePicker", () => {
   // ── Node definitions completeness ─────────────────────────────────────
 
   it("has exactly 65 node definitions", () => {
-    expect(NODE_DEFINITIONS.length).toBe(65);
+    expect(NODE_DEFINITIONS.length).toBe(66);
   });
 
   it("every node has a usageExample", () => {
@@ -229,7 +230,7 @@ describe("NodePicker", () => {
     expect(counts.ai).toBe(14);
     expect(counts.knowledge).toBe(3);
     expect(counts.logic).toBe(13);
-    expect(counts.integrations).toBe(11);
+    expect(counts.integrations).toBe(12);
     expect(counts.messaging).toBe(6);
     expect(counts.utilities).toBe(16);
   });
