@@ -57,14 +57,33 @@ export interface UpdateSessionInput {
 
 function parseMessages(raw: unknown): SessionMessage[] {
   if (!Array.isArray(raw)) return [];
-  return raw.filter(
-    (m): m is SessionMessage =>
+
+  const valid: SessionMessage[] = [];
+  let skipped = 0;
+
+  for (const m of raw) {
+    if (
       typeof m === "object" &&
       m !== null &&
       "role" in m &&
       "content" in m &&
       typeof (m as Record<string, unknown>).content === "string"
-  );
+    ) {
+      valid.push(m as SessionMessage);
+    } else {
+      skipped++;
+    }
+  }
+
+  if (skipped > 0) {
+    logger.warn("parseMessages: filtered invalid entries", {
+      total: raw.length,
+      skipped,
+      kept: valid.length,
+    });
+  }
+
+  return valid;
 }
 
 function toSessionData(row: {
@@ -88,11 +107,13 @@ function toSessionData(row: {
   };
 }
 
-/** Generate a short title from the first user message */
+/** Generate a short, sanitized title from the first user message */
 function generateTitle(messages: SessionMessage[]): string {
   const firstUser = messages.find((m) => m.role === "user");
   if (!firstUser) return "Untitled session";
-  const text = firstUser.content.trim();
+  // Strip control chars and excessive whitespace
+  const text = firstUser.content.replace(/[\x00-\x1f]+/g, " ").trim();
+  if (!text) return "Untitled session";
   return text.length > 80 ? text.slice(0, 77) + "…" : text;
 }
 
@@ -143,49 +164,53 @@ export async function loadSdkSession(
 
 /**
  * Update an existing SDK session (append messages, update tokens, etc.).
+ *
+ * Uses a Prisma interactive transaction to prevent race conditions:
+ * the row is locked during the read-modify-write cycle so two concurrent
+ * updates cannot overwrite each other's message arrays.
  */
 export async function updateSdkSession(
   sessionId: string,
   input: UpdateSessionInput
 ): Promise<SdkSessionData> {
-  const current = await prisma.agentSdkSession.findUnique({
-    where: { id: sessionId },
-  });
+  const row = await prisma.$transaction(async (tx) => {
+    const current = await tx.agentSdkSession.findUnique({
+      where: { id: sessionId },
+    });
 
-  if (!current) {
-    throw new Error(`SDK session not found: ${sessionId}`);
-  }
+    if (!current) {
+      throw new Error(`SDK session not found: ${sessionId}`);
+    }
 
-  const existingMessages = parseMessages(current.messages);
-  const mergedMessages = input.messages ?? existingMessages;
+    const existingMessages = parseMessages(current.messages);
+    const mergedMessages = input.messages ?? existingMessages;
+    const title = input.title ?? current.title;
 
-  // Auto-generate title on first resume if title is still default
-  const title = input.title ?? current.title;
-
-  const row = await prisma.agentSdkSession.update({
-    where: { id: sessionId },
-    data: {
-      messages: JSON.parse(JSON.stringify(mergedMessages)),
-      title,
-      status: input.status,
-      metadata: input.metadata
-        ? JSON.parse(JSON.stringify(input.metadata))
-        : undefined,
-      totalInputTokens: {
-        increment: input.inputTokensDelta ?? 0,
+    return tx.agentSdkSession.update({
+      where: { id: sessionId },
+      data: {
+        messages: JSON.parse(JSON.stringify(mergedMessages)),
+        title,
+        status: input.status,
+        metadata: input.metadata
+          ? JSON.parse(JSON.stringify(input.metadata))
+          : undefined,
+        totalInputTokens: {
+          increment: input.inputTokensDelta ?? 0,
+        },
+        totalOutputTokens: {
+          increment: input.outputTokensDelta ?? 0,
+        },
+        resumeCount: {
+          increment: 1,
+        },
       },
-      totalOutputTokens: {
-        increment: input.outputTokensDelta ?? 0,
-      },
-      resumeCount: {
-        increment: 1,
-      },
-    },
+    });
   });
 
   logger.info("SDK session updated", {
     sessionId,
-    messageCount: mergedMessages.length,
+    messageCount: parseMessages(row.messages).length,
     resumeCount: row.resumeCount,
   });
 
