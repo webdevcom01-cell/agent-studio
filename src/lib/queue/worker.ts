@@ -14,7 +14,7 @@
 
 import { Worker, type Job } from "bullmq";
 import { logger } from "@/lib/logger";
-import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData, WebhookExecuteJobData, ManagedTaskRunJobData } from "./index";
+import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData, WebhookExecuteJobData, ManagedTaskRunJobData, PipelineRunJobData } from "./index";
 import type { TaskInput } from "@/lib/managed-tasks/manager";
 
 const QUEUE_NAME = "agent-studio";
@@ -42,6 +42,8 @@ async function processJob(job: Job<JobData>): Promise<unknown> {
       return processWebhookExecuteJob(job as Job<WebhookExecuteJobData>);
     case "managed.task.run":
       return processManagedTaskJob(job as Job<ManagedTaskRunJobData>);
+    case "pipeline.run":
+      return processPipelineRunJob(job as Job<PipelineRunJobData>);
     default:
       throw new Error(`Unknown job type: ${(data as Record<string, unknown>).type}`);
   }
@@ -368,6 +370,84 @@ async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<u
     }
 
     logger.error("Managed task job failed", { jobId: job.id, taskId, agentId, error: err });
+    throw err; // Re-throw so BullMQ records the failure
+  }
+}
+
+/**
+ * P5: Processes SDLC pipeline run jobs.
+ * Delegates to the orchestrator which runs each step sequentially,
+ * fires learn hooks between steps, and checks cancellation.
+ */
+async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unknown> {
+  const { pipelineRunId, agentId, userId, modelId } = job.data;
+
+  const {
+    getPipelineRun,
+    markPipelineRunning,
+    markPipelineCompleted,
+    markPipelineFailed,
+    advancePipelineStep,
+    isPipelineCancelled,
+  } = await import("@/lib/sdlc/pipeline-manager");
+
+  const { runPipeline } = await import("@/lib/sdlc/orchestrator");
+
+  // Load the pipeline run record
+  const run = await getPipelineRun(pipelineRunId);
+  if (!run) {
+    throw new Error(`Pipeline run ${pipelineRunId} not found`);
+  }
+
+  // Mark as RUNNING
+  await markPipelineRunning(pipelineRunId, job.id ?? `pipeline-run-${pipelineRunId}`);
+  await job.updateProgress(5);
+
+  try {
+    const result = await runPipeline(
+      {
+        runId: pipelineRunId,
+        agentId,
+        userId,
+        taskDescription: run.taskDescription,
+        pipeline: run.pipeline,
+        modelId,
+      },
+      {
+        onStepComplete: async (stepIdx: number, output: string) => {
+          await advancePipelineStep(pipelineRunId, stepIdx, output);
+        },
+        isCancelled: async () => isPipelineCancelled(pipelineRunId),
+        onProgress: async (pct: number) => {
+          await job.updateProgress(pct);
+        },
+      },
+    );
+
+    if (result.cancelled) {
+      // Pipeline was cancelled mid-run — DB already updated by cancel route
+      logger.info("Pipeline run was cancelled mid-execution", { pipelineRunId });
+      return { pipelineRunId, cancelled: true };
+    }
+
+    await markPipelineCompleted(pipelineRunId, result.finalOutput);
+    await job.updateProgress(100);
+
+    logger.info("Pipeline run job completed", {
+      jobId: job.id,
+      pipelineRunId,
+      agentId,
+      stepCount: result.stepCount,
+      durationMs: result.durationMs,
+      totalInputTokens: result.totalInputTokens,
+      totalOutputTokens: result.totalOutputTokens,
+    });
+
+    return result;
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    await markPipelineFailed(pipelineRunId, errorMsg);
+    logger.error("Pipeline run job failed", { jobId: job.id, pipelineRunId, agentId, error: err });
     throw err; // Re-throw so BullMQ records the failure
   }
 }

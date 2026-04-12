@@ -77,18 +77,30 @@ export interface ManagedTaskRunJobData {
   userId?: string;
 }
 
+/** P5 — SDLC Pipeline Run (multi-agent sequential execution via meta-orchestrator) */
+export interface PipelineRunJobData {
+  type: "pipeline.run";
+  pipelineRunId: string;
+  agentId: string;
+  userId?: string;
+  /** Optional model override (defaults to claude-sonnet-4-6 in the orchestrator) */
+  modelId?: string;
+}
+
 export type JobData =
   | FlowExecuteJobData
   | EvalRunJobData
   | WebhookRetryJobData
   | KBIngestJobData
   | WebhookExecuteJobData
-  | ManagedTaskRunJobData;
+  | ManagedTaskRunJobData
+  | PipelineRunJobData;
 
 const PRIORITY_MAP: Record<string, number> = {
   chat: 1,
   pipeline: 5,
   managed: 8,
+  sdlc: 8,     // P5 SDLC pipelines — same tier as managed tasks
   eval: 10,
 };
 
@@ -314,6 +326,36 @@ export async function addManagedTaskJob(
   });
 
   return job.id ?? `managed-task-${data.taskId}`;
+}
+
+/**
+ * P5: Enqueue a SDLC pipeline run for async multi-agent execution.
+ * Priority 8 — same tier as managed tasks (background, not user-interactive).
+ */
+export async function addPipelineRunJob(
+  data: Omit<PipelineRunJobData, "type">,
+): Promise<string> {
+  const q = getQueue();
+
+  const job = await q.add(
+    "pipeline.run",
+    { ...data, type: "pipeline.run" as const },
+    {
+      priority: PRIORITY_MAP.sdlc,
+      jobId: `pipeline-run-${data.pipelineRunId}`,
+      attempts: 1, // SDLC pipeline runs do not auto-retry — failure is explicit
+      removeOnComplete: { age: 86400 },
+      removeOnFail: { age: 604800 },
+    },
+  );
+
+  logger.info("Pipeline run job enqueued", {
+    jobId: job.id,
+    pipelineRunId: data.pipelineRunId,
+    agentId: data.agentId,
+  });
+
+  return job.id ?? `pipeline-run-${data.pipelineRunId}`;
 }
 
 export async function closeQueue(): Promise<void> {

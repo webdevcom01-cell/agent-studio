@@ -151,6 +151,7 @@ model Agent {
 
   sdkSessions     AgentSdkSession[]
   managedTasks    ManagedAgentTask[]
+  pipelineRuns    PipelineRun[]
 
   @@index([userId])
   @@index([userId, updatedAt])
@@ -213,6 +214,62 @@ model ManagedAgentTask {
   completedAt DateTime?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+
+  @@index([agentId, status])
+  @@index([userId])
+  @@index([status, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// SDLC Pipeline Runs — multi-agent pipeline orchestration (P5)
+// Each PipelineRun represents one full execution of an SDLC pipeline:
+//   analyzeTask → buildPipelineConfig → sequential step execution
+// Steps are the ordered list from the meta-orchestrator routing table.
+// ---------------------------------------------------------------------------
+
+enum PipelineRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model PipelineRun {
+  id              String            @id @default(cuid())
+  status          PipelineRunStatus @default(PENDING)
+
+  /// Original task description passed to analyzeTask()
+  taskDescription String            @db.Text
+  /// Detected task type (new-feature, bug-fix, architecture, …)
+  taskType        String
+  /// Complexity level: simple | moderate | complex
+  complexity      String
+  /// Ordered list of step IDs (agent IDs + infrastructure node IDs)
+  pipeline        String[]
+  /// 0-based index of the step currently being executed
+  currentStep     Int               @default(0)
+
+  /// Map of step index (stringified) → step output text / JSON
+  /// e.g. { "0": "Planner output...", "1": "{ decision: 'APPROVE' }" }
+  stepResults     Json              @default("{}")
+
+  /// Aggregated final summary produced after all steps complete
+  finalOutput     String?           @db.Text
+  /// Error message when status = FAILED
+  error           String?
+
+  /// BullMQ job ID for the pipeline runner job
+  jobId           String?           @unique
+
+  agentId         String
+  agent           Agent             @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  userId          String?
+
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   @@index([agentId, status])
   @@index([userId])
