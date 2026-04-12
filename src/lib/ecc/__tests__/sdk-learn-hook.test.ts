@@ -19,6 +19,8 @@ const mockPrisma = vi.hoisted(() => ({
     create: vi.fn(),
     update: vi.fn(),
   },
+  // $transaction passes `tx` (which is mockPrisma itself) to the callback
+  $transaction: vi.fn(),
 }));
 
 vi.mock("ai",                            () => ({ generateText: mockGenerateText }));
@@ -66,6 +68,11 @@ beforeEach(() => {
 
   // Default: AgentExecution created successfully
   mockPrisma.agentExecution.create.mockResolvedValue({ id: EXEC_ID });
+
+  // $transaction: execute callback with mockPrisma as tx
+  mockPrisma.$transaction.mockImplementation(
+    async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma)
+  );
 
   // Default: no existing instinct
   mockPrisma.instinct.findFirst.mockResolvedValue(null);
@@ -370,5 +377,71 @@ describe("Example ID list bounded at MAX_EXAMPLE_IDS (10)", () => {
     expect(updateCall.data.examples.executionIds).toHaveLength(10);
     expect(updateCall.data.examples.executionIds.at(-1)).toBe(EXEC_ID);
     expect(updateCall.data.examples.executionIds).not.toContain("exec-old-0");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Suite 7 — P3 Upgrades: transaction safety, JSON logging, empty name guard
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe("P3 Upgrade: $transaction used for instinct upsert (race-safe)", () => {
+  beforeEach(() => {
+    mockIsECCEnabled.mockReturnValue(true);
+    mockPrisma.agent.findUnique.mockResolvedValue({ eccEnabled: true });
+  });
+
+  it("calls $transaction for instinct create", async () => {
+    mockPrisma.instinct.findFirst.mockResolvedValue(null);
+
+    await fireSdkLearnHook(record());
+
+    expect(mockPrisma.$transaction).toHaveBeenCalled();
+  });
+
+  it("calls $transaction for instinct reinforcement", async () => {
+    mockPrisma.instinct.findFirst.mockResolvedValue({
+      id: "inst-1",
+      confidence: 0.2,
+      frequency: 3,
+      examples: {},
+    });
+
+    await fireSdkLearnHook(record());
+
+    expect(mockPrisma.$transaction).toHaveBeenCalled();
+  });
+});
+
+describe("P3 Upgrade: empty pattern name generates timestamped fallback", () => {
+  beforeEach(() => {
+    mockIsECCEnabled.mockReturnValue(true);
+    mockPrisma.agent.findUnique.mockResolvedValue({ eccEnabled: true });
+  });
+
+  it("generates auto-pattern-<timestamp> when LLM name normalizes to empty", async () => {
+    mockGenerateText.mockResolvedValue({
+      text: '{"name":"!!!","description":"All special chars"}',
+    });
+
+    await fireSdkLearnHook(record());
+
+    const createCall = mockPrisma.instinct.create.mock.calls[0][0] as {
+      data: { name: string };
+    };
+    expect(createCall.data.name).toMatch(/^auto-pattern-\d+$/);
+  });
+
+  it("handles LLM returning empty name string", async () => {
+    mockGenerateText.mockResolvedValue({
+      text: '{"name":"","description":"Empty name"}',
+    });
+
+    await fireSdkLearnHook(record());
+
+    // Should throw from the "empty name" check and use task-derived fallback
+    const createCall = mockPrisma.instinct.create.mock.calls[0][0] as {
+      data: { name: string };
+    };
+    expect(createCall.data.name.length).toBeGreaterThan(0);
   });
 });

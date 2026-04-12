@@ -165,76 +165,96 @@ async function extractAndLearnPattern(
       maxOutputTokens: 120,
     });
 
-    const parsed = JSON.parse(text.trim()) as {
-      name: string;
-      description: string;
-    };
+    const trimmed = text.trim();
+    let parsed: { name?: unknown; description?: unknown };
+    try {
+      parsed = JSON.parse(trimmed) as { name?: unknown; description?: unknown };
+    } catch (jsonErr) {
+      logger.warn("SDK Learn Hook: LLM returned non-JSON, using fallback", {
+        agentId: record.agentId,
+        rawOutput: trimmed.slice(0, 200),
+        error: jsonErr instanceof Error ? jsonErr.message : String(jsonErr),
+      });
+      throw jsonErr; // re-throw to hit the outer catch for fallback
+    }
+
+    if (typeof parsed.name !== "string" || !parsed.name.trim()) {
+      throw new Error("LLM returned empty or non-string pattern name");
+    }
+
     patternName = normalisePatternName(parsed.name);
     patternDescription =
       typeof parsed.description === "string" && parsed.description.length > 5
         ? parsed.description
         : `Auto-extracted pattern from: ${taskSnippet.slice(0, 80)}`;
-  } catch {
+  } catch (extractErr) {
     // Fallback: derive pattern name directly from the task text
+    logger.warn("SDK Learn Hook: extraction failed, using task-derived fallback", {
+      agentId: record.agentId,
+      error: extractErr instanceof Error ? extractErr.message : String(extractErr),
+    });
     patternName = normalisePatternName(taskSnippet.slice(0, 40));
     patternDescription = `Auto-extracted pattern from: ${taskSnippet.slice(0, 100)}`;
   }
 
-  // Upsert Instinct
-  const existing = await prisma.instinct.findFirst({
-    where: { agentId: record.agentId, name: patternName },
-    select: { id: true, confidence: true, frequency: true, examples: true },
-  });
-
-  if (existing) {
-    const newConfidence = Math.min(1.0, existing.confidence + AUTO_CONFIDENCE_BOOST);
-    await prisma.instinct.update({
-      where: { id: existing.id },
-      data: {
-        confidence: newConfidence,
-        frequency: existing.frequency + 1,
-        examples: appendExecutionId(
-          existing.examples,
-          executionId
-        ) as Prisma.InputJsonValue,
-      },
+  // Atomic upsert: use a Prisma transaction to prevent race conditions
+  // where two concurrent executions both create the same instinct.
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.instinct.findFirst({
+      where: { agentId: record.agentId, name: patternName },
+      select: { id: true, confidence: true, frequency: true, examples: true },
     });
 
-    logger.info("SDK Learn Hook: reinforced instinct", {
-      agentId: record.agentId,
-      patternName,
-      newConfidence: newConfidence.toFixed(3),
-      frequency: existing.frequency + 1,
-    });
+    if (existing) {
+      const newConfidence = Math.min(1.0, existing.confidence + AUTO_CONFIDENCE_BOOST);
+      await tx.instinct.update({
+        where: { id: existing.id },
+        data: {
+          confidence: newConfidence,
+          frequency: existing.frequency + 1,
+          examples: appendExecutionId(
+            existing.examples,
+            executionId
+          ) as Prisma.InputJsonValue,
+        },
+      });
 
-    recordMetric("sdk.instinct.reinforced", 1, "count", {
-      agentId: record.agentId,
-    });
-  } else {
-    await prisma.instinct.create({
-      data: {
+      logger.info("SDK Learn Hook: reinforced instinct", {
         agentId: record.agentId,
-        name: patternName,
-        description: patternDescription,
+        patternName,
+        newConfidence: newConfidence.toFixed(3),
+        frequency: existing.frequency + 1,
+      });
+
+      recordMetric("sdk.instinct.reinforced", 1, "count", {
+        agentId: record.agentId,
+      });
+    } else {
+      await tx.instinct.create({
+        data: {
+          agentId: record.agentId,
+          name: patternName,
+          description: patternDescription,
+          confidence: AUTO_CONFIDENCE_INITIAL,
+          frequency: 1,
+          origin: "sdk_hook",
+          examples: {
+            executionIds: [executionId],
+          } satisfies Prisma.InputJsonValue,
+        },
+      });
+
+      logger.info("SDK Learn Hook: created instinct", {
+        agentId: record.agentId,
+        patternName,
         confidence: AUTO_CONFIDENCE_INITIAL,
-        frequency: 1,
-        origin: "sdk_hook",
-        examples: {
-          executionIds: [executionId],
-        } satisfies Prisma.InputJsonValue,
-      },
-    });
+      });
 
-    logger.info("SDK Learn Hook: created instinct", {
-      agentId: record.agentId,
-      patternName,
-      confidence: AUTO_CONFIDENCE_INITIAL,
-    });
-
-    recordMetric("sdk.instinct.created", 1, "count", {
-      agentId: record.agentId,
-    });
-  }
+      recordMetric("sdk.instinct.created", 1, "count", {
+        agentId: record.agentId,
+      });
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +262,7 @@ async function extractAndLearnPattern(
 // ---------------------------------------------------------------------------
 
 function normalisePatternName(raw: string): string {
-  return raw
+  const name = raw
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, " ")
     .trim()
@@ -250,6 +270,8 @@ function normalisePatternName(raw: string): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 60);
+  // Guarantee a non-empty name — fall back to a timestamped placeholder
+  return name || `auto-pattern-${Date.now()}`;
 }
 
 function appendExecutionId(
