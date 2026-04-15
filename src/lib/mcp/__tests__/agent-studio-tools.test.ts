@@ -45,15 +45,23 @@ vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
 }));
 
+vi.mock("@/lib/managed-tasks/manager", () => ({
+  createTask: vi.fn(),
+}));
+
+vi.mock("@/lib/queue", () => ({
+  addMcpFlowJob: vi.fn(),
+}));
+
 import { prisma } from "@/lib/prisma";
-import { executeFlow } from "@/lib/runtime/engine";
-import { parseFlowContent } from "@/lib/validators/flow-content";
 import { hybridSearch } from "@/lib/knowledge/search";
+import { createTask } from "@/lib/managed-tasks/manager";
+import { addMcpFlowJob } from "@/lib/queue";
 
 const mockPrisma = vi.mocked(prisma);
-const mockExecuteFlow = vi.mocked(executeFlow);
-const mockParseFlowContent = vi.mocked(parseFlowContent);
 const mockHybridSearch = vi.mocked(hybridSearch);
+const mockCreateTask = vi.mocked(createTask);
+const mockAddMcpFlowJob = vi.mocked(addMcpFlowJob);
 
 const USER_ID = "user-test-1";
 
@@ -267,35 +275,24 @@ describe("get_agent", () => {
 });
 
 // ---------------------------------------------------------------------------
-// trigger_agent
+// trigger_agent (async — enqueues BullMQ job, returns taskId immediately)
 // ---------------------------------------------------------------------------
 
 describe("trigger_agent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockParseFlowContent.mockReturnValue({ nodes: [], edges: [] } as never);
-    mockPrisma.conversation.create.mockResolvedValue({
-      id: "conv-1",
-      agentId: "agent-1",
-      status: "ACTIVE",
-      variables: {},
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } as never);
-    mockExecuteFlow.mockResolvedValue({
-      messages: [
-        { role: "user", content: "hello" },
-        { role: "assistant", content: "world" },
-      ],
-    } as never);
+    mockCreateTask.mockResolvedValue({ id: "task-1" } as never);
+    mockAddMcpFlowJob.mockResolvedValue("mcp-flow-task-1");
   });
 
-  it("returns output for valid agent and message", async () => {
-    mockPrisma.agent.findFirst.mockResolvedValueOnce({
-      id: "agent-1",
-      userId: USER_ID,
-      flow: { id: "flow-1", content: "{}" },
-    } as never);
+  const agentWithFlow = {
+    id: "agent-1",
+    name: "Test Agent",
+    flow: { id: "flow-1" },
+  };
+
+  it("returns taskId and PENDING status for valid agent and message", async () => {
+    mockPrisma.agent.findFirst.mockResolvedValueOnce(agentWithFlow as never);
 
     const result = await callAgentStudioTool(
       "trigger_agent",
@@ -305,9 +302,45 @@ describe("trigger_agent", () => {
     const data = JSON.parse(result.content[0].text);
 
     expect(result.isError).toBeUndefined();
-    expect(data.output).toBe("world");
-    expect(data.conversationId).toBe("conv-1");
-    expect(data.messageCount).toBe(2);
+    expect(data.taskId).toBe("task-1");
+    expect(data.status).toBe("PENDING");
+    expect(data.message).toContain("Poll get_task_status");
+  });
+
+  it("creates a ManagedAgentTask with correct fields", async () => {
+    mockPrisma.agent.findFirst.mockResolvedValueOnce(agentWithFlow as never);
+
+    await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "run this task" },
+      USER_ID,
+    );
+
+    expect(mockCreateTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: "agent-1",
+        userId: USER_ID,
+        input: { task: "run this task" },
+      }),
+    );
+  });
+
+  it("enqueues MCP flow job with correct data", async () => {
+    mockPrisma.agent.findFirst.mockResolvedValueOnce(agentWithFlow as never);
+
+    await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "hello", variables: '{"topic":"AI"}' },
+      USER_ID,
+    );
+
+    expect(mockAddMcpFlowJob).toHaveBeenCalledWith({
+      taskId: "task-1",
+      agentId: "agent-1",
+      userId: USER_ID,
+      message: "hello",
+      variables: { topic: "AI" },
+    });
   });
 
   it("returns isError when agentId is missing", async () => {
@@ -334,12 +367,7 @@ describe("trigger_agent", () => {
   });
 
   it("returns isError when agent has no flow", async () => {
-    mockPrisma.agent.findFirst.mockResolvedValueOnce({
-      id: "agent-1",
-      userId: USER_ID,
-      flow: null,
-    } as never);
-
+    mockPrisma.agent.findFirst.mockResolvedValueOnce({ id: "agent-1", name: "A", flow: null } as never);
     const result = await callAgentStudioTool(
       "trigger_agent",
       { agentId: "agent-1", message: "hello" },
@@ -377,68 +405,6 @@ describe("trigger_agent", () => {
     );
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("JSON object");
-  });
-
-  it("passes parsed variables to conversation create", async () => {
-    mockPrisma.agent.findFirst.mockResolvedValueOnce({
-      id: "agent-1",
-      userId: USER_ID,
-      flow: { id: "flow-1", content: "{}" },
-    } as never);
-
-    await callAgentStudioTool(
-      "trigger_agent",
-      { agentId: "agent-1", message: "hello", variables: '{"topic":"AI"}' },
-      USER_ID,
-    );
-
-    expect(mockPrisma.conversation.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ variables: { topic: "AI" } }),
-      }),
-    );
-  });
-
-  it("returns null output when no assistant message exists", async () => {
-    mockPrisma.agent.findFirst.mockResolvedValueOnce({
-      id: "agent-1",
-      userId: USER_ID,
-      flow: { id: "flow-1", content: "{}" },
-    } as never);
-    mockExecuteFlow.mockResolvedValueOnce({ messages: [] } as never);
-
-    const result = await callAgentStudioTool(
-      "trigger_agent",
-      { agentId: "agent-1", message: "hello" },
-      USER_ID,
-    );
-    const data = JSON.parse(result.content[0].text);
-    expect(data.output).toBeNull();
-  });
-
-  it("marks conversation as ABANDONED and returns isError when executeFlow throws", async () => {
-    mockPrisma.agent.findFirst.mockResolvedValueOnce({
-      id: "agent-1",
-      userId: USER_ID,
-      flow: { id: "flow-1", content: "{}" },
-    } as never);
-    mockExecuteFlow.mockRejectedValueOnce(new Error("Engine crashed"));
-    mockPrisma.conversation.update.mockResolvedValueOnce({} as never);
-
-    const result = await callAgentStudioTool(
-      "trigger_agent",
-      { agentId: "agent-1", message: "hello" },
-      USER_ID,
-    );
-
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("execution failed");
-    expect(mockPrisma.conversation.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "conv-1" },
-        data: { status: "ABANDONED" },
-      }),
-    );
   });
 });
 

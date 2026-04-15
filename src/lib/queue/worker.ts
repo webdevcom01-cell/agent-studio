@@ -14,7 +14,7 @@
 
 import { Worker, type Job } from "bullmq";
 import { logger } from "@/lib/logger";
-import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData, WebhookExecuteJobData, ManagedTaskRunJobData, PipelineRunJobData } from "./index";
+import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData, WebhookExecuteJobData, ManagedTaskRunJobData, McpFlowRunJobData, PipelineRunJobData } from "./index";
 import type { TaskInput } from "@/lib/managed-tasks/manager";
 
 const QUEUE_NAME = "agent-studio";
@@ -42,6 +42,8 @@ async function processJob(job: Job<JobData>): Promise<unknown> {
       return processWebhookExecuteJob(job as Job<WebhookExecuteJobData>);
     case "managed.task.run":
       return processManagedTaskJob(job as Job<ManagedTaskRunJobData>);
+    case "mcp.flow.run":
+      return processMcpFlowJob(job as Job<McpFlowRunJobData>);
     case "pipeline.run":
       return processPipelineRunJob(job as Job<PipelineRunJobData>);
     default:
@@ -404,6 +406,82 @@ async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<u
 
     logger.error("Managed task job failed", { jobId: job.id, taskId, agentId, error: err });
     throw err; // Re-throw so BullMQ records the failure
+  }
+}
+
+/**
+ * MCP: Processes async flow execution jobs triggered by the MCP trigger_agent tool.
+ * Creates a conversation, runs executeFlow, and stores the output in ManagedAgentTask.
+ */
+async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> {
+  const { taskId, agentId, userId, message, variables } = job.data;
+
+  const { prisma } = await import("@/lib/prisma");
+  const { executeFlow } = await import("@/lib/runtime/engine");
+  const { parseFlowContent } = await import("@/lib/validators/flow-content");
+  const { markRunning, markCompleted, markFailed } = await import("@/lib/managed-tasks/manager");
+  const { logger: log } = await import("@/lib/logger");
+
+  await markRunning(taskId, job.id ?? `mcp-flow-${taskId}`);
+  await job.updateProgress(10);
+
+  const startTime = Date.now();
+
+  try {
+    const agent = await prisma.agent.findFirst({
+      where: { id: agentId, userId },
+      include: { flow: true },
+    });
+
+    if (!agent) throw new Error(`Agent "${agentId}" not found`);
+    if (!agent.flow) throw new Error(`Agent "${agentId}" has no flow configured`);
+
+    const flowContent = parseFlowContent(agent.flow.content);
+    await job.updateProgress(20);
+
+    const conversation = await prisma.conversation.create({
+      data: {
+        agentId,
+        status: "ACTIVE",
+        variables: variables as import("@/generated/prisma").Prisma.InputJsonValue,
+      },
+    });
+
+    const context = {
+      conversationId: conversation.id,
+      agentId,
+      flowContent,
+      currentNodeId: null as string | null,
+      variables: { ...variables },
+      messageHistory: [] as Array<{ role: "user" | "assistant" | "system"; content: string }>,
+      isNewConversation: true,
+    };
+
+    await job.updateProgress(30);
+    const result = await executeFlow(context, message);
+    await job.updateProgress(90);
+
+    const lastAssistant = result.messages.filter((m) => m.role === "assistant").pop();
+    const durationMs = Date.now() - startTime;
+
+    const output = {
+      conversationId: conversation.id,
+      output: lastAssistant?.content ?? null,
+      messageCount: result.messages.length,
+      durationMs,
+    };
+
+    await markCompleted(taskId, output as unknown as import("@/lib/managed-tasks/manager").TaskOutput);
+    await job.updateProgress(100);
+
+    log.info("MCP flow job completed", { jobId: job.id, taskId, agentId, durationMs });
+
+    return output;
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    await markFailed(taskId, errorMsg);
+    log.error("MCP flow job failed", { jobId: job.id, taskId, agentId, error: err });
+    throw err;
   }
 }
 

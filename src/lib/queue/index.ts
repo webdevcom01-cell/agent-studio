@@ -77,6 +77,16 @@ export interface ManagedTaskRunJobData {
   userId?: string;
 }
 
+/** MCP — Async flow execution triggered via MCP trigger_agent tool */
+export interface McpFlowRunJobData {
+  type: "mcp.flow.run";
+  taskId: string;
+  agentId: string;
+  userId: string;
+  message: string;
+  variables: Record<string, unknown>;
+}
+
 /** P5 — SDLC Pipeline Run (multi-agent sequential execution via meta-orchestrator) */
 export interface PipelineRunJobData {
   type: "pipeline.run";
@@ -94,6 +104,7 @@ export type JobData =
   | KBIngestJobData
   | WebhookExecuteJobData
   | ManagedTaskRunJobData
+  | McpFlowRunJobData
   | PipelineRunJobData;
 
 const PRIORITY_MAP: Record<string, number> = {
@@ -356,6 +367,36 @@ export async function addPipelineRunJob(
   });
 
   return job.id ?? `pipeline-run-${data.pipelineRunId}`;
+}
+
+/**
+ * MCP: Enqueue an async flow execution triggered by the MCP trigger_agent tool.
+ * Priority 5 (pipeline) — not interactive, but higher than background managed tasks.
+ */
+export async function addMcpFlowJob(
+  data: Omit<McpFlowRunJobData, "type">,
+): Promise<string> {
+  const q = getQueue();
+
+  const job = await q.add(
+    "mcp.flow.run",
+    { ...data, type: "mcp.flow.run" as const },
+    {
+      priority: PRIORITY_MAP.pipeline,
+      jobId: `mcp-flow-${data.taskId}`,
+      attempts: 1, // MCP flow runs do not auto-retry — caller polls status
+      removeOnComplete: { age: 86400 },
+      removeOnFail: { age: 604800 },
+    },
+  );
+
+  logger.info("MCP flow job enqueued", {
+    jobId: job.id,
+    taskId: data.taskId,
+    agentId: data.agentId,
+  });
+
+  return job.id ?? `mcp-flow-${data.taskId}`;
 }
 
 export async function closeQueue(): Promise<void> {

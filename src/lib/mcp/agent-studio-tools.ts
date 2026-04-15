@@ -15,9 +15,9 @@
 import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { executeFlow } from "@/lib/runtime/engine";
-import { parseFlowContent } from "@/lib/validators/flow-content";
 import { hybridSearch } from "@/lib/knowledge/search";
+import { createTask } from "@/lib/managed-tasks/manager";
+import { addMcpFlowJob } from "@/lib/queue";
 
 // ---------------------------------------------------------------------------
 // Pagination / search limits
@@ -104,7 +104,7 @@ export const AGENT_STUDIO_TOOLS: MCPToolDefinition[] = [
   {
     name: "trigger_agent",
     description:
-      "Run an agent with a user message and return its response. Creates a new conversation and executes the agent flow synchronously. Use this to get answers, generate content, or automate tasks via your agents.",
+      "Run an agent with a user message. Enqueues the agent flow for async execution and returns a taskId immediately. Poll get_task_status with the taskId to retrieve the result when status is COMPLETED. Use this to get answers, generate content, or automate tasks via your agents.",
     inputSchema: {
       type: "object",
       properties: {
@@ -336,59 +336,33 @@ async function toolTriggerAgent(
     inputVariables = parsed as Record<string, unknown>;
   }
 
+  // Verify the agent exists and belongs to this user before enqueueing
   const agent = await prisma.agent.findFirst({
     where: { id: agentId, userId },
-    include: { flow: true },
+    select: { id: true, name: true, flow: { select: { id: true } } },
   });
 
   if (!agent) return err(`Agent "${agentId}" not found.`);
   if (!agent.flow) return err(`Agent "${agentId}" has no flow configured.`);
 
-  const flowContent = parseFlowContent(agent.flow.content);
-
-  const conversation = await prisma.conversation.create({
-    data: {
-      agentId,
-      status: "ACTIVE",
-      variables: inputVariables as Prisma.InputJsonValue,
-    },
+  // Create a ManagedAgentTask record (PENDING) — worker will execute and update it
+  const task = await createTask({
+    name: `MCP: ${agent.name}`,
+    description: message.slice(0, 200),
+    agentId,
+    userId,
+    input: { task: message },
   });
 
-  const context = {
-    conversationId: conversation.id,
-    agentId,
-    flowContent,
-    currentNodeId: null as string | null,
-    variables: { ...inputVariables },
-    messageHistory: [] as Array<{ role: "user" | "assistant" | "system"; content: string }>,
-    isNewConversation: true,
-  };
+  // Enqueue the async flow job — returns immediately
+  await addMcpFlowJob({ taskId: task.id, agentId, userId, message, variables: inputVariables });
 
-  const startTime = Date.now();
-  let result: Awaited<ReturnType<typeof executeFlow>>;
-  try {
-    result = await executeFlow(context, message);
-  } catch (flowError) {
-    // Mark conversation as FAILED so it doesn't stay ACTIVE forever
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { status: "ABANDONED" },
-    });
-    logger.error("trigger_agent executeFlow failed", { agentId, conversationId: conversation.id, error: flowError });
-    return err("Agent execution failed.");
-  }
-
-  const durationMs = Date.now() - startTime;
-
-  const lastAssistant = result.messages
-    .filter((m) => m.role === "assistant")
-    .pop();
+  logger.info("trigger_agent enqueued async flow job", { taskId: task.id, agentId, userId });
 
   return ok({
-    conversationId: conversation.id,
-    output: lastAssistant?.content ?? null,
-    durationMs,
-    messageCount: result.messages.length,
+    taskId: task.id,
+    status: "PENDING",
+    message: "Agent triggered. Poll get_task_status with taskId to retrieve the result.",
   });
 }
 
