@@ -1,0 +1,137 @@
+#!/usr/bin/env node
+/**
+ * agent-studio-mcp-server
+ *
+ * MCP server providing direct read/write access to the agent-studio
+ * Railway PostgreSQL database — inspect agents, patch flows, diagnose
+ * model mismatches, all without writing scripts or redeploying.
+ *
+ * Transport: Streamable HTTP (remote Railway service)
+ * Auth:      MCP_API_KEY header check on every request
+ *
+ * Required env vars:
+ *   DATABASE_URL   — PostgreSQL connection string (Railway provides this)
+ *   MCP_API_KEY    — Secret key clients must send as Bearer token
+ *
+ * Optional env vars:
+ *   PORT           — HTTP port (default 3000)
+ *   TRANSPORT      — "http" (default) or "stdio" (local dev)
+ *
+ * For Claude Cowork / Claude.ai connection, add this server URL:
+ *   https://<your-railway-domain>/mcp
+ * with header:  Authorization: Bearer <MCP_API_KEY>
+ */
+
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import express, { type Request, type Response, type NextFunction } from "express";
+import { registerAgentTools } from "./tools/agents.js";
+import { registerMutationTools } from "./tools/mutations.js";
+import { registerDiagnosticTools } from "./tools/diagnostics.js";
+import { ping } from "./db.js";
+
+// ── Server setup ─────────────────────────────────────────────────────────────
+
+const server = new McpServer({
+  name: "agent-studio-mcp-server",
+  version: "1.0.0",
+});
+
+registerAgentTools(server);
+registerMutationTools(server);
+registerDiagnosticTools(server);
+
+// ── Auth middleware ───────────────────────────────────────────────────────────
+
+function requireApiKey(req: Request, res: Response, next: NextFunction): void {
+  const apiKey = process.env.MCP_API_KEY;
+
+  // If no key is configured, skip auth (useful for local dev)
+  if (!apiKey) {
+    next();
+    return;
+  }
+
+  const auth = req.headers.authorization ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : auth;
+
+  if (token !== apiKey) {
+    res.status(401).json({ error: "Unauthorized: invalid or missing MCP_API_KEY" });
+    return;
+  }
+  next();
+}
+
+// ── HTTP transport ────────────────────────────────────────────────────────────
+
+async function runHTTP(): Promise<void> {
+  const app = express();
+  app.use(express.json({ limit: "10mb" }));
+
+  // Health endpoint — no auth required
+  app.get("/health", async (_req: Request, res: Response) => {
+    const dbOk = await ping();
+    res.status(dbOk ? 200 : 503).json({
+      status: dbOk ? "ok" : "degraded",
+      db: dbOk ? "connected" : "unreachable",
+      server: "agent-studio-mcp-server@1.0.0",
+      time: new Date().toISOString(),
+    });
+  });
+
+  // MCP endpoint — auth required
+  app.post("/mcp", requireApiKey, async (req: Request, res: Response) => {
+    try {
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,  // stateless — new transport per request
+        enableJsonResponse: true,
+      });
+      res.on("close", () => { transport.close().catch(() => undefined); });
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      process.stderr.write(`[MCP] Request error: ${err instanceof Error ? err.message : String(err)}\n`);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Internal server error" });
+      }
+    }
+  });
+
+  // 404 catch-all
+  app.use((_req: Request, res: Response) => {
+    res.status(404).json({ error: "Not found. MCP endpoint is POST /mcp" });
+  });
+
+  const port = parseInt(process.env.PORT ?? "3000", 10);
+  app.listen(port, () => {
+    process.stderr.write(`[MCP] agent-studio-mcp-server running on port ${port}\n`);
+    process.stderr.write(`[MCP] Endpoint: POST http://localhost:${port}/mcp\n`);
+    process.stderr.write(`[MCP] Auth: ${process.env.MCP_API_KEY ? "✅ MCP_API_KEY set" : "⚠️  MCP_API_KEY not set — open access"}\n`);
+    process.stderr.write(`[MCP] Database: ${process.env.DATABASE_URL ? "✅ DATABASE_URL set" : "❌ DATABASE_URL missing"}\n`);
+  });
+}
+
+// ── stdio transport (local dev) ───────────────────────────────────────────────
+
+async function runStdio(): Promise<void> {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  process.stderr.write("[MCP] agent-studio-mcp-server running via stdio\n");
+}
+
+// ── Startup ───────────────────────────────────────────────────────────────────
+
+const transport = process.env.TRANSPORT ?? "http";
+
+if (transport === "stdio") {
+  runStdio().catch((err: unknown) => {
+    process.stderr.write(`[MCP] Fatal: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  });
+} else {
+  runHTTP().catch((err: unknown) => {
+    process.stderr.write(`[MCP] Fatal: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  });
+}
