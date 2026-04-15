@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
 import { applySecurityHeaders } from "@/lib/api/security-headers";
 
 // UX guard only — redirects unauthenticated users to /login.
@@ -27,6 +28,7 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === "/api/openapi.json") return true;
   if (pathname === "/api/docs") return true;
   if (pathname === "/login") return true;
+  if (pathname === "/onboarding") return true;
   if (pathname.startsWith("/embed")) return true;
   if (pathname === "/evals/standards") return true;
   if (pathname.startsWith("/chat/")) return true;
@@ -110,7 +112,7 @@ function isCsrfSafe(request: NextRequest): boolean {
   }
 }
 
-export function middleware(request: NextRequest): NextResponse {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
   if (isPublicPath(pathname)) {
@@ -136,6 +138,21 @@ export function middleware(request: NextRequest): NextResponse {
     const response = NextResponse.redirect(loginUrl);
     applySecurityHeaders(response, pathname);
     return response;
+  }
+
+  // Onboarding gate: redirect authenticated users who haven't completed onboarding.
+  // Only runs when AUTH_SECRET is present; skipped if token is unreadable (fail open).
+  if (process.env.AUTH_SECRET) {
+    const token = await getToken({
+      req: request,
+      secret: process.env.AUTH_SECRET,
+      secureCookie: process.env.NODE_ENV === "production",
+    });
+    if (token?.onboardingCompleted === false) {
+      const response = NextResponse.redirect(new URL("/onboarding", request.url));
+      applySecurityHeaders(response, pathname);
+      return response;
+    }
   }
 
   const response = NextResponse.next();

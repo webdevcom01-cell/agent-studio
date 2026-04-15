@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { CommandPalette } from "./command-palette";
 
-const SIDEBAR_EXCLUDED_PATHS = ["/login", "/embed"];
+const SIDEBAR_EXCLUDED_PATHS = ["/login", "/onboarding", "/embed"];
 
 function isSidebarExcluded(pathname: string): boolean {
   return SIDEBAR_EXCLUDED_PATHS.some((path) => pathname.startsWith(path));

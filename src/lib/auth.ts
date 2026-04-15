@@ -16,6 +16,7 @@ import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 import { createEncryptedAdapter } from "@/lib/auth-adapter";
+import { prisma } from "@/lib/prisma";
 
 // ── OIDC provider factory ────────────────────────────────────────────────────
 // Dynamically constructs a standards-compliant OIDC provider when all three
@@ -122,15 +123,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
   },
   callbacks: {
-    jwt({ token, user }) {
-      if (user) {
+    async jwt({ token, user, trigger }) {
+      if (user?.id) {
         token.id = user.id;
+      }
+      const userId = token.id as string | undefined;
+      if (userId && (user || trigger === "update")) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { onboardingCompletedAt: true },
+        });
+        token.onboardingCompleted = !!dbUser?.onboardingCompletedAt;
       }
       return token;
     },
     session({ session, token }) {
       if (session.user && token.id) {
         session.user.id = token.id as string;
+        session.user.onboardingCompleted = (token.onboardingCompleted as boolean | undefined) ?? false;
       }
       return session;
     },

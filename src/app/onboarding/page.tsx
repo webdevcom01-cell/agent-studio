@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, Bot, Database, MessageSquare, Sparkles } from "lucide-react";
+import { ArrowRight, Bot, CheckCircle2, Database, MessageSquare, Sparkles } from "lucide-react";
 
 const STEPS = [
   {
@@ -39,10 +40,16 @@ const TEMPLATES = [
 
 export default function OnboardingPage(): React.ReactElement {
   const router = useRouter();
+  const { update } = useSession();
+
   const [step, setStep] = useState(0);
   const [agentName, setAgentName] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [agentId, setAgentId] = useState<string | null>(null);
+  const [knowledgeUrl, setKnowledgeUrl] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [isAddingKnowledge, setIsAddingKnowledge] = useState(false);
+  const [isFinishing, setIsFinishing] = useState(false);
 
   async function handleCreate(): Promise<void> {
     setIsCreating(true);
@@ -55,21 +62,56 @@ export default function OnboardingPage(): React.ReactElement {
         body: JSON.stringify({
           name: agentName || "My First Agent",
           description: template?.description ?? "",
-          systemPrompt: selectedTemplate === "blank"
-            ? ""
-            : `You are a ${template?.name ?? "helpful assistant"}. ${template?.description ?? ""}`,
+          systemPrompt:
+            selectedTemplate === "blank"
+              ? ""
+              : `You are a ${template?.name ?? "helpful assistant"}. ${template?.description ?? ""}`,
         }),
       });
 
       const data = (await res.json()) as { success: boolean; data?: { id: string } };
 
       if (data.success && data.data?.id) {
-        router.push(`/builder/${data.data.id}`);
-      } else {
-        router.push("/");
+        setAgentId(data.data.id);
+        setStep(2);
       }
+    } finally {
+      setIsCreating(false);
+    }
+  }
+
+  async function handleAddKnowledge(): Promise<void> {
+    if (!agentId || !knowledgeUrl.trim()) {
+      setStep(3);
+      return;
+    }
+
+    setIsAddingKnowledge(true);
+    try {
+      await fetch(`/api/agents/${agentId}/knowledge/sources`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: knowledgeUrl,
+          type: "URL",
+          url: knowledgeUrl,
+        }),
+      });
+    } finally {
+      setIsAddingKnowledge(false);
+      setStep(3);
+    }
+  }
+
+  async function handleFinish(): Promise<void> {
+    if (!agentId) return;
+    setIsFinishing(true);
+    try {
+      await fetch("/api/user/complete-onboarding", { method: "POST" });
+      await update();
+      router.push(`/builder/${agentId}`);
     } catch {
-      router.push("/");
+      router.push(`/builder/${agentId}`);
     }
   }
 
@@ -104,6 +146,9 @@ export default function OnboardingPage(): React.ReactElement {
                     placeholder="e.g. Customer Support Bot"
                     className="text-lg h-12"
                     autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && agentName.trim()) setStep(1);
+                    }}
                   />
                 </div>
                 <Button
@@ -145,13 +190,92 @@ export default function OnboardingPage(): React.ReactElement {
                   </Button>
                   <Button
                     className="flex-1"
-                    onClick={() => handleCreate()}
+                    onClick={handleCreate}
                     disabled={!selectedTemplate || isCreating}
                   >
                     {isCreating ? "Creating..." : "Create Agent"}
                     <ArrowRight className="ml-2 size-4" />
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {step === 2 && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <Database className="size-12 mx-auto mb-4 text-primary" />
+                  <h1 className="text-2xl font-bold mb-2">Add knowledge</h1>
+                  <p className="text-muted-foreground">
+                    Give your agent a URL to learn from. You can add more later.
+                  </p>
+                </div>
+                <Input
+                  value={knowledgeUrl}
+                  onChange={(e) => setKnowledgeUrl(e.target.value)}
+                  placeholder="https://your-website.com/docs"
+                  className="h-12"
+                  type="url"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && knowledgeUrl.trim()) handleAddKnowledge();
+                  }}
+                />
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setStep(3)}
+                    className="flex-1"
+                    disabled={isAddingKnowledge}
+                  >
+                    Skip
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={handleAddKnowledge}
+                    disabled={!knowledgeUrl.trim() || isAddingKnowledge}
+                  >
+                    {isAddingKnowledge ? "Adding..." : "Add & Continue"}
+                    <ArrowRight className="ml-2 size-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <div className="relative inline-flex mb-4">
+                    <MessageSquare className="size-12 text-primary" />
+                    <CheckCircle2 className="size-5 text-green-500 absolute -bottom-1 -right-1 bg-background rounded-full" />
+                  </div>
+                  <h1 className="text-2xl font-bold mb-2">Your agent is ready!</h1>
+                  <p className="text-muted-foreground">
+                    <span className="text-foreground font-medium">{agentName || "Your agent"}</span>
+                    {" "}has been created and is ready to use.
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
+                    Agent
+                  </p>
+                  <p className="font-semibold text-foreground">{agentName || "My First Agent"}</p>
+                  {knowledgeUrl && (
+                    <>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium pt-1">
+                        Knowledge source
+                      </p>
+                      <p className="text-sm text-muted-foreground truncate">{knowledgeUrl}</p>
+                    </>
+                  )}
+                </div>
+                <Button
+                  className="w-full h-11"
+                  onClick={handleFinish}
+                  disabled={isFinishing}
+                >
+                  {isFinishing ? "Opening..." : "Open in Builder"}
+                  <ArrowRight className="ml-2 size-4" />
+                </Button>
               </div>
             )}
           </CardContent>
