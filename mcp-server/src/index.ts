@@ -69,6 +69,38 @@ async function runHTTP(): Promise<void> {
   const app = express();
   app.use(express.json({ limit: "10mb" }));
 
+  // ── OAuth2 endpoints (required for Claude Connectors UI) ──────────────────
+  //
+  // Claude's "Add custom connector" always initiates OAuth2 PKCE flow.
+  // We implement a minimal pass-through: /authorize redirects immediately
+  // and /token returns MCP_API_KEY as the access token.
+  // The actual security still lives in requireApiKey on POST /mcp.
+
+  app.get("/authorize", (req: Request, res: Response) => {
+    const { redirect_uri, state, code_challenge } = req.query as Record<string, string>;
+    if (!redirect_uri) {
+      res.status(400).json({ error: "missing redirect_uri" });
+      return;
+    }
+    // Issue a one-time code (we'll just use a fixed value — /token validates nothing here)
+    const code = "mcp_auth_code_" + Date.now();
+    const separator = redirect_uri.includes("?") ? "&" : "?";
+    const location = `${redirect_uri}${separator}code=${encodeURIComponent(code)}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
+    process.stderr.write(`[MCP] OAuth /authorize → redirecting (challenge=${code_challenge ?? "none"})\n`);
+    res.redirect(302, location);
+  });
+
+  app.post("/token", express.urlencoded({ extended: false }), (req: Request, res: Response) => {
+    // Return MCP_API_KEY as the Bearer token so Claude uses it on /mcp requests
+    const accessToken = process.env.MCP_API_KEY ?? "no-key-configured";
+    process.stderr.write("[MCP] OAuth /token → issuing access token\n");
+    res.json({
+      access_token: accessToken,
+      token_type: "bearer",
+      expires_in: 31536000,  // 1 year
+    });
+  });
+
   // Health endpoint — no auth required
   app.get("/health", async (_req: Request, res: Response) => {
     const dbOk = await ping();
