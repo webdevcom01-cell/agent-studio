@@ -6,13 +6,14 @@
  *   as_set_agent_public     — toggle agent's isPublic flag (marketplace visibility)
  *   as_patch_node_field     — update a specific field in a flow node's data
  *   as_update_agent_prompt  — replace the prompt on an ai_response node
+ *   as_delete_agent         — permanently delete an agent + all dependent rows (transactional)
  *
  * Schema notes: Agent has `isPublic` (no `enabled`).
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { query, queryOne } from "../db.js";
+import { query, queryOne, getPool } from "../db.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -319,6 +320,124 @@ the right one (get node IDs from as_inspect_flow).`,
         newPromptPreview: prompt.slice(0, 150) + (prompt.length > 150 ? "…" : ""),
       };
 
+      return {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
+      };
+    }
+  );
+
+  // ── as_delete_agent ───────────────────────────────────────────────────────
+  server.registerTool(
+    "as_delete_agent",
+    {
+      title: "Delete Agent",
+      description: `Permanently delete an agent and all its dependent rows (Flow, AgentExecution, etc.).
+
+⚠️ DESTRUCTIVE — cannot be undone. Requires confirm=true to execute.
+Without confirm=true this returns a dry-run preview listing what would be deleted.
+
+The tool dynamically discovers every table with a FK to "Agent" via information_schema,
+then deletes rows from each in a single transaction before deleting the agent itself.
+If any DELETE fails, the entire transaction rolls back.`,
+      inputSchema: {
+        agent_name: z.string().optional().describe("Partial agent name (case-insensitive)."),
+        agent_id: z.string().optional().describe("Exact agent UUID."),
+        confirm: z.boolean().default(false)
+          .describe("Must be true to actually delete. Default false = dry-run preview."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ agent_name, agent_id, confirm }) => {
+      if (!agent_name && !agent_id) {
+        return { content: [{ type: "text", text: "Error: provide agent_name or agent_id." }] };
+      }
+
+      const condition = agent_id ? `id = $1` : `name ILIKE $1`;
+      const param = agent_id ?? `%${agent_name}%`;
+
+      const agent = await queryOne<{ id: string; name: string }>(
+        `SELECT id, name FROM "Agent" WHERE ${condition} LIMIT 1`,
+        [param]
+      );
+
+      if (!agent) {
+        return { content: [{ type: "text", text: `Agent not found: ${agent_name ?? agent_id}` }] };
+      }
+
+      // Discover every table/column with FK → "Agent"
+      const fkRows = await query<{ table_name: string; column_name: string }>(
+        `SELECT tc.table_name, kcu.column_name
+         FROM information_schema.table_constraints tc
+         JOIN information_schema.key_column_usage kcu
+           ON tc.constraint_name = kcu.constraint_name
+          AND tc.table_schema = kcu.table_schema
+         JOIN information_schema.constraint_column_usage ccu
+           ON tc.constraint_name = ccu.constraint_name
+          AND tc.table_schema = ccu.table_schema
+         WHERE tc.constraint_type = 'FOREIGN KEY'
+           AND ccu.table_name = 'Agent'
+           AND ccu.column_name = 'id'`
+      );
+
+      // Count rows that would be deleted per FK table
+      const previewCounts: Record<string, number> = {};
+      for (const { table_name, column_name } of fkRows) {
+        const [row] = await query<{ count: string }>(
+          `SELECT COUNT(*)::text as count FROM "${table_name}" WHERE "${column_name}" = $1`,
+          [agent.id]
+        );
+        previewCounts[`${table_name}.${column_name}`] = Number(row.count);
+      }
+
+      if (!confirm) {
+        const out = {
+          dryRun: true,
+          wouldDelete: { id: agent.id, name: agent.name },
+          dependentRows: previewCounts,
+          foreignKeys: fkRows.map(r => `${r.table_name}.${r.column_name}`),
+          hint: "Pass confirm=true to actually delete.",
+        };
+        return {
+          content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+          structuredContent: out,
+        };
+      }
+
+      // Execute transactional delete
+      const client = await getPool().connect();
+      const deletedCounts: Record<string, number> = {};
+      try {
+        await client.query("BEGIN");
+        for (const { table_name, column_name } of fkRows) {
+          const r = await client.query(
+            `DELETE FROM "${table_name}" WHERE "${column_name}" = $1`,
+            [agent.id]
+          );
+          deletedCounts[`${table_name}.${column_name}`] = r.rowCount ?? 0;
+        }
+        const agentResult = await client.query(
+          `DELETE FROM "Agent" WHERE id = $1`,
+          [agent.id]
+        );
+        deletedCounts["Agent"] = agentResult.rowCount ?? 0;
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        const msg = err instanceof Error ? err.message : String(err);
+        return {
+          content: [{ type: "text", text: `Delete failed and rolled back: ${msg}` }],
+          structuredContent: { success: false, error: msg },
+        };
+      } finally {
+        client.release();
+      }
+
+      const out = {
+        success: true,
+        deletedAgent: { id: agent.id, name: agent.name },
+        deletedCounts,
+      };
       return {
         content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
         structuredContent: out,

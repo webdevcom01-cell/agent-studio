@@ -23,6 +23,7 @@ Enables Claude to inspect agents, patch flows, change models, and run diagnostic
 | `as_set_agent_public` | Toggle agent's `isPublic` flag (marketplace visibility) |
 | `as_patch_node_field` | Update any field in a flow node's data |
 | `as_update_agent_prompt` | Replace the prompt on an ai_response node |
+| `as_delete_agent` | Permanently delete an agent + all FK-dependent rows (transactional, requires `confirm=true`) |
 
 ### Diagnostics
 | Tool | What it does |
