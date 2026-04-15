@@ -113,3 +113,5 @@ agents.csv
 agents_export.csv
 test_write_check
 agents_dump.json
+*.tgz
+pr-guardian-phase1.patch

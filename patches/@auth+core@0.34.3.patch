@@ -1,0 +1,15 @@
+diff --git a/lib/actions/callback/oauth/callback.js b/lib/actions/callback/oauth/callback.js
+index 1111111..2222222 100644
+--- a/lib/actions/callback/oauth/callback.js
++++ b/lib/actions/callback/oauth/callback.js
+@@ -43,7 +43,11 @@
+     const resCookies = [];
+     const state = await checks.state.use(cookies, resCookies, options, randomState);
+-    const codeGrantParams = o.validateAuthResponse(as, client, new URLSearchParams(query), provider.checks.includes("state") ? state : o.skipStateCheck);
++    const _authQP = new URLSearchParams(query);
++    // OAuth2 providers (e.g. GitHub) may return iss (RFC 9207) with unexpected
++    // values that do not match our fallback issuer. Skip iss check for non-OIDC.
++    if (!isOIDCProvider(provider)) _authQP.delete("iss");
++    const codeGrantParams = o.validateAuthResponse(as, client, _authQP, provider.checks.includes("state") ? state : o.skipStateCheck);
+     /** https://www.rfc-editor.org/rfc/rfc6749#section-4.1.2.1 */
+     if (o.isOAuth2Error(codeGrantParams)) {
