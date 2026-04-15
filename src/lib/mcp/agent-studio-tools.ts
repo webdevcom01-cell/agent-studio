@@ -229,7 +229,8 @@ async function toolListAgents(
   args: Record<string, unknown>,
   userId: string,
 ): Promise<MCPToolResult> {
-  const limit = Math.min(Number(args.limit ?? DEFAULT_AGENT_LIMIT), MAX_AGENT_LIMIT);
+  const rawLimit = Number(args.limit ?? DEFAULT_AGENT_LIMIT);
+  const limit = Math.min(Number.isFinite(rawLimit) ? rawLimit : DEFAULT_AGENT_LIMIT, MAX_AGENT_LIMIT);
   const search = typeof args.search === "string" ? args.search : undefined;
 
   const agents = await prisma.agent.findMany({
@@ -323,11 +324,16 @@ async function toolTriggerAgent(
 
   let inputVariables: Record<string, unknown> = {};
   if (typeof args.variables === "string") {
+    let parsed: unknown;
     try {
-      inputVariables = JSON.parse(args.variables) as Record<string, unknown>;
+      parsed = JSON.parse(args.variables);
     } catch {
       return err("variables must be a valid JSON string.");
     }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return err("variables must be a JSON object (e.g. {\"key\": \"value\"}).");
+    }
+    inputVariables = parsed as Record<string, unknown>;
   }
 
   const agent = await prisma.agent.findFirst({
@@ -395,7 +401,8 @@ async function toolSearchKnowledgeBase(
   const knowledgeBaseId =
     typeof args.knowledgeBaseId === "string" ? args.knowledgeBaseId : null;
   const query = typeof args.query === "string" ? args.query : null;
-  const topK = Math.min(Number(args.topK ?? DEFAULT_TOP_K), MAX_TOP_K);
+  const rawTopK = Number(args.topK ?? DEFAULT_TOP_K);
+  const topK = Math.min(Number.isFinite(rawTopK) ? rawTopK : DEFAULT_TOP_K, MAX_TOP_K);
 
   if (!knowledgeBaseId) return err("knowledgeBaseId is required.");
   if (!query) return err("query is required.");

@@ -176,6 +176,15 @@ describe("list_agents", () => {
     );
   });
 
+  it("falls back to default limit when a non-numeric string is passed (NaN guard)", async () => {
+    mockPrisma.agent.findMany.mockResolvedValueOnce([] as never);
+    await callAgentStudioTool("list_agents", { limit: "abc" }, USER_ID);
+
+    expect(mockPrisma.agent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 20 }),
+    );
+  });
+
   it("passes search filter when provided", async () => {
     mockPrisma.agent.findMany.mockResolvedValueOnce([] as never);
     await callAgentStudioTool("list_agents", { search: "summariser" }, USER_ID);
@@ -350,6 +359,26 @@ describe("trigger_agent", () => {
     expect(result.content[0].text).toContain("valid JSON");
   });
 
+  it("returns isError when variables is a JSON array not an object", async () => {
+    const result = await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "hi", variables: "[1,2,3]" },
+      USER_ID,
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("JSON object");
+  });
+
+  it("returns isError when variables is a JSON primitive (not an object)", async () => {
+    const result = await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "hi", variables: '"true"' },
+      USER_ID,
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("JSON object");
+  });
+
   it("passes parsed variables to conversation create", async () => {
     mockPrisma.agent.findFirst.mockResolvedValueOnce({
       id: "agent-1",
@@ -501,6 +530,19 @@ describe("search_knowledge_base", () => {
     );
 
     expect(mockHybridSearch).toHaveBeenCalledWith("test", "kb-1", { topK: 20 });
+  });
+
+  it("falls back to default topK when a non-numeric string is passed (NaN guard)", async () => {
+    mockPrisma.knowledgeBase.findFirst.mockResolvedValueOnce({ id: "kb-1", name: "KB" } as never);
+    mockHybridSearch.mockResolvedValueOnce([] as never);
+
+    await callAgentStudioTool(
+      "search_knowledge_base",
+      { knowledgeBaseId: "kb-1", query: "test", topK: "abc" },
+      USER_ID,
+    );
+
+    expect(mockHybridSearch).toHaveBeenCalledWith("test", "kb-1", { topK: 5 });
   });
 });
 
