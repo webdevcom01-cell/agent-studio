@@ -29,14 +29,6 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-vi.mock("@/lib/runtime/engine", () => ({
-  executeFlow: vi.fn(),
-}));
-
-vi.mock("@/lib/validators/flow-content", () => ({
-  parseFlowContent: vi.fn(),
-}));
-
 vi.mock("@/lib/knowledge/search", () => ({
   hybridSearch: vi.fn(),
 }));
@@ -47,6 +39,7 @@ vi.mock("@/lib/logger", () => ({
 
 vi.mock("@/lib/managed-tasks/manager", () => ({
   createTask: vi.fn(),
+  markFailed: vi.fn(),
 }));
 
 vi.mock("@/lib/queue", () => ({
@@ -55,12 +48,13 @@ vi.mock("@/lib/queue", () => ({
 
 import { prisma } from "@/lib/prisma";
 import { hybridSearch } from "@/lib/knowledge/search";
-import { createTask } from "@/lib/managed-tasks/manager";
+import { createTask, markFailed } from "@/lib/managed-tasks/manager";
 import { addMcpFlowJob } from "@/lib/queue";
 
 const mockPrisma = vi.mocked(prisma);
 const mockHybridSearch = vi.mocked(hybridSearch);
 const mockCreateTask = vi.mocked(createTask);
+const mockMarkFailed = vi.mocked(markFailed);
 const mockAddMcpFlowJob = vi.mocked(addMcpFlowJob);
 
 const USER_ID = "user-test-1";
@@ -283,6 +277,7 @@ describe("trigger_agent", () => {
     vi.clearAllMocks();
     mockCreateTask.mockResolvedValue({ id: "task-1" } as never);
     mockAddMcpFlowJob.mockResolvedValue("mcp-flow-task-1");
+    mockMarkFailed.mockResolvedValue({ id: "task-1", status: "FAILED" } as never);
   });
 
   const agentWithFlow = {
@@ -405,6 +400,31 @@ describe("trigger_agent", () => {
     );
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("JSON object");
+  });
+
+  it("returns isError when message is whitespace-only", async () => {
+    const result = await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "   " },
+      USER_ID,
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("message is required");
+  });
+
+  it("marks task as FAILED and returns isError when queue throws", async () => {
+    mockPrisma.agent.findFirst.mockResolvedValueOnce(agentWithFlow as never);
+    mockAddMcpFlowJob.mockRejectedValueOnce(new Error("Redis connection refused"));
+
+    const result = await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "hello" },
+      USER_ID,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("Failed to queue");
+    expect(mockMarkFailed).toHaveBeenCalledWith("task-1", "Failed to enqueue job");
   });
 });
 
@@ -575,5 +595,26 @@ describe("get_task_status", () => {
     expect(data.output).toBeNull();
     expect(data.startedAt).toBeNull();
     expect(data.completedAt).toBeNull();
+  });
+
+  it("returns ABANDONED status when flow produced no assistant output", async () => {
+    mockPrisma.managedAgentTask.findFirst.mockResolvedValueOnce({
+      id: "task-3",
+      status: "ABANDONED",
+      progress: 100,
+      output: null,
+      error: "Flow completed but produced no assistant output.",
+      startedAt: new Date("2025-01-01T10:00:00Z"),
+      completedAt: new Date("2025-01-01T10:01:00Z"),
+      createdAt: new Date("2025-01-01T09:59:00Z"),
+    } as never);
+
+    const result = await callAgentStudioTool("get_task_status", { taskId: "task-3" }, USER_ID);
+    const data = JSON.parse(result.content[0].text);
+
+    expect(result.isError).toBeUndefined();
+    expect(data.status).toBe("ABANDONED");
+    expect(data.output).toBeNull();
+    expect(data.error).toContain("no assistant output");
   });
 });

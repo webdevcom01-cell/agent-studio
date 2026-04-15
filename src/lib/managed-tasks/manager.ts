@@ -230,6 +230,24 @@ export async function markFailed(
   return toTask(row);
 }
 
+export async function markAbandoned(
+  taskId: string,
+  reason: string
+): Promise<ManagedTask> {
+  const row = await prisma.managedAgentTask.update({
+    where: { id: taskId },
+    data: {
+      status: "ABANDONED",
+      error: reason,
+      completedAt: new Date(),
+    },
+  });
+
+  logger.warn("Managed task abandoned", { taskId, reason });
+
+  return toTask(row);
+}
+
 /** User requests pause — worker honours this between tool steps */
 export async function requestPause(taskId: string): Promise<ManagedTask> {
   const task = await prisma.managedAgentTask.findUnique({

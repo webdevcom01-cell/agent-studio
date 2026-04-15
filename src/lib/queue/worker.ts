@@ -419,7 +419,7 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
   const { prisma } = await import("@/lib/prisma");
   const { executeFlow } = await import("@/lib/runtime/engine");
   const { parseFlowContent } = await import("@/lib/validators/flow-content");
-  const { markRunning, markCompleted, markFailed } = await import("@/lib/managed-tasks/manager");
+  const { markRunning, markCompleted, markFailed, markAbandoned } = await import("@/lib/managed-tasks/manager");
   const { logger: log } = await import("@/lib/logger");
 
   await markRunning(taskId, job.id ?? `mcp-flow-${taskId}`);
@@ -464,9 +464,16 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
     const lastAssistant = result.messages.filter((m) => m.role === "assistant").pop();
     const durationMs = Date.now() - startTime;
 
+    if (!lastAssistant) {
+      await markAbandoned(taskId, "Flow completed but produced no assistant output.");
+      await job.updateProgress(100);
+      log.warn("MCP flow job abandoned — no assistant output", { jobId: job.id, taskId, agentId, durationMs });
+      return { conversationId: conversation.id, output: null, messageCount: result.messages.length, durationMs };
+    }
+
     const output = {
       conversationId: conversation.id,
-      output: lastAssistant?.content ?? null,
+      output: lastAssistant.content,
       messageCount: result.messages.length,
       durationMs,
     };

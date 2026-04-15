@@ -16,7 +16,7 @@ import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { hybridSearch } from "@/lib/knowledge/search";
-import { createTask } from "@/lib/managed-tasks/manager";
+import { createTask, markFailed } from "@/lib/managed-tasks/manager";
 import { addMcpFlowJob } from "@/lib/queue";
 
 // ---------------------------------------------------------------------------
@@ -27,6 +27,7 @@ const DEFAULT_AGENT_LIMIT = 20;
 const MAX_AGENT_LIMIT = 50;
 const DEFAULT_TOP_K = 5;
 const MAX_TOP_K = 20;
+const TASK_DESCRIPTION_MAX_LENGTH = 200;
 
 // ---------------------------------------------------------------------------
 // MCP Tool Definition types (MCP 2025-11-05 spec)
@@ -156,7 +157,7 @@ export const AGENT_STUDIO_TOOLS: MCPToolDefinition[] = [
   {
     name: "get_task_status",
     description:
-      "Check the status of an async agent task (BullMQ managed task). Returns status (PENDING, RUNNING, COMPLETED, FAILED), progress, and output when available.",
+      "Check the status of an async agent task (BullMQ managed task). Returns status (PENDING, RUNNING, PAUSED, COMPLETED, FAILED, ABANDONED, CANCELLED), progress, and output when available. Poll until status is COMPLETED, FAILED, ABANDONED, or CANCELLED.",
     inputSchema: {
       type: "object",
       properties: {
@@ -317,10 +318,10 @@ async function toolTriggerAgent(
   userId: string,
 ): Promise<MCPToolResult> {
   const agentId = typeof args.agentId === "string" ? args.agentId : null;
-  const message = typeof args.message === "string" ? args.message : null;
+  const message = typeof args.message === "string" ? args.message.trim() : null;
 
   if (!agentId) return err("agentId is required.");
-  if (!message) return err("message is required.");
+  if (!message) return err("message is required and cannot be empty.");
 
   let inputVariables: Record<string, unknown> = {};
   if (typeof args.variables === "string") {
@@ -348,14 +349,24 @@ async function toolTriggerAgent(
   // Create a ManagedAgentTask record (PENDING) — worker will execute and update it
   const task = await createTask({
     name: `MCP: ${agent.name}`,
-    description: message.slice(0, 200),
+    description: message.slice(0, TASK_DESCRIPTION_MAX_LENGTH),
     agentId,
     userId,
     input: { task: message },
   });
 
   // Enqueue the async flow job — returns immediately
-  await addMcpFlowJob({ taskId: task.id, agentId, userId, message, variables: inputVariables });
+  try {
+    await addMcpFlowJob({ taskId: task.id, agentId, userId, message, variables: inputVariables });
+  } catch (queueError) {
+    try {
+      await markFailed(task.id, "Failed to enqueue job");
+    } catch {
+      // best-effort cleanup — ignore secondary failure
+    }
+    logger.error("trigger_agent failed to enqueue job", { taskId: task.id, agentId, error: queueError });
+    return err("Failed to queue agent execution. Please try again.");
+  }
 
   logger.info("trigger_agent enqueued async flow job", { taskId: task.id, agentId, userId });
 

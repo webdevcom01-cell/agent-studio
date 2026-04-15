@@ -110,7 +110,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       // Tool execution
       case "tools/call": {
         const toolName = rpcParams?.name as string | undefined;
-        const toolArgs = (rpcParams?.arguments ?? {}) as Record<string, unknown>;
+        const rawArgs = rpcParams?.arguments;
+        const toolArgs: Record<string, unknown> =
+          rawArgs !== null && typeof rawArgs === "object" && !Array.isArray(rawArgs)
+            ? (rawArgs as Record<string, unknown>)
+            : {};
 
         if (!toolName) {
           return jsonRpcError(id, -32602, "Missing tool name in params.name");

@@ -184,6 +184,7 @@ enum ManagedTaskStatus {
   COMPLETED
   FAILED
   CANCELLED
+  ABANDONED
 }
 
 model ManagedAgentTask {
