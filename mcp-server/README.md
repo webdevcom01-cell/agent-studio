@@ -24,6 +24,7 @@ Enables Claude to inspect agents, patch flows, change models, and run diagnostic
 | `as_patch_node_field` | Update any field in a flow node's data |
 | `as_update_agent_prompt` | Replace the prompt on an ai_response node |
 | `as_delete_agent` | Permanently delete an agent + all FK-dependent rows (transactional, requires `confirm=true`) |
+| `as_update_flow` | Replace entire nodes+edges in a flow — for structural rewiring, adding/removing nodes |
 
 ### Diagnostics
 | Tool | What it does |

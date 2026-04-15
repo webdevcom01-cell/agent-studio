@@ -7,6 +7,7 @@
  *   as_patch_node_field     — update a specific field in a flow node's data
  *   as_update_agent_prompt  — replace the prompt on an ai_response node
  *   as_delete_agent         — permanently delete an agent + all dependent rows (transactional)
+ *   as_update_flow          — replace entire nodes+edges array in a flow (structural rewiring)
  *
  * Schema notes: Agent has `isPublic` (no `enabled`).
  */
@@ -438,6 +439,102 @@ If any DELETE fails, the entire transaction rolls back.`,
         deletedAgent: { id: agent.id, name: agent.name },
         deletedCounts,
       };
+      return {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
+      };
+    }
+  );
+
+  // ── as_update_flow ────────────────────────────────────────────────────────
+  server.registerTool(
+    "as_update_flow",
+    {
+      title: "Update Flow Structure",
+      description: `Replace the entire nodes and/or edges array in an agent's flow.
+
+Use this for structural rewiring: adding new nodes, removing nodes, changing
+edge connections, or reorganizing the flow topology.
+
+Pass nodes_json and/or edges_json as JSON strings (arrays).
+Omit either parameter to leave that part of the flow unchanged.
+
+Before calling, fetch current state with as_inspect_flow so you have the
+full node/edge list to modify. Build the new arrays, then call this tool.
+
+⚠️  Replaces the full nodes/edges in DB immediately — no undo.
+    Always call as_inspect_flow first to capture the current state.`,
+      inputSchema: {
+        agent_name: z.string().optional().describe("Partial agent name (case-insensitive)."),
+        agent_id: z.string().optional().describe("Exact agent UUID."),
+        nodes_json: z.string().optional()
+          .describe("Full replacement nodes array as a JSON string. Omit to leave nodes unchanged."),
+        edges_json: z.string().optional()
+          .describe("Full replacement edges array as a JSON string. Omit to leave edges unchanged."),
+        dry_run: z.boolean().default(false)
+          .describe("If true, validates input and returns a preview without writing to DB."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ agent_name, agent_id, nodes_json, edges_json, dry_run }) => {
+      if (!agent_name && !agent_id) {
+        return { content: [{ type: "text", text: "Error: provide agent_name or agent_id." }] };
+      }
+      if (!nodes_json && !edges_json) {
+        return { content: [{ type: "text", text: "Error: provide at least one of nodes_json or edges_json." }] };
+      }
+
+      // Parse nodes
+      let newNodes: unknown[] | undefined;
+      if (nodes_json) {
+        try {
+          newNodes = JSON.parse(nodes_json) as unknown[];
+          if (!Array.isArray(newNodes)) throw new Error("nodes_json must be a JSON array");
+        } catch (e) {
+          return { content: [{ type: "text", text: `Error parsing nodes_json: ${e instanceof Error ? e.message : String(e)}` }] };
+        }
+      }
+
+      // Parse edges
+      let newEdges: unknown[] | undefined;
+      if (edges_json) {
+        try {
+          newEdges = JSON.parse(edges_json) as unknown[];
+          if (!Array.isArray(newEdges)) throw new Error("edges_json must be a JSON array");
+        } catch (e) {
+          return { content: [{ type: "text", text: `Error parsing edges_json: ${e instanceof Error ? e.message : String(e)}` }] };
+        }
+      }
+
+      const row = await getAgentWithFlow(agent_name, agent_id);
+      if (!row) {
+        return { content: [{ type: "text", text: `Agent or flow not found: ${agent_name ?? agent_id}` }] };
+      }
+
+      const content = row.content as FlowContent;
+      const prevNodeCount = content.nodes.length;
+      const prevEdgeCount = (content.edges as unknown[]).length;
+
+      // Apply changes
+      if (newNodes !== undefined) content.nodes = newNodes as FlowNode[];
+      if (newEdges !== undefined) content.edges = newEdges;
+
+      const out = {
+        success: true,
+        dryRun: dry_run,
+        agentId: row.id,
+        agentName: row.name,
+        nodes: { before: prevNodeCount, after: content.nodes.length },
+        edges: { before: prevEdgeCount, after: (content.edges as unknown[]).length },
+      };
+
+      if (!dry_run) {
+        await query(
+          `UPDATE "Flow" SET content = $1, "updatedAt" = NOW() WHERE id = $2`,
+          [JSON.stringify(content), row.flowId]
+        );
+      }
+
       return {
         content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
         structuredContent: out,
