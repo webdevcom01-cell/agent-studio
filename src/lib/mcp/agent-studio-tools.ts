@@ -12,11 +12,21 @@
  *   kb:read       → search_knowledge_base
  */
 
+import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { executeFlow } from "@/lib/runtime/engine";
 import { parseFlowContent } from "@/lib/validators/flow-content";
 import { hybridSearch } from "@/lib/knowledge/search";
+
+// ---------------------------------------------------------------------------
+// Pagination / search limits
+// ---------------------------------------------------------------------------
+
+const DEFAULT_AGENT_LIMIT = 20;
+const MAX_AGENT_LIMIT = 50;
+const DEFAULT_TOP_K = 5;
+const MAX_TOP_K = 20;
 
 // ---------------------------------------------------------------------------
 // MCP Tool Definition types (MCP 2025-11-05 spec)
@@ -62,10 +72,10 @@ export const AGENT_STUDIO_TOOLS: MCPToolDefinition[] = [
       properties: {
         limit: {
           type: "number",
-          description: "Maximum number of agents to return (1-50).",
+          description: `Maximum number of agents to return (1-${MAX_AGENT_LIMIT}).`,
           minimum: 1,
-          maximum: 50,
-          default: 20,
+          maximum: MAX_AGENT_LIMIT,
+          default: DEFAULT_AGENT_LIMIT,
         },
         search: {
           type: "string",
@@ -133,10 +143,10 @@ export const AGENT_STUDIO_TOOLS: MCPToolDefinition[] = [
         },
         topK: {
           type: "number",
-          description: "Number of results to return (1-20).",
+          description: `Number of results to return (1-${MAX_TOP_K}).`,
           minimum: 1,
-          maximum: 20,
-          default: 5,
+          maximum: MAX_TOP_K,
+          default: DEFAULT_TOP_K,
         },
       },
       required: ["knowledgeBaseId", "query"],
@@ -219,7 +229,7 @@ async function toolListAgents(
   args: Record<string, unknown>,
   userId: string,
 ): Promise<MCPToolResult> {
-  const limit = Math.min(Number(args.limit ?? 20), 50);
+  const limit = Math.min(Number(args.limit ?? DEFAULT_AGENT_LIMIT), MAX_AGENT_LIMIT);
   const search = typeof args.search === "string" ? args.search : undefined;
 
   const agents = await prisma.agent.findMany({
@@ -334,7 +344,7 @@ async function toolTriggerAgent(
     data: {
       agentId,
       status: "ACTIVE",
-      variables: inputVariables as object,
+      variables: inputVariables as Prisma.InputJsonValue,
     },
   });
 
@@ -373,7 +383,7 @@ async function toolSearchKnowledgeBase(
   const knowledgeBaseId =
     typeof args.knowledgeBaseId === "string" ? args.knowledgeBaseId : null;
   const query = typeof args.query === "string" ? args.query : null;
-  const topK = Math.min(Number(args.topK ?? 5), 20);
+  const topK = Math.min(Number(args.topK ?? DEFAULT_TOP_K), MAX_TOP_K);
 
   if (!knowledgeBaseId) return err("knowledgeBaseId is required.");
   if (!query) return err("query is required.");
