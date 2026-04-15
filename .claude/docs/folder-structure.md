@@ -57,6 +57,9 @@ src/
     webhooks/[agentId]/page.tsx       ← Webhook management (two-panel: list + detail)
     skills/page.tsx                   ← ECC Skills Browser
     devsecops/page.tsx                ← DevSecOps Pipeline Setup guide
+    settings/profile/page.tsx         ← User profile settings
+    webhooks/page.tsx                 ← Global webhooks overview (all agents)
+    evals/page.tsx                    ← Global evals overview (all suites)
     api/
       auth/[...nextauth]/route.ts              ← NextAuth API route (GET, POST)
       health/route.ts                          ← Health check endpoint
@@ -83,6 +86,8 @@ src/
       agents/import/route.ts                      ← POST import agent from JSON
       agents/discover/route.ts                    ← GET marketplace search/filter
       a2a/agents/route.ts                         ← A2A agent discovery
+      a2a/[agentId]/agent-card/route.ts           ← GET/PUT individual agent card for A2A
+      .well-known/agent-cards/route.ts            ← GET public agent card discovery endpoint
       agent-calls/route.ts                        ← Agent-to-agent call logs
       agent-calls/stats/route.ts                  ← Agent call statistics
       approvals/route.ts                          ← GET pending approval requests
@@ -111,6 +116,16 @@ src/
       agents/[agentId]/memory/[memoryId]/route.ts              ← GET, PATCH, DELETE memory
       agents/[agentId]/memory/export/route.ts                  ← GET export memories
       agents/[agentId]/memory/import/route.ts                  ← POST import memories
+      agents/[agentId]/tasks/route.ts                          ← GET list, POST create managed task
+      agents/[agentId]/tasks/[taskId]/route.ts                 ← GET single task + status
+      agents/[agentId]/tasks/[taskId]/cancel/route.ts          ← POST cancel
+      agents/[agentId]/tasks/[taskId]/pause/route.ts           ← POST pause
+      agents/[agentId]/tasks/[taskId]/resume/route.ts          ← POST resume
+      agents/[agentId]/sdk-sessions/route.ts                   ← GET list, POST create SDK session
+      agents/[agentId]/sdk-sessions/[sessionId]/route.ts       ← GET, DELETE session
+      agents/[agentId]/pipelines/route.ts                      ← GET list, POST create SDLC pipeline run
+      agents/[agentId]/pipelines/[runId]/route.ts              ← GET single run + step results
+      agents/[agentId]/pipelines/[runId]/cancel/route.ts       ← POST cancel
       api-keys/route.ts                           ← GET list, POST create API keys
       api-keys/[keyId]/route.ts                   ← GET, PATCH, DELETE API key
       orgs/[orgId]/invite/route.ts                ← POST send org invite
@@ -148,12 +163,12 @@ src/
     builder/
       flow-builder.tsx    ← Main ReactFlow editor
       flow-error-boundary.tsx ← Error boundary for flow editor
-      node-picker.tsx     ← Node type selector dropdown (56 node types)
+      node-picker.tsx     ← Node type selector dropdown (62 node types)
       property-panel.tsx  ← Right sidebar for editing node properties
       version-panel.tsx   ← Version history sidebar
       deploy-dialog.tsx   ← Deploy confirmation dialog
       diff-view.tsx       ← Version diff viewer
-      nodes/              ← 57 node display components (base + 56 node types)
+      nodes/              ← 64 node display components (7 new: claude-agent-sdk, deploy-trigger, file-writer, git-node, process-runner, project-context, sandbox-verify)
     theme-provider.tsx    ← Dark mode theme provider
 
   data/
@@ -268,7 +283,7 @@ src/
       workers/
         pyodide-node-worker.js ← Node.js Worker thread running Pyodide WASM
       handlers/
-        index.ts           ← Handler registry (59 handlers + 2 streaming variants)
+        index.ts           ← Handler registry (62 handlers + 2 streaming variants)
         ai-response-handler.ts          ← Non-streaming AI (generateText + MCP + agent tools)
         ai-response-streaming-handler.ts ← Streaming AI (streamText → NDJSON + MCP + agent tools)
         mcp-tool-handler.ts             ← Deterministic MCP tool call node
@@ -314,6 +329,46 @@ src/
         api-call-handler.ts, function-handler.ts, kb-search-handler.ts,
         webhook-handler.ts, webhook-trigger-handler.ts,
         verification-handler.ts, ast-transform-handler.ts, lsp-query-handler.ts
+        claude-agent-sdk-handler.ts         ← Claude Agent SDK subagent (session, MCP, tools)
+        claude-agent-sdk-streaming-handler.ts ← Streaming variant of claude_agent_sdk
+        code-review-handler.ts              ← AI-powered code review (SDLC pipeline step)
+        deploy-trigger-handler.ts           ← Trigger deployment (SDLC pipeline step)
+        file-writer-handler.ts              ← Write files to agent workspace
+        git-node-handler.ts                 ← Git operations (clone, commit, push)
+        process-runner-handler.ts           ← Run shell commands in sandbox
+        project-context-handler.ts          ← Gather project context (SDLC infrastructure node)
+        sandbox-verify-handler.ts           ← Verify sandbox environment (SDLC infrastructure node)
+    sdk-sessions/
+      persistence.ts  ← AgentSdkSession CRUD (loadSdkSession, createSdkSession, updateSdkSession)
+      __tests__/      ← Unit tests
+    managed-tasks/
+      manager.ts      ← ManagedAgentTask CRUD + lifecycle (PENDING→RUNNING→PAUSED/COMPLETED/FAILED/CANCELLED)
+      __tests__/      ← Unit tests
+    sdlc/
+      pipeline-manager.ts ← PipelineRun CRUD + lifecycle (create/mark-running/advance-step/complete/fail/cancel)
+      orchestrator.ts     ← Step-by-step pipeline execution (called by BullMQ worker only)
+      schemas.ts          ← Zod schemas for task classification + pipeline config
+      agent-prompts.ts    ← Per-step system prompts keyed by ECC agent template names
+      __tests__/          ← Unit + integration tests
+    queue/
+      index.ts        ← BullMQ Queue init + all addXxxJob helpers; job types: flow.execute, eval.run, webhook.retry, kb.ingest, webhook.execute, managed.task.run, pipeline.run
+      worker.ts       ← BullMQ Worker process (concurrency=5); run via \`pnpm worker\`
+      events.ts       ← Queue event listeners (job completion callbacks)
+      __tests__/      ← Unit + shutdown tests
+    ecc/
+      index.ts            ← ECC module exports + feature-flag check
+      feature-flag.ts     ← ECC_ENABLED env var + per-agent eccEnabled check
+      meta-orchestrator.ts ← LLM-based task routing to agent templates
+      instinct-engine.ts  ← Instinct CRUD + extraction pipeline
+      skill-ingest.ts     ← Skill ingestion into KB
+      skill-parser.ts     ← Parse ECC skill definitions
+      skill-composer.ts   ← Compose skill outputs
+      skill-router.ts     ← Route queries to matching skills
+      sdk-learn-hook.ts   ← fireSdkLearnHook() — auto AgentExecution + instinct extraction after claude_agent_sdk runs
+      mcp-circuit-breaker.ts ← Circuit breaker for ECC MCP calls
+      obsidian-adapter.ts ← Obsidian vault integration
+      types.ts            ← ECC type definitions
+      __tests__/          ← Unit tests
     knowledge/
       index.ts        ← Main search entry point
       chunker.ts      ← Text chunking (400 tokens, 20% overlap)
@@ -344,7 +399,7 @@ src/
       __tests__/      ← Unit tests
 
   types/
-    index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType (56 types)
+    index.ts          ← FlowNode, FlowEdge, FlowContent, FlowVariable, NodeType (62 types)
     pdf-parse.d.ts    ← Type declaration for pdf-parse
     mammoth.d.ts      ← Type declaration for mammoth
 

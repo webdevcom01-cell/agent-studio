@@ -1,8 +1,8 @@
 # Key Conventions & Patterns
 
 ## Runtime Engine
-- 59 node handlers registered in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants: ai-response-streaming, parallel-streaming)
-- Node types (59): message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, webhook_trigger, email_send, notification, format_transform, switch, web_fetch, browser_action, desktop_app, learn, python_code, structured_output, cache, embeddings, retry, ab_test, semantic_router, cost_monitor, aggregate, web_search, multimodal_input, image_generation, speech_audio, database_query, file_operations, mcp_task_runner, guardrails, code_interpreter, trajectory_evaluator, plan_and_execute, reflexive_loop, swarm, verification, ast_transform, lsp_query
+- 62 node handlers registered in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants: ai-response-streaming, parallel-streaming)
+- Node types (62): message, button, capture, condition, set_variable, end, goto, wait, ai_response, ai_classify, ai_extract, ai_summarize, api_call, function, kb_search, webhook, mcp_tool, call_agent, human_approval, loop, parallel, memory_write, memory_read, evaluator, schedule_trigger, webhook_trigger, email_send, notification, format_transform, switch, web_fetch, browser_action, desktop_app, learn, python_code, structured_output, cache, embeddings, retry, ab_test, semantic_router, cost_monitor, aggregate, web_search, multimodal_input, image_generation, speech_audio, database_query, file_operations, mcp_task_runner, guardrails, code_interpreter, trajectory_evaluator, plan_and_execute, reflexive_loop, swarm, verification, ast_transform, lsp_query, **claude_agent_sdk**
 - Safety limits: MAX_ITERATIONS=50, MAX_HISTORY=100
 - Handlers return `ExecutionResult` with messages, nextNodeId, waitForInput, updatedVariables
 - Handlers never throw — always return graceful fallback
@@ -320,3 +320,102 @@ PDF (pdf-parse), DOCX (mammoth), HTML (cheerio), Excel/CSV (xlsx), PPTX (JSZip X
 - `compare-utils.ts`: A/B comparison result diffing
 - `rag-assertions.ts`: RAG-specific assertion types
 - `trajectory-scorer.ts`: multi-step reasoning trajectory scoring
+
+## Claude Agent SDK Node (`claude_agent_sdk`)
+
+Handler: `src/lib/runtime/handlers/claude-agent-sdk-handler.ts`
+
+**Execution model**
+- Calls Vercel AI SDK `generateText` with `stopWhen: stepCountIs(maxSteps)`
+- Default model: `claude-sonnet-4-6`; default `maxSteps`: 20; upper bound: 50
+- Per-call timeout: 5 min (AbortController). Compose with flow's `abortSignal` via `composeAbortSignals()`
+- Tools loaded with `Promise.allSettled` — one source failing never blocks the other
+- When ≥2 subagent tools are loaded, a parallel-execution hint is prepended to the system prompt
+
+**Session persistence** (`src/lib/sdk-sessions/persistence.ts`)
+- `enableSessionResume: true` activates persistence
+- DB-backed (priority): set `sdkSessionId` node property → loads `AgentSdkSession` row, validates `agentId` match
+- Auto-create: if `enableSessionResume=true` and no `sdkSessionId` given, a new session is created and `__sdk_session_id` is written to flow variables
+- Legacy fallback: `sessionVarName` (default `__sdk_session`) stores message array in flow variables
+- Session update is transactional: `inputTokensDelta`/`outputTokensDelta` accumulate across resumes
+
+**Observability**
+- OTel span `gen_ai.agent_sdk.generate` with `gen_ai.*` semantic conventions
+- `recordChatLatency` + `recordTokenUsage` metrics after every call
+- `fireSdkLearnHook` fires fire-and-forget (ECC instinct extraction) — never throws
+
+**Node properties**: `task`, `systemPrompt`, `model`, `maxSteps`, `enableMCP`, `enableSubAgents`, `enableSessionResume`, `sdkSessionId`, `sessionVarName`, `outputVariable`
+
+---
+
+## SDLC Pipeline Orchestration
+
+Source: `src/lib/sdlc/` | API: `/api/sdlc/*` | Worker: BullMQ `pipeline.run` jobs
+
+**Architecture**
+- `pipeline-manager.ts` — CRUD + lifecycle for `PipelineRun` Prisma model
+- `orchestrator.ts` — step-by-step execution; called exclusively by the BullMQ worker, never directly from API routes
+- `schemas.ts` — Zod schemas for task classification and pipeline config
+- `agent-prompts.ts` — per-step system prompts keyed by ECC agent template names
+
+**Status transitions**: `PENDING → RUNNING → COMPLETED | FAILED | CANCELLED`
+- Worker calls: `markPipelineRunning()` → `advancePipelineStep()` (in transaction) → `markPipelineCompleted/Failed()`
+- Cancel: user API → `cancelPipelineRun()` sets DB status; worker checks `isPipelineCancelled()` between every step and aborts
+- Idempotent cancel: re-cancelling an already-cancelled run is a no-op
+
+**Execution details**
+- `STEP_TIMEOUT_MS = 5min` — per-step `generateText` timeout via AbortController
+- `MAX_CONTEXT_CHARS = 24 000` — accumulated step outputs fed into subsequent steps; trimmed at ceiling
+- `CONTEXT_SLICE_PER_STEP = 3 000` chars max per step when building context document
+- `INFRASTRUCTURE_NODES = { project_context, sandbox_verify }` — executed inline, no AI call
+- Learn Hook (`fireSdkLearnHook`) fired fire-and-forget after each AI step
+- `job.updateProgress()` emitted between steps so UI can display live progress
+- Workspace: `/tmp/sdlc` (Railway read-only `/app` filesystem fallback for vitest + git ops)
+
+**Issue idempotency**: unique constraint on issue key prevents duplicate pipeline runs for the same event
+
+---
+
+## BullMQ Managed Agent Tasks
+
+Source: `src/lib/queue/index.ts` + `worker.ts` | Manager: `src/lib/managed-tasks/manager.ts`
+
+**Queue setup**
+- Single queue: `agent-studio` | Worker concurrency: 5
+- Default retry: 3 attempts, exponential backoff 5 s | `removeOnComplete`: 24 h / 1000 jobs | `removeOnFail`: 7 days
+- Managed tasks and SDLC pipelines: `attempts: 1` — failures are explicit, not auto-retried
+
+**Job types and priorities** (lower = higher priority)
+| Job type | Priority | Use |
+|---|---|---|
+| `flow.execute` | 1 | Live chat — user waiting |
+| `webhook.execute` | 2 | Async webhook trigger |
+| `webhook.retry` | 3 | Webhook retry backoff |
+| `kb.ingest` | 5 | Background KB ingestion |
+| `managed.task.run` | 8 | Long-running agent task |
+| `pipeline.run` | 8 | SDLC pipeline run |
+| `eval.run` | 10 | Batch eval suite |
+
+**ManagedAgentTask lifecycle** (`src/lib/managed-tasks/manager.ts`)
+- Status: `PENDING → RUNNING → COMPLETED | FAILED | CANCELLED`; also `PAUSED → RUNNING` (resume)
+- `TaskInput`: `{ task, model?, maxSteps?, enableMCP?, enableSubAgents?, sdkSessionId?, outputVariable? }`
+- `TaskOutput`: `{ result, inputTokens, outputTokens, durationMs, sessionId? }`
+- Optional `callbackUrl` — POSTed on completion/failure (webhook-style notification)
+- `progress` (0–100) updated by worker via `job.updateProgress()`; polled by client via `GET /api/agents/[agentId]/tasks/[taskId]`
+
+**Worker startup**: `pnpm worker` runs `src/lib/queue/worker.ts` as a separate process. Must run alongside Next.js in production (Railway: separate worker service or `Procfile`).
+
+---
+
+## Adding a New Node Type
+1. Add type to `NodeType` union in `src/types/index.ts`
+2. Add type string to `NODE_TYPES` array in `src/lib/validators/flow-content.ts`
+3. Create handler in `src/lib/runtime/handlers/[name]-handler.ts`
+4. Register in `src/lib/runtime/handlers/index.ts`
+5. Create display component in `src/components/builder/nodes/[name]-node.tsx`
+6. Register component in `NODE_TYPES` map in `src/components/builder/flow-builder.tsx`
+7. Add to node picker in `src/components/builder/node-picker.tsx`
+8. Add property editor in `src/components/builder/property-panel.tsx`
+9. If node sets output variable, add to `OUTPUT_VAR_TYPES` set in `property-panel.tsx`
+10. Write unit test in `src/lib/runtime/handlers/__tests__/[name]-handler.test.ts`
+11. Update node count in `src/components/builder/__tests__/node-picker.test.tsx`
