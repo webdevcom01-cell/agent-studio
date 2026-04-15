@@ -459,16 +459,34 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
         : undefined,
     };
   } catch (error) {
-    logger.error("AI response failed", error, { agentId: context.agentId });
+    logger.error("AI response failed", error, {
+      agentId: context.agentId,
+      nodeId: node.id,
+      model: node.data.model,
+      outputVariable,
+    });
+
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    // Surface actionable hints for the most common failure mode: missing API key.
+    const apiKeyMatch = rawMessage.match(/([A-Z_]+_API_KEY)\s+not\s+configured/i);
+    const hint = apiKeyMatch
+      ? `Missing ${apiKeyMatch[1]} on server — set the env var or switch this node to a model whose key is configured.`
+      : undefined;
+
+    const userFacing = hint
+      ? `AI call failed: ${hint}`
+      : `AI call failed: ${rawMessage.slice(0, 200)}`;
+
     return {
-      messages: [
-        {
-          role: "assistant",
-          content: "I'm having trouble generating a response right now. Let me continue.",
-        },
-      ],
+      messages: [{ role: "assistant", content: userFacing }],
       nextNodeId: null,
       waitForInput: false,
+      // Write the error into the configured output variable so downstream nodes
+      // (e.g. sandbox_verify) see a non-empty, diagnostic value instead of undefined
+      // — the silent undefined was what made the root cause invisible for hours.
+      updatedVariables: outputVariable
+        ? { [outputVariable]: `[AI_ERROR] ${userFacing}` }
+        : undefined,
     };
   }
 };

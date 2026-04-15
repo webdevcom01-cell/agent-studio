@@ -145,6 +145,37 @@ describe("aiResponseStreamingHandler", () => {
     expect(writer.chunks).toContainEqual(
       expect.objectContaining({ type: "error" })
     );
-    expect(result.messages[0].content).toContain("having trouble");
+    expect(result.messages[0].content).toContain("AI call failed");
+    expect(result.messages[0].content).toContain("API failure");
+  });
+
+  it("writes error diagnostic to outputVariable when streamText throws", async () => {
+    mockedStreamText.mockImplementation(() => {
+      throw new Error("timeout");
+    });
+
+    const node = createNode({ outputVariable: "stream_result" });
+    const ctx = createContext();
+    const writer = createMockWriter();
+
+    const result = await aiResponseStreamingHandler(node, ctx, writer);
+
+    expect(result.updatedVariables?.stream_result).toMatch(/^\[AI_ERROR\]/);
+    expect(result.updatedVariables?.stream_result).toContain("timeout");
+  });
+
+  it("surfaces API key hint on missing provider key", async () => {
+    mockedStreamText.mockImplementation(() => {
+      throw new Error("OPENAI_API_KEY not configured");
+    });
+
+    const node = createNode({ outputVariable: "stream_result" });
+    const ctx = createContext();
+    const writer = createMockWriter();
+
+    const result = await aiResponseStreamingHandler(node, ctx, writer);
+
+    expect(result.messages[0].content).toContain("OPENAI_API_KEY");
+    expect(result.updatedVariables?.stream_result).toContain("OPENAI_API_KEY");
   });
 });

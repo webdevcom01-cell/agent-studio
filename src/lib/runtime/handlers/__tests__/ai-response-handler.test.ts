@@ -208,20 +208,19 @@ describe("aiResponseHandler", () => {
     expect(callArgs.tools).toBeUndefined();
   });
 
-  it("returns graceful error message on AI failure", async () => {
+  it("returns diagnostic error message on AI failure", async () => {
     mockGenerateText.mockRejectedValue(new Error("API rate limit exceeded"));
 
     const result = await aiResponseHandler(makeNode(), makeContext());
 
     expect(result.messages[0].role).toBe("assistant");
-    expect(result.messages[0].content).toContain(
-      "having trouble generating a response"
-    );
+    expect(result.messages[0].content).toContain("AI call failed");
+    expect(result.messages[0].content).toContain("rate limit");
     expect(result.nextNodeId).toBeNull();
     expect(result.waitForInput).toBe(false);
   });
 
-  it("does not set updatedVariables on error", async () => {
+  it("writes error diagnostic to outputVariable on AI failure (so downstream nodes don't see undefined)", async () => {
     mockGenerateText.mockRejectedValue(new Error("timeout"));
 
     const result = await aiResponseHandler(
@@ -229,7 +228,35 @@ describe("aiResponseHandler", () => {
       makeContext()
     );
 
+    expect(result.updatedVariables).toBeDefined();
+    expect(result.updatedVariables?.ai_result).toMatch(/^\[AI_ERROR\]/);
+    expect(result.updatedVariables?.ai_result).toContain("timeout");
+  });
+
+  it("does not set updatedVariables on error when no outputVariable configured", async () => {
+    mockGenerateText.mockRejectedValue(new Error("timeout"));
+
+    const result = await aiResponseHandler(
+      makeNode({ outputVariable: "" }),
+      makeContext()
+    );
+
     expect(result.updatedVariables).toBeUndefined();
+  });
+
+  it("surfaces API key hint when provider key is missing", async () => {
+    mockGenerateText.mockRejectedValue(
+      new Error("ANTHROPIC_API_KEY not configured"),
+    );
+
+    const result = await aiResponseHandler(
+      makeNode({ outputVariable: "ai_result", model: "claude-sonnet-4-6" }),
+      makeContext(),
+    );
+
+    expect(result.messages[0].content).toContain("ANTHROPIC_API_KEY");
+    expect(result.messages[0].content).toContain("env var");
+    expect(result.updatedVariables?.ai_result).toContain("ANTHROPIC_API_KEY");
   });
 
   it("resolves template variables in prompt", async () => {

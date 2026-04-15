@@ -140,8 +140,8 @@ describe("aiResponseHandler — outputSchema branch", () => {
     const node = makeNode({ outputSchema: "NonExistentSchema" });
     const result = await aiResponseHandler(node as Parameters<typeof aiResponseHandler>[0], makeContext());
 
-    // Error is caught and returns graceful fallback
-    expect(result.messages[0].content).toMatch(/trouble generating/i);
+    // Error is caught and returns diagnostic fallback (not generic "trouble generating")
+    expect(result.messages[0].content).toMatch(/AI call failed/i);
     expect(mockGenerateObject).not.toHaveBeenCalled();
   });
 

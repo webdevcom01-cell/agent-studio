@@ -384,14 +384,32 @@ export async function aiResponseStreamingHandler(
         : undefined,
     };
   } catch (err) {
-    logger.error("AI streaming response failed", err instanceof Error ? err : new Error(String(err)), { agentId: context.agentId });
-    const errorMsg =
-      "I'm having trouble generating a response right now. Let me continue.";
-    try { writer.write({ type: "error", content: errorMsg }); } catch { /* stream closed by client */ }
+    logger.error(
+      "AI streaming response failed",
+      err instanceof Error ? err : new Error(String(err)),
+      { agentId: context.agentId, nodeId: node.id, model: node.data.model, outputVariable },
+    );
+
+    const rawMessage = err instanceof Error ? err.message : String(err);
+    const apiKeyMatch = rawMessage.match(/([A-Z_]+_API_KEY)\s+not\s+configured/i);
+    const hint = apiKeyMatch
+      ? `Missing ${apiKeyMatch[1]} on server — set the env var or switch this node to a model whose key is configured.`
+      : undefined;
+
+    const userFacing = hint
+      ? `AI call failed: ${hint}`
+      : `AI call failed: ${rawMessage.slice(0, 200)}`;
+
+    try { writer.write({ type: "error", content: userFacing }); } catch { /* stream closed by client */ }
+
     return {
-      messages: [{ role: "assistant", content: errorMsg }],
+      messages: [{ role: "assistant", content: userFacing }],
       nextNodeId: null,
       waitForInput: false,
+      // Write diagnostic value to outputVariable so downstream nodes don't receive undefined.
+      updatedVariables: outputVariable
+        ? { [outputVariable]: `[AI_ERROR] ${userFacing}` }
+        : undefined,
     };
   }
 }
