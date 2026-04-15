@@ -421,11 +421,13 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
   const { parseFlowContent } = await import("@/lib/validators/flow-content");
   const { markRunning, markCompleted, markFailed, markAbandoned } = await import("@/lib/managed-tasks/manager");
   const { logger: log } = await import("@/lib/logger");
+  type TaskOutput = import("@/lib/managed-tasks/manager").TaskOutput;
 
   await markRunning(taskId, job.id ?? `mcp-flow-${taskId}`);
   await job.updateProgress(10);
 
   const startTime = Date.now();
+  let conversationId: string | null = null;
 
   try {
     const agent = await prisma.agent.findFirst({
@@ -446,9 +448,10 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
         variables: variables as import("@/generated/prisma").Prisma.InputJsonValue,
       },
     });
+    conversationId = conversation.id;
 
     const context = {
-      conversationId: conversation.id,
+      conversationId,
       agentId,
       flowContent,
       currentNodeId: null as string | null,
@@ -466,19 +469,22 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
 
     if (!lastAssistant) {
       await markAbandoned(taskId, "Flow completed but produced no assistant output.");
+      await prisma.conversation.update({ where: { id: conversationId }, data: { status: "ABANDONED" } });
       await job.updateProgress(100);
       log.warn("MCP flow job abandoned — no assistant output", { jobId: job.id, taskId, agentId, durationMs });
-      return { conversationId: conversation.id, output: null, messageCount: result.messages.length, durationMs };
+      return { conversationId, output: null, messageCount: result.messages.length, durationMs };
     }
 
-    const output = {
-      conversationId: conversation.id,
-      output: lastAssistant.content,
-      messageCount: result.messages.length,
+    const output: TaskOutput = {
+      result: lastAssistant.content,
+      inputTokens: 0,
+      outputTokens: 0,
       durationMs,
+      sessionId: conversationId,
     };
 
-    await markCompleted(taskId, output as unknown as import("@/lib/managed-tasks/manager").TaskOutput);
+    await markCompleted(taskId, output);
+    await prisma.conversation.update({ where: { id: conversationId }, data: { status: "COMPLETED" } });
     await job.updateProgress(100);
 
     log.info("MCP flow job completed", { jobId: job.id, taskId, agentId, durationMs });
@@ -487,6 +493,11 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     await markFailed(taskId, errorMsg);
+    if (conversationId) {
+      await prisma.conversation
+        .update({ where: { id: conversationId }, data: { status: "ABANDONED" } })
+        .catch(() => undefined);
+    }
     log.error("MCP flow job failed", { jobId: job.id, taskId, agentId, error: err });
     throw err;
   }

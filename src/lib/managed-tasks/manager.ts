@@ -225,7 +225,7 @@ export async function markFailed(
     },
   });
 
-  logger.warn("Managed task failed", { taskId, error });
+  logger.error("Managed task failed", { taskId, error });
 
   return toTask(row);
 }
@@ -239,6 +239,7 @@ export async function markAbandoned(
     data: {
       status: "ABANDONED",
       error: reason,
+      progress: 100,
       completedAt: new Date(),
     },
   });
@@ -299,7 +300,7 @@ export async function cancelTask(taskId: string): Promise<ManagedTask> {
 
   if (!task) throw new Error(`Task not found: ${taskId}`);
 
-  const terminal: ManagedTaskStatus[] = ["COMPLETED", "FAILED", "CANCELLED"];
+  const terminal: ManagedTaskStatus[] = ["COMPLETED", "FAILED", "CANCELLED", "ABANDONED"];
   if (terminal.includes(task.status)) {
     throw new Error(`Task already in terminal status: ${task.status}`);
   }

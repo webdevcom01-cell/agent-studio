@@ -426,6 +426,21 @@ describe("trigger_agent", () => {
     expect(result.content[0].text).toContain("Failed to queue");
     expect(mockMarkFailed).toHaveBeenCalledWith("task-1", "Failed to enqueue job");
   });
+
+  it("still returns isError when both queue and markFailed throw", async () => {
+    mockPrisma.agent.findFirst.mockResolvedValueOnce(agentWithFlow as never);
+    mockAddMcpFlowJob.mockRejectedValueOnce(new Error("Redis down"));
+    mockMarkFailed.mockRejectedValueOnce(new Error("DB also down"));
+
+    const result = await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "hello" },
+      USER_ID,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("Failed to queue");
+  });
 });
 
 // ---------------------------------------------------------------------------
