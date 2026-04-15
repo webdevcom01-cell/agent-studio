@@ -18,6 +18,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     conversation: {
       create: vi.fn(),
+      update: vi.fn(),
     },
     knowledgeBase: {
       findFirst: vi.fn(),
@@ -152,7 +153,9 @@ describe("list_agents", () => {
     expect(data.agents).toHaveLength(1);
     expect(data.agents[0].id).toBe("agent-1");
     expect(data.agents[0].totalConversations).toBe(3);
-    expect(data.total).toBe(1);
+    // `returned` reflects the page size, not total DB count
+    expect(data.returned).toBe(1);
+    expect(data.total).toBeUndefined();
   });
 
   it("applies default limit of 20", async () => {
@@ -382,6 +385,31 @@ describe("trigger_agent", () => {
     );
     const data = JSON.parse(result.content[0].text);
     expect(data.output).toBeNull();
+  });
+
+  it("marks conversation as FAILED and returns isError when executeFlow throws", async () => {
+    mockPrisma.agent.findFirst.mockResolvedValueOnce({
+      id: "agent-1",
+      userId: USER_ID,
+      flow: { id: "flow-1", content: "{}" },
+    } as never);
+    mockExecuteFlow.mockRejectedValueOnce(new Error("Engine crashed"));
+    mockPrisma.conversation.update.mockResolvedValueOnce({} as never);
+
+    const result = await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "hello" },
+      USER_ID,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("execution failed");
+    expect(mockPrisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "conv-1" },
+        data: { status: "ABANDONED" },
+      }),
+    );
   });
 });
 

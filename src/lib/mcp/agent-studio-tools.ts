@@ -66,7 +66,7 @@ export const AGENT_STUDIO_TOOLS: MCPToolDefinition[] = [
   {
     name: "list_agents",
     description:
-      "List AI agents in the agent-studio workspace. Returns id, name, description, and status for each agent. Use this to discover available agents before triggering them.",
+      "List AI agents in the agent-studio workspace. Returns id, name, description, and model for each agent. The `returned` field shows how many agents were returned (up to the limit); use the `limit` parameter to paginate. Use this to discover available agents before triggering them.",
     inputSchema: {
       type: "object",
       properties: {
@@ -266,7 +266,7 @@ async function toolListAgents(
       totalConversations: a._count.conversations,
       updatedAt: a.updatedAt.toISOString(),
     })),
-    total: agents.length,
+    returned: agents.length,
   });
 }
 
@@ -359,7 +359,19 @@ async function toolTriggerAgent(
   };
 
   const startTime = Date.now();
-  const result = await executeFlow(context, message);
+  let result: Awaited<ReturnType<typeof executeFlow>>;
+  try {
+    result = await executeFlow(context, message);
+  } catch (flowError) {
+    // Mark conversation as FAILED so it doesn't stay ACTIVE forever
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { status: "ABANDONED" },
+    });
+    logger.error("trigger_agent executeFlow failed", { agentId, conversationId: conversation.id, error: flowError });
+    return err("Agent execution failed.");
+  }
+
   const durationMs = Date.now() - startTime;
 
   const lastAssistant = result.messages
