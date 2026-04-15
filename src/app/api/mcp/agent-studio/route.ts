@@ -101,7 +101,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         });
 
       case "notifications/initialized":
-        return jsonRpcResult(id, {});
+        // MCP spec (Streamable HTTP): notifications are one-way — no JSON-RPC response.
+        // Return 202 Accepted with empty body so the client knows the notification was received.
+        return new NextResponse(null, { status: 202 });
 
       // Tool discovery
       case "tools/list":

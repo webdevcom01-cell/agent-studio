@@ -106,13 +106,14 @@ describe("POST /api/mcp/agent-studio", () => {
     expect(json.result.capabilities).toEqual({ tools: {} });
   });
 
-  it("handles notifications/initialized without error", async () => {
+  it("returns 202 Accepted for notifications/initialized (no JSON-RPC body)", async () => {
     const req = makeRequest({ jsonrpc: "2.0", id: null, method: "notifications/initialized" });
     const res = await POST(req);
-    const json = await res.json();
 
-    expect(json.error).toBeUndefined();
-    expect(json.result).toBeDefined();
+    // MCP spec: notifications are one-way — server must NOT return a JSON-RPC response
+    expect(res.status).toBe(202);
+    const text = await res.text();
+    expect(text).toBe("");
   });
 
   // ── tools/list ────────────────────────────────────────────────────────────
