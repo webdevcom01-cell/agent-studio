@@ -1,0 +1,26 @@
+# BullMQ Worker — standalone Docker image
+# Processes flow.execute, eval.run, managed.task.run, mcp.flow.run,
+# webhook.execute, webhook.retry, kb.ingest, and pipeline.run jobs.
+# Requires: REDIS_URL, DATABASE_URL, OPENAI_API_KEY, DEEPSEEK_API_KEY
+
+FROM node:20-alpine
+
+RUN apk add --no-cache libc6-compat
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml .npmrc ./
+RUN pnpm install --no-frozen-lockfile
+
+COPY . .
+
+# Regenerate Prisma client for the correct binary target
+RUN pnpm db:generate
+
+ENV NODE_ENV=production
+
+HEALTHCHECK --interval=30s --timeout=15s --start-period=30s --retries=3 \
+  CMD node -e "process.exit(0)"
+
+CMD ["npx", "tsx", "src/lib/queue/worker.ts"]

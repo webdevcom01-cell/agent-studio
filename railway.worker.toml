@@ -1,15 +1,18 @@
 [build]
 builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.worker"
 
 [deploy]
-startCommand = "pnpm worker"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
 watchPaths = [
-  "src/**",
+  "src/lib/queue/**",
+  "src/lib/runtime/**",
+  "src/lib/managed-tasks/**",
+  "src/lib/mcp/**",
   "prisma/**",
   "package.json",
   "pnpm-lock.yaml",
   "railway.worker.toml",
-  "Dockerfile"
+  "Dockerfile.worker"
 ]
