@@ -47,6 +47,9 @@ function isPublicPath(pathname: string): boolean {
   // Internal MCP proxy — called server-to-server by the MCP client pool, no session cookie
   if (pathname.startsWith("/api/mcp/proxy/")) return true;
 
+  // Remote MCP server — authenticated via Bearer API key in Authorization header
+  if (pathname === "/api/mcp/agent-studio") return true;
+
   // Cron jobs — called by Vercel infrastructure, authenticated via CRON_SECRET header
   if (pathname.startsWith("/api/cron/")) return true;
 
