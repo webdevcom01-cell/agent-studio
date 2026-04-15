@@ -416,7 +416,7 @@ describe("trigger_agent", () => {
     expect(data.output).toBeNull();
   });
 
-  it("marks conversation as FAILED and returns isError when executeFlow throws", async () => {
+  it("marks conversation as ABANDONED and returns isError when executeFlow throws", async () => {
     mockPrisma.agent.findFirst.mockResolvedValueOnce({
       id: "agent-1",
       userId: USER_ID,
