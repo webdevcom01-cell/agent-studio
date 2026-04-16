@@ -194,7 +194,11 @@ export async function searchKnowledgeBase(
   // SET LOCAL scopes to the current transaction — thread-safe, no global state.
   const wordCount = query.split(/\s+/).filter(Boolean).length;
   const efSearch = wordCount <= 3 ? 40 : wordCount <= 8 ? 60 : 100;
-  await prisma.$executeRaw`SET LOCAL hnsw.ef_search = ${efSearch}`;
+  // SET LOCAL does not support parameterised placeholders in PostgreSQL
+  // ($1 syntax is rejected with "syntax error at or near $1").
+  // efSearch is always 40 | 60 | 100 — a computed integer, never user input — so
+  // Prisma.raw() injection is safe here.
+  await prisma.$executeRaw(Prisma.sql`SET LOCAL hnsw.ef_search = ${Prisma.raw(String(efSearch))}`);
 
   const searchStart = performance.now();
   const results = await prisma.$queryRaw<VectorSearchRow[]>(
