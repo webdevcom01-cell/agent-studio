@@ -9,7 +9,9 @@ import { generateText } from "ai";
 import { getModel } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 
-const TRANSFORM_MODEL = "deepseek-chat";
+// Use gpt-4o-mini by default — cheap, fast, and reliable for query expansion.
+// Override via RAG_TRANSFORM_MODEL env var (e.g. "deepseek-chat") if preferred.
+const TRANSFORM_MODEL = process.env.RAG_TRANSFORM_MODEL ?? "gpt-4o-mini";
 const MAX_EXPANDED_QUERIES = 3;
 
 export async function hydeTransform(

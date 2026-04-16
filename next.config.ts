@@ -7,6 +7,15 @@ const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["pdf-parse", "mammoth", "tiktoken", "sharp", "bullmq", "@ast-grep/napi"],
   transpilePackages: ["swr"],
+  // Include project context files in the standalone build so that
+  // project_context nodes can read CLAUDE.md and .claude/docs/** at runtime.
+  // Without this, Next.js standalone output only bundles server.js + deps —
+  // arbitrary project-root files are NOT copied and process.cwd() lookups fail.
+  experimental: {
+    outputFileTracingIncludes: {
+      "/**": ["./CLAUDE.md", "./.claude/docs/**", "./.claude/rules/**"],
+    },
+  },
   // ESLint runs in CI (GitHub Actions) — skip during Railway builds to avoid
   // pre-existing lint debt blocking deploys.
   eslint: { ignoreDuringBuilds: true },
