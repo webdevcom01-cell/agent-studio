@@ -97,23 +97,36 @@ export class DiscordRenderer implements NotificationRenderer {
 // SlackRenderer
 // ---------------------------------------------------------------------------
 
+// Slack Block Kit hard limits
+const SLACK_HEADER_MAX = 150;   // plain_text in header block
+const SLACK_SECTION_MAX = 2900; // mrkdwn text in section block (limit is 3000, leave buffer)
+const SLACK_TEXT_MAX = 3900;    // top-level "text" fallback field
+
+function slackTruncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return text.slice(0, max - 3) + "…";
+}
+
 export class SlackRenderer implements NotificationRenderer {
   readonly name = "slack";
 
   render(input: NotificationInput): RenderedMessage {
     const emoji = LEVEL_EMOJI[input.level] ?? "";
-    const text = input.title
+    const rawTitle = input.title
+      ? `${emoji} ${input.title}`
+      : `${emoji} Notification`;
+    const rawFallback = input.title
       ? `${emoji} ${input.title}: ${input.message}`
       : `${emoji} ${input.message}`;
+
+    const text = slackTruncate(rawFallback, SLACK_TEXT_MAX);
 
     const blocks: Array<Record<string, unknown>> = [
       {
         type: "header",
         text: {
           type: "plain_text",
-          text: input.title
-            ? `${emoji} ${input.title}`
-            : `${emoji} Notification`,
+          text: slackTruncate(rawTitle, SLACK_HEADER_MAX),
           emoji: true,
         },
       },
@@ -122,7 +135,12 @@ export class SlackRenderer implements NotificationRenderer {
     if (input.message) {
       blocks.push({
         type: "section",
-        text: { type: "mrkdwn", text: input.message },
+        text: {
+          type: "mrkdwn",
+          // Truncate to avoid Slack's 3000-char section limit.
+          // Long fields like {{pipelineReport}} or {{testResult}} can easily exceed it.
+          text: slackTruncate(input.message, SLACK_SECTION_MAX),
+        },
       });
     }
 
