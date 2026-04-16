@@ -99,9 +99,18 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
           break;
         }
 
-        case "push":
+        case "push": {
+          // Embed token in remote URL so HTTPS push works without a credential
+          // helper — required on Railway where there is no persistent keychain.
+          const token = process.env.GIT_TOKEN;
+          const repo = process.env.GIT_REPO ?? (node.data.prRepo as string) ?? "";
+          if (token && repo) {
+            const authedUrl = `https://${token}@github.com/${repo}.git`;
+            await runGit(["remote", "set-url", "origin", authedUrl], workingDir, gitEnv);
+          }
           await runGit(["push", "--set-upstream", "origin", branch, "--force-with-lease"], workingDir, gitEnv);
           break;
+        }
 
         case "create_pr":
           prResult = await createGitHubPR({
@@ -194,15 +203,18 @@ async function runGit(
 }
 
 function buildGitEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {
+  // Git identity — required for commit. Falls back to sensible SDLC defaults.
+  // Override via GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL env vars on Railway.
+  const name = process.env.GIT_AUTHOR_NAME ?? "SDLC Pipeline";
+  const email = process.env.GIT_AUTHOR_EMAIL ?? "sdlc@agent-studio.app";
+  return {
     ...process.env,
     GIT_TERMINAL_PROMPT: "0",
+    GIT_AUTHOR_NAME: name,
+    GIT_AUTHOR_EMAIL: email,
+    GIT_COMMITTER_NAME: name,
+    GIT_COMMITTER_EMAIL: email,
   };
-  if (process.env.GIT_TOKEN) {
-    // Configure HTTPS auth via credential helper
-    env.GIT_ASKPASS = "echo";
-  }
-  return env;
 }
 
 // ── GitHub PR creation via REST API ───────────────────────────────────────────
