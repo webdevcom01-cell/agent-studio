@@ -11,10 +11,9 @@ const nextConfig: NextConfig = {
   // project_context nodes can read CLAUDE.md and .claude/docs/** at runtime.
   // Without this, Next.js standalone output only bundles server.js + deps —
   // arbitrary project-root files are NOT copied and process.cwd() lookups fail.
-  experimental: {
-    outputFileTracingIncludes: {
-      "/**": ["./CLAUDE.md", "./.claude/docs/**", "./.claude/rules/**"],
-    },
+  // Note: moved from experimental.outputFileTracingIncludes → top-level in Next.js 15.5+
+  outputFileTracingIncludes: {
+    "/**": ["./CLAUDE.md", "./.claude/docs/**", "./.claude/rules/**"],
   },
   // ESLint runs in CI (GitHub Actions) — skip during Railway builds to avoid
   // pre-existing lint debt blocking deploys.
