@@ -1,3 +1,4 @@
+import { join, resolve } from "node:path";
 import { logger } from "@/lib/logger";
 
 /**
@@ -76,7 +77,8 @@ export async function runVerificationCommands(
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
   const execFileAsync = promisify(execFile);
-  const effectiveCwd = cwd ?? process.cwd();
+  // Resolve to an absolute path so PATH entries built from it are always absolute.
+  const effectiveCwd = resolve(cwd ?? process.cwd());
 
   const outputLines: string[] = [];
   const results: CommandResult[] = [];
@@ -101,7 +103,20 @@ export async function runVerificationCommands(
       const { stdout, stderr } = await execFileAsync(cmd, args, {
         timeout: timeoutMs,
         maxBuffer: 1024 * 512, // 512KB
-        env: { ...process.env, CI: "true", FORCE_COLOR: "0" },
+        env: {
+          ...process.env,
+          CI: "true",
+          FORCE_COLOR: "0",
+          // Extend PATH so local node_modules/.bin binaries (vitest, tsc, eslint, etc.)
+          // are resolved by execFile. Required on Railway: the runtime PATH does not
+          // include project node_modules/.bin, so bare commands like `vitest` get ENOENT
+          // without this. Include both the effective CWD dir and the Railway app root.
+          PATH: [
+            join(effectiveCwd, "node_modules", ".bin"),
+            "/app/node_modules/.bin",
+            process.env.PATH ?? "",
+          ].filter(Boolean).join(":"),
+        },
         cwd: effectiveCwd,
       });
 
