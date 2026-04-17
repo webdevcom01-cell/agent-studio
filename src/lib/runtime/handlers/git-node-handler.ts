@@ -264,16 +264,18 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
       updatedVariables: { [outputVariable]: result },
     };
   } catch (error) {
-    // Serialize error explicitly — passing the raw Error object to logger causes
-    // Railway to display "errorMessage: [object Object]" instead of the real message.
-    const stderr = (error as { stderr?: string }).stderr ?? "(empty)";
-    const msg = error instanceof Error ? error.message : JSON.stringify(error);
-    const fullMessage = stderr !== "(empty)" ? `${msg} | git stderr: ${stderr}` : msg;
+    // logger.error signature: error(message, error?, context?)
+    // Passing a plain object as the second arg caused logger to call String(obj)
+    // → "errorMessage: [object Object]". Pass the actual error object directly.
+    const gitStderr = (error as { stderr?: string }).stderr ?? "";
+    const gitStdout = (error as { stdout?: string }).stdout ?? "";
+    const msg = error instanceof Error ? error.message : String(error);
+    const fullMessage = gitStderr ? `${msg} | stderr: ${gitStderr}` : msg;
 
-    logger.error("git-node-handler error", {
+    logger.error("git-node-handler error", error, {
       nodeId: node.id,
-      message: msg.slice(0, 500),
-      stderr: stderr.slice(0, 500),
+      gitStderr: gitStderr.slice(0, 500) || "(empty)",
+      gitStdout: gitStdout.slice(0, 200) || "(empty)",
     });
 
     const result = {
