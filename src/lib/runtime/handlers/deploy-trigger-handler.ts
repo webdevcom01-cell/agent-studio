@@ -62,7 +62,7 @@ export const deployTriggerHandler: NodeHandler = async (node, context) => {
           role: "assistant",
           content: "Deploy step skipped: no VERCEL_TOKEN configured. Railway will auto-deploy from the git push.",
         }],
-        nextNodeId: "passed",
+        nextNodeId: "failed",
         waitForInput: false,
         updatedVariables: { [outputVariable]: result },
       };
@@ -80,7 +80,7 @@ export const deployTriggerHandler: NodeHandler = async (node, context) => {
       };
       return {
         messages: [{ role: "assistant", content: "Deploy step skipped: projectId not configured." }],
-        nextNodeId: "passed",
+        nextNodeId: "failed",
         waitForInput: false,
         updatedVariables: { [outputVariable]: result },
       };

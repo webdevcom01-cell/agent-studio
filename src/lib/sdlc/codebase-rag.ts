@@ -86,17 +86,26 @@ export async function indexCodebase(
     return { filesIndexed: 0, knowledgeBaseId: kb.id };
   }
 
-  // 4. Ingest each file as a TEXT KBSource
+  // 4. Ingest files concurrently using a worker-pool semaphore.
+  //
+  //    Each worker picks the next file from the queue when it finishes the current
+  //    one. This keeps all CONCURRENCY slots busy at all times — unlike a fixed
+  //    batch approach where a slow file in a batch stalls the whole batch.
+  //
+  //    CONCURRENCY=5 is chosen to balance throughput against:
+  //      - DB connection pool pressure (prisma default pool ≈ 10)
+  //      - OpenAI embeddings rate limit (~3 000 RPM on free tier)
+  //      - Railway Railway memory constraints (avoid OOM on large repos)
   let indexed = 0;
-  for (const filePath of files) {
+  const queue = [...files]; // mutable work queue
+  const indexFile = async (filePath: string): Promise<void> => {
     try {
       const content = await readFile(filePath, "utf-8");
-      if (!content.trim()) continue;
+      if (!content.trim()) return;
 
       const relativePath = relative(workingDir, filePath);
       const language = extToLanguage(extname(filePath));
 
-      // Create KBSource record
       const source = await prisma.kBSource.create({
         data: {
           type: "TEXT",
@@ -112,7 +121,7 @@ export async function indexCodebase(
         },
       });
 
-      // Ingest: chunk + embed + store vectors
+      // chunk + embed + store vectors (the expensive part — runs concurrently)
       await ingestSource(source.id, content);
       indexed++;
     } catch (err) {
@@ -121,12 +130,25 @@ export async function indexCodebase(
         error: err instanceof Error ? err.message : String(err),
       });
     }
-  }
+  };
+
+  // Spin up CONCURRENCY workers; each drains from the shared queue
+  const CONCURRENCY = 5;
+  await Promise.all(
+    Array.from({ length: CONCURRENCY }, async () => {
+      while (queue.length > 0) {
+        const next = queue.shift();
+        if (next === undefined) break;
+        await indexFile(next);
+      }
+    }),
+  );
 
   logger.info("codebase-rag: indexing complete", {
     agentId,
     knowledgeBaseId: kb.id,
     filesIndexed: indexed,
+    concurrency: CONCURRENCY,
   });
 
   return { filesIndexed: indexed, knowledgeBaseId: kb.id };
@@ -182,11 +204,13 @@ export function buildCodeContext(results: SearchResult[]): string {
 // ---------------------------------------------------------------------------
 
 async function findOrCreateKB(agentId: string) {
-  const existing = await prisma.knowledgeBase.findUnique({ where: { agentId } });
-  if (existing) return existing;
-
-  return prisma.knowledgeBase.create({
-    data: {
+  // Use upsert instead of findUnique + create to prevent a race condition when
+  // two pipeline runs start simultaneously for the same agent. Both might see
+  // findUnique → null and both attempt create → unique constraint violation.
+  return prisma.knowledgeBase.upsert({
+    where: { agentId },
+    update: {}, // KB already exists — no fields to change
+    create: {
       agentId,
       name: "SDLC Codebase Index",
       retrievalMode: "hybrid",
@@ -203,25 +227,26 @@ async function findOrCreateKB(agentId: string) {
 }
 
 async function deleteCodebaseSources(knowledgeBaseId: string): Promise<void> {
-  // Find all codebase-tagged sources
-  const sources = await prisma.kBSource.findMany({
-    where: { knowledgeBaseId },
-    select: { id: true, customMetadata: true },
-  });
-
-  const codebaseSources = sources.filter((s) => {
-    const meta = s.customMetadata as Record<string, unknown> | null;
-    return meta?.[CODEBASE_SOURCE_TAG] === true;
+  // Filter at the DB level using a JSON path predicate so we don't load the
+  // entire KnowledgeBase (potentially thousands of documents) into Node memory.
+  // The @> operator checks that customMetadata contains { codebaseIndex: true }.
+  const codebaseSources = await prisma.kBSource.findMany({
+    where: {
+      knowledgeBaseId,
+      customMetadata: { path: [CODEBASE_SOURCE_TAG], equals: true },
+    },
+    select: { id: true },
   });
 
   if (codebaseSources.length === 0) return;
 
-  // Delete chunks first (cascades via Prisma but being explicit)
   const ids = codebaseSources.map((s) => s.id);
+
+  // Delete chunks first, then sources (explicit cascade for clarity)
   await prisma.kBChunk.deleteMany({ where: { sourceId: { in: ids } } });
   await prisma.kBSource.deleteMany({ where: { id: { in: ids } } });
 
-  logger.info("codebase-rag: deleted stale sources", { count: ids.length });
+  logger.info("codebase-rag: deleted stale codebase sources", { count: ids.length });
 }
 
 async function collectFiles(dir: string, depth = 0): Promise<string[]> {

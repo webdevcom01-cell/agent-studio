@@ -21,15 +21,21 @@
  *   • // src/lib/foo.ts           (comment as first line inside block)
  *   • // filepath: src/lib/foo.ts (explicit filepath annotation)
  *   • # filepath: src/lib/foo.ts  (Python/shell style)
+ *
+ * Two entry points:
+ *   - executeRealTestsFromFiles(files, workDir, agentId)
+ *       Called when files are already structured (generateObject path).
+ *       No markdown parsing needed — maximum reliability.
+ *   - executeRealTests(aiOutput, workDir, agentId)
+ *       Called with raw AI text (generateText fallback path).
+ *       Parses markdown code blocks, then delegates to executeRealTestsFromFiles.
  */
 
-import { mkdirSync, writeFileSync, existsSync, writeFile } from "node:fs";
-import { join, dirname, extname } from "node:path";
-import { promisify } from "node:util";
+import { mkdirSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
+import { join, dirname, relative, resolve } from "node:path";
 import { logger } from "@/lib/logger";
 import { runVerificationCommands } from "@/lib/runtime/verification-commands";
-
-const writeFileAsync = promisify(writeFile);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -93,7 +99,7 @@ function matchPathLine(line: string): string | null {
 }
 
 /**
- * Inspect the first 3 lines of a code block for an inline path comment.
+ * Inspect the first line of a code block for an inline path comment.
  *
  *   // src/lib/foo.ts
  *   // filepath: src/lib/foo.ts
@@ -221,13 +227,28 @@ export function parseCodeBlocks(aiOutput: string): ParsedFile[] {
  * Write ParsedFile[] to disk under workDir.
  * Silently skips files that fail (logs a warning instead).
  * Returns absolute paths of successfully written files.
+ *
+ * Security: resolves each path and confirms it stays inside workDir,
+ * blocking both "../../../etc/passwd" traversal and absolute-path injection.
  */
 export function writeToWorkspace(files: ParsedFile[], workDir: string): string[] {
   const written: string[] = [];
+  // Resolve workDir once so path traversal checks are against a canonical path
+  const resolvedWorkDir = resolve(workDir);
 
   for (const file of files) {
     try {
-      const absPath = join(workDir, file.path);
+      // Resolve the full path and confirm it stays inside workDir.
+      const absPath = resolve(join(resolvedWorkDir, file.path));
+      if (!absPath.startsWith(resolvedWorkDir + "/") && absPath !== resolvedWorkDir) {
+        logger.warn("code-extractor: blocked path traversal attempt", {
+          filePath: file.path,
+          resolvedPath: absPath,
+          workDir: resolvedWorkDir,
+        });
+        continue;
+      }
+
       mkdirSync(dirname(absPath), { recursive: true });
       writeFileSync(absPath, file.content, "utf-8");
       written.push(absPath);
@@ -244,53 +265,66 @@ export function writeToWorkspace(files: ParsedFile[], workDir: string): string[]
 }
 
 // ---------------------------------------------------------------------------
-// Real compilation + test execution
+// Real compilation + test execution — shared core
 // ---------------------------------------------------------------------------
 
-/** Workspace subdirectory for generated files */
 const GENERATED_SUBDIR = "workspace";
 
 /**
- * Full pipeline:
- *   1. Parse AI markdown output → extract code blocks
- *   2. Write files to {workDir}/workspace/
- *   3. Run tsc --noEmit on TypeScript files
- *   4. Run vitest run on test files (if any)
- *   5. Return real stdout/stderr combined
+ * Core execution pipeline — accepts already-parsed ParsedFile[].
  *
- * Never throws — errors are caught and returned as testOutput strings.
+ * Preferred entry point when the orchestrator calls generateObject() and has
+ * structured file data — avoids round-tripping through markdown serialization.
+ *
+ * Steps:
+ *   1. Clean and recreate {workDir}/workspace/
+ *   2. Write files to disk (with path traversal guard)
+ *   3. tsc --noEmit on TS files (90s timeout)
+ *   4. vitest run on test files (3min timeout)
+ *   5. Return combined output + pass/fail flags for the feedback loop
+ *
+ * Never throws — all errors are caught and reflected in the return value.
  */
-export async function executeRealTests(
-  aiOutput: string,
+export async function executeRealTestsFromFiles(
+  files: ParsedFile[],
   workDir: string,
   agentId: string,
 ): Promise<WorkspaceExecResult> {
-  // ── Parse code blocks ───────────────────────────────────────────────────
-  const parsed = parseCodeBlocks(aiOutput);
-
-  if (parsed.length === 0) {
-    logger.info("code-extractor: no code blocks found in AI output", { agentId });
+  if (files.length === 0) {
     return {
       filesWritten: 0,
       writtenPaths: [],
-      testOutput: "No code blocks extracted from implementation output — skipping real execution.",
+      testOutput: "No files provided — skipping real execution.",
       typecheckPassed: true,
       testsPassed: true,
     };
   }
 
-  // ── Ensure workspace exists ─────────────────────────────────────────────
+  // ── Ensure workspace is clean before writing ────────────────────────────
+  // Remove stale files from previous pipeline runs so the typecheck and
+  // test runner only see what the current run produced.
   const genDir = join(workDir, GENERATED_SUBDIR);
+  try {
+    if (existsSync(genDir)) {
+      rmSync(genDir, { recursive: true, force: true });
+    }
+  } catch (cleanErr) {
+    logger.warn("code-extractor: workspace cleanup failed — stale files may persist", {
+      agentId,
+      genDir,
+      error: cleanErr instanceof Error ? cleanErr.message : String(cleanErr),
+    });
+  }
   mkdirSync(genDir, { recursive: true });
 
   // ── Write files ─────────────────────────────────────────────────────────
-  const writtenPaths = writeToWorkspace(parsed, genDir);
+  const writtenPaths = writeToWorkspace(files, genDir);
 
   logger.info("code-extractor: files written to workspace", {
     agentId,
     genDir,
     filesWritten: writtenPaths.length,
-    files: writtenPaths.map((p) => p.replace(genDir + "/", "")),
+    files: writtenPaths.map((p) => relative(genDir, p)),
   });
 
   if (writtenPaths.length === 0) {
@@ -304,38 +338,38 @@ export async function executeRealTests(
   }
 
   // ── Create a minimal tsconfig for type checking the generated files ─────
-  // We extend the project's tsconfig so path aliases (@/) resolve correctly.
-  const tsconfigPath = join(workDir, "tsconfig.generated.json");
+  // Written to /app/ so tsc resolves node_modules from /app/node_modules/
+  // and @/* path aliases resolve against /app/tsconfig.json.
+  const APP_TSCONFIG = "/app/tsconfig.json";
+  const tsconfigPath = existsSync(APP_TSCONFIG)
+    ? "/app/tsconfig.sdlc-generated.json"
+    : join(workDir, "tsconfig.sdlc-generated.json");
+
   const tsconfigContent = JSON.stringify(
     {
-      extends: existsSync("/app/tsconfig.json") ? "/app/tsconfig.json" : "./tsconfig.json",
-      compilerOptions: {
-        noEmit: true,
-        skipLibCheck: true,
-        allowJs: true,
-      },
-      include: [genDir + "/**/*"],
+      extends: existsSync(APP_TSCONFIG) ? APP_TSCONFIG : "./tsconfig.json",
+      compilerOptions: { noEmit: true, skipLibCheck: true, allowJs: true },
+      include: [`${genDir}/**/*`],
     },
     null,
     2,
   );
 
   try {
-    await writeFileAsync(tsconfigPath, tsconfigContent, "utf-8");
+    await writeFile(tsconfigPath, tsconfigContent, "utf-8");
   } catch {
-    // tsconfig write failed — fall back to per-file tsc invocation
+    logger.warn("code-extractor: failed to write tsconfig", { agentId });
   }
 
   // ── Typecheck ───────────────────────────────────────────────────────────
-  const tsFiles = writtenPaths.filter((p) =>
-    p.endsWith(".ts") || p.endsWith(".tsx") || p.endsWith(".mts"),
+  const tsFiles = writtenPaths.filter(
+    (p) => p.endsWith(".ts") || p.endsWith(".tsx") || p.endsWith(".mts"),
   );
 
   let typecheckOutput = "";
   let typecheckPassed = true;
 
   if (tsFiles.length > 0) {
-    // Use the generated tsconfig if it was created, otherwise use file-by-file
     const tscCommand = existsSync(tsconfigPath)
       ? `tsc --project ${tsconfigPath}`
       : `tsc --noEmit --skipLibCheck --allowJs ${tsFiles.join(" ")}`;
@@ -343,7 +377,7 @@ export async function executeRealTests(
     const { results } = await runVerificationCommands(
       [tscCommand],
       agentId,
-      90_000, // 90 seconds — some projects are large
+      90_000, // 90 seconds — large projects may take longer
       genDir,
     );
 
@@ -357,55 +391,63 @@ export async function executeRealTests(
     });
   }
 
+  try {
+    rmSync(tsconfigPath);
+  } catch {
+    // Non-critical cleanup — ignore errors
+  }
+
   // ── Test runner ─────────────────────────────────────────────────────────
   const testFiles = writtenPaths.filter(
     (p) => p.includes(".test.") || p.includes(".spec.") || p.includes("__tests__"),
   );
 
-  let testOutput = "";
+  let testRunOutput = "";
   let testsPassed = true;
 
   if (testFiles.length > 0) {
-    const vitestCommand = `vitest run ${testFiles.join(" ")}`;
-
     const { results } = await runVerificationCommands(
-      [vitestCommand],
+      [`vitest run ${testFiles.join(" ")}`],
       agentId,
-      180_000, // 3 minutes for tests
+      180_000, // 3 minutes for test suites
       genDir,
     );
 
-    testOutput = results[0]?.output ?? "";
+    testRunOutput = results[0]?.output ?? "";
     testsPassed = results[0]?.passed ?? true;
 
     logger.info("code-extractor: test run complete", {
       agentId,
       passed: testsPassed,
-      outputLength: testOutput.length,
+      outputLength: testRunOutput.length,
     });
   }
 
   // ── Combine output for feedback loop ────────────────────────────────────
   const outputSections: string[] = [
-    `Files written: ${writtenPaths.length} (${writtenPaths.map((p) => p.replace(genDir + "/", "")).join(", ")})`,
+    `Files written: ${writtenPaths.length} (${writtenPaths.map((p) => relative(genDir, p)).join(", ")})`,
   ];
 
   if (typecheckOutput) {
-    const label = typecheckPassed ? "✅ TypeScript typecheck PASSED" : "❌ TypeScript typecheck FAILED";
+    const label = typecheckPassed
+      ? "✅ TypeScript typecheck PASSED"
+      : "❌ TypeScript typecheck FAILED";
     outputSections.push(`## ${label}\n\`\`\`\n${typecheckOutput}\n\`\`\``);
   } else if (tsFiles.length > 0) {
     outputSections.push("## ✅ TypeScript typecheck PASSED (no output)");
   }
 
-  if (testOutput) {
+  if (testRunOutput) {
     const label = testsPassed ? "✅ Tests PASSED" : "❌ Tests FAILED";
-    outputSections.push(`## ${label}\n\`\`\`\n${testOutput}\n\`\`\``);
+    outputSections.push(`## ${label}\n\`\`\`\n${testRunOutput}\n\`\`\``);
   } else if (testFiles.length > 0) {
     outputSections.push("## ✅ Tests PASSED (no output)");
   }
 
   if (tsFiles.length === 0 && testFiles.length === 0) {
-    outputSections.push("No TypeScript or test files generated — skipping compilation and test execution.");
+    outputSections.push(
+      "No TypeScript or test files generated — skipping compilation and test execution.",
+    );
   }
 
   return {
@@ -415,4 +457,32 @@ export async function executeRealTests(
     typecheckPassed,
     testsPassed,
   };
+}
+
+/**
+ * Markdown-text entry point — parses code blocks from raw AI output,
+ * then delegates to executeRealTestsFromFiles.
+ *
+ * Use when the AI output is raw markdown text (generateText fallback path).
+ * Never throws — errors are caught and returned as testOutput strings.
+ */
+export async function executeRealTests(
+  aiOutput: string,
+  workDir: string,
+  agentId: string,
+): Promise<WorkspaceExecResult> {
+  const parsed = parseCodeBlocks(aiOutput);
+
+  if (parsed.length === 0) {
+    logger.info("code-extractor: no code blocks found in AI output", { agentId });
+    return {
+      filesWritten: 0,
+      writtenPaths: [],
+      testOutput: "No code blocks extracted from implementation output — skipping real execution.",
+      typecheckPassed: true,
+      testsPassed: true,
+    };
+  }
+
+  return executeRealTestsFromFiles(parsed, workDir, agentId);
 }

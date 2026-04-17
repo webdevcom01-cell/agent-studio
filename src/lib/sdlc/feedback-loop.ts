@@ -55,6 +55,10 @@ export interface FeedbackLoopResult {
   failureAnalysis: string;
   /** true if the implementation was successfully revised */
   success: boolean;
+  /** Prompt tokens consumed by this feedback iteration (0 on failure/timeout) */
+  inputTokens: number;
+  /** Completion tokens consumed by this feedback iteration (0 on failure/timeout) */
+  outputTokens: number;
 }
 
 /**
@@ -168,16 +172,23 @@ export async function runFeedbackIteration(
       abortSignal: ac.signal,
     });
 
+    const inputTokens = result.usage.inputTokens ?? 0;
+    const outputTokens = result.usage.outputTokens ?? 0;
+
     logger.info("feedback-loop: revision attempt complete", {
       agentId: input.agentId,
       attempt: input.attempt,
       outputLength: result.text.length,
+      inputTokens,
+      outputTokens,
     });
 
     return {
       revisedImplementation: result.text,
       failureAnalysis: `Attempt ${input.attempt}: ${parseTestFailures(input.testOutput).slice(0, 3).join("; ")}`,
       success: true,
+      inputTokens,
+      outputTokens,
     };
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
@@ -190,6 +201,8 @@ export async function runFeedbackIteration(
         revisedImplementation: input.previousImplementation,
         failureAnalysis: `Attempt ${input.attempt} timed out after ${FEEDBACK_TIMEOUT_MS / 1000}s`,
         success: false,
+        inputTokens: 0,
+        outputTokens: 0,
       };
     }
     logger.error("feedback-loop: revision attempt failed", err, {
@@ -201,6 +214,8 @@ export async function runFeedbackIteration(
       revisedImplementation: input.previousImplementation,
       failureAnalysis: `Attempt ${input.attempt} failed: ${err instanceof Error ? err.message : String(err)}`,
       success: false,
+      inputTokens: 0,
+      outputTokens: 0,
     };
   } finally {
     clearTimeout(timeoutId);
