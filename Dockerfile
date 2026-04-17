@@ -72,7 +72,7 @@ FROM node:20-alpine AS runner
 # vitest is installed globally because Next.js standalone output prunes node_modules
 # by tracing imports — vitest is only a CLI tool, never imported, so it is absent
 # from /app/node_modules in production. Global install puts it at /usr/local/bin/vitest.
-RUN apk add --no-cache curl python3 && \
+RUN apk add --no-cache curl python3 git && \
     npm install -g typescript typescript-language-server pyright vitest --no-fund --no-audit
 
 WORKDIR /app
