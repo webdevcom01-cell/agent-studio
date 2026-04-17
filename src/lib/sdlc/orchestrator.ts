@@ -35,6 +35,7 @@ import {
   didTestsFail,
   MAX_RETRIES,
 } from "./feedback-loop";
+import { executeRealTests } from "./code-extractor";
 
 /** Working directory where the SDLC pipeline writes files */
 const SDLC_WORKSPACE = "/tmp/sdlc";
@@ -341,6 +342,95 @@ export async function runPipeline(
         lastImplOutput = stepOutput;
         lastImplSystemPrompt = systemPrompt;
         lastImplCodeContext = codeContext;
+
+        // ── Real execution: parse code blocks → write files → compile + test ─
+        // This is the core upgrade: instead of relying on an AI to "simulate"
+        // test results, we write the actual generated code to disk, run the
+        // TypeScript compiler, and run Vitest. The real stdout/stderr is then
+        // fed into the feedback loop so the AI fixes actual errors.
+        try {
+          const execResult = await executeRealTests(stepOutput, SDLC_WORKSPACE, agentId);
+
+          if (execResult.filesWritten > 0) {
+            const realFailed = !execResult.typecheckPassed || !execResult.testsPassed;
+
+            logger.info("Pipeline: real execution after implementation step", {
+              runId, stepIdx, stepId,
+              filesWritten: execResult.filesWritten,
+              typecheckPassed: execResult.typecheckPassed,
+              testsPassed: execResult.testsPassed,
+            });
+
+            if (realFailed) {
+              // ── Feedback loop on real failures ──────────────────────────────
+              logger.info("Pipeline: real compile/test failures — entering feedback loop", {
+                runId, stepIdx, stepId, maxRetries: MAX_RETRIES,
+              });
+
+              let currentImpl = stepOutput;
+              let currentTestOutput = execResult.testOutput;
+
+              for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                const feedbackResult = await runFeedbackIteration(
+                  {
+                    taskDescription,
+                    architecturePlan,
+                    previousImplementation: currentImpl,
+                    testOutput: currentTestOutput,
+                    codebaseContext: codeContext,
+                    agentId,
+                    modelId: resolvedModelId,
+                    attempt,
+                  },
+                  systemPrompt,
+                );
+
+                if (!feedbackResult.success) {
+                  logger.warn("Pipeline: real-exec feedback iteration failed", { runId, attempt });
+                  break;
+                }
+
+                currentImpl = feedbackResult.revisedImplementation;
+
+                // Re-run real tests against the revised implementation
+                const reExec = await executeRealTests(currentImpl, SDLC_WORKSPACE, agentId);
+                currentTestOutput = reExec.testOutput;
+                totalInputTokens += 0; // AI tokens already counted inside runFeedbackIteration
+                totalOutputTokens += 0;
+
+                const nowPassing = reExec.typecheckPassed && reExec.testsPassed;
+                logger.info("Pipeline: real-exec feedback attempt complete", {
+                  runId, attempt, nowPassing,
+                });
+
+                if (nowPassing) {
+                  // Update step output to the working implementation
+                  stepOutput = currentImpl + `\n\n---\n\n## Verified by real execution (attempt ${attempt})\n${currentTestOutput}`;
+                  lastImplOutput = currentImpl;
+                  logger.info("Pipeline: real execution passing after feedback loop", { runId, attempt });
+                  break;
+                }
+
+                if (attempt === MAX_RETRIES) {
+                  // Append the failure report to the step output for human review
+                  stepOutput = currentImpl + `\n\n---\n\n## Real Execution (${MAX_RETRIES} attempts, still failing)\n${currentTestOutput}`;
+                  lastImplOutput = currentImpl;
+                  logger.warn("Pipeline: real-exec max retries reached", { runId, maxRetries: MAX_RETRIES });
+                }
+              }
+            } else {
+              // Tests pass — annotate the step output with the verification proof
+              stepOutput = stepOutput + `\n\n---\n\n## Real Execution — PASSED\n${execResult.testOutput}`;
+              logger.info("Pipeline: real execution passed on first try", { runId, stepIdx });
+            }
+          }
+        } catch (execErr) {
+          // Real execution is best-effort — never block the pipeline
+          logger.warn("Pipeline: real execution failed unexpectedly, continuing", {
+            runId, stepIdx,
+            error: execErr instanceof Error ? execErr.message : String(execErr),
+          });
+        }
       }
 
       // ── Feedback loop — triggered by TEST_STEPS ───────────────────────────
