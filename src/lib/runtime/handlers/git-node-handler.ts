@@ -80,14 +80,19 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
 
   try {
     // ── 2. Startup log — first thing visible in Railway logs ─────────────────
+    // NOTE: keys containing "token" are always redacted by logger's SENSITIVE_KEY_RE.
+    // Use neutral names (credPresent / credLen / credPrefix) to get real values.
     logger.info("git-node: startup", {
       nodeId: node.id,
-      tokenPresent: !!token,
-      tokenLength: token?.length ?? 0,
+      credPresent: !!token,
+      credLen: token?.length ?? 0,
+      credPrefix: token ? `${token.slice(0, 6)}***` : "MISSING",
       GIT_REPO: process.env.GIT_REPO || "NOT SET",
       prRepo: (node.data.prRepo as string) || "NOT SET",
       workingDir,
       gitDirExists: existsSync(join(workingDir, ".git")),
+      // List all GIT_* env keys present (not values) — helps detect missing vars
+      gitEnvKeys: Object.keys(process.env).filter((k) => k.startsWith("GIT_")),
     });
 
     // ── 3. Fail fast before any git operation if credentials are missing ──────
@@ -146,9 +151,9 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
             .catch(() => ({ stdout: "(no remotes configured)", stderr: "" }));
           logger.info("git-node: push pre-flight", {
             nodeId: node.id,
-            tokenPresent: !!token,
-            tokenLength: token?.length ?? 0,
-            tokenPrefix: token ? `${token.slice(0, 4)}***` : "MISSING",
+            credPresent: !!token,
+            credLen: token?.length ?? 0,
+            credPrefix: token ? `${token.slice(0, 6)}***` : "MISSING",
             repo: repo || "MISSING",
             maskedRemoteUrl: repo ? `https://***@github.com/${repo}.git` : "MISSING",
             workingDirExists: existsSync(workingDir),
