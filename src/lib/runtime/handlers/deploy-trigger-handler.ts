@@ -42,21 +42,45 @@ export const deployTriggerHandler: NodeHandler = async (node, context) => {
   const vercelToken = process.env.VERCEL_TOKEN;
 
   try {
+    // When VERCEL_TOKEN is not configured, skip gracefully.
+    // Railway auto-deploys from GitHub push — no explicit deploy trigger needed.
     if (!vercelToken) {
-      const result = buildErrorResult("VERCEL_TOKEN not configured", target);
+      logger.info("deploy-trigger: VERCEL_TOKEN not set — skipping (Railway auto-deploys from GitHub push)", {
+        nodeId: node.id,
+        agentId: context.agentId,
+      });
+      const result = {
+        deploymentId: "",
+        url: "",
+        status: "SKIPPED" as DeployStatus,
+        target,
+        durationMs: 0,
+        logs: "Vercel deployment skipped — VERCEL_TOKEN not configured. Railway auto-deploys from GitHub push.",
+      };
       return {
-        messages: [{ role: "assistant", content: "Deploy trigger: VERCEL_TOKEN not configured." }],
-        nextNodeId: "failed",
+        messages: [{
+          role: "assistant",
+          content: "Deploy step skipped: no VERCEL_TOKEN configured. Railway will auto-deploy from the git push.",
+        }],
+        nextNodeId: "passed",
         waitForInput: false,
         updatedVariables: { [outputVariable]: result },
       };
     }
 
     if (!projectId) {
-      const result = buildErrorResult("projectId not configured", target);
+      logger.warn("deploy-trigger: projectId not configured — skipping", { nodeId: node.id });
+      const result = {
+        deploymentId: "",
+        url: "",
+        status: "SKIPPED" as DeployStatus,
+        target,
+        durationMs: 0,
+        logs: "Vercel deployment skipped — projectId not configured.",
+      };
       return {
-        messages: [{ role: "assistant", content: "Deploy trigger: projectId not configured." }],
-        nextNodeId: "failed",
+        messages: [{ role: "assistant", content: "Deploy step skipped: projectId not configured." }],
+        nextNodeId: "passed",
         waitForInput: false,
         updatedVariables: { [outputVariable]: result },
       };
@@ -155,7 +179,7 @@ export const deployTriggerHandler: NodeHandler = async (node, context) => {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error("deploy-trigger-handler error", { nodeId: node.id, error });
+    logger.error("deploy-trigger-handler error", error, { nodeId: node.id });
 
     const result = buildErrorResult(message, target);
     return {
