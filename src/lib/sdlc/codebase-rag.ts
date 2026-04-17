@@ -245,7 +245,9 @@ async function collectFiles(dir: string, depth = 0): Promise<string[]> {
       const info = await stat(fullPath);
       if (info.isDirectory()) {
         const sub = await collectFiles(fullPath, depth + 1);
-        files.push(...sub);
+        // Slice to respect the global limit even when a subdirectory alone exceeds it
+        const capacity = MAX_FILES - files.length;
+        files.push(...sub.slice(0, capacity));
       } else if (info.isFile() && INDEXABLE_EXTS.has(extname(entry))) {
         if (info.size <= MAX_FILE_BYTES) {
           files.push(fullPath);

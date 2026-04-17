@@ -14,7 +14,7 @@
  * Phase classification:
  *   PLANNING_STEPS       — discovery, architect, tdd_guide  → produce architecturePlan
  *   IMPLEMENTATION_STEPS — codegen, developer, implementation → produce code; receive architecturePlan + RAG
- *   TEST_STEPS           — sandbox, sandbox_verify          → detect failures → trigger feedback loop
+ *   TEST_STEPS           — sandbox, run_tests, test_runner  → detect failures → trigger feedback loop
  *   REVIEW_STEPS         — code_reviewer, sec_reviewer      → full context
  *
  * Feedback loop:
@@ -51,9 +51,11 @@ const IMPLEMENTATION_STEPS = new Set([
   "code_generator", "feature_developer",
 ]);
 
-/** Steps whose output may indicate test failures — trigger feedback loop */
+/** Steps whose output may indicate test failures — trigger feedback loop.
+ *  NOTE: infrastructure nodes (sandbox_verify) are intentionally excluded —
+ *  they run inline and return static strings that can never signal failures. */
 const TEST_STEPS = new Set([
-  "sandbox", "sandbox_verify", "run_tests", "test_runner",
+  "sandbox", "run_tests", "test_runner",
 ]);
 
 /** Infrastructure nodes that are not real agents — executed inline */
@@ -377,6 +379,7 @@ export async function runPipeline(
 
           // Persist the revised implementation so the caller can show progress.
           stepOutputs[lastImplStepIdx] = currentImpl;
+          lastImplOutput = currentImpl; // Keep in sync — subsequent TEST_STEPS must see the latest version
           await onStepComplete(lastImplStepIdx, currentImpl);
 
           // Update the context window so the re-run test step sees the fix.
@@ -497,7 +500,6 @@ function buildContextDoc(parts: string[]): string {
   if (joined.length <= MAX_CONTEXT_CHARS) return joined;
 
   // Task description (parts[0]) is never trimmed. Trim step outputs from oldest.
-  const trimmedParts = [parts[0]];
   let remaining = MAX_CONTEXT_CHARS - parts[0].length - 20; // 20 for separators overhead
 
   // Walk backwards (most recent first) to prioritise recent context
@@ -516,8 +518,6 @@ function buildContextDoc(parts: string[]): string {
     }
   }
 
-  // trimmedParts is built but not used — return from allocated directly
-  void trimmedParts;
   return [parts[0], ...allocated].join("\n\n---\n\n");
 }
 

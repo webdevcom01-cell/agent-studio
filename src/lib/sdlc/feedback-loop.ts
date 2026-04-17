@@ -29,6 +29,9 @@ import { logger } from "@/lib/logger";
 
 export const MAX_RETRIES = 3;
 
+/** Per-attempt timeout for feedback AI calls (5 minutes, matching orchestrator STEP_TIMEOUT_MS). */
+const FEEDBACK_TIMEOUT_MS = 5 * 60 * 1000;
+
 export interface FeedbackLoopInput {
   taskDescription: string;
   /** The architecture/plan from the planning phase */
@@ -62,13 +65,14 @@ export function parseTestFailures(testOutput: string): string[] {
   const failures: string[] = [];
 
   // Vitest/Jest: lines starting with FAIL or ✗ or × or ●
+  // Stack trace lines ("  at Object.foo (file.ts:42:12)") are excluded —
+  // they are location metadata, not failure descriptions, and add noise to the AI prompt.
   const patterns = [
     /^\s*(FAIL|FAILED|✗|×)\s+(.+)$/gm,
     /^\s*●\s+(.+)$/gm,
-    /Error:\s+(.+)$/gm,
+    /Error:\s+\S.+$/gm,
     /AssertionError:\s+(.+)$/gm,
     /Expected\s+(.+?)\s+but\s+received\s+(.+)$/gm,
-    /^\s+at\s+.+:\d+:\d+\s*$/gm,
   ];
 
   for (const pattern of patterns) {
@@ -152,12 +156,16 @@ export async function runFeedbackIteration(
     failureCount: parseTestFailures(input.testOutput).length,
   });
 
+  const ac = new AbortController();
+  const timeoutId = setTimeout(() => ac.abort(), FEEDBACK_TIMEOUT_MS);
+
   try {
     const result = await generateText({
       model,
       system: systemPrompt,
       prompt,
       maxOutputTokens: 8192,
+      abortSignal: ac.signal,
     });
 
     logger.info("feedback-loop: revision attempt complete", {
@@ -172,6 +180,18 @@ export async function runFeedbackIteration(
       success: true,
     };
   } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      logger.error("feedback-loop: revision timed out", err, {
+        agentId: input.agentId,
+        attempt: input.attempt,
+        timeoutMs: FEEDBACK_TIMEOUT_MS,
+      });
+      return {
+        revisedImplementation: input.previousImplementation,
+        failureAnalysis: `Attempt ${input.attempt} timed out after ${FEEDBACK_TIMEOUT_MS / 1000}s`,
+        success: false,
+      };
+    }
     logger.error("feedback-loop: revision attempt failed", err, {
       agentId: input.agentId,
       attempt: input.attempt,
@@ -182,6 +202,8 @@ export async function runFeedbackIteration(
       failureAnalysis: `Attempt ${input.attempt} failed: ${err instanceof Error ? err.message : String(err)}`,
       success: false,
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -198,7 +220,7 @@ export function didTestsFail(testOutput: string): boolean {
     /\d+ failed/i,
     /test.*failed/i,
     /AssertionError/,
-    /Error:/,
+    /Error:\s+\S/,  // narrowed: requires non-whitespace after colon to avoid "Error: 0" false positives
     /✗/,
     /×/,
   ];
