@@ -74,19 +74,41 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
 
   const gitEnv = buildGitEnv();
 
+  // ── 1. Resolve credentials once, at handler startup ───────────────────────
+  const token = process.env.GIT_TOKEN;
+  const repo = (node.data.prRepo as string) || process.env.GIT_REPO || "";
+
   try {
-    // Ensure the working directory is a git repository.
-    // The Next.js standalone Docker image does NOT include .git — it copies only
-    // .next/standalone/ which has no version control context. When file-writer
-    // falls back to /tmp/sdlc (read-only /app), that directory also has no .git.
-    // We initialise it here: git init → add remote → shallow-fetch main so the
-    // new commit has proper parent history instead of being an orphan.
-    const token = process.env.GIT_TOKEN;
-    const repo =
-      (node.data.prRepo as string) || process.env.GIT_REPO || "";
-    if (token && repo) {
-      await ensureGitRepo(workingDir, gitEnv, repo, token);
+    // ── 2. Startup log — first thing visible in Railway logs ─────────────────
+    logger.info("git-node: startup", {
+      nodeId: node.id,
+      tokenPresent: !!token,
+      tokenLength: token?.length ?? 0,
+      GIT_REPO: process.env.GIT_REPO || "NOT SET",
+      prRepo: (node.data.prRepo as string) || "NOT SET",
+      workingDir,
+      gitDirExists: existsSync(join(workingDir, ".git")),
+    });
+
+    // ── 3. Fail fast before any git operation if credentials are missing ──────
+    // Previously the guard `if (token && repo)` silently skipped ensureGitRepo,
+    // causing `git checkout -B` to fail on an uninitialized directory with the
+    // misleading "not a git repository" error instead of a credentials error.
+    if (!token) {
+      throw new Error(
+        `STARTUP FAIL: GIT_TOKEN=MISSING, repo=${repo || "MISSING"}. ` +
+        "Set GIT_TOKEN in Railway → Service → Variables.",
+      );
     }
+    if (!repo) {
+      throw new Error(
+        `STARTUP FAIL: GIT_TOKEN=present, repo=MISSING. ` +
+        "Set GIT_REPO env var on Railway (owner/repo) or prRepo on the git_node.",
+      );
+    }
+
+    // Both credentials present — initialize / refresh the git repo
+    await ensureGitRepo(workingDir, gitEnv, repo, token);
 
     let commitHash: string | undefined;
     let prResult: PRResult | undefined;
@@ -242,21 +264,16 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
       updatedVariables: { [outputVariable]: result },
     };
   } catch (error) {
-    // execFileAsync errors carry the real stdout/stderr from the failed process.
-    // Extract them so the failure reason is visible in Railway logs and pipeline output
-    // — not just the generic "Command failed" Node.js wrapper message.
-    const execStderr = (error as { stderr?: string }).stderr ?? "";
-    const execStdout = (error as { stdout?: string }).stdout ?? "";
-    const baseMessage = error instanceof Error ? error.message : String(error);
-    const fullMessage = execStderr
-      ? `${baseMessage} | git stderr: ${execStderr}`
-      : baseMessage;
+    // Serialize error explicitly — passing the raw Error object to logger causes
+    // Railway to display "errorMessage: [object Object]" instead of the real message.
+    const stderr = (error as { stderr?: string }).stderr ?? "(empty)";
+    const msg = error instanceof Error ? error.message : JSON.stringify(error);
+    const fullMessage = stderr !== "(empty)" ? `${msg} | git stderr: ${stderr}` : msg;
 
     logger.error("git-node-handler error", {
       nodeId: node.id,
-      error: baseMessage,
-      gitStderr: execStderr.slice(0, 500) || "(empty)",
-      gitStdout: execStdout.slice(0, 200) || "(empty)",
+      message: msg.slice(0, 500),
+      stderr: stderr.slice(0, 500),
     });
 
     const result = {
