@@ -115,15 +115,75 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
         }
 
         case "push": {
-          // Embed token in remote URL so HTTPS push works without a credential
-          // helper — required on Railway where there is no persistent keychain.
           const token = process.env.GIT_TOKEN;
+          // Use || so that an empty-string GIT_REPO falls through to prRepo
           const repo = process.env.GIT_REPO || (node.data.prRepo as string) || "";
-          if (token && repo) {
-            const authedUrl = `https://${token}@github.com/${repo}.git`;
-            await runGit(["remote", "set-url", "origin", authedUrl], workingDir, gitEnv);
+
+          // ── 1. Pre-flight diagnostic — log the full auth chain state ──────
+          const remoteV = await runGit(["remote", "-v"], workingDir, gitEnv)
+            .catch(() => ({ stdout: "(no remotes configured)", stderr: "" }));
+          logger.info("git-node: push pre-flight", {
+            nodeId: node.id,
+            tokenPresent: !!token,
+            tokenLength: token?.length ?? 0,
+            tokenPrefix: token ? `${token.slice(0, 4)}***` : "MISSING",
+            repo: repo || "MISSING",
+            maskedRemoteUrl: repo ? `https://***@github.com/${repo}.git` : "MISSING",
+            workingDirExists: existsSync(workingDir),
+            workingDir,
+            remotes: remoteV.stdout.trim(),
+          });
+
+          // ── 2. Fail fast with clear messages if credentials are missing ───
+          if (!token) {
+            throw new Error(
+              "GIT_TOKEN env var is not set on Railway. " +
+              "Go to Railway → Service → Variables → add GIT_TOKEN=<your PAT>.",
+            );
           }
-          await runGit(["push", "--set-upstream", "origin", branch, "--force-with-lease"], workingDir, gitEnv);
+          if (!repo) {
+            throw new Error(
+              "No repository configured. " +
+              "Set GIT_REPO env var on Railway (e.g. owner/repo) " +
+              "or set prRepo on the git_node.",
+            );
+          }
+
+          // ── 3. Validate token against GitHub API before attempting push ───
+          const tokenCheck = await fetch(`${GITHUB_API}/user`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+            },
+          });
+          if (!tokenCheck.ok) {
+            const body = await tokenCheck.text().catch(() => "");
+            throw new Error(
+              `GIT_TOKEN rejected by GitHub (HTTP ${tokenCheck.status}). ` +
+              `Token may be expired or missing 'repo' scope. ` +
+              `GitHub response: ${body.slice(0, 200)}`,
+            );
+          }
+          const ghUser = (await tokenCheck.json()) as { login?: string };
+          logger.info("git-node: token validated", {
+            nodeId: node.id,
+            ghLogin: ghUser.login,
+          });
+
+          // ── 4. Always overwrite remote URL with current token ─────────────
+          // Critical: even if .git already existed from a previous run, the
+          // remote URL stored in .git/config may be stale (no token, or old
+          // token). Always set it explicitly before push.
+          const authedUrl = `https://${token}@github.com/${repo}.git`;
+          await runGit(["remote", "set-url", "origin", authedUrl], workingDir, gitEnv);
+          logger.info("git-node: remote URL updated with token", { nodeId: node.id });
+
+          await runGit(
+            ["push", "--set-upstream", "origin", branch, "--force-with-lease"],
+            workingDir,
+            gitEnv,
+          );
           break;
         }
 
@@ -182,19 +242,33 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
       updatedVariables: { [outputVariable]: result },
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.error("git-node-handler error", { nodeId: node.id, error });
+    // execFileAsync errors carry the real stdout/stderr from the failed process.
+    // Extract them so the failure reason is visible in Railway logs and pipeline output
+    // — not just the generic "Command failed" Node.js wrapper message.
+    const execStderr = (error as { stderr?: string }).stderr ?? "";
+    const execStdout = (error as { stdout?: string }).stdout ?? "";
+    const baseMessage = error instanceof Error ? error.message : String(error);
+    const fullMessage = execStderr
+      ? `${baseMessage} | git stderr: ${execStderr}`
+      : baseMessage;
+
+    logger.error("git-node-handler error", {
+      nodeId: node.id,
+      error: baseMessage,
+      gitStderr: execStderr.slice(0, 500) || "(empty)",
+      gitStdout: execStdout.slice(0, 200) || "(empty)",
+    });
 
     const result = {
       branch,
       commitHash: undefined,
       pushed: false,
       success: false,
-      message: `Git operation failed: ${message.slice(0, 500)}`,
+      message: `Git operation failed: ${fullMessage.slice(0, 800)}`,
     };
 
     return {
-      messages: [{ role: "assistant", content: `Git node failed: ${message.slice(0, 500)}` }],
+      messages: [{ role: "assistant", content: `Git node failed: ${fullMessage.slice(0, 800)}` }],
       nextNodeId: (node.data.onErrorNodeId as string) ?? null,
       waitForInput: false,
       updatedVariables: { [outputVariable]: result },
@@ -213,7 +287,7 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
  *
  * Strategy:
  *   1. git init  (no-op if .git already exists)
- *   2. Set authenticated remote URL
+ *   2. Always set authenticated remote URL (even on existing repos — stale token fix)
  *   3. Shallow-fetch main so the new commit has a proper parent (not orphan)
  *   4. Reset HEAD softly to FETCH_HEAD (index untouched, working tree intact)
  *
@@ -227,9 +301,21 @@ async function ensureGitRepo(
   token: string,
 ): Promise<void> {
   const gitDir = join(workingDir, ".git");
-  if (existsSync(gitDir)) return; // already initialised — nothing to do
-
   const authedUrl = `https://${token}@github.com/${repo}.git`;
+
+  if (existsSync(gitDir)) {
+    // Repo already initialised — but ALWAYS refresh the remote URL with the
+    // current token. A previous container may have stored a stale/missing token.
+    logger.info("git-node: .git exists, refreshing remote URL with current token", {
+      workingDir,
+    });
+    await runGit(["remote", "set-url", "origin", authedUrl], workingDir, gitEnv)
+      .catch(() =>
+        // set-url fails if remote doesn't exist yet — add it instead
+        runGit(["remote", "add", "origin", authedUrl], workingDir, gitEnv),
+      );
+    return;
+  }
 
   logger.info("git-node: initialising git repo in working dir", { workingDir, repo });
 
