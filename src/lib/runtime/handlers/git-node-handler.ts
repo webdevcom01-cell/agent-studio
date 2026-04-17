@@ -118,7 +118,7 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
           // Embed token in remote URL so HTTPS push works without a credential
           // helper — required on Railway where there is no persistent keychain.
           const token = process.env.GIT_TOKEN;
-          const repo = process.env.GIT_REPO ?? (node.data.prRepo as string) ?? "";
+          const repo = process.env.GIT_REPO || (node.data.prRepo as string) || "";
           if (token && repo) {
             const authedUrl = `https://${token}@github.com/${repo}.git`;
             await runGit(["remote", "set-url", "origin", authedUrl], workingDir, gitEnv);
