@@ -1,48 +1,81 @@
 /**
- * SDLC Pipeline Orchestrator — P5
+ * SDLC Pipeline Orchestrator — P6
  *
  * Executes a PipelineRun step-by-step, wiring together:
- *   - Meta-Orchestrator  (task analysis + pipeline config)
+ *   - Codebase RAG        (index /tmp/sdlc → inject relevant code per step)
+ *   - Multi-step planning (discovery → architecture → implementation → review)
+ *   - Feedback loop       (test failures → retry implementation up to 3×)
+ *   - Meta-Orchestrator   (task analysis + pipeline config)
  *   - ECC agent templates (per-step system prompts)
- *   - Vercel AI SDK      (generateText per step)
- *   - P3 Learn Hook      (fire-and-forget after each step)
- *   - BullMQ progress    (job.updateProgress between steps)
+ *   - Vercel AI SDK       (generateText per step)
+ *   - P3 Learn Hook       (fire-and-forget after each step)
+ *   - BullMQ progress     (job.updateProgress between steps)
  *
- * Called by the BullMQ worker (processro is dynamic-imported).
- * Never called directly from API routes.
+ * Phase classification:
+ *   PLANNING_STEPS       — discovery, architect, tdd_guide  → produce architecturePlan
+ *   IMPLEMENTATION_STEPS — codegen, developer, implementation → produce code; receive architecturePlan + RAG
+ *   TEST_STEPS           — sandbox, sandbox_verify          → detect failures → trigger feedback loop
+ *   REVIEW_STEPS         — code_reviewer, sec_reviewer      → full context
  *
- * Cancellation:
- *   The worker checks isPipelineCancelled() between every step.
- *   If true, execution stops and the run is left in CANCELLED state
- *   (the user already updated the DB via the cancel API route).
- *
- * Context accumulation:
- *   Each step receives:
- *     1. The original task description
- *     2. A "context document" built from all previous step outputs
- *   This lets later steps (e.g. code-reviewer) see what the planner produced.
+ * Feedback loop:
+ *   After a TEST_STEP output indicates failure, the orchestrator re-runs the
+ *   most recent IMPLEMENTATION_STEP with the failure report injected.
+ *   Max retries: MAX_RETRIES (3). Each retry also re-runs the TEST_STEP to
+ *   verify the fix before continuing.
  */
 
 import { logger } from "@/lib/logger";
+import {
+  indexCodebase,
+  searchCodebase,
+  buildCodeContext,
+} from "./codebase-rag";
+import {
+  runFeedbackIteration,
+  didTestsFail,
+  MAX_RETRIES,
+} from "./feedback-loop";
+
+/** Working directory where the SDLC pipeline writes files */
+const SDLC_WORKSPACE = "/tmp/sdlc";
+
+/** Steps that produce the architecture/plan document used by later steps */
+const PLANNING_STEPS = new Set([
+  "discovery", "architect", "architecture", "planner",
+  "tdd_guide", "security_eng", "project_context",
+]);
+
+/** Steps that produce implementation code — receive architecturePlan + RAG context */
+const IMPLEMENTATION_STEPS = new Set([
+  "codegen", "developer", "implementation", "coder",
+  "code_generator", "feature_developer",
+]);
+
+/** Steps whose output may indicate test failures — trigger feedback loop */
+const TEST_STEPS = new Set([
+  "sandbox", "sandbox_verify", "run_tests", "test_runner",
+]);
 
 /** Infrastructure nodes that are not real agents — executed inline */
 const INFRASTRUCTURE_NODES = new Set(["project_context", "sandbox_verify"]);
 
 /** System prompts for infrastructure nodes */
 const INFRA_PROMPTS: Record<string, string> = {
-  project_context: "Gathering project context...",
+  project_context: "Gathering project context and indexing existing codebase...",
   sandbox_verify: "Verifying sandbox environment...",
 };
 
 /** Per-step timeout for AI calls (5 minutes). Prevents hung pipelines. */
 const STEP_TIMEOUT_MS = 5 * 60 * 1000;
 
-/** Maximum total context document size in characters. Older step outputs are
- *  summarised (trimmed) once this ceiling is exceeded to prevent prompt bloat. */
+/** Maximum total context document size in characters. */
 const MAX_CONTEXT_CHARS = 24_000;
 
 /** Per-step output slice when building context for subsequent steps. */
 const CONTEXT_SLICE_PER_STEP = 3_000;
+
+/** Max RAG results to inject per step */
+const RAG_TOP_K = 5;
 
 // ---------------------------------------------------------------------------
 // Main entry point — called by the BullMQ worker
@@ -100,23 +133,44 @@ export async function runPipeline(
   const { fireSdkLearnHook } = await import("@/lib/ecc/sdk-learn-hook");
   const { getAgentSystemPrompt } = await import("./agent-prompts");
 
-  // Resolve model lazily — only needed if at least one AI step exists.
-  // Using deepseek-chat as the default (always available, no extra API key).
+  // Resolve model lazily — deepseek-chat is always available, no extra API key needed.
   const resolvedModelId = modelId ?? "deepseek-chat";
 
   const startedAt = Date.now();
-
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
 
   // Context document — accumulated from previous step outputs
-  const contextParts: string[] = [
-    `# Task\n${taskDescription}`,
-  ];
-
+  const contextParts: string[] = [`# Task\n${taskDescription}`];
   const stepOutputs: string[] = [];
 
-  // Resume support: pre-seed context from previous run's step results
+  // ── Phase tracking ──────────────────────────────────────────────────────────
+  // Accumulated architecture/design plan from all PLANNING_STEPS.
+  // Injected verbatim into every IMPLEMENTATION_STEP prompt.
+  let architecturePlan = "";
+
+  // Most recent IMPLEMENTATION_STEP state — required for the feedback loop.
+  let lastImplStepIdx = -1;
+  let lastImplOutput = "";
+  let lastImplSystemPrompt = "";
+  let lastImplCodeContext = "";
+
+  // ── RAG: index the workspace codebase ──────────────────────────────────────
+  // Best-effort — if the workspace doesn't exist yet the pipeline still runs;
+  // RAG context will simply be empty for this run.
+  let codebaseReady = false;
+  try {
+    const { filesIndexed } = await indexCodebase(SDLC_WORKSPACE, agentId);
+    codebaseReady = filesIndexed > 0;
+    logger.info("Pipeline: codebase indexed for RAG", { runId, filesIndexed });
+  } catch (err) {
+    logger.warn("Pipeline: codebase indexing skipped — workspace absent or empty", {
+      runId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // ── Resume support: pre-seed context from a previous interrupted run ────────
   if (startFromStep > 0 && existingStepResults) {
     for (let i = 0; i < startFromStep && i < pipeline.length; i++) {
       const prevOutput = existingStepResults[String(i)];
@@ -125,6 +179,18 @@ export async function runPipeline(
           `# Step ${i + 1} output (${pipeline[i]})\n${prevOutput.slice(0, CONTEXT_SLICE_PER_STEP)}`,
         );
         stepOutputs.push(prevOutput);
+
+        // Restore phase state so IMPLEMENTATION_STEPS and feedback loop work
+        // correctly when resuming mid-pipeline.
+        if (PLANNING_STEPS.has(pipeline[i])) {
+          architecturePlan += `\n\n## ${pipeline[i]}\n${prevOutput.slice(0, 2000)}`;
+        }
+        if (IMPLEMENTATION_STEPS.has(pipeline[i])) {
+          lastImplStepIdx = i;
+          lastImplOutput = prevOutput;
+          lastImplSystemPrompt = getAgentSystemPrompt(pipeline[i]);
+          lastImplCodeContext = ""; // RAG context unavailable for resumed steps
+        }
       }
     }
     logger.info("Pipeline resuming from step", {
@@ -134,11 +200,12 @@ export async function runPipeline(
     });
   }
 
+  // ── Main step loop ──────────────────────────────────────────────────────────
   for (let stepIdx = startFromStep; stepIdx < pipeline.length; stepIdx++) {
     const stepId = pipeline[stepIdx];
 
     // Progress: 5% start → 90% max, spread evenly across steps
-    const pct = Math.min(5 + Math.floor(((stepIdx) / pipeline.length) * 85), 90);
+    const pct = Math.min(5 + Math.floor((stepIdx / pipeline.length) * 85), 90);
     await onProgress(pct);
 
     // Cancellation check before each step
@@ -162,22 +229,54 @@ export async function runPipeline(
     const stepStart = Date.now();
 
     if (INFRASTRUCTURE_NODES.has(stepId)) {
-      // Infrastructure nodes run inline — no AI call needed
+      // ── Infrastructure node: no AI call ──────────────────────────────────
       stepOutput = INFRA_PROMPTS[stepId] ?? `Infrastructure step: ${stepId}`;
+
     } else {
-      // Agent step: load system prompt from ECC templates
+      // ── Agent step ────────────────────────────────────────────────────────
       const model = getModel(resolvedModelId);
       const systemPrompt = getAgentSystemPrompt(stepId);
 
-      // Context size management: trim older steps if total exceeds ceiling
-      const contextDoc = buildContextDoc(contextParts);
+      // RAG: retrieve code relevant to this step
+      let codeContext = "";
+      if (codebaseReady) {
+        try {
+          // Use step role + task description as the search query for relevance.
+          const ragQuery = `${stepId} ${taskDescription.slice(0, 200)}`;
+          const ragResults = await searchCodebase(ragQuery, agentId, RAG_TOP_K);
+          codeContext = buildCodeContext(ragResults);
+        } catch (err) {
+          logger.warn("Pipeline: RAG search failed for step", {
+            runId, stepIdx, stepId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
 
-      const prompt = [
-        contextDoc,
-        `\n\n---\n\n# Instructions for this step (${stepId})\n`,
+      // Prompt assembly — layered by phase
+      const contextDoc = buildContextDoc(contextParts);
+      const promptSections: string[] = [contextDoc];
+
+      // IMPLEMENTATION_STEPS receive the full architecture plan so the AI
+      // knows exactly what to build before writing a single line of code.
+      if (IMPLEMENTATION_STEPS.has(stepId) && architecturePlan) {
+        promptSections.push(
+          `\n\n---\n\n# Architecture & Design Plan\n${architecturePlan.slice(0, 3000)}`,
+        );
+      }
+
+      // All steps get RAG-injected code context when available.
+      if (codeContext) {
+        promptSections.push(`\n\n---\n\n${codeContext}`);
+      }
+
+      promptSections.push(
+        `\n\n---\n\n# Instructions for this step (${stepId})`,
         `Apply your expertise to the task above. Be specific, actionable, and thorough.`,
         `Reference and build upon any previous step outputs shown in the context above.`,
-      ].join("\n");
+      );
+
+      const prompt = promptSections.join("\n");
 
       // Per-step timeout via AbortController
       const ac = new AbortController();
@@ -197,7 +296,9 @@ export async function runPipeline(
         stepOutputTokens = result.usage.outputTokens ?? 0;
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
-          throw new Error(`Pipeline step ${stepIdx} (${stepId}) timed out after ${STEP_TIMEOUT_MS / 1000}s`);
+          throw new Error(
+            `Pipeline step ${stepIdx} (${stepId}) timed out after ${STEP_TIMEOUT_MS / 1000}s`,
+          );
         }
         throw err;
       } finally {
@@ -220,9 +321,138 @@ export async function runPipeline(
         inputTokens: stepInputTokens,
         outputTokens: stepOutputTokens,
       });
+
+      // ── Phase tracking ────────────────────────────────────────────────────
+      if (PLANNING_STEPS.has(stepId)) {
+        // Accumulate each planning step's output into a single architecture plan.
+        // Each section is labelled so the implementation agent knows which
+        // part of the plan came from which specialist.
+        architecturePlan += `\n\n## ${stepId}\n${stepOutput.slice(0, 2000)}`;
+        logger.info("Pipeline: planning step done — architecture plan updated", {
+          runId, stepIdx, stepId, planLength: architecturePlan.length,
+        });
+      }
+
+      if (IMPLEMENTATION_STEPS.has(stepId)) {
+        // Snapshot this step so the feedback loop can re-run it with failure context.
+        lastImplStepIdx = stepIdx;
+        lastImplOutput = stepOutput;
+        lastImplSystemPrompt = systemPrompt;
+        lastImplCodeContext = codeContext;
+      }
+
+      // ── Feedback loop — triggered by TEST_STEPS ───────────────────────────
+      if (TEST_STEPS.has(stepId) && didTestsFail(stepOutput) && lastImplStepIdx >= 0) {
+        logger.info("Pipeline: test failures detected — entering feedback loop", {
+          runId, stepIdx, stepId, maxRetries: MAX_RETRIES,
+        });
+
+        let currentImpl = lastImplOutput;
+        let currentTestOutput = stepOutput;
+
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          // ── Step A: AI produces a revised implementation ──────────────────
+          const feedbackResult = await runFeedbackIteration(
+            {
+              taskDescription,
+              architecturePlan,
+              previousImplementation: currentImpl,
+              testOutput: currentTestOutput,
+              codebaseContext: lastImplCodeContext,
+              agentId,
+              modelId: resolvedModelId,
+              attempt,
+            },
+            lastImplSystemPrompt,
+          );
+
+          if (!feedbackResult.success) {
+            logger.warn("Pipeline: feedback iteration failed — stopping retry", {
+              runId, attempt,
+            });
+            break;
+          }
+
+          currentImpl = feedbackResult.revisedImplementation;
+
+          // Persist the revised implementation so the caller can show progress.
+          stepOutputs[lastImplStepIdx] = currentImpl;
+          await onStepComplete(lastImplStepIdx, currentImpl);
+
+          // Update the context window so the re-run test step sees the fix.
+          // contextParts index: 0 = task, 1 = step-0, 2 = step-1, …
+          // so step N is at contextParts[N + 1].
+          contextParts[lastImplStepIdx + 1] =
+            `# Step ${lastImplStepIdx + 1} output (${pipeline[lastImplStepIdx]}) [revised-attempt-${attempt}]\n` +
+            currentImpl.slice(0, CONTEXT_SLICE_PER_STEP);
+
+          // ── Step B: Re-run the test step against the revised implementation ─
+          const testSystemPrompt = getAgentSystemPrompt(stepId);
+          const rerunContextDoc = buildContextDoc(contextParts);
+
+          const rerunPrompt = [
+            rerunContextDoc,
+            `\n\n---\n\n# Revised Implementation (Feedback Attempt ${attempt})`,
+            `The implementation has been revised based on the previous test failures.`,
+            `Re-run the full test suite against the revised code below:\n`,
+            `\`\`\`\n${currentImpl.slice(0, 4_000)}\n\`\`\``,
+            `\n\n---\n\n# Instructions for this step (${stepId})`,
+            `Run ALL tests again. Report pass/fail for every test case.`,
+            `Be precise — if any test still fails, say so explicitly with the failure message.`,
+          ].join("\n");
+
+          const testModel = getModel(resolvedModelId);
+          const testAC = new AbortController();
+          const testTimeoutId = setTimeout(() => testAC.abort(), STEP_TIMEOUT_MS);
+
+          try {
+            const testResult = await generateText({
+              model: testModel,
+              system: testSystemPrompt,
+              prompt: rerunPrompt,
+              maxOutputTokens: 4096,
+              abortSignal: testAC.signal,
+            });
+
+            currentTestOutput = testResult.text;
+            totalInputTokens += testResult.usage.inputTokens ?? 0;
+            totalOutputTokens += testResult.usage.outputTokens ?? 0;
+          } catch (retestErr) {
+            logger.warn("Pipeline: test re-run failed in feedback loop", {
+              runId, attempt,
+              error: retestErr instanceof Error ? retestErr.message : String(retestErr),
+            });
+            break;
+          } finally {
+            clearTimeout(testTimeoutId);
+          }
+
+          const nowPassing = !didTestsFail(currentTestOutput);
+          logger.info("Pipeline: feedback attempt complete", {
+            runId, attempt, nowPassing,
+          });
+
+          // Tests are green — replace the test step output and stop retrying.
+          if (nowPassing) {
+            stepOutput = currentTestOutput;
+            logger.info("Pipeline: all tests passing after feedback loop", {
+              runId, attempt,
+            });
+            break;
+          }
+
+          // Exhausted retries — continue with the best test output we have.
+          if (attempt === MAX_RETRIES) {
+            stepOutput = currentTestOutput;
+            logger.warn("Pipeline: max retries reached — proceeding with last test output", {
+              runId, maxRetries: MAX_RETRIES,
+            });
+          }
+        }
+      }
     }
 
-    // Accumulate context for subsequent steps
+    // ── Accumulate context for subsequent steps ─────────────────────────────
     contextParts.push(
       `# Step ${stepIdx + 1} output (${stepId})\n${stepOutput.slice(0, CONTEXT_SLICE_PER_STEP)}`,
     );
@@ -286,6 +516,8 @@ function buildContextDoc(parts: string[]): string {
     }
   }
 
+  // trimmedParts is built but not used — return from allocated directly
+  void trimmedParts;
   return [parts[0], ...allocated].join("\n\n---\n\n");
 }
 
