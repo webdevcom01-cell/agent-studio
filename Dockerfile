@@ -69,8 +69,11 @@ FROM node:20-alpine AS runner
 # Install LSP server binaries for the lsp_query node (Phase F1)
 # typescript-language-server handles TypeScript + JavaScript
 # pyright-langserver (via pyright) handles Python
+# vitest is installed globally because Next.js standalone output prunes node_modules
+# by tracing imports — vitest is only a CLI tool, never imported, so it is absent
+# from /app/node_modules in production. Global install puts it at /usr/local/bin/vitest.
 RUN apk add --no-cache curl python3 && \
-    npm install -g typescript typescript-language-server pyright --no-fund --no-audit
+    npm install -g typescript typescript-language-server pyright vitest --no-fund --no-audit
 
 WORKDIR /app
 
