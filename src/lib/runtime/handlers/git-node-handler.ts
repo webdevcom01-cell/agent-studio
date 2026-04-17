@@ -73,6 +73,19 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
   const gitEnv = buildGitEnv();
 
   try {
+    // Ensure the working directory is a git repository.
+    // The Next.js standalone Docker image does NOT include .git — it copies only
+    // .next/standalone/ which has no version control context. When file-writer
+    // falls back to /tmp/sdlc (read-only /app), that directory also has no .git.
+    // We initialise it here: git init → add remote → shallow-fetch main so the
+    // new commit has proper parent history instead of being an orphan.
+    const token = process.env.GIT_TOKEN;
+    const repo =
+      (node.data.prRepo as string) || process.env.GIT_REPO || "";
+    if (token && repo) {
+      await ensureGitRepo(workingDir, gitEnv, repo, token);
+    }
+
     let commitHash: string | undefined;
     let prResult: PRResult | undefined;
 
@@ -186,6 +199,59 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
     };
   }
 };
+
+// ── Git workspace bootstrap ────────────────────────────────────────────────────
+
+/**
+ * Ensure workingDir is a git repository with a configured remote.
+ *
+ * The Next.js standalone Docker image does not include a .git folder — only the
+ * compiled app is copied. When the SDLC pipeline writes files to /tmp/sdlc
+ * (Railway read-only /app fallback), that directory also has no .git.
+ *
+ * Strategy:
+ *   1. git init  (no-op if .git already exists)
+ *   2. Set authenticated remote URL
+ *   3. Shallow-fetch main so the new commit has a proper parent (not orphan)
+ *   4. Reset HEAD softly to FETCH_HEAD (index untouched, working tree intact)
+ *
+ * If fetch fails (empty repo / network issue) we log a warning and continue —
+ * the commit will be an orphan branch but push will still succeed.
+ */
+async function ensureGitRepo(
+  workingDir: string,
+  gitEnv: NodeJS.ProcessEnv,
+  repo: string,
+  token: string,
+): Promise<void> {
+  const gitDir = join(workingDir, ".git");
+  if (existsSync(gitDir)) return; // already initialised — nothing to do
+
+  const authedUrl = `https://${token}@github.com/${repo}.git`;
+
+  logger.info("git-node: initialising git repo in working dir", { workingDir, repo });
+
+  await runGit(["init"], workingDir, gitEnv);
+  await runGit(["remote", "add", "origin", authedUrl], workingDir, gitEnv);
+
+  try {
+    // Shallow-fetch only the latest commit on main so history is present.
+    await runGit(
+      ["fetch", "--depth=1", "origin", "main"],
+      workingDir,
+      gitEnv,
+    );
+    // Move HEAD to that commit without touching working tree or index.
+    await runGit(["reset", "--soft", "FETCH_HEAD"], workingDir, gitEnv);
+    logger.info("git-node: repo bootstrapped from origin/main", { workingDir });
+  } catch (fetchErr) {
+    // Non-fatal: empty remote or network hiccup — proceed with orphan commit.
+    logger.warn("git-node: could not fetch origin/main, will create orphan commit", {
+      workingDir,
+      error: fetchErr instanceof Error ? fetchErr.message : String(fetchErr),
+    });
+  }
+}
 
 // ── Git helpers ────────────────────────────────────────────────────────────────
 
