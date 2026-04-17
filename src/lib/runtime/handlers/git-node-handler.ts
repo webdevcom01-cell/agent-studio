@@ -57,9 +57,11 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
       ? SDLC_TMP
       : configuredDir;
 
-  const branch = interpolateVariables(
-    (node.data.branch as string) || `feat/autonomous-${Date.now()}`,
-    context.variables,
+  const branch = sanitizeBranchName(
+    interpolateVariables(
+      (node.data.branch as string) || `feat/autonomous-${Date.now()}`,
+      context.variables,
+    ),
   );
   const commitMessage = interpolateVariables(
     (node.data.commitMessage as string) || "chore: autonomous pipeline commit",
@@ -394,4 +396,42 @@ function interpolateVariables(
     const val = variables[key];
     return val !== undefined && val !== null ? String(val) : `{{${key}}}`;
   });
+}
+
+/**
+ * Sanitize a string into a valid git branch name segment.
+ *
+ * Git branch name rules (from git-check-ref-format):
+ *  - No spaces
+ *  - No ASCII control characters, DEL, SP, ~, ^, :, ?, *, [, \
+ *  - No .. sequences
+ *  - No @{ sequences
+ *  - Cannot begin or end with /
+ *  - Cannot end with .
+ *  - Cannot contain consecutive slashes //
+ *
+ * Strategy: replace runs of invalid chars with "-", collapse repeated "-",
+ * trim leading/trailing "-" and "/", truncate to 60 chars to keep refs short.
+ */
+export function sanitizeBranchName(name: string): string {
+  return name
+    // Replace spaces and invalid chars with hyphens
+    .replace(/[\s~^:?*[\\\x00-\x1f\x7f<>|"]/g, "-")
+    // Remove @{ sequences
+    .replace(/@\{/g, "-")
+    // Collapse consecutive hyphens/slashes
+    .replace(/-{2,}/g, "-")
+    .replace(/\/{2,}/g, "/")
+    // Remove .. sequences
+    .replace(/\.\./g, "-")
+    // Strip leading/trailing hyphens and slashes
+    .replace(/^[-/]+|[-/]+$/g, "")
+    // Strip trailing dots (forbidden by git)
+    .replace(/\.+$/g, "")
+    // Truncate to 60 chars
+    .slice(0, 60)
+    // Final cleanup: trailing hyphens/slashes/dots after truncation
+    .replace(/[-/.]+$/g, "")
+    // Fallback if everything was stripped
+    || `branch-${Date.now()}`;
 }

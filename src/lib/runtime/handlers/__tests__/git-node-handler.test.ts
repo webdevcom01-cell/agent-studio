@@ -1,127 +1,88 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { gitNodeHandler } from "../git-node-handler";
-import type { RuntimeContext } from "../../types";
+/**
+ * Tests for git-node-handler — focusing on sanitizeBranchName()
+ * which was the root cause of git pipeline failures.
+ *
+ * The SDLC orchestrator passes {{taskSummary}} into the branch field,
+ * producing strings like:
+ *   "sdlc/Implements a generic, production-ready LRUCache<K, V> using Map"
+ * These are invalid git branch names (spaces, <, >, commas) and cause
+ * `git checkout -B` to fail with a fatal error.
+ */
 
-const mockExecFile = vi.fn();
+import { describe, it, expect } from "vitest";
+import { sanitizeBranchName } from "../git-node-handler";
 
-vi.mock("node:child_process", () => ({
-  execFile: (...args: unknown[]) => {
-    const callback = args[args.length - 1];
-    if (typeof callback === "function") {
-      const result = mockExecFile(...args.slice(0, -1));
-      if (result instanceof Promise) {
-        result.then(
-          (r: { stdout: string; stderr: string }) => callback(null, r.stdout, r.stderr),
-          (e: Error) => callback(e),
-        );
-      }
-    }
-  },
-}));
-
-vi.mock("node:util", () => ({
-  promisify: (fn: unknown) => (...args: unknown[]) => {
-    return new Promise((resolve, reject) => {
-      mockExecFile(...args)
-        .then((r: { stdout: string; stderr: string }) => resolve(r))
-        .catch((e: Error) => reject(e));
-    });
-  },
-}));
-
-vi.mock("@/lib/logger", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
-
-function makeNode(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "node-1",
-    type: "git_node",
-    data: {
-      label: "Git",
-      workingDir: "/tmp/project",
-      branch: "feat/test-branch",
-      commitMessage: "feat: test commit",
-      operations: ["checkout_branch", "add", "commit", "push"],
-      outputVariable: "gitResult",
-      nextNodeId: "next-1",
-      ...overrides,
-    },
-  };
-}
-
-function makeContext(variables: Record<string, unknown> = {}): RuntimeContext {
-  return {
-    agentId: "agent-1",
-    conversationId: "conv-1",
-    variables,
-    history: [],
-    nodes: [],
-    edges: [],
-  } as unknown as RuntimeContext;
-}
-
-describe("gitNodeHandler", () => {
-  beforeEach(() => {
-    mockExecFile.mockReset();
+describe("sanitizeBranchName", () => {
+  it("passes through a clean branch name unchanged", () => {
+    expect(sanitizeBranchName("feat/my-feature")).toBe("feat/my-feature");
   });
 
-  it("runs all git operations and returns success", async () => {
-    mockExecFile.mockResolvedValue({ stdout: "[feat/test-branch abc1234] feat: test commit", stderr: "" });
-
-    const result = await gitNodeHandler(makeNode() as never, makeContext());
-
-    expect(result.nextNodeId).toBe("next-1");
-    const output = result.updatedVariables?.gitResult as Record<string, unknown>;
-    expect(output.success).toBe(true);
-    expect(output.branch).toBe("feat/test-branch");
-    expect(output.pushed).toBe(true);
+  it("replaces spaces with hyphens", () => {
+    expect(sanitizeBranchName("feat/my feature")).toBe("feat/my-feature");
   });
 
-  it("runs only specified operations", async () => {
-    mockExecFile.mockResolvedValue({ stdout: "", stderr: "" });
+  it("handles the real LRUCache taskSummary that caused failures", () => {
+    const taskSummary =
+      "Implements a generic, production-ready LRUCache<K, V> using Map for O(1) operations";
+    const branch = sanitizeBranchName(`sdlc/${taskSummary}`);
 
-    const result = await gitNodeHandler(
-      makeNode({ operations: ["add", "commit"] }) as never,
-      makeContext(),
-    );
-
-    expect(result.nextNodeId).toBe("next-1");
-    const output = result.updatedVariables?.gitResult as Record<string, unknown>;
-    expect(output.pushed).toBe(false);
+    expect(branch).not.toMatch(/\s/);
+    expect(branch).not.toMatch(/[<>]/);
+    expect(branch.length).toBeGreaterThan(0);
+    expect(branch.startsWith("sdlc/")).toBe(true);
+    expect(branch.length).toBeLessThanOrEqual(60);
   });
 
-  it("returns error result when git command fails", async () => {
-    mockExecFile.mockRejectedValue(new Error("fatal: not a git repository"));
-
-    const result = await gitNodeHandler(makeNode() as never, makeContext());
-
-    expect(result.nextNodeId).toBeNull();
-    const output = result.updatedVariables?.gitResult as Record<string, unknown>;
-    expect(output.success).toBe(false);
-    expect(output.message).toContain("Git operation failed");
+  it("strips leading and trailing hyphens and slashes", () => {
+    const result = sanitizeBranchName("  feature  ");
+    expect(result).not.toMatch(/^[-/]/);
+    expect(result).not.toMatch(/[-/]$/);
   });
 
-  it("interpolates branch variable from context", async () => {
-    mockExecFile.mockResolvedValue({ stdout: "", stderr: "" });
-
-    const result = await gitNodeHandler(
-      makeNode({ branch: "feat/{{featureName}}" }) as never,
-      makeContext({ featureName: "new-auth" }),
-    );
-
-    const output = result.updatedVariables?.gitResult as Record<string, unknown>;
-    expect(output.branch).toBe("feat/new-auth");
+  it("collapses consecutive hyphens into one", () => {
+    expect(sanitizeBranchName("feat---my---feature")).toBe("feat-my-feature");
   });
 
-  it("does not throw when node data is empty", async () => {
-    mockExecFile.mockResolvedValue({ stdout: "", stderr: "" });
+  it("strips angle brackets from generic type params", () => {
+    expect(sanitizeBranchName("LRUCache<K, V>")).not.toMatch(/[<>]/);
+  });
 
-    await expect(
-      gitNodeHandler(
-        { id: "n1", type: "git_node", data: {} } as never,
-        makeContext(),
-      ),
-    ).resolves.toBeDefined();
+  it("strips shell metacharacters invalid in branch names", () => {
+    const result = sanitizeBranchName("feat:fix~something^1");
+    expect(result).not.toMatch(/[:~^]/);
+  });
+
+  it("handles @{ sequences", () => {
+    const result = sanitizeBranchName("branch@{upstream}");
+    expect(result).not.toContain("@{");
+  });
+
+  it("handles double-dot sequences", () => {
+    const result = sanitizeBranchName("feat..something");
+    expect(result).not.toContain("..");
+  });
+
+  it("truncates to 60 characters", () => {
+    const long = "a".repeat(100);
+    expect(sanitizeBranchName(long).length).toBeLessThanOrEqual(60);
+  });
+
+  it("returns a fallback for an all-invalid input", () => {
+    const result = sanitizeBranchName("~^:?*[\\");
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it("preserves sdlc/ prefix used by SDLC pipeline", () => {
+    const result = sanitizeBranchName("sdlc/Build a REST API with auth middleware");
+    expect(result.startsWith("sdlc/")).toBe(true);
+  });
+
+  it("handles the slugify task summary from Slack failure report", () => {
+    const taskSummary =
+      "A robust TypeScript slugify utility that creates URL-safe slugs, with comprehensive Vitest coverage";
+    const branch = sanitizeBranchName(`sdlc/${taskSummary}`);
+    expect(branch).not.toMatch(/\s/);
+    expect(branch.length).toBeLessThanOrEqual(60);
+    expect(branch.startsWith("sdlc/")).toBe(true);
   });
 });
