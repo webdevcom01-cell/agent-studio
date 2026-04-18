@@ -65,10 +65,10 @@ describe("parseRepoInfo", () => {
 });
 
 describe("integrateWithGit", () => {
-  it("returns error when GITHUB_PAT is not set", async () => {
+  it("returns error when GITHUB_TOKEN is not set", async () => {
     const result = await integrateWithGit(makeGitInput());
     expect(result.success).toBe(false);
-    expect(result.error).toContain("GITHUB_PAT");
+    expect(result.error).toContain("GITHUB_TOKEN");
   });
 
   it("returns error for non-GitHub URL", async () => {
