@@ -3,11 +3,11 @@ import { ALL_MODELS } from "@/lib/models";
 export type StepPhase = "planning" | "implementation" | "testing" | "review" | "other";
 
 const PHASE_MODEL_PRIORITY: Record<StepPhase, string[]> = {
-  planning:       ["deepseek-reasoner", "o4-mini", "deepseek-chat"],
-  implementation: ["deepseek-chat", "gpt-4.1", "deepseek-reasoner"],
-  testing:        ["deepseek-chat", "gpt-4.1-mini"],
-  review:         ["claude-sonnet-4-6", "deepseek-reasoner", "deepseek-chat"],
-  other:          ["deepseek-chat"],
+  planning:       ["deepseek-reasoner", "o4-mini", "gpt-4o-mini"],
+  implementation: ["gpt-4o-mini", "gpt-4.1", "deepseek-reasoner"],
+  testing:        ["gpt-4o-mini", "gpt-4.1-mini"],
+  review:         ["claude-sonnet-4-6", "deepseek-reasoner", "gpt-4o-mini"],
+  other:          ["gpt-4o-mini"],
 };
 
 export function isModelAvailable(modelId: string): boolean {

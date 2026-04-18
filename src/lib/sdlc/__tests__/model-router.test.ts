@@ -44,10 +44,10 @@ describe("resolveStepModel", () => {
   });
 
   it("returns first available candidate for phase when smart routing enabled", () => {
-    // deepseek-chat has no envKey so it is always available
+    // gpt-4o-mini is not in the model catalog → skipped; gpt-4.1 has no envKey → available
     const result = resolveStepModel("implementation", {}, "codegen", "fallback-model", true);
-    // First candidate for implementation is deepseek-chat (no envKey → always available)
-    expect(result).toBe("deepseek-chat");
+    // First available candidate for implementation is gpt-4.1 (no envKey → always available)
+    expect(result).toBe("gpt-4.1");
   });
 
   it("returns defaultModelId when no candidates available (all envKeys missing)", () => {
@@ -84,13 +84,14 @@ describe("resolveStepModel", () => {
 
   it("picks candidate by phase priority order for testing phase", () => {
     const result = resolveStepModel("testing", {}, "run_tests", "fallback", true);
-    // First candidate for 'testing' is deepseek-chat (no envKey → always available)
-    expect(result).toBe("deepseek-chat");
+    // gpt-4o-mini not in catalog → skipped; gpt-4.1-mini has no envKey → available
+    expect(result).toBe("gpt-4.1-mini");
   });
 
   it("picks candidate by phase priority for other phase", () => {
     const result = resolveStepModel("other", {}, "sandbox_verify", "fallback", true);
-    expect(result).toBe("deepseek-chat");
+    // gpt-4o-mini not in catalog → no available candidates → returns defaultModelId
+    expect(result).toBe("fallback");
   });
 });
 
@@ -206,26 +207,21 @@ describe("resolveStepModelAdaptive", () => {
       },
     ]);
     const result = await resolveStepModelAdaptive("implementation", {}, "codegen", "fallback");
-    // Static priority for implementation: deepseek-chat (no envKey → available)
-    expect(result).toBe("deepseek-chat");
+    // Static priority for implementation: gpt-4o-mini skipped (not in catalog), gpt-4.1 available
+    expect(result).toBe("gpt-4.1");
   });
 
   it("falls back to static priority when DB returns empty (cold start)", async () => {
     mockPrisma.modelPerformanceStat.findMany.mockResolvedValueOnce([]);
     const result = await resolveStepModelAdaptive("implementation", {}, "codegen", "fallback");
-    // First available in implementation priority = deepseek-chat
-    expect(result).toBe("deepseek-chat");
+    // First available in implementation priority = gpt-4.1 (gpt-4o-mini not in catalog)
+    expect(result).toBe("gpt-4.1");
   });
 
   it("falls back to defaultModelId when no static candidate available", async () => {
-    // Stub all envKeys missing; only deepseek-chat (no envKey) is always available —
-    // since the static list for 'other' = ["deepseek-chat"], result will be deepseek-chat.
-    // To test fallback-to-default we need a phase where all candidates are keyed.
-    // 'review' priority: ["claude-sonnet-4-6" (ANTHROPIC), "deepseek-reasoner" (none), ...]
-    // deepseek-reasoner has no envKey so it's always available → it will be returned.
-    // Realistic test: verify defaultModelId is returned only when override exists.
+    // 'other' priority = ["gpt-4o-mini"] — not in catalog → no candidates → returns defaultModelId
     const result = await resolveStepModelAdaptive("other", {}, "sandbox_verify", "my-default");
-    expect(result).toBe("deepseek-chat"); // first in 'other' priority, no envKey
+    expect(result).toBe("my-default");
   });
 
   it("logs warn and falls back to static priority when DB throws", async () => {
@@ -235,8 +231,8 @@ describe("resolveStepModelAdaptive", () => {
       "model-router: adaptive DB query failed, using static priority",
       expect.objectContaining({ phase: "implementation" }),
     );
-    // Static fallback: first available in implementation priority = deepseek-chat
-    expect(result).toBe("deepseek-chat");
+    // Static fallback: first available in implementation priority = gpt-4.1
+    expect(result).toBe("gpt-4.1");
   });
 
   it("prefers model with highest success rate when multiple DB candidates exist", async () => {

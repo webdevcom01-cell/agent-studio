@@ -154,7 +154,7 @@ export interface OrchestratorInput {
    * Per-step model overrides. Keys are step IDs (e.g. "codegen", "ecc-frontend-developer").
    * When a step ID is found here, its value is used as the modelId for that step's AI call,
    * its learn hook, and any feedback loop iterations triggered by that step.
-   * Falls back to the top-level `modelId` (or "deepseek-chat") when no override is present.
+   * Falls back to the top-level `modelId` (or "gpt-4o-mini") when no override is present.
    */
   stepModelOverrides?: Record<string, string>;
   /**
@@ -234,8 +234,8 @@ export async function runPipeline(
   const { getAgentSystemPrompt } = await import("./agent-prompts");
   const { loadRelevantMemory } = await import("./pipeline-memory");
 
-  // Resolve model lazily — deepseek-chat is always available, no extra API key needed.
-  const resolvedModelId = modelId ?? "deepseek-chat";
+  // Resolve model lazily — gpt-4o-mini is always available, no extra API key needed.
+  const resolvedModelId = modelId ?? "gpt-4o-mini";
 
   const startedAt = Date.now();
   let totalInputTokens = 0;

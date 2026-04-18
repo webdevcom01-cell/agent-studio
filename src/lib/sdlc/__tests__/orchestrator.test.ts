@@ -262,7 +262,7 @@ describe("runPipeline — happy path", () => {
     expect(mockGetModel).toHaveBeenCalledWith("claude-opus-4-6");
   });
 
-  it("defaults to deepseek-chat when modelId is omitted", async () => {
+  it("defaults to gpt-4o-mini when modelId is omitted", async () => {
     mockGenerateText.mockResolvedValue({
       text: "out",
       usage: { inputTokens: 10, outputTokens: 5 },
@@ -279,7 +279,7 @@ describe("runPipeline — happy path", () => {
       makeCallbacks(),
     );
 
-    expect(mockGetModel).toHaveBeenCalledWith("deepseek-chat");
+    expect(mockGetModel).toHaveBeenCalledWith("gpt-4o-mini");
   });
 });
 
