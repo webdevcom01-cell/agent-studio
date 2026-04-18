@@ -629,6 +629,17 @@ export async function runPipeline(
             ? await executeRealTestsFromFiles(implFiles, workDir, agentId)
             : await executeRealTests(stepOutput, workDir, agentId);
 
+          if (execResult.filesWritten === 0) {
+            logger.warn("Pipeline: implementation step produced zero files — workspace will be empty", {
+              runId, stepIdx, stepId,
+              usedStructuredOutput: implFiles !== null,
+              implFilesCount: implFiles?.length ?? 0,
+              testOutput: execResult.testOutput.slice(0, 200),
+              stepOutputLength: stepOutput.length,
+              stepOutputSample: stepOutput.slice(0, 300),
+            });
+          }
+
           if (execResult.filesWritten > 0) {
             const realFailed = !execResult.typecheckPassed || !execResult.testsPassed;
 

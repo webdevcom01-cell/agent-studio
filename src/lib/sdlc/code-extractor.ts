@@ -493,7 +493,11 @@ export async function executeRealTests(
   const parsed = parseCodeBlocks(aiOutput);
 
   if (parsed.length === 0) {
-    logger.info("code-extractor: no code blocks found in AI output", { agentId });
+    logger.warn("code-extractor: no code blocks found in AI output — workspace will be empty", {
+      agentId,
+      outputLength: aiOutput.length,
+      outputSample: aiOutput.slice(0, 400),
+    });
     return {
       filesWritten: 0,
       writtenPaths: [],
