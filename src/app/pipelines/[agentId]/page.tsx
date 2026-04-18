@@ -13,173 +13,171 @@ import {
   ChevronDown,
   ChevronRight,
   Play,
+  RefreshCw,
   BarChart3,
   Cpu,
   Timer,
-  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
-interface StepMetric {
-  phase: string;
-  stepId: string;
-  modelId: string;
-  outcome: string;
-  durationMs: number;
-  inputTokens: number;
-  outputTokens: number;
-  feedbackAttempts: number;
-}
 
 interface PipelineRun {
   id: string;
   status: string;
   taskDescription: string;
-  taskType: string;
-  complexity: string;
+  taskType: string | null;
+  complexity: string | null;
   pipeline: string[];
   currentStep: number;
-  stepMetrics: Record<string, StepMetric>;
+  stepMetrics: Record<string, {
+    phase: string;
+    stepId: string;
+    modelId: string;
+    outcome: string;
+    durationMs: number;
+    inputTokens: number;
+    outputTokens: number;
+    feedbackAttempts: number;
+  }>;
   finalOutput: string | null;
   error: string | null;
   prUrl: string | null;
-  repoUrl: string | null;
   createdAt: string;
-  completedAt: string | null;
 }
 
-interface PipelineListResponse {
-  success: boolean;
-  data: PipelineRun[];
+function StatusIcon({ status }: { status: string }) {
+  if (status === "COMPLETED") return <CheckCircle2 className="size-4 text-emerald-400" />;
+  if (status === "FAILED") return <XCircle className="size-4 text-red-400" />;
+  if (status === "RUNNING") return <Loader2 className="size-4 text-blue-400 animate-spin" />;
+  return <Clock className="size-4 text-zinc-400" />;
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
-    COMPLETED: { label: "Completed", className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", icon: <CheckCircle2 className="size-3" /> },
-    RUNNING: { label: "Running", className: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: <Loader2 className="size-3 animate-spin" /> },
-    PENDING: { label: "Pending", className: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30", icon: <Clock className="size-3" /> },
-    FAILED: { label: "Failed", className: "bg-red-500/20 text-red-400 border-red-500/30", icon: <XCircle className="size-3" /> },
-    AWAITING_APPROVAL: { label: "Awaiting Approval", className: "bg-amber-500/20 text-amber-400 border-amber-500/30", icon: <Clock className="size-3" /> },
+function statusLabel(status: string): string {
+  const map: Record<string, string> = {
+    COMPLETED: "Završeno",
+    FAILED: "Greška",
+    RUNNING: "U toku",
+    PENDING: "Čeka",
+    AWAITING_APPROVAL: "Čeka odobrenje",
   };
-  const cfg = map[status] ?? { label: status, className: "bg-zinc-500/20 text-zinc-400", icon: null };
-  return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium", cfg.className)}>
-      {cfg.icon}
-      {cfg.label}
-    </span>
-  );
+  return map[status] ?? status;
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
+function formatMs(ms: number): string {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString("sr-RS", { dateStyle: "medium", timeStyle: "short" });
-}
-
-function RunCard({ run, agentId }: { run: PipelineRun; agentId: string }) {
-  const [expanded, setExpanded] = useState(false);
+function RunRow({ run, agentId }: { run: PipelineRun; agentId: string }) {
+  const [open, setOpen] = useState(false);
   const { data, isLoading } = useSWR<{ success: boolean; data: PipelineRun }>(
-    expanded ? `/api/agents/${agentId}/pipelines/${run.id}` : null,
+    open ? `/api/agents/${agentId}/pipelines/${run.id}` : null,
     fetcher
   );
   const detail = data?.data;
   const metrics = detail?.stepMetrics ?? {};
-  const metricEntries = Object.entries(metrics) as [string, StepMetric][];
-  const totalTokens = metricEntries.reduce((sum, [, m]) => sum + (m.inputTokens ?? 0) + (m.outputTokens ?? 0), 0);
+  const entries = Object.entries(metrics);
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/50">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <StatusBadge status={run.status} />
-              <Badge variant="outline" className="text-xs capitalize text-zinc-400 border-zinc-700">
-                {run.taskType?.replace(/-/g, " ") ?? "task"}
-              </Badge>
-              <Badge variant="outline" className="text-xs capitalize text-zinc-400 border-zinc-700">
-                {run.complexity ?? "moderate"}
-              </Badge>
-            </div>
-            <p className="text-sm text-zinc-200 font-medium leading-snug line-clamp-2">
-              {run.taskDescription}
-            </p>
-            <p className="text-xs text-zinc-500 mt-1">{formatDate(run.createdAt)}</p>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="shrink-0 text-zinc-400 hover:text-zinc-200"
-            onClick={() => setExpanded(!expanded)}
-          >
-            {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-          </Button>
-        </div>
-
-        {/* Pipeline steps summary */}
-        <div className="flex flex-wrap gap-1 mt-2">
-          {run.pipeline.map((step, i) => (
-            <span
-              key={step}
-              className={cn(
-                "text-xs px-2 py-0.5 rounded-full border",
-                i < run.currentStep
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                  : i === run.currentStep && run.status === "RUNNING"
-                  ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                  : "bg-zinc-800 text-zinc-500 border-zinc-700"
-              )}
-            >
-              {step}
+    <div className="border border-zinc-800 rounded-xl bg-zinc-900/40 overflow-hidden">
+      {/* Header row */}
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-start gap-3 p-4 text-left hover:bg-zinc-800/30 transition-colors"
+      >
+        <StatusIcon status={run.status} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-zinc-100 font-medium leading-snug line-clamp-2">
+            {run.taskDescription}
+          </p>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <span className={cn(
+              "text-xs font-medium",
+              run.status === "COMPLETED" ? "text-emerald-400" :
+              run.status === "FAILED" ? "text-red-400" :
+              run.status === "RUNNING" ? "text-blue-400" : "text-zinc-400"
+            )}>
+              {statusLabel(run.status)}
             </span>
-          ))}
+            {run.taskType && (
+              <span className="text-xs text-zinc-500 capitalize">{run.taskType.replace(/-/g, " ")}</span>
+            )}
+            <span className="text-xs text-zinc-600">
+              {new Date(run.createdAt).toLocaleString("sr-RS")}
+            </span>
+          </div>
+          {/* Pipeline steps */}
+          <div className="flex flex-wrap gap-1 mt-2">
+            {run.pipeline.map((step, i) => (
+              <span
+                key={`${step}-${i}`}
+                className={cn(
+                  "text-xs px-1.5 py-0.5 rounded border",
+                  i < run.currentStep
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                    : i === run.currentStep && run.status === "RUNNING"
+                    ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                    : "bg-zinc-800 text-zinc-500 border-zinc-700"
+                )}
+              >
+                {step}
+              </span>
+            ))}
+          </div>
+          {run.prUrl && (
+            <a
+              href={run.prUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-1.5"
+            >
+              <GitBranch className="size-3" />
+              View PR
+            </a>
+          )}
         </div>
-
-        {run.prUrl && (
-          <a
-            href={run.prUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-1"
-          >
-            <GitBranch className="size-3" />
-            View Pull Request
-          </a>
+        {open ? (
+          <ChevronDown className="size-4 text-zinc-500 shrink-0 mt-0.5" />
+        ) : (
+          <ChevronRight className="size-4 text-zinc-500 shrink-0 mt-0.5" />
         )}
-      </CardHeader>
+      </button>
 
-      {expanded && (
-        <CardContent className="pt-0 border-t border-zinc-800">
-          {isLoading ? (
-            <div className="flex items-center gap-2 py-4 text-zinc-500 text-sm">
-              <Loader2 className="size-4 animate-spin" />
-              Loading details...
+      {/* Expanded detail */}
+      {open && (
+        <div className="border-t border-zinc-800 p-4 space-y-4">
+          {isLoading && (
+            <div className="flex items-center gap-2 text-sm text-zinc-500">
+              <Loader2 className="size-4 animate-spin" /> Učitavam detalje...
             </div>
-          ) : detail ? (
-            <div className="space-y-4 pt-3">
-              {/* Step Metrics */}
-              {metricEntries.length > 0 && (
+          )}
+
+          {detail && (
+            <>
+              {/* Step metrics */}
+              {entries.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <BarChart3 className="size-3" /> Step Metrics
+                  <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <BarChart3 className="size-3" /> Step Metrikes
                   </h4>
                   <div className="space-y-1.5">
-                    {metricEntries.map(([idx, m]) => (
-                      <div key={idx} className="flex items-center gap-3 text-xs bg-zinc-800/50 rounded-lg px-3 py-2">
-                        <span className="text-zinc-300 font-mono w-36 truncate">{m.stepId}</span>
-                        <span className="text-zinc-500">{m.phase}</span>
+                    {entries.map(([idx, m]) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 text-xs bg-zinc-800/50 rounded-lg px-3 py-2"
+                      >
+                        <span className="text-zinc-300 font-mono w-40 truncate">{m.stepId}</span>
+                        <span className="text-zinc-600">{m.phase}</span>
                         <span className="ml-auto flex items-center gap-3 text-zinc-400">
-                          <span className="flex items-center gap-1"><Cpu className="size-3" />{m.modelId}</span>
-                          <span className="flex items-center gap-1"><Timer className="size-3" />{formatDuration(m.durationMs)}</span>
-                          <span>{(m.inputTokens + m.outputTokens).toLocaleString()} tok</span>
+                          <span className="flex items-center gap-1">
+                            <Cpu className="size-3" />{m.modelId}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Timer className="size-3" />{formatMs(m.durationMs)}
+                          </span>
+                          <span>{((m.inputTokens ?? 0) + (m.outputTokens ?? 0)).toLocaleString()} tok</span>
                           {m.feedbackAttempts > 0 && (
                             <span className="text-amber-400">↺{m.feedbackAttempts}</span>
                           )}
@@ -190,38 +188,33 @@ function RunCard({ run, agentId }: { run: PipelineRun; agentId: string }) {
                       </div>
                     ))}
                   </div>
-                  {totalTokens > 0 && (
-                    <p className="text-xs text-zinc-500 mt-1.5 text-right">
-                      Total: {totalTokens.toLocaleString()} tokens
-                    </p>
-                  )}
                 </div>
               )}
 
               {/* Error */}
               {detail.error && (
                 <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
-                  <p className="text-xs text-red-400 font-semibold mb-1">Error</p>
+                  <p className="text-xs font-semibold text-red-400 mb-1">Greška</p>
                   <p className="text-xs text-red-300 font-mono">{detail.error}</p>
                 </div>
               )}
 
-              {/* Final Output */}
+              {/* Final output */}
               {detail.finalOutput && (
                 <div>
                   <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-                    Final Output
+                    Rezultat
                   </h4>
-                  <pre className="bg-zinc-800/30 rounded-lg p-4 text-zinc-300 overflow-auto max-h-96 text-xs whitespace-pre-wrap font-mono leading-relaxed">
+                  <pre className="bg-zinc-800/30 rounded-lg p-3 text-xs text-zinc-300 overflow-auto max-h-80 whitespace-pre-wrap leading-relaxed">
                     {detail.finalOutput}
                   </pre>
                 </div>
               )}
-            </div>
-          ) : null}
-        </CardContent>
+            </>
+          )}
+        </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -231,59 +224,55 @@ export default function PipelinesPage({
   params: Promise<{ agentId: string }>;
 }): React.ReactElement {
   const { agentId } = use(params);
-  const { data, isLoading, mutate } = useSWR<PipelineListResponse>(
+  const { data, isLoading, mutate } = useSWR<{ success: boolean; data: PipelineRun[] }>(
     `/api/agents/${agentId}/pipelines`,
     fetcher,
-    { refreshInterval: 5000 }
+    { refreshInterval: 8000 }
   );
 
-  const runs = data?.data ?? [];
+  const runs: PipelineRun[] = data?.data ?? [];
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       {/* Header */}
-      <div className="border-b border-zinc-800 bg-zinc-900/50 sticky top-0 z-10 backdrop-blur">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Button variant="ghost" size="sm" asChild className="text-zinc-400 hover:text-zinc-200">
+      <div className="border-b border-zinc-800 bg-zinc-900/60 sticky top-0 z-10 backdrop-blur">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+          <Button variant="ghost" size="icon-sm" asChild className="text-zinc-400">
             <Link href={`/chat/${agentId}`}>
               <ArrowLeft className="size-4" />
             </Link>
           </Button>
-          <div className="flex items-center gap-2">
-            <GitBranch className="size-4 text-blue-400" />
-            <h1 className="font-semibold text-sm">SDLC Pipelines</h1>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
+          <GitBranch className="size-4 text-blue-400" />
+          <h1 className="font-semibold text-sm">SDLC Pipelines</h1>
+          <div className="ml-auto flex items-center gap-3">
             <Button
               variant="ghost"
-              size="sm"
-              className="text-zinc-400 hover:text-zinc-200"
+              size="icon-sm"
+              className="text-zinc-400"
               onClick={() => mutate()}
             >
               <RefreshCw className="size-4" />
             </Button>
-            <span className="text-xs text-zinc-500">{runs.length} runs</span>
+            <span className="text-xs text-zinc-500">{runs.length} runova</span>
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-3">
+      {/* List */}
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-3">
         {isLoading ? (
-          <div className="flex items-center justify-center py-16 text-zinc-500">
-            <Loader2 className="size-5 animate-spin mr-2" />
-            Loading pipelines...
+          <div className="flex items-center justify-center py-20 text-zinc-500 gap-2">
+            <Loader2 className="size-5 animate-spin" />
+            <span className="text-sm">Učitavam pipeline runove...</span>
           </div>
         ) : runs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Play className="size-10 text-zinc-700 mb-3" />
-            <p className="text-zinc-400 font-medium">No pipeline runs yet</p>
-            <p className="text-zinc-600 text-sm mt-1">
-              Trigger a pipeline run via the API to see results here
-            </p>
+          <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
+            <Play className="size-10 text-zinc-700" />
+            <p className="text-zinc-400 font-medium text-sm">Nema pipeline runova</p>
+            <p className="text-zinc-600 text-xs">Pokrenite pipeline run via API</p>
           </div>
         ) : (
-          runs.map((run) => <RunCard key={run.id} run={run} agentId={agentId} />)
+          runs.map((run) => <RunRow key={run.id} run={run} agentId={agentId} />)
         )}
       </div>
     </div>
