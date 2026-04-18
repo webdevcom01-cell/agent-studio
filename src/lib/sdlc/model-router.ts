@@ -25,10 +25,13 @@ export function resolveStepModel(
   useSmartRouting: boolean,
 ): string {
   if (overrides[stepId]) return overrides[stepId];
-  if (!useSmartRouting) return defaultModelId;
-  const candidates = PHASE_MODEL_PRIORITY[phase];
-  for (const candidate of candidates) {
-    if (isModelAvailable(candidate)) return candidate;
+  // Implementation steps always use phase priority regardless of useSmartRouting,
+  // because gpt-4o-mini does not support the structured output schema (generateObject fails).
+  if (useSmartRouting || phase === "implementation") {
+    const candidates = PHASE_MODEL_PRIORITY[phase];
+    for (const candidate of candidates) {
+      if (isModelAvailable(candidate)) return candidate;
+    }
   }
   return defaultModelId;
 }
