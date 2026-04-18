@@ -4,7 +4,7 @@ export type StepPhase = "planning" | "implementation" | "testing" | "review" | "
 
 const PHASE_MODEL_PRIORITY: Record<StepPhase, string[]> = {
   planning:       ["gpt-4o-mini", "deepseek-reasoner", "o4-mini"],
-  implementation: ["gpt-4o-mini", "gpt-4.1", "deepseek-reasoner"],
+  implementation: ["gpt-4.1", "gpt-4o", "gpt-4o-mini"],
   testing:        ["gpt-4o-mini", "gpt-4.1-mini"],
   review:         ["gpt-4o-mini", "claude-sonnet-4-6", "deepseek-reasoner"],
   other:          ["gpt-4o-mini"],
