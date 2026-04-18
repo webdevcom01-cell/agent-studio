@@ -23,6 +23,11 @@ import { cn } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
+interface PipelineListData {
+  runs: PipelineRun[];
+  total: number;
+}
+
 interface PipelineRun {
   id: string;
   status: string;
@@ -224,13 +229,12 @@ export default function PipelinesPage({
   params: Promise<{ agentId: string }>;
 }): React.ReactElement {
   const { agentId } = use(params);
-  const { data, isLoading, mutate } = useSWR<{ success: boolean; data: PipelineRun[] }>(
+  const { data, isLoading, mutate } = useSWR<{ success: boolean; data: PipelineListData }>(
     `/api/agents/${agentId}/pipelines`,
-    fetcher,
-    { refreshInterval: 8000 }
+    fetcher
   );
 
-  const runs: PipelineRun[] = data?.data ?? [];
+  const runs: PipelineRun[] = data?.data?.runs ?? [];
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
