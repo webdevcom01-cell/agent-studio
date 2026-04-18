@@ -512,7 +512,7 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
   const {
     pipelineRunId, agentId, userId, modelId,
     requireApproval, startFromStep, existingStepResults, approvalFeedback,
-    useSmartRouting,
+    useSmartRouting, repoUrl,
   } = job.data;
 
   const {
@@ -551,6 +551,7 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
         requireApproval: requireApproval ?? false,
         approvalFeedback,
         useSmartRouting: useSmartRouting ?? false,
+        repoUrl,
       },
       {
         onStepComplete: async (stepIdx: number, output: string) => {
@@ -577,7 +578,7 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
       return { pipelineRunId, cancelled: true };
     }
 
-    await markPipelineCompleted(pipelineRunId, result.finalOutput);
+    await markPipelineCompleted(pipelineRunId, result.finalOutput, result.prUrl);
     await job.updateProgress(100);
 
     // Fire-and-forget: persist per-step metrics and aggregate model stats

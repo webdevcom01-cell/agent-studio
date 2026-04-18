@@ -271,6 +271,9 @@ model PipelineRun {
   agent           Agent             @relation(fields: [agentId], references: [id], onDelete: Cascade)
   userId          String?
 
+  repoUrl         String?
+  prUrl           String?
+
   startedAt       DateTime?
   completedAt     DateTime?
   createdAt       DateTime          @default(now())

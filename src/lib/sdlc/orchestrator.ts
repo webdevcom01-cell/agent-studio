@@ -176,6 +176,7 @@ export interface OrchestratorInput {
   approvalFeedback?: string;
   /** When true, use the smart model router to select the best available model per phase. */
   useSmartRouting?: boolean;
+  repoUrl?: string;
 }
 
 export interface OrchestratorResult {
@@ -191,6 +192,7 @@ export interface OrchestratorResult {
   planningStepsCompleted?: number;
   /** Per-step telemetry — keyed by step index */
   stepMetrics?: Record<number, StepMetric>;
+  prUrl?: string;
 }
 
 /**
@@ -217,10 +219,12 @@ export async function runPipeline(
     requireApproval = false,
     approvalFeedback,
     useSmartRouting = false,
+    repoUrl,
   } = input;
   const { onStepComplete, isCancelled, onProgress } = callbacks;
 
   const workDir = input.workspaceDir ?? `${SDLC_WORKSPACE_BASE}/${runId}`;
+  let gitPrUrl: string | undefined;
   const cleanupWorkspace = !input.workspaceDir;
 
   try {
@@ -364,6 +368,7 @@ export async function runPipeline(
         durationMs: Date.now() - startedAt,
         cancelled: true,
         stepMetrics: stepMetricsMap,
+        prUrl: undefined,
       };
     }
 
@@ -916,6 +921,7 @@ export async function runPipeline(
         awaitingApproval: true,
         planningStepsCompleted: stepIdx + 1,
         stepMetrics: stepMetricsMap,
+        prUrl: undefined,
       };
     }
 
@@ -939,6 +945,26 @@ export async function runPipeline(
   // All steps done
   await onProgress(100);
 
+  // Tier 5 — Git/PR integration (best-effort, never blocks COMPLETED)
+  if (repoUrl) {
+    const { integrateWithGit } = await import("./git-integration");
+    const gitResult = await integrateWithGit({
+      repoUrl,
+      workDir,
+      runId,
+      taskDescription: input.taskDescription,
+    });
+    if (gitResult.success && gitResult.prUrl) {
+      gitPrUrl = gitResult.prUrl;
+      logger.info("orchestrator: git PR created", { runId, prUrl: gitPrUrl });
+    } else {
+      logger.warn("orchestrator: git integration skipped or failed", {
+        runId,
+        error: gitResult.error,
+      });
+    }
+  }
+
   const finalOutput = buildSummary(stepOutputs, pipeline);
 
   return {
@@ -948,6 +974,7 @@ export async function runPipeline(
     totalOutputTokens,
     durationMs: Date.now() - startedAt,
     stepMetrics: stepMetricsMap,
+    prUrl: gitPrUrl,
   };
   } finally {
     if (cleanupWorkspace) {

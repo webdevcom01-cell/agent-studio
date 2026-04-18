@@ -109,6 +109,7 @@ export interface PipelineRunJobData {
   approvalFeedback?: string;
   /** When true, use the smart model router to select the best available model per phase. */
   useSmartRouting?: boolean;
+  repoUrl?: string;
 }
 
 export type JobData =

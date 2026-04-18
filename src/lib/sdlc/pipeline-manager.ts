@@ -35,6 +35,8 @@ export interface PipelineRun {
   jobId: string | null;
   agentId: string;
   userId: string | null;
+  repoUrl: string | null;
+  prUrl: string | null;
   startedAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
@@ -48,6 +50,7 @@ export interface CreatePipelineRunInput {
   pipeline: string[];
   agentId: string;
   userId?: string;
+  repoUrl?: string;
 }
 
 export interface ListPipelineRunsOptions {
@@ -75,6 +78,8 @@ function toRun(row: {
   jobId: string | null;
   agentId: string;
   userId: string | null;
+  repoUrl: string | null;
+  prUrl: string | null;
   startedAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
@@ -83,6 +88,8 @@ function toRun(row: {
   return {
     ...row,
     approvalFeedback: row.approvalFeedback ?? null,
+    repoUrl: row.repoUrl,
+    prUrl: row.prUrl,
     stepResults:
       row.stepResults && typeof row.stepResults === "object" && !Array.isArray(row.stepResults)
         ? (row.stepResults as Record<string, string>)
@@ -105,6 +112,7 @@ export async function createPipelineRun(
       pipeline: input.pipeline,
       agentId: input.agentId,
       userId: input.userId ?? null,
+      repoUrl: input.repoUrl ?? null,
       status: "PENDING",
     },
   });
@@ -213,6 +221,7 @@ export async function advancePipelineStep(
 export async function markPipelineCompleted(
   runId: string,
   finalOutput: string,
+  prUrl?: string,
 ): Promise<PipelineRun> {
   const row = await prisma.pipelineRun.update({
     where: { id: runId },
@@ -220,6 +229,7 @@ export async function markPipelineCompleted(
       status: "COMPLETED",
       finalOutput,
       completedAt: new Date(),
+      ...(prUrl ? { prUrl } : {}),
     },
   });
 

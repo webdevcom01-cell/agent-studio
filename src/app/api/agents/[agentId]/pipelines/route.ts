@@ -73,6 +73,7 @@ const CreatePipelineRunSchema = z.object({
    * Falls back to the top-level modelId when no suitable model is found.
    */
   useSmartRouting: z.boolean().default(false),
+  repoUrl: z.string().url().optional(),
 });
 
 export async function POST(
@@ -94,7 +95,7 @@ export async function POST(
       );
     }
 
-    const { taskDescription, pipelineOverride, modelId, useLLMAnalysis, requireApproval, useSmartRouting } = parsed.data;
+    const { taskDescription, pipelineOverride, modelId, useLLMAnalysis, requireApproval, useSmartRouting, repoUrl } = parsed.data;
 
     // Step 1: Analyze the task to determine pipeline (unless overridden)
     let taskType: string;
@@ -131,6 +132,7 @@ export async function POST(
       pipeline,
       agentId,
       userId,
+      repoUrl,
     });
 
     // Step 4: Enqueue the pipeline runner job
@@ -141,6 +143,7 @@ export async function POST(
       modelId,
       requireApproval,
       useSmartRouting,
+      repoUrl,
     });
 
     logger.info("Pipeline run created and enqueued", {
