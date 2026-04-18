@@ -50,7 +50,7 @@ Categories:
 - errors: specific mistakes made and how they were fixed
 - patterns: reusable implementation patterns that worked well`;
 
-    const model = getModel("deepseek-chat");
+    const model = getModel("gpt-4o-mini");
     const result = await generateObject({
       model,
       prompt,
