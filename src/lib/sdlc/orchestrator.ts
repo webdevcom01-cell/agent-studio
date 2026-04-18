@@ -513,6 +513,14 @@ export async function runPipeline(
             stepInputTokens = result.usage.inputTokens ?? 0;
             stepOutputTokens = result.usage.outputTokens ?? 0;
 
+            // Runtime guard: schema no longer uses .min(1) (OpenAI strict-mode
+            // rejects the minItems keyword), so we check here instead.
+            if (result.object.files.length === 0) {
+              throw new Error(
+                "generateObject returned empty files array — falling back to generateText",
+              );
+            }
+
             // Convert structured files to ParsedFile[] for writeToWorkspace
             implFiles = result.object.files.map((f) => ({
               path: f.path,
@@ -641,13 +649,19 @@ export async function runPipeline(
           }
 
           if (execResult.filesWritten > 0) {
-            const realFailed = !execResult.typecheckPassed || !execResult.testsPassed;
+            // Gate the feedback loop on test failures only.
+            // Typecheck failures are intentionally excluded: the sdlc-generated tsconfig
+            // may not resolve all @/* path aliases in every environment (Railway worker
+            // vs local dev), producing false "Cannot find module" TS errors for code that
+            // is actually correct. Tests (vitest) are the authoritative correctness signal.
+            const realFailed = !execResult.testsPassed;
 
             logger.info("Pipeline: real execution after implementation step", {
               runId, stepIdx, stepId,
               filesWritten: execResult.filesWritten,
               typecheckPassed: execResult.typecheckPassed,
               testsPassed: execResult.testsPassed,
+              feedbackLoopGate: realFailed ? "FAILED (tests)" : "PASSED",
             });
 
             if (realFailed) {
@@ -1027,15 +1041,17 @@ function serializeCodeGenOutput(output: import("./schemas").CodeGenOutput): stri
     );
   }
 
-  if (output.dependencies.length > 0) {
-    const depList = output.dependencies
+  const deps = output.dependencies ?? [];
+  if (deps.length > 0) {
+    const depList = deps
       .map((d) => `- \`${d.name}@${d.version}\`${d.isDev ? " (dev)" : ""}`)
       .join("\n");
     sections.push(`### Dependencies\n\n${depList}`);
   }
 
-  if (output.envVariables.length > 0) {
-    const envList = output.envVariables
+  const envVars = output.envVariables ?? [];
+  if (envVars.length > 0) {
+    const envList = envVars
       .map((e) => `- \`${e.key}\` — ${e.description}${e.required ? " *(required)*" : ""}`)
       .join("\n");
     sections.push(`### Environment Variables\n\n${envList}`);

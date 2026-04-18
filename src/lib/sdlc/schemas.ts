@@ -5,12 +5,15 @@ import { z } from "zod";
 export const CodeGenFileSchema = z.object({
   path: z.string().describe("Relative file path, e.g. src/app/api/urls/route.ts"),
   content: z.string().describe("Full file content"),
-  language: z.string().default("typescript"),
+  // No .default() — OpenAI strict-mode response_format does not support default keywords
+  language: z.string().describe("Language identifier: typescript, tsx, javascript, python, etc."),
   isNew: z.boolean().describe("true = new file, false = modifying existing"),
 });
 
 export const CodeGenOutputSchema = z.object({
-  files: z.array(CodeGenFileSchema).min(1).describe("Generated or modified files"),
+  // No .min(1) — minItems is not supported by OpenAI structured output strict mode
+  files: z.array(CodeGenFileSchema).describe("Generated or modified source files"),
+  // .optional() instead of .default([]) — OpenAI strict mode rejects the 'default' JSON schema keyword
   dependencies: z
     .array(
       z.object({
@@ -19,8 +22,8 @@ export const CodeGenOutputSchema = z.object({
         isDev: z.boolean(),
       }),
     )
-    .default([])
-    .describe("npm packages to add"),
+    .optional()
+    .describe("npm packages to add; omit if none"),
   envVariables: z
     .array(
       z.object({
@@ -29,8 +32,8 @@ export const CodeGenOutputSchema = z.object({
         required: z.boolean(),
       }),
     )
-    .default([])
-    .describe("Environment variables required"),
+    .optional()
+    .describe("Environment variables required; omit if none"),
   prismaSchemaChanges: z
     .string()
     .optional()

@@ -355,17 +355,29 @@ export async function executeRealTestsFromFiles(
   }
 
   // ── Create a minimal tsconfig for type checking the generated files ─────
-  // Written to /app/ so tsc resolves node_modules from /app/node_modules/
-  // and @/* path aliases resolve against /app/tsconfig.json.
+  // Written to /app/ so tsc resolves node_modules from /app/node_modules/.
+  // Explicit baseUrl + absolute paths ensures @/* aliases resolve correctly
+  // regardless of the tsconfig location, avoiding false "Cannot find module"
+  // errors in the Railway worker container.
   const APP_TSCONFIG = "/app/tsconfig.json";
-  const tsconfigPath = existsSync(APP_TSCONFIG)
+  const appTsconfigExists = existsSync(APP_TSCONFIG);
+  const tsconfigPath = appTsconfigExists
     ? "/app/tsconfig.sdlc-generated.json"
     : join(workDir, "tsconfig.sdlc-generated.json");
 
   const tsconfigContent = JSON.stringify(
     {
-      extends: existsSync(APP_TSCONFIG) ? APP_TSCONFIG : "./tsconfig.json",
-      compilerOptions: { noEmit: true, skipLibCheck: true, allowJs: true },
+      extends: appTsconfigExists ? APP_TSCONFIG : undefined,
+      compilerOptions: {
+        noEmit: true,
+        skipLibCheck: true,
+        allowJs: true,
+        // Override path aliases with absolute references so @/* resolves
+        // correctly when the tsconfig sits next to /app/tsconfig.json.
+        ...(appTsconfigExists
+          ? { baseUrl: "/app", paths: { "@/*": ["./src/*"] } }
+          : {}),
+      },
       include: [`${genDir}/**/*`],
     },
     null,
@@ -586,14 +598,22 @@ export async function runWorkspaceTests(
 
   if (tsFiles.length > 0) {
     const APP_TSCONFIG = "/app/tsconfig.json";
-    const tsconfigPath = existsSync(APP_TSCONFIG)
+    const appTsconfigExists = existsSync(APP_TSCONFIG);
+    const tsconfigPath = appTsconfigExists
       ? "/app/tsconfig.sdlc-generated.json"
       : join(workDir, "tsconfig.sdlc-generated.json");
 
     const tsconfigContent = JSON.stringify(
       {
-        extends: existsSync(APP_TSCONFIG) ? APP_TSCONFIG : "./tsconfig.json",
-        compilerOptions: { noEmit: true, skipLibCheck: true, allowJs: true },
+        extends: appTsconfigExists ? APP_TSCONFIG : undefined,
+        compilerOptions: {
+          noEmit: true,
+          skipLibCheck: true,
+          allowJs: true,
+          ...(appTsconfigExists
+            ? { baseUrl: "/app", paths: { "@/*": ["./src/*"] } }
+            : {}),
+        },
         include: [`${genDir}/**/*`],
       },
       null,

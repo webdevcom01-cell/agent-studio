@@ -21,20 +21,25 @@ describe("CodeGenOutputSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects empty files array", () => {
+  it("accepts empty files array (schema is permissive; orchestrator guards at runtime)", () => {
+    // .min(1) was removed from the schema because OpenAI strict-mode response_format
+    // does not support the minItems JSON schema keyword. The orchestrator performs a
+    // runtime check instead: if result.object.files.length === 0 it falls back to generateText.
     const result = CodeGenOutputSchema.safeParse({ files: [], summary: "empty" });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
-  it("defaults optional fields", () => {
+  it("optional fields are undefined when omitted (no defaults)", () => {
+    // .default([]) was removed because OpenAI strict-mode rejects the 'default' keyword.
+    // Callers use ?? [] to handle the undefined case.
     const result = CodeGenOutputSchema.safeParse({
       files: [{ path: "a.ts", content: "const x = 1", language: "typescript", isNew: false }],
       summary: "ok",
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.dependencies).toEqual([]);
-      expect(result.data.envVariables).toEqual([]);
+      expect(result.data.dependencies).toBeUndefined();
+      expect(result.data.envVariables).toBeUndefined();
     }
   });
 
