@@ -60,6 +60,19 @@ const CreatePipelineRunSchema = z.object({
    * Faster and free — useful when cost matters more than accuracy.
    */
   useLLMAnalysis: z.boolean().default(true),
+  /**
+   * When true, the pipeline pauses after the last planning step that is
+   * immediately followed by an implementation step (HITL checkpoint).
+   * Status transitions to AWAITING_APPROVAL — call POST .../approve to resume.
+   * Defaults to false for backwards compatibility.
+   */
+  requireApproval: z.boolean().default(false),
+  /**
+   * When true, the smart model router selects the best available model
+   * for each step phase (planning, implementation, testing, review).
+   * Falls back to the top-level modelId when no suitable model is found.
+   */
+  useSmartRouting: z.boolean().default(false),
 });
 
 export async function POST(
@@ -81,7 +94,7 @@ export async function POST(
       );
     }
 
-    const { taskDescription, pipelineOverride, modelId, useLLMAnalysis } = parsed.data;
+    const { taskDescription, pipelineOverride, modelId, useLLMAnalysis, requireApproval, useSmartRouting } = parsed.data;
 
     // Step 1: Analyze the task to determine pipeline (unless overridden)
     let taskType: string;
@@ -126,6 +139,8 @@ export async function POST(
       agentId,
       userId,
       modelId,
+      requireApproval,
+      useSmartRouting,
     });
 
     logger.info("Pipeline run created and enqueued", {

@@ -235,6 +235,7 @@ enum PipelineRunStatus {
   COMPLETED
   FAILED
   CANCELLED
+  AWAITING_APPROVAL
 }
 
 model PipelineRun {
@@ -255,11 +256,13 @@ model PipelineRun {
   /// Map of step index (stringified) → step output text / JSON
   /// e.g. { "0": "Planner output...", "1": "{ decision: 'APPROVE' }" }
   stepResults     Json              @default("{}")
+  stepMetrics     Json              @default("{}")
 
   /// Aggregated final summary produced after all steps complete
   finalOutput     String?           @db.Text
   /// Error message when status = FAILED
   error           String?
+  approvalFeedback    String?           @db.Text
 
   /// BullMQ job ID for the pipeline runner job
   jobId           String?           @unique
@@ -276,6 +279,21 @@ model PipelineRun {
   @@index([agentId, status])
   @@index([userId])
   @@index([status, createdAt])
+}
+
+/// Extracted learnings persisted after each completed pipeline run.
+/// Injected as prior knowledge into subsequent runs for the same agent.
+model PipelineMemory {
+  id        String   @id @default(cuid())
+  agentId   String
+  runId     String
+  /// One of: "architecture" | "conventions" | "errors" | "patterns"
+  category  String
+  /// Compact summary, max 500 chars
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([agentId, createdAt])
 }
 
 model AgentSdkSession {
@@ -1292,4 +1310,19 @@ model Invitation {
 
   @@index([token])
   @@index([email, organizationId])
+}
+
+model ModelPerformanceStat {
+  id                String   @id @default(cuid())
+  modelId           String
+  phase             String
+  runCount          Int      @default(0)
+  successCount      Int      @default(0)
+  retryCount        Int      @default(0)
+  totalInputTokens  Int      @default(0)
+  totalOutputTokens Int      @default(0)
+  totalDurationMs   Int      @default(0)
+  updatedAt         DateTime @updatedAt
+
+  @@unique([modelId, phase])
 }

@@ -46,6 +46,7 @@ import {
   parseCodeBlocks,
   writeToWorkspace,
   executeRealTestsFromFiles,
+  runWorkspaceTests,
 } from "../code-extractor";
 
 // ---------------------------------------------------------------------------
@@ -211,6 +212,41 @@ describe("executeRealTestsFromFiles", () => {
     }
   });
 
+  it("uses workDir tsconfig (not /app/) when /app/tsconfig.json does not exist", async () => {
+    // When /app/tsconfig.json is absent, tsconfigPath falls back to join(workDir, "tsconfig.sdlc-generated.json").
+    // writeFile writes it there, existsSync returns true for it, so the command is
+    // "tsc --project <workDir>/tsconfig.sdlc-generated.json --pretty false" — NOT --noEmit.
+    mockExistsSync.mockImplementation((p) => {
+      const path = String(p);
+      if (path === "/app/tsconfig.json") return false;
+      if (path === "/app/tsconfig.sdlc-generated.json") return false;
+      return _realExistsSync(path);
+    });
+
+    const testDir = join(tmpdir(), randomUUID());
+    try {
+      const files = [
+        { path: "src/lib/foo.ts", content: "export const x: number = 1;", language: "typescript" },
+      ];
+      await executeRealTestsFromFiles(files, testDir, "agent-fallback-tsc-test");
+
+      const tscCallArgs = mockRunVerificationCommands.mock.calls.find((c) =>
+        Array.isArray(c[0]) && c[0].some((cmd: string) => cmd.includes("tsc")),
+      );
+      expect(tscCallArgs).toBeDefined();
+      const tscCommand = (tscCallArgs![0] as string[]).find((cmd: string) => cmd.includes("tsc"));
+      // Uses --project with a workDir-based tsconfig (not /app/)
+      expect(tscCommand).toContain("tsconfig.sdlc-generated.json");
+      expect(tscCommand).not.toContain("/app/");
+    } finally {
+      try {
+        _realRmSync(testDir, { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+    }
+  });
+
   it("cleans up the sdlc-generated tsconfig with rmSync after typecheck", async () => {
     // Simulate: /app/tsconfig.json exists → tsconfig written to /app/tsconfig.sdlc-generated.json
     mockExistsSync.mockImplementation((p) => {
@@ -236,6 +272,144 @@ describe("executeRealTestsFromFiles", () => {
       } catch {
         // ignore
       }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runWorkspaceTests — re-test after SEARCH/REPLACE patch (no file writes)
+// ---------------------------------------------------------------------------
+
+describe("runWorkspaceTests", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockRunVerificationCommands.mockResolvedValue({
+      results: [{ output: "", passed: true }],
+    });
+  });
+
+  it("returns graceful result when workspace/workspace dir does not exist", async () => {
+    // mockExistsSync delegates to real fs by default — non-existent path returns false
+    const result = await runWorkspaceTests("/nonexistent/path/xyz", "agent-rw-1");
+
+    expect(result.typecheckPassed).toBe(true);
+    expect(result.testsPassed).toBe(true);
+    expect(result.filesWritten).toBe(0);
+    expect(result.testOutput).toContain("does not exist");
+    expect(mockRunVerificationCommands).not.toHaveBeenCalled();
+  });
+
+  it("returns graceful result when workspace dir exists but is empty", async () => {
+    const workDir = join(tmpdir(), randomUUID());
+    try {
+      const { mkdirSync: realMkdir } = await vi.importActual<typeof import("node:fs")>("node:fs");
+      realMkdir(join(workDir, "workspace"), { recursive: true });
+
+      const result = await runWorkspaceTests(workDir, "agent-rw-2");
+
+      expect(result.typecheckPassed).toBe(true);
+      expect(result.testsPassed).toBe(true);
+      expect(result.filesWritten).toBe(0);
+      expect(result.testOutput).toContain("empty");
+      expect(mockRunVerificationCommands).not.toHaveBeenCalled();
+    } finally {
+      try { _realRmSync(workDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it("filesWritten is 0 even when files exist in workspace (no new writes)", async () => {
+    const { mkdirSync: realMkdir, writeFileSync: realWrite } =
+      await vi.importActual<typeof import("node:fs")>("node:fs");
+    const workDir = join(tmpdir(), randomUUID());
+    try {
+      realMkdir(join(workDir, "workspace"), { recursive: true });
+      realWrite(join(workDir, "workspace", "module.ts"), "export const x = 1;", "utf-8");
+
+      const result = await runWorkspaceTests(workDir, "agent-rw-3");
+
+      expect(result.filesWritten).toBe(0);
+      expect(result.writtenPaths.length).toBeGreaterThan(0);
+    } finally {
+      try { _realRmSync(workDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it("calls runVerificationCommands with tsc for .ts files in workspace", async () => {
+    const { mkdirSync: realMkdir, writeFileSync: realWrite } =
+      await vi.importActual<typeof import("node:fs")>("node:fs");
+    const workDir = join(tmpdir(), randomUUID());
+    try {
+      realMkdir(join(workDir, "workspace"), { recursive: true });
+      realWrite(join(workDir, "workspace", "module.ts"), "export const x = 1;", "utf-8");
+
+      await runWorkspaceTests(workDir, "agent-rw-4");
+
+      expect(mockRunVerificationCommands).toHaveBeenCalled();
+      const allCommands = mockRunVerificationCommands.mock.calls.flatMap(
+        (call) => call[0] as string[],
+      );
+      expect(allCommands.some((c) => /tsc/.test(c))).toBe(true);
+    } finally {
+      try { _realRmSync(workDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it("returns typecheckPassed=false when tsc command fails", async () => {
+    mockRunVerificationCommands.mockResolvedValueOnce({
+      results: [{ output: "error TS2345: type mismatch", passed: false }],
+    });
+
+    const { mkdirSync: realMkdir, writeFileSync: realWrite } =
+      await vi.importActual<typeof import("node:fs")>("node:fs");
+    const workDir = join(tmpdir(), randomUUID());
+    try {
+      realMkdir(join(workDir, "workspace"), { recursive: true });
+      realWrite(join(workDir, "workspace", "bad.ts"), "const x: number = 'oops';", "utf-8");
+
+      const result = await runWorkspaceTests(workDir, "agent-rw-5");
+
+      expect(result.typecheckPassed).toBe(false);
+      expect(result.testOutput).toContain("FAILED");
+    } finally {
+      try { _realRmSync(workDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it("also runs vitest when .test.ts files are present alongside .ts files", async () => {
+    const { mkdirSync: realMkdir, writeFileSync: realWrite } =
+      await vi.importActual<typeof import("node:fs")>("node:fs");
+    const workDir = join(tmpdir(), randomUUID());
+    try {
+      realMkdir(join(workDir, "workspace"), { recursive: true });
+      realWrite(join(workDir, "workspace", "module.ts"), "export const add = (a: number, b: number) => a + b;", "utf-8");
+      realWrite(join(workDir, "workspace", "module.test.ts"), "import { add } from './module'; it('adds', () => expect(add(1,2)).toBe(3));", "utf-8");
+
+      await runWorkspaceTests(workDir, "agent-rw-6");
+
+      // tsc + vitest → 2 calls
+      expect(mockRunVerificationCommands).toHaveBeenCalledTimes(2);
+      const allCommands = mockRunVerificationCommands.mock.calls.flatMap(
+        (call) => call[0] as string[],
+      );
+      expect(allCommands.some((c) => c.startsWith("vitest run"))).toBe(true);
+    } finally {
+      try { _realRmSync(workDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  });
+
+  it("never throws even when runVerificationCommands rejects", async () => {
+    mockRunVerificationCommands.mockRejectedValue(new Error("process crashed"));
+
+    const { mkdirSync: realMkdir, writeFileSync: realWrite } =
+      await vi.importActual<typeof import("node:fs")>("node:fs");
+    const workDir = join(tmpdir(), randomUUID());
+    try {
+      realMkdir(join(workDir, "workspace"), { recursive: true });
+      realWrite(join(workDir, "workspace", "module.ts"), "export const x = 1;", "utf-8");
+
+      await expect(runWorkspaceTests(workDir, "agent-rw-7")).resolves.toBeDefined();
+    } finally {
+      try { _realRmSync(workDir, { recursive: true, force: true }); } catch { /* ignore */ }
     }
   });
 });

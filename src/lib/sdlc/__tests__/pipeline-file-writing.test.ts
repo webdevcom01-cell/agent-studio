@@ -51,6 +51,30 @@ vi.mock("../schemas", () => ({ CodeGenOutputSchema: {} }));
 vi.mock("@/lib/runtime/verification-commands", () => ({
   runVerificationCommands: mockRunVerificationCommands,
 }));
+vi.mock("../pipeline-memory", () => ({
+  loadRelevantMemory: vi.fn().mockResolvedValue(""),
+  extractAndSaveMemory: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../ast-analyzer", () => ({
+  extractCodeSignatures: vi.fn().mockResolvedValue([]),
+  formatSignaturesForPrompt: vi.fn().mockReturnValue(""),
+}));
+
+vi.mock("../module-map", () => ({
+  enrichWithSemanticSummaries: vi.fn().mockResolvedValue([]),
+  buildModuleMapContext: vi.fn().mockReturnValue(""),
+}));
+
+vi.mock("../scope-analyzer", () => ({
+  getCachedImportGraph: vi.fn().mockResolvedValue({ adjacency: new Map(), builtAt: 0 }),
+  identifyAffectedFiles: vi.fn().mockReturnValue([]),
+  buildBlastRadiusContext: vi.fn().mockResolvedValue(""),
+}));
+
+vi.mock("../patch-applier", () => ({
+  parseSearchReplaceBlocks: vi.fn().mockReturnValue([]),
+  applyPatchToWorkspace: vi.fn().mockResolvedValue({ applied: 0, failed: 0, errors: [] }),
+}));
 
 // DO NOT mock ../code-extractor — real fs I/O is the point of this test.
 

@@ -31,6 +31,7 @@ export interface PipelineRun {
   stepResults: Record<string, string>;
   finalOutput: string | null;
   error: string | null;
+  approvalFeedback: string | null;
   jobId: string | null;
   agentId: string;
   userId: string | null;
@@ -70,6 +71,7 @@ function toRun(row: {
   stepResults: Prisma.JsonValue;
   finalOutput: string | null;
   error: string | null;
+  approvalFeedback?: string | null;
   jobId: string | null;
   agentId: string;
   userId: string | null;
@@ -80,6 +82,7 @@ function toRun(row: {
 }): PipelineRun {
   return {
     ...row,
+    approvalFeedback: row.approvalFeedback ?? null,
     stepResults:
       row.stepResults && typeof row.stepResults === "object" && !Array.isArray(row.stepResults)
         ? (row.stepResults as Record<string, string>)
@@ -283,4 +286,44 @@ export async function isPipelineCancelled(runId: string): Promise<boolean> {
     select: { status: true },
   });
   return run?.status === "CANCELLED";
+}
+
+export async function markPipelineAwaitingApproval(
+  runId: string,
+): Promise<PipelineRun> {
+  const row = await prisma.pipelineRun.update({
+    where: { id: runId },
+    data: { status: "AWAITING_APPROVAL" },
+  });
+  return toRun(row);
+}
+
+export async function approvePipelineRun(
+  runId: string,
+  feedback?: string,
+): Promise<PipelineRun> {
+  const run = await prisma.pipelineRun.findUnique({ where: { id: runId } });
+  if (!run) throw new Error(`Pipeline run not found: ${runId}`);
+  if (run.status !== "AWAITING_APPROVAL") {
+    throw new Error(
+      `Pipeline run ${runId} is not awaiting approval (status: ${run.status})`,
+    );
+  }
+
+  const row = await prisma.pipelineRun.update({
+    where: { id: runId },
+    data: {
+      status: "PENDING",
+      approvalFeedback: feedback ?? null,
+    },
+  });
+  return toRun(row);
+}
+
+export async function isPipelineAwaitingApproval(runId: string): Promise<boolean> {
+  const run = await prisma.pipelineRun.findUnique({
+    where: { id: runId },
+    select: { status: true },
+  });
+  return run?.status === "AWAITING_APPROVAL";
 }

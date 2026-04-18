@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { randomUUID } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Mocks — must be hoisted before imports
@@ -23,6 +24,12 @@ const mockGetModel = vi.hoisted(() => vi.fn());
 const mockGetAgentSystemPrompt = vi.hoisted(() => vi.fn());
 const mockExecuteRealTests = vi.hoisted(() => vi.fn());
 const mockExecuteRealTestsFromFiles = vi.hoisted(() => vi.fn());
+const mockRmSync = vi.hoisted(() => vi.fn());
+
+vi.mock("node:fs", async () => {
+  const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+  return { ...actual, rmSync: mockRmSync };
+});
 
 vi.mock("@/lib/ai", () => ({
   getModel: mockGetModel,
@@ -52,6 +59,32 @@ vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock("../pipeline-memory", () => ({
+  loadRelevantMemory: vi.fn().mockResolvedValue(""),
+  extractAndSaveMemory: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../ast-analyzer", () => ({
+  extractCodeSignatures: vi.fn().mockResolvedValue([]),
+  formatSignaturesForPrompt: vi.fn().mockReturnValue(""),
+}));
+
+vi.mock("../module-map", () => ({
+  enrichWithSemanticSummaries: vi.fn().mockResolvedValue([]),
+  buildModuleMapContext: vi.fn().mockReturnValue(""),
+}));
+
+vi.mock("../scope-analyzer", () => ({
+  getCachedImportGraph: vi.fn().mockResolvedValue({ adjacency: new Map(), builtAt: 0 }),
+  identifyAffectedFiles: vi.fn().mockReturnValue([]),
+  buildBlastRadiusContext: vi.fn().mockResolvedValue(""),
+}));
+
+vi.mock("../patch-applier", () => ({
+  parseSearchReplaceBlocks: vi.fn().mockReturnValue([]),
+  applyPatchToWorkspace: vi.fn().mockResolvedValue({ applied: 0, failed: 0, errors: [] }),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports
 // ---------------------------------------------------------------------------
@@ -63,6 +96,7 @@ import { runPipeline } from "../orchestrator";
 // ---------------------------------------------------------------------------
 
 const FAKE_MODEL = { __brand: "model" };
+const mkWorkDir = () => `/tmp/test-sdlc/${randomUUID()}`;
 
 function flush(): Promise<void> {
   return new Promise<void>((r) => setTimeout(r, 0));
@@ -134,6 +168,7 @@ describe("runPipeline — happy path", () => {
         agentId: "agent-1",
         taskDescription: "Add login feature",
         pipeline: ["ecc-planner", "ecc-code-reviewer"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -163,6 +198,7 @@ describe("runPipeline — happy path", () => {
         agentId: "agent-1",
         taskDescription: "test",
         pipeline: ["ecc-planner"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -188,6 +224,7 @@ describe("runPipeline — happy path", () => {
         userId: "user-1",
         taskDescription: "build auth",
         pipeline: ["ecc-planner", "ecc-tdd-guide"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -217,6 +254,7 @@ describe("runPipeline — happy path", () => {
         taskDescription: "task",
         pipeline: ["ecc-architect"],
         modelId: "claude-opus-4-6",
+        workspaceDir: mkWorkDir(),
       },
       makeCallbacks(),
     );
@@ -236,6 +274,7 @@ describe("runPipeline — happy path", () => {
         agentId: "agent-1",
         taskDescription: "task",
         pipeline: ["ecc-planner"],
+        workspaceDir: mkWorkDir(),
       },
       makeCallbacks(),
     );
@@ -263,6 +302,7 @@ describe("runPipeline — infrastructure nodes", () => {
         agentId: "agent-1",
         taskDescription: "test",
         pipeline: ["project_context", "ecc-planner"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -282,6 +322,7 @@ describe("runPipeline — infrastructure nodes", () => {
         agentId: "agent-1",
         taskDescription: "test",
         pipeline: ["sandbox_verify"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -299,6 +340,7 @@ describe("runPipeline — infrastructure nodes", () => {
         agentId: "agent-1",
         taskDescription: "test",
         pipeline: ["project_context", "sandbox_verify"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -324,6 +366,7 @@ describe("runPipeline — cancellation", () => {
         agentId: "agent-1",
         taskDescription: "test",
         pipeline: ["ecc-planner", "ecc-code-reviewer"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -353,6 +396,7 @@ describe("runPipeline — cancellation", () => {
         agentId: "agent-1",
         taskDescription: "test",
         pipeline: ["ecc-planner", "ecc-code-reviewer"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -381,6 +425,7 @@ describe("runPipeline — cancellation", () => {
         agentId: "agent-1",
         taskDescription: "test",
         pipeline: ["ecc-planner", "ecc-code-reviewer"],
+        workspaceDir: mkWorkDir(),
       },
       makeCallbacks({ isCancelled }),
     );
@@ -407,6 +452,7 @@ describe("runPipeline — error handling", () => {
           agentId: "agent-1",
           taskDescription: "test",
           pipeline: ["ecc-planner"],
+          workspaceDir: mkWorkDir(),
         },
         cbs,
       ),
@@ -430,6 +476,7 @@ describe("runPipeline — error handling", () => {
           agentId: "agent-1",
           taskDescription: "test",
           pipeline: ["ecc-planner"],
+          workspaceDir: mkWorkDir(),
         },
         cbs,
       ),
@@ -453,6 +500,7 @@ describe("runPipeline — context accumulation", () => {
         agentId: "agent-1",
         taskDescription: "Build a GraphQL API",
         pipeline: ["ecc-architect", "ecc-code-reviewer"],
+        workspaceDir: mkWorkDir(),
       },
       makeCallbacks(),
     );
@@ -476,6 +524,7 @@ describe("runPipeline — context accumulation", () => {
         agentId: "agent-1",
         taskDescription: "Design the database layer",
         pipeline: ["ecc-architect", "ecc-code-reviewer"],
+        workspaceDir: mkWorkDir(),
       },
       makeCallbacks(),
     );
@@ -498,6 +547,7 @@ describe("runPipeline — context accumulation", () => {
         agentId: "agent-1",
         taskDescription: "task",
         pipeline: ["ecc-planner"],
+        workspaceDir: mkWorkDir(),
       },
       makeCallbacks(),
     );
@@ -524,6 +574,7 @@ describe("runPipeline — edge cases", () => {
         agentId: "agent-1",
         taskDescription: "test",
         pipeline: [],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -555,6 +606,7 @@ describe("runPipeline — IMPLEMENTATION_STEPS use generateObject", () => {
         agentId: "agent-1",
         taskDescription: "Build login page",
         pipeline: ["ecc-frontend-developer"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -582,6 +634,7 @@ describe("runPipeline — IMPLEMENTATION_STEPS use generateObject", () => {
         agentId: "agent-1",
         taskDescription: "Add feature",
         pipeline: ["codegen"],
+        workspaceDir: mkWorkDir(),
       },
       makeCallbacks(),
     );
@@ -603,6 +656,7 @@ describe("runPipeline — IMPLEMENTATION_STEPS use generateObject", () => {
         agentId: "agent-1",
         taskDescription: "Auth feature",
         pipeline: ["ecc-frontend-developer"],
+        workspaceDir: mkWorkDir(),
       },
       makeCallbacks(),
     );
@@ -627,6 +681,7 @@ describe("runPipeline — IMPLEMENTATION_STEPS use generateObject", () => {
         agentId: "agent-1",
         taskDescription: "API route",
         pipeline: ["codegen"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -652,6 +707,7 @@ describe("runPipeline — IMPLEMENTATION_STEPS use generateObject", () => {
         agentId: "agent-1",
         taskDescription: "Build feature",
         pipeline: ["ecc-frontend-developer"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -679,6 +735,7 @@ describe("runPipeline — IMPLEMENTATION_STEPS use generateObject", () => {
           agentId: "agent-1",
           taskDescription: "Build feature",
           pipeline: ["ecc-frontend-developer"],
+          workspaceDir: mkWorkDir(),
         },
         makeCallbacks(),
       ),
@@ -700,6 +757,7 @@ describe("runPipeline — IMPLEMENTATION_STEPS use generateObject", () => {
         agentId: "agent-1",
         taskDescription: "Plan the system",
         pipeline: ["ecc-architect"],
+        workspaceDir: mkWorkDir(),
       },
       makeCallbacks(),
     );
@@ -720,6 +778,7 @@ describe("runPipeline — IMPLEMENTATION_STEPS use generateObject", () => {
         agentId: "agent-1",
         taskDescription: "Verify the build",
         pipeline: ["ecc-e2e-runner"],
+        workspaceDir: mkWorkDir(),
       },
       makeCallbacks(),
     );
@@ -769,6 +828,7 @@ describe("runPipeline — feedback loop token aggregation", () => {
         agentId: "agent-1",
         taskDescription: "Build auth",
         pipeline: ["ecc-frontend-developer"],
+        workspaceDir: mkWorkDir(),
       },
       makeCallbacks(),
     );
@@ -820,6 +880,7 @@ describe("runPipeline — dual feedback loop decoupling (TASK 4)", () => {
         agentId: "agent-1",
         taskDescription: "Build auth",
         pipeline: ["codegen", "ecc-e2e-runner"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -886,7 +947,7 @@ describe("runPipeline — dual feedback loop decoupling (TASK 4)", () => {
         agentId: "agent-1",
         taskDescription: "Build auth",
         pipeline: ["codegen", "ecc-e2e-runner"],
-        // Provide a mock for runFeedbackIteration via the feedback-loop module mock
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -935,6 +996,7 @@ describe("runPipeline — per-step timeout", () => {
         agentId: "agent-1",
         taskDescription: "test",
         pipeline: ["ecc-planner"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -969,6 +1031,7 @@ describe("runPipeline — resume from step", () => {
         pipeline: ["ecc-planner", "ecc-code-reviewer"],
         startFromStep: 1,
         existingStepResults: { "0": "Previous planner output" },
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
@@ -998,11 +1061,43 @@ describe("runPipeline — resume from step", () => {
         agentId: "agent-1",
         taskDescription: "test",
         pipeline: ["ecc-planner"],
+        workspaceDir: mkWorkDir(),
       },
       cbs,
     );
 
     expect(mockGenerateText).toHaveBeenCalledTimes(1);
     expect(cbs.onStepComplete).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Workspace cleanup
+// ---------------------------------------------------------------------------
+
+describe("runPipeline — workspace cleanup", () => {
+  it("cleanup: calls rmSync on workspace when workspaceDir not provided", async () => {
+    mockGenerateText.mockResolvedValue({
+      text: "output",
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+
+    const runId = "run-cleanup-test";
+
+    await runPipeline(
+      {
+        runId,
+        agentId: "agent-1",
+        taskDescription: "test",
+        pipeline: ["ecc-planner"],
+        // workspaceDir intentionally NOT provided — triggers cleanup
+      },
+      makeCallbacks(),
+    );
+
+    expect(mockRmSync).toHaveBeenCalledWith(
+      expect.stringContaining(runId),
+      expect.objectContaining({ recursive: true, force: true }),
+    );
   });
 });

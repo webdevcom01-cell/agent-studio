@@ -31,7 +31,7 @@
  *       Parses markdown code blocks, then delegates to executeRealTestsFromFiles.
  */
 
-import { mkdirSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, rmSync, readdirSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join, dirname, relative, resolve } from "node:path";
 import { logger } from "@/lib/logger";
@@ -371,14 +371,15 @@ export async function executeRealTestsFromFiles(
 
   if (tsFiles.length > 0) {
     const tscCommand = existsSync(tsconfigPath)
-      ? `tsc --project ${tsconfigPath}`
-      : `tsc --noEmit --skipLibCheck --allowJs ${tsFiles.join(" ")}`;
+      ? `tsc --project ${tsconfigPath} --pretty false`
+      : `tsc --noEmit --skipLibCheck --allowJs --pretty false ${tsFiles.join(" ")}`;
 
     const { results } = await runVerificationCommands(
       [tscCommand],
       agentId,
-      90_000, // 90 seconds — large projects may take longer
+      90_000,
       genDir,
+      1024 * 1024 * 5,
     );
 
     typecheckOutput = results[0]?.output ?? "";
@@ -409,8 +410,9 @@ export async function executeRealTestsFromFiles(
     const { results } = await runVerificationCommands(
       [`vitest run ${testFiles.join(" ")}`],
       agentId,
-      180_000, // 3 minutes for test suites
+      180_000,
       genDir,
+      1024 * 1024 * 5,
     );
 
     testRunOutput = results[0]?.output ?? "";
@@ -485,4 +487,174 @@ export async function executeRealTests(
   }
 
   return executeRealTestsFromFiles(parsed, workDir, agentId);
+}
+
+/**
+ * Re-run tsc + vitest on files already present in the workspace, without
+ * writing any new files. Used after SEARCH/REPLACE patches are applied
+ * in-place — re-writing files would overwrite the patches.
+ *
+ * Never throws — all errors are reflected in the return value.
+ */
+export async function runWorkspaceTests(
+  workDir: string,
+  agentId: string,
+): Promise<WorkspaceExecResult> {
+  const genDir = join(workDir, GENERATED_SUBDIR);
+
+  if (!existsSync(genDir)) {
+    logger.info("runWorkspaceTests: workspace directory absent — skipping", { agentId, genDir });
+    return {
+      filesWritten: 0,
+      writtenPaths: [],
+      testOutput: "Workspace directory does not exist — skipping re-test after patch.",
+      typecheckPassed: true,
+      testsPassed: true,
+    };
+  }
+
+  // Collect all files in genDir recursively
+  const allFiles: string[] = [];
+  function walkDir(dir: string): void {
+    try {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walkDir(full);
+        else allFiles.push(full);
+      }
+    } catch {
+      // Skip unreadable subdirectories
+    }
+  }
+  walkDir(genDir);
+
+  if (allFiles.length === 0) {
+    logger.info("runWorkspaceTests: workspace empty — skipping", { agentId, genDir });
+    return {
+      filesWritten: 0,
+      writtenPaths: [],
+      testOutput: "Workspace is empty — skipping re-test after patch.",
+      typecheckPassed: true,
+      testsPassed: true,
+    };
+  }
+
+  const tsFiles = allFiles.filter(
+    (p) => p.endsWith(".ts") || p.endsWith(".tsx") || p.endsWith(".mts"),
+  );
+  const testFiles = allFiles.filter(
+    (p) => p.includes(".test.") || p.includes(".spec.") || p.includes("__tests__"),
+  );
+
+  // ── Typecheck ───────────────────────────────────────────────────────────
+  let typecheckOutput = "";
+  let typecheckPassed = true;
+
+  if (tsFiles.length > 0) {
+    const APP_TSCONFIG = "/app/tsconfig.json";
+    const tsconfigPath = existsSync(APP_TSCONFIG)
+      ? "/app/tsconfig.sdlc-generated.json"
+      : join(workDir, "tsconfig.sdlc-generated.json");
+
+    const tsconfigContent = JSON.stringify(
+      {
+        extends: existsSync(APP_TSCONFIG) ? APP_TSCONFIG : "./tsconfig.json",
+        compilerOptions: { noEmit: true, skipLibCheck: true, allowJs: true },
+        include: [`${genDir}/**/*`],
+      },
+      null,
+      2,
+    );
+
+    try {
+      await writeFile(tsconfigPath, tsconfigContent, "utf-8");
+    } catch {
+      logger.warn("runWorkspaceTests: failed to write tsconfig", { agentId });
+    }
+
+    const tscCommand = existsSync(tsconfigPath)
+      ? `tsc --project ${tsconfigPath} --pretty false`
+      : `tsc --noEmit --skipLibCheck --allowJs --pretty false ${tsFiles.join(" ")}`;
+
+    try {
+      const { results } = await runVerificationCommands(
+        [tscCommand],
+        agentId,
+        90_000,
+        genDir,
+        1024 * 1024 * 5,
+      );
+      typecheckOutput = results[0]?.output ?? "";
+      typecheckPassed = results[0]?.passed ?? true;
+    } catch (tscErr) {
+      logger.warn("runWorkspaceTests: tsc command failed unexpectedly", {
+        agentId,
+        error: tscErr instanceof Error ? tscErr.message : String(tscErr),
+      });
+      typecheckPassed = false;
+      typecheckOutput = `tsc failed: ${tscErr instanceof Error ? tscErr.message : String(tscErr)}`;
+    }
+
+    try { rmSync(tsconfigPath); } catch { /* non-critical cleanup */ }
+
+    logger.info("runWorkspaceTests: typecheck complete", {
+      agentId, passed: typecheckPassed,
+    });
+  }
+
+  // ── Test runner ─────────────────────────────────────────────────────────
+  let testRunOutput = "";
+  let testsPassed = true;
+
+  if (testFiles.length > 0) {
+    try {
+      const { results } = await runVerificationCommands(
+        [`vitest run ${testFiles.join(" ")}`],
+        agentId,
+        180_000,
+        genDir,
+        1024 * 1024 * 5,
+      );
+      testRunOutput = results[0]?.output ?? "";
+      testsPassed = results[0]?.passed ?? true;
+    } catch (vitestErr) {
+      logger.warn("runWorkspaceTests: vitest command failed unexpectedly", {
+        agentId,
+        error: vitestErr instanceof Error ? vitestErr.message : String(vitestErr),
+      });
+      testsPassed = false;
+      testRunOutput = `vitest failed: ${vitestErr instanceof Error ? vitestErr.message : String(vitestErr)}`;
+    }
+
+    logger.info("runWorkspaceTests: test run complete", {
+      agentId, passed: testsPassed,
+    });
+  }
+
+  // ── Combine output ───────────────────────────────────────────────────────
+  const outputSections: string[] = [
+    `Re-tested ${allFiles.length} existing workspace files after SEARCH/REPLACE patch (no new writes).`,
+  ];
+
+  if (typecheckOutput) {
+    const label = typecheckPassed ? "✅ TypeScript typecheck PASSED" : "❌ TypeScript typecheck FAILED";
+    outputSections.push(`## ${label}\n\`\`\`\n${typecheckOutput}\n\`\`\``);
+  } else if (tsFiles.length > 0) {
+    outputSections.push("## ✅ TypeScript typecheck PASSED (no output)");
+  }
+
+  if (testRunOutput) {
+    const label = testsPassed ? "✅ Tests PASSED" : "❌ Tests FAILED";
+    outputSections.push(`## ${label}\n\`\`\`\n${testRunOutput}\n\`\`\``);
+  } else if (testFiles.length > 0) {
+    outputSections.push("## ✅ Tests PASSED (no output)");
+  }
+
+  return {
+    filesWritten: 0, // no new files written — patches were applied in-place
+    writtenPaths: allFiles,
+    testOutput: outputSections.join("\n\n"),
+    typecheckPassed,
+    testsPassed,
+  };
 }

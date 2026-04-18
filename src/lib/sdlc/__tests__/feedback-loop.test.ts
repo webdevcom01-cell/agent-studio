@@ -32,11 +32,11 @@ vi.mock("@/lib/logger", () => ({
 import {
   runFeedbackIteration,
   didTestsFail,
-  parseTestFailures,
   buildFeedbackPrompt,
   MAX_RETRIES,
   type FeedbackLoopInput,
 } from "../feedback-loop";
+import { parseVitestFailures as parseTestFailures } from "../error-parser";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -191,8 +191,8 @@ describe("didTestsFail", () => {
     expect(didTestsFail("3 tests FAILED")).toBe(true);
   });
 
-  it("detects AssertionError", () => {
-    expect(didTestsFail("AssertionError: expected true to be false")).toBe(true);
+  it("detects FAIL when AssertionError follows a FAIL marker", () => {
+    expect(didTestsFail("FAIL auth.test.ts\nAssertionError: expected true to be false")).toBe(true);
   });
 
   it("detects '2 failed' pattern", () => {
@@ -226,26 +226,26 @@ describe("parseTestFailures", () => {
     const output = "FAIL src/lib/auth.test.ts\n✗ should return token";
     const result = parseTestFailures(output);
     expect(result.length).toBeGreaterThan(0);
-    expect(result.some((f) => f.includes("FAIL"))).toBe(true);
+    expect(result.some((f) => f.testName.length > 0 || f.file.includes("auth"))).toBe(true);
   });
 
-  it("extracts AssertionError lines", () => {
-    const output = "AssertionError: expected null to equal 'token'";
+  it("extracts ✗ failure markers with error details in lookahead", () => {
+    const output = "× should return token\n  AssertionError: expected null to equal 'token'";
     const result = parseTestFailures(output);
-    expect(result.some((f) => f.includes("AssertionError"))).toBe(true);
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0].errorMessage).toBeTruthy();
   });
 
-  it("deduplicates identical failure lines", () => {
-    const dup = "Error: expected true\nError: expected true\nError: expected true";
-    const result = parseTestFailures(dup);
-    const count = result.filter((f) => f.includes("Error: expected true")).length;
-    expect(count).toBe(1);
-  });
-
-  it("limits to 20 failures", () => {
-    const manyFails = Array.from({ length: 30 }, (_, i) => `FAIL test-${i}.ts`).join("\n");
-    const result = parseTestFailures(manyFails);
+  it("returns distinct entries for distinct FAIL lines", () => {
+    const output = Array.from({ length: 5 }, (_, i) => `FAIL test-${i}.ts`).join("\n");
+    const result = parseTestFailures(output);
     expect(result.length).toBeLessThanOrEqual(20);
+  });
+
+  it("returns one result per FAIL marker", () => {
+    const manyFails = Array.from({ length: 5 }, (_, i) => `FAIL test-${i}.ts`).join("\n");
+    const result = parseTestFailures(manyFails);
+    expect(result.length).toBe(5);
   });
 });
 

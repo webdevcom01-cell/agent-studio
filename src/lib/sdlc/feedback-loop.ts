@@ -26,6 +26,12 @@
  */
 
 import { logger } from "@/lib/logger";
+import {
+  parseTscErrors,
+  parseVitestFailures,
+  formatErrorsForFeedback,
+  hasTestFailures,
+} from "@/lib/sdlc/error-parser";
 
 export const MAX_RETRIES = 3;
 
@@ -61,47 +67,18 @@ export interface FeedbackLoopResult {
   outputTokens: number;
 }
 
-/**
- * Parse test output to extract failure summaries.
- * Handles Vitest, Jest, and generic test runner output.
- */
-export function parseTestFailures(testOutput: string): string[] {
-  const failures: string[] = [];
-
-  // Vitest/Jest: lines starting with FAIL or ✗ or × or ●
-  // Stack trace lines ("  at Object.foo (file.ts:42:12)") are excluded —
-  // they are location metadata, not failure descriptions, and add noise to the AI prompt.
-  const patterns = [
-    /^\s*(FAIL|FAILED|✗|×)\s+(.+)$/gm,
-    /^\s*●\s+(.+)$/gm,
-    /Error:\s+\S.+$/gm,
-    /AssertionError:\s+(.+)$/gm,
-    /Expected\s+(.+?)\s+but\s+received\s+(.+)$/gm,
-  ];
-
-  for (const pattern of patterns) {
-    const matches = testOutput.matchAll(pattern);
-    for (const match of matches) {
-      const line = match[0].trim();
-      if (line.length > 10 && !failures.includes(line)) {
-        failures.push(line);
-      }
-    }
-  }
-
-  // Deduplicate and limit
-  return [...new Set(failures)].slice(0, 20);
-}
 
 /**
  * Build the feedback prompt for the re-implementation step.
  * This is injected into the AI call that fixes failing code.
  */
 export function buildFeedbackPrompt(input: FeedbackLoopInput): string {
-  const failures = parseTestFailures(input.testOutput);
-  const failureBlock = failures.length > 0
-    ? failures.map((f) => `  - ${f}`).join("\n")
-    : input.testOutput.slice(0, 1000);
+  const tscErrors = parseTscErrors(input.testOutput);
+  const vitestFailures = parseVitestFailures(input.testOutput);
+  const structuredErrors = formatErrorsForFeedback(tscErrors, vitestFailures);
+  const errorSection = structuredErrors
+    ? `# Errors (Structured)\n${structuredErrors}`
+    : `# Raw Output\n\`\`\`\n${input.testOutput.slice(0, 2000)}\n\`\`\``;
 
   return `# Task
 ${input.taskDescription}
@@ -116,15 +93,7 @@ The implementation below failed the tests. Study it carefully to understand what
 ${input.previousImplementation.slice(0, 4000)}
 \`\`\`
 
-# Test Failures
-The following test failures were reported:
-
-${failureBlock}
-
-# Full Test Output
-\`\`\`
-${input.testOutput.slice(0, 3000)}
-\`\`\`
+${errorSection}
 
 # Instructions
 You are a senior engineer fixing a failing implementation. Based on the test failures above:
@@ -137,7 +106,16 @@ You are a senior engineer fixing a failing implementation. Based on the test fai
 Do NOT output the same broken code. Do NOT add TODO comments. Do NOT write placeholders.
 Write complete, correct, production-ready TypeScript that passes all tests.
 
-Attempt ${input.attempt} of ${MAX_RETRIES}. This is critical — be thorough.`;
+Attempt ${input.attempt} of ${MAX_RETRIES}. This is critical — be thorough.${input.attempt >= 2 ? `
+
+## IMPORTANT: Use SEARCH/REPLACE format for changes
+For each change, output blocks in this exact format:
+File: path/to/file.ts
+<<<<<<< SEARCH
+(exact text to find — must match file exactly)
+=======
+(replacement text)
+>>>>>>> REPLACE` : ""}`;
 }
 
 /**
@@ -157,7 +135,7 @@ export async function runFeedbackIteration(
   logger.info("feedback-loop: running revision attempt", {
     agentId: input.agentId,
     attempt: input.attempt,
-    failureCount: parseTestFailures(input.testOutput).length,
+    failureCount: parseVitestFailures(input.testOutput).length,
   });
 
   const ac = new AbortController();
@@ -185,7 +163,7 @@ export async function runFeedbackIteration(
 
     return {
       revisedImplementation: result.text,
-      failureAnalysis: `Attempt ${input.attempt}: ${parseTestFailures(input.testOutput).slice(0, 3).join("; ")}`,
+      failureAnalysis: `Attempt ${input.attempt}: ${parseVitestFailures(input.testOutput).slice(0, 3).map((f) => f.testName).join("; ")}`,
       success: true,
       inputTokens,
       outputTokens,
@@ -228,30 +206,9 @@ export async function runFeedbackIteration(
  */
 export function didTestsFail(testOutput: string): boolean {
   if (!testOutput) return false;
-
-  const failSignals = [
-    /\bFAIL\b/,
-    /\bFAILED\b/,
-    /\d+ failed/i,
-    /test.*failed/i,
-    /AssertionError/,
-    /Error:\s+\S/,  // narrowed: requires non-whitespace after colon to avoid "Error: 0" false positives
-    /✗/,
-    /×/,
-  ];
-
-  const passSignals = [
-    /\bPASS\b/,
-    /\bpassed\b/i,
-    /all tests passed/i,
-    /✓/,
-    /Tests:\s+\d+ passed/i,
-  ];
-
-  const hasFailure = failSignals.some((re) => re.test(testOutput));
-  const hasPass = passSignals.some((re) => re.test(testOutput));
-
-  // If explicit pass signals with no failures — consider it passing
-  if (hasPass && !hasFailure) return false;
-  return hasFailure;
+  return (
+    hasTestFailures(testOutput) ||
+    /\bFAIL\b/.test(testOutput) ||
+    /\bfailed\b/i.test(testOutput)
+  );
 }

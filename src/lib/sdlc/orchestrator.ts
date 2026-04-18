@@ -24,6 +24,7 @@
  *   verify the fix before continuing.
  */
 
+import { rmSync } from "node:fs";
 import { logger } from "@/lib/logger";
 import {
   indexCodebase,
@@ -38,12 +39,24 @@ import {
 import {
   executeRealTests,
   executeRealTestsFromFiles,
+  runWorkspaceTests,
   type ParsedFile,
 } from "./code-extractor";
 import { CodeGenOutputSchema } from "./schemas";
+import { resolveStepModel, getEscalationModel, resolveStepModelAdaptive } from "./model-router";
+import type { StepPhase } from "./model-router";
+import type { StepMetric } from "./metrics-collector";
+import {
+  getCachedImportGraph,
+  identifyAffectedFiles,
+  buildBlastRadiusContext,
+} from "./scope-analyzer";
+import { enrichWithSemanticSummaries, buildModuleMapContext } from "./module-map";
+import type { ModuleEntry } from "./module-map";
+import { parseSearchReplaceBlocks, applyPatchToWorkspace } from "./patch-applier";
 
-/** Working directory where the SDLC pipeline writes files */
-const SDLC_WORKSPACE = "/tmp/sdlc";
+/** Base directory for SDLC pipeline workspaces — each run gets its own subdirectory */
+const SDLC_WORKSPACE_BASE = "/tmp/sdlc";
 
 /** Steps that produce the architecture/plan document used by later steps.
  *  Includes both bare IDs (used in standalone flows) and ecc-prefixed IDs
@@ -146,9 +159,23 @@ export interface OrchestratorInput {
   stepModelOverrides?: Record<string, string>;
   /**
    * Override the workspace directory used for file writes and RAG indexing.
-   * Defaults to SDLC_WORKSPACE ("/tmp/sdlc"). Intended for test isolation.
+   * Defaults to SDLC_WORKSPACE_BASE/{runId} — unique per run.
+   * Pass explicitly only in tests to prevent cleanup.
    */
   workspaceDir?: string;
+  /**
+   * When true, pipeline pauses after the last PLANNING_STEP that is
+   * immediately followed by an IMPLEMENTATION_STEP.
+   * Defaults to false — all existing callers unaffected.
+   */
+  requireApproval?: boolean;
+  /**
+   * Human feedback injected into the first IMPLEMENTATION_STEP prompt.
+   * Set by the approve route when creating the Phase 2 resume job.
+   */
+  approvalFeedback?: string;
+  /** When true, use the smart model router to select the best available model per phase. */
+  useSmartRouting?: boolean;
 }
 
 export interface OrchestratorResult {
@@ -158,6 +185,12 @@ export interface OrchestratorResult {
   totalOutputTokens: number;
   durationMs: number;
   cancelled?: boolean;
+  /** True when pipeline paused at approval checkpoint (Phase 1 complete). */
+  awaitingApproval?: boolean;
+  /** Number of steps completed before pause; used by worker for Phase 2 job. */
+  planningStepsCompleted?: number;
+  /** Per-step telemetry — keyed by step index */
+  stepMetrics?: Record<number, StepMetric>;
 }
 
 /**
@@ -181,15 +214,21 @@ export async function runPipeline(
     startFromStep = 0,
     existingStepResults,
     stepModelOverrides = {},
+    requireApproval = false,
+    approvalFeedback,
+    useSmartRouting = false,
   } = input;
   const { onStepComplete, isCancelled, onProgress } = callbacks;
 
+  const workDir = input.workspaceDir ?? `${SDLC_WORKSPACE_BASE}/${runId}`;
+  const cleanupWorkspace = !input.workspaceDir;
+
+  try {
   const { getModel } = await import("@/lib/ai");
   const { generateText, generateObject } = await import("ai");
   const { fireSdkLearnHook } = await import("@/lib/ecc/sdk-learn-hook");
   const { getAgentSystemPrompt } = await import("./agent-prompts");
-
-  const workDir = input.workspaceDir ?? SDLC_WORKSPACE;
+  const { loadRelevantMemory } = await import("./pipeline-memory");
 
   // Resolve model lazily — deepseek-chat is always available, no extra API key needed.
   const resolvedModelId = modelId ?? "deepseek-chat";
@@ -197,9 +236,15 @@ export async function runPipeline(
   const startedAt = Date.now();
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  const stepMetricsMap: Record<number, StepMetric> = {};
+
+  const priorMemory = await loadRelevantMemory(agentId);
 
   // Context document — accumulated from previous step outputs
   const contextParts: string[] = [`# Task\n${taskDescription}`];
+  if (priorMemory) {
+    contextParts.push(priorMemory);
+  }
   const stepOutputs: string[] = [];
 
   // ── Phase tracking ──────────────────────────────────────────────────────────
@@ -238,6 +283,35 @@ export async function runPipeline(
     logger.warn("Pipeline: codebase indexing skipped — workspace absent or empty", {
       runId,
       error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // ── AST: extract API signatures from project source ────────────────────
+  let astContext = "";
+  let moduleMapEntries: ModuleEntry[] = [];
+  try {
+    const { extractCodeSignatures, formatSignaturesForPrompt } =
+      await import("./ast-analyzer");
+    const sigs = await extractCodeSignatures();
+    astContext = formatSignaturesForPrompt(sigs);
+    if (astContext) {
+      logger.info("Pipeline: AST signatures extracted", {
+        runId, charCount: astContext.length,
+      });
+    }
+    try {
+      moduleMapEntries = await enrichWithSemanticSummaries(sigs);
+      logger.info("Pipeline: module map enriched", {
+        runId, entryCount: moduleMapEntries.length,
+      });
+    } catch (enrichErr) {
+      logger.warn("Pipeline: module map enrichment failed, continuing without it", {
+        runId, error: enrichErr instanceof Error ? enrichErr.message : String(enrichErr),
+      });
+    }
+  } catch (astErr) {
+    logger.warn("Pipeline: AST extraction failed, continuing without it", {
+      runId, error: astErr instanceof Error ? astErr.message : String(astErr),
     });
   }
 
@@ -289,6 +363,7 @@ export async function runPipeline(
         totalOutputTokens,
         durationMs: Date.now() - startedAt,
         cancelled: true,
+        stepMetrics: stepMetricsMap,
       };
     }
 
@@ -305,14 +380,24 @@ export async function runPipeline(
 
     } else {
       // ── Agent step ────────────────────────────────────────────────────────
-      const stepModelId = stepModelOverrides[stepId] ?? resolvedModelId;
+      const phase: StepPhase = PLANNING_STEPS.has(stepId) ? "planning"
+        : IMPLEMENTATION_STEPS.has(stepId) ? "implementation"
+        : TEST_STEPS.has(stepId) ? "testing"
+        : "other";
+      const stepModelId = useSmartRouting
+        ? await resolveStepModelAdaptive(phase, stepModelOverrides, stepId, resolvedModelId)
+        : resolveStepModel(phase, stepModelOverrides, stepId, resolvedModelId, false);
       const model = getModel(stepModelId);
       logger.info("Pipeline: model resolved for step", {
         runId, stepIdx, stepId,
         stepModelId,
-        isOverride: stepModelId !== resolvedModelId,
+        phase,
+        isOverride: !!stepModelOverrides[stepId],
+        isSmartRouted: useSmartRouting && !stepModelOverrides[stepId],
       });
       const systemPrompt = getAgentSystemPrompt(stepId);
+      let stepFeedbackAttempts = 0;
+      let stepOutcome: "success" | "retried" = "success";
 
       // RAG: retrieve code relevant to this step
       let codeContext = "";
@@ -338,6 +423,18 @@ export async function runPipeline(
         }
       }
 
+      // ── Blast radius: import-graph context for implementation steps ─────────
+      let blastRadiusContext = "";
+      if (IMPLEMENTATION_STEPS.has(stepId)) {
+        try {
+          const graph = await getCachedImportGraph(agentId);
+          const affected = identifyAffectedFiles(taskDescription, graph);
+          blastRadiusContext = await buildBlastRadiusContext(affected);
+        } catch {
+          // best-effort — never block step execution
+        }
+      }
+
       // Prompt assembly — layered by phase
       const contextDoc = buildContextDoc(contextParts);
       const promptSections: string[] = [contextDoc];
@@ -355,13 +452,34 @@ export async function runPipeline(
         promptSections.push(`\n\n---\n\n${codeContext}`);
       }
 
+      const astSection = IMPLEMENTATION_STEPS.has(stepId) && astContext
+        ? `\n\n${astContext}`
+        : "";
+
+      const moduleMapSection = PLANNING_STEPS.has(stepId) && moduleMapEntries.length > 0
+        ? `\n\n${buildModuleMapContext(moduleMapEntries, taskDescription)}`
+        : "";
+
+      // Prepend human feedback to the FIRST implementation step only
+      const alreadyHasImpl = stepOutputs
+        .slice(0, stepIdx)
+        .some((_, i) => IMPLEMENTATION_STEPS.has(pipeline[i]));
+      const approvalPrefix =
+        approvalFeedback &&
+        IMPLEMENTATION_STEPS.has(stepId) &&
+        !alreadyHasImpl
+          ? `## Human Feedback on Architecture Plan\n${approvalFeedback}\n\n`
+          : "";
+
       promptSections.push(
         `\n\n---\n\n# Instructions for this step (${stepId})`,
         `Apply your expertise to the task above. Be specific, actionable, and thorough.`,
         `Reference and build upon any previous step outputs shown in the context above.`,
       );
 
-      const prompt = promptSections.join("\n");
+      const prompt = approvalPrefix + promptSections.join("\n") + astSection
+        + (blastRadiusContext ? `\n\n${blastRadiusContext}` : "")
+        + moduleMapSection;
 
       // ── AI call — structured output for implementation steps, text for all others ─
       // IMPLEMENTATION_STEPS use generateObject() + CodeGenOutputSchema for guaranteed
@@ -526,6 +644,8 @@ export async function runPipeline(
               let currentTestOutput = execResult.testOutput;
 
               for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                stepFeedbackAttempts++;
+                const escalatedModelId = getEscalationModel(phase, stepModelId, attempt);
                 const feedbackResult = await runFeedbackIteration(
                   {
                     taskDescription,
@@ -534,7 +654,7 @@ export async function runPipeline(
                     testOutput: currentTestOutput,
                     codebaseContext: codeContext,
                     agentId,
-                    modelId: stepModelId,
+                    modelId: escalatedModelId,
                     attempt,
                   },
                   systemPrompt,
@@ -550,6 +670,30 @@ export async function runPipeline(
                 }
 
                 currentImpl = feedbackResult.revisedImplementation;
+
+                // ── SEARCH/REPLACE patch application for attempt >= 2 ────────────
+                if (attempt >= 2) {
+                  const blocks = parseSearchReplaceBlocks(currentImpl);
+                  if (blocks.length > 0) {
+                    const patchResult = await applyPatchToWorkspace(blocks, workDir, undefined);
+                    if (patchResult.applied > 0) {
+                      logger.info("Pipeline: SEARCH/REPLACE patches applied", {
+                        runId, attempt, applied: patchResult.applied, failed: patchResult.failed,
+                      });
+                      const patchTestResult = await runWorkspaceTests(workDir, agentId);
+                      if (patchTestResult.typecheckPassed && patchTestResult.testsPassed) {
+                        stepOutput = currentImpl + `\n\n---\n\n## Verified by SEARCH/REPLACE patch (attempt ${attempt})\n${patchTestResult.testOutput}`;
+                        lastImplOutput = currentImpl;
+                        implResolution = "passing";
+                        logger.info("Pipeline: SEARCH/REPLACE patch fixed tests", { runId, attempt });
+                        break;
+                      }
+                      currentTestOutput = patchTestResult.testOutput;
+                      await onStepComplete(stepIdx, currentImpl);
+                      continue;
+                    }
+                  }
+                }
 
                 // Re-run real tests against the revised implementation
                 const reExec = await executeRealTests(currentImpl, workDir, agentId);
@@ -577,6 +721,7 @@ export async function runPipeline(
                   stepOutput = currentImpl + `\n\n---\n\n## Real Execution (${MAX_RETRIES} attempts, still failing)\n${currentTestOutput}`;
                   lastImplOutput = currentImpl;
                   implResolution = "exhausted"; // All real-exec retries spent — TEST_STEP may try again
+                  stepOutcome = "retried";
                   logger.warn("Pipeline: real-exec max retries reached", { runId, maxRetries: MAX_RETRIES });
                 }
               }
@@ -594,6 +739,14 @@ export async function runPipeline(
             error: execErr instanceof Error ? execErr.message : String(execErr),
           });
         }
+      }
+
+      // Post-loop safety net: if the IMPL_STEP real-exec loop exited via a
+      // SEARCH/REPLACE `continue` on the MAX_RETRIES iteration, the
+      // `attempt === MAX_RETRIES` block was skipped and stepOutcome was never
+      // set to "retried". Correct it here before recording telemetry.
+      if (stepFeedbackAttempts > 0 && implResolution !== "passing" && stepOutcome === "success") {
+        stepOutcome = "retried";
       }
 
       // ── Feedback loop — triggered by TEST_STEPS ───────────────────────────
@@ -616,6 +769,8 @@ export async function runPipeline(
 
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
           // ── Step A: AI produces a revised implementation ──────────────────
+          stepFeedbackAttempts++;
+          const escalatedModelId = getEscalationModel(phase, stepModelId, attempt);
           const feedbackResult = await runFeedbackIteration(
             {
               taskDescription,
@@ -624,7 +779,7 @@ export async function runPipeline(
               testOutput: currentTestOutput,
               codebaseContext: lastImplCodeContext,
               agentId,
-              modelId: stepModelId,
+              modelId: escalatedModelId,
               attempt,
             },
             lastImplSystemPrompt,
@@ -713,12 +868,55 @@ export async function runPipeline(
           // Exhausted retries — continue with the best test output we have.
           if (attempt === MAX_RETRIES) {
             stepOutput = currentTestOutput;
+            stepOutcome = "retried";
             logger.warn("Pipeline: max retries reached — proceeding with last test output", {
               runId, maxRetries: MAX_RETRIES,
             });
           }
         }
       }
+
+      // Record per-step telemetry
+      stepMetricsMap[stepIdx] = {
+        stepId,
+        phase,
+        modelId: stepModelId,
+        inputTokens: stepInputTokens,
+        outputTokens: stepOutputTokens,
+        durationMs: Date.now() - stepStart,
+        feedbackAttempts: stepFeedbackAttempts,
+        outcome: stepOutcome,
+      };
+    }
+
+    // ── HITL approval checkpoint ──────────────────────────────────────────
+    if (
+      requireApproval === true &&
+      PLANNING_STEPS.has(stepId) &&
+      stepIdx + 1 < pipeline.length &&
+      IMPLEMENTATION_STEPS.has(pipeline[stepIdx + 1])
+    ) {
+      contextParts.push(
+        `# Step ${stepIdx + 1} output (${stepId})\n${stepOutput.slice(0, CONTEXT_SLICE_PER_STEP)}`,
+      );
+      stepOutputs.push(stepOutput);
+      await onStepComplete(stepIdx, stepOutput);
+      await onProgress(
+        Math.min(5 + Math.floor(((stepIdx + 1) / pipeline.length) * 85), 90),
+      );
+      logger.info("Pipeline: approval checkpoint — pausing for human review", {
+        runId, stepIdx, stepId, nextStep: pipeline[stepIdx + 1],
+      });
+      return {
+        finalOutput: buildSummary(stepOutputs, pipeline),
+        stepCount: stepIdx + 1,
+        totalInputTokens,
+        totalOutputTokens,
+        durationMs: Date.now() - startedAt,
+        awaitingApproval: true,
+        planningStepsCompleted: stepIdx + 1,
+        stepMetrics: stepMetricsMap,
+      };
     }
 
     // ── Accumulate context for subsequent steps ─────────────────────────────
@@ -749,7 +947,22 @@ export async function runPipeline(
     totalInputTokens,
     totalOutputTokens,
     durationMs: Date.now() - startedAt,
+    stepMetrics: stepMetricsMap,
   };
+  } finally {
+    if (cleanupWorkspace) {
+      try {
+        rmSync(workDir, { recursive: true, force: true });
+        logger.info("Pipeline: workspace cleaned up", { runId, workDir });
+      } catch (cleanErr) {
+        logger.warn("Pipeline: workspace cleanup failed", {
+          runId,
+          workDir,
+          error: cleanErr instanceof Error ? cleanErr.message : String(cleanErr),
+        });
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

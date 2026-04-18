@@ -95,6 +95,20 @@ export interface PipelineRunJobData {
   userId?: string;
   /** Optional model override (defaults to claude-sonnet-4-6 in the orchestrator) */
   modelId?: string;
+  /**
+   * When true, the orchestrator pauses after the last PLANNING_STEP that is
+   * immediately followed by an IMPLEMENTATION_STEP, sets status=AWAITING_APPROVAL,
+   * and returns without running implementation steps.
+   */
+  requireApproval?: boolean;
+  /** Phase 2 resume: start from this step index (0-based). */
+  startFromStep?: number;
+  /** Phase 2 resume: step outputs from Phase 1. */
+  existingStepResults?: Record<string, string>;
+  /** Phase 2 resume: human feedback to inject into first implementation step. */
+  approvalFeedback?: string;
+  /** When true, use the smart model router to select the best available model per phase. */
+  useSmartRouting?: boolean;
 }
 
 export type JobData =
@@ -353,7 +367,7 @@ export async function addPipelineRunJob(
     { ...data, type: "pipeline.run" as const },
     {
       priority: PRIORITY_MAP.sdlc,
-      jobId: `pipeline-run-${data.pipelineRunId}`,
+      jobId: `pipeline-run-${data.pipelineRunId}${data.startFromStep != null ? `-resume-${Date.now()}` : ""}`,
       attempts: 1, // SDLC pipeline runs do not auto-retry — failure is explicit
       removeOnComplete: { age: 86400 },
       removeOnFail: { age: 604800 },

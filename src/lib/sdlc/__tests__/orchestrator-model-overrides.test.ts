@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { randomUUID } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before imports
@@ -67,11 +68,39 @@ vi.mock("@/lib/ecc/sdk-learn-hook", () => ({
 
 vi.mock("../schemas", () => ({ CodeGenOutputSchema: {} }));
 
+vi.mock("../pipeline-memory", () => ({
+  loadRelevantMemory: vi.fn().mockResolvedValue(""),
+  extractAndSaveMemory: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../ast-analyzer", () => ({
+  extractCodeSignatures: vi.fn().mockResolvedValue([]),
+  formatSignaturesForPrompt: vi.fn().mockReturnValue(""),
+}));
+
+vi.mock("../module-map", () => ({
+  enrichWithSemanticSummaries: vi.fn().mockResolvedValue([]),
+  buildModuleMapContext: vi.fn().mockReturnValue(""),
+}));
+
+vi.mock("../scope-analyzer", () => ({
+  getCachedImportGraph: vi.fn().mockResolvedValue({ adjacency: new Map(), builtAt: 0 }),
+  identifyAffectedFiles: vi.fn().mockReturnValue([]),
+  buildBlastRadiusContext: vi.fn().mockResolvedValue(""),
+}));
+
+vi.mock("../patch-applier", () => ({
+  parseSearchReplaceBlocks: vi.fn().mockReturnValue([]),
+  applyPatchToWorkspace: vi.fn().mockResolvedValue({ applied: 0, failed: 0, errors: [] }),
+}));
+
 // ---------------------------------------------------------------------------
 // Import under test
 // ---------------------------------------------------------------------------
 
 import { runPipeline } from "../orchestrator";
+
+const mkWorkDir = () => `/tmp/test-sdlc/${randomUUID()}`;
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -139,7 +168,7 @@ beforeEach(() => {
 describe("stepModelOverrides", () => {
   it("uses default model for all steps when no overrides provided", async () => {
     await runPipeline(
-      { ...baseInput, pipeline: ["discovery", "codegen"] },
+      { ...baseInput, pipeline: ["discovery", "codegen"], workspaceDir: mkWorkDir() },
       callbacks,
     );
 
@@ -155,6 +184,7 @@ describe("stepModelOverrides", () => {
         ...baseInput,
         pipeline: ["discovery", "codegen"],
         stepModelOverrides: { codegen: "claude-sonnet-4-6" },
+        workspaceDir: mkWorkDir(),
       },
       callbacks,
     );
@@ -174,6 +204,7 @@ describe("stepModelOverrides", () => {
         ...baseInput,
         pipeline: ["discovery", "codegen", "sandbox"],
         stepModelOverrides: { codegen: "gpt-4o" },
+        workspaceDir: mkWorkDir(),
       },
       callbacks,
     );
@@ -204,6 +235,7 @@ describe("stepModelOverrides", () => {
         ...baseInput,
         pipeline: ["codegen", "sandbox"],
         stepModelOverrides: { codegen: "claude-sonnet-4-6" },
+        workspaceDir: mkWorkDir(),
       },
       callbacks,
     );
@@ -252,6 +284,7 @@ describe("stepModelOverrides", () => {
         ...baseInput,
         pipeline: ["codegen", "sandbox"],
         stepModelOverrides: { sandbox: "gpt-4o" },
+        workspaceDir: mkWorkDir(),
       },
       callbacks,
     );
@@ -269,6 +302,7 @@ describe("stepModelOverrides", () => {
         ...baseInput,
         pipeline: ["discovery", "codegen"],
         stepModelOverrides: { codegen: "claude-opus-4-6" },
+        workspaceDir: mkWorkDir(),
       },
       callbacks,
     );

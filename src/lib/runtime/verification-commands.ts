@@ -73,6 +73,7 @@ export async function runVerificationCommands(
   agentId: string,
   timeoutMs = 60_000,
   cwd?: string,
+  maxBufferBytes = 1024 * 512,
 ): Promise<{ allPassed: boolean; output: string; results: CommandResult[] }> {
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
@@ -102,11 +103,14 @@ export async function runVerificationCommands(
     try {
       const { stdout, stderr } = await execFileAsync(cmd, args, {
         timeout: timeoutMs,
-        maxBuffer: 1024 * 512, // 512KB
+        maxBuffer: maxBufferBytes,
         env: {
           ...process.env,
           CI: "true",
           FORCE_COLOR: "0",
+          NODE_OPTIONS: [process.env.NODE_OPTIONS, "--max-old-space-size=512"]
+            .filter(Boolean)
+            .join(" "),
           // Extend PATH so local node_modules/.bin binaries (vitest, tsc, eslint, etc.)
           // are resolved by execFile. Required on Railway: the runtime PATH does not
           // include project node_modules/.bin, so bare commands like `vitest` get ENOENT

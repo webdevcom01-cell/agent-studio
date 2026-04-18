@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { randomUUID } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before imports
@@ -66,11 +67,39 @@ vi.mock("@/lib/ecc/sdk-learn-hook", () => ({
 
 vi.mock("../schemas", () => ({ CodeGenOutputSchema: {} }));
 
+vi.mock("../pipeline-memory", () => ({
+  loadRelevantMemory: vi.fn().mockResolvedValue(""),
+  extractAndSaveMemory: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../ast-analyzer", () => ({
+  extractCodeSignatures: vi.fn().mockResolvedValue([]),
+  formatSignaturesForPrompt: vi.fn().mockReturnValue(""),
+}));
+
+vi.mock("../module-map", () => ({
+  enrichWithSemanticSummaries: vi.fn().mockResolvedValue([]),
+  buildModuleMapContext: vi.fn().mockReturnValue(""),
+}));
+
+vi.mock("../scope-analyzer", () => ({
+  getCachedImportGraph: vi.fn().mockResolvedValue({ adjacency: new Map(), builtAt: 0 }),
+  identifyAffectedFiles: vi.fn().mockReturnValue([]),
+  buildBlastRadiusContext: vi.fn().mockResolvedValue(""),
+}));
+
+vi.mock("../patch-applier", () => ({
+  parseSearchReplaceBlocks: vi.fn().mockReturnValue([]),
+  applyPatchToWorkspace: vi.fn().mockResolvedValue({ applied: 0, failed: 0, errors: [] }),
+}));
+
 // ---------------------------------------------------------------------------
 // Import under test
 // ---------------------------------------------------------------------------
 
 import { runPipeline } from "../orchestrator";
+
+const mkWorkDir = () => `/tmp/test-sdlc/${randomUUID()}`;
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -139,7 +168,7 @@ beforeEach(() => {
 describe("RAG top-K per phase", () => {
   it("calls searchCodebase with RAG_TOP_K_IMPLEMENTATION (12) for IMPLEMENTATION_STEPS", async () => {
     await runPipeline(
-      { ...baseInput, pipeline: ["codegen"] },
+      { ...baseInput, pipeline: ["codegen"], workspaceDir: mkWorkDir() },
       callbacks,
     );
 
@@ -149,7 +178,7 @@ describe("RAG top-K per phase", () => {
 
   it("calls searchCodebase with RAG_TOP_K_DEFAULT (5) for PLANNING_STEPS", async () => {
     await runPipeline(
-      { ...baseInput, pipeline: ["discovery"] },
+      { ...baseInput, pipeline: ["discovery"], workspaceDir: mkWorkDir() },
       callbacks,
     );
 
@@ -159,7 +188,7 @@ describe("RAG top-K per phase", () => {
 
   it("calls searchCodebase with RAG_TOP_K_DEFAULT (5) for TEST_STEPS", async () => {
     await runPipeline(
-      { ...baseInput, pipeline: ["sandbox"] },
+      { ...baseInput, pipeline: ["sandbox"], workspaceDir: mkWorkDir() },
       callbacks,
     );
 
@@ -169,7 +198,7 @@ describe("RAG top-K per phase", () => {
 
   it("uses correct topK for each step in a mixed pipeline", async () => {
     await runPipeline(
-      { ...baseInput, pipeline: ["discovery", "codegen", "sandbox"] },
+      { ...baseInput, pipeline: ["discovery", "codegen", "sandbox"], workspaceDir: mkWorkDir() },
       callbacks,
     );
 
@@ -194,7 +223,7 @@ describe("RAG top-K per phase", () => {
       ]);
 
     await runPipeline(
-      { ...baseInput, pipeline: ["discovery", "codegen"] },
+      { ...baseInput, pipeline: ["discovery", "codegen"], workspaceDir: mkWorkDir() },
       callbacks,
     );
 

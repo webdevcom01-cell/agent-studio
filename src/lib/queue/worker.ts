@@ -509,7 +509,11 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
  * fires learn hooks between steps, and checks cancellation.
  */
 async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unknown> {
-  const { pipelineRunId, agentId, userId, modelId } = job.data;
+  const {
+    pipelineRunId, agentId, userId, modelId,
+    requireApproval, startFromStep, existingStepResults, approvalFeedback,
+    useSmartRouting,
+  } = job.data;
 
   const {
     getPipelineRun,
@@ -518,6 +522,7 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
     markPipelineFailed,
     advancePipelineStep,
     isPipelineCancelled,
+    markPipelineAwaitingApproval,
   } = await import("@/lib/sdlc/pipeline-manager");
 
   const { runPipeline } = await import("@/lib/sdlc/orchestrator");
@@ -541,6 +546,11 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
         taskDescription: run.taskDescription,
         pipeline: run.pipeline,
         modelId,
+        startFromStep,
+        existingStepResults,
+        requireApproval: requireApproval ?? false,
+        approvalFeedback,
+        useSmartRouting: useSmartRouting ?? false,
       },
       {
         onStepComplete: async (stepIdx: number, output: string) => {
@@ -553,6 +563,14 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
       },
     );
 
+    if (result.awaitingApproval) {
+      await markPipelineAwaitingApproval(pipelineRunId);
+      logger.info("Pipeline paused — awaiting human approval", {
+        pipelineRunId, agentId, planningStepsCompleted: result.planningStepsCompleted,
+      });
+      return { pipelineRunId, awaitingApproval: true };
+    }
+
     if (result.cancelled) {
       // Pipeline was cancelled mid-run — DB already updated by cancel route
       logger.info("Pipeline run was cancelled mid-execution", { pipelineRunId });
@@ -561,6 +579,25 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
 
     await markPipelineCompleted(pipelineRunId, result.finalOutput);
     await job.updateProgress(100);
+
+    // Fire-and-forget: persist per-step metrics and aggregate model stats
+    void (async () => {
+      const { recordAllStepMetrics, aggregateRunMetrics } = await import("@/lib/sdlc/metrics-collector");
+      await recordAllStepMetrics(pipelineRunId, result.stepMetrics ?? {});
+      await aggregateRunMetrics(pipelineRunId);
+    })();
+
+    // Fire-and-forget: extract and persist learnings from this run
+    const stepResultsMap = run.stepResults as Record<string, string>;
+    void (async () => {
+      const { extractAndSaveMemory } = await import("@/lib/sdlc/pipeline-memory");
+      await extractAndSaveMemory(
+        pipelineRunId,
+        agentId,
+        run.taskDescription,
+        Object.values(stepResultsMap),
+      );
+    })();
 
     logger.info("Pipeline run job completed", {
       jobId: job.id,
