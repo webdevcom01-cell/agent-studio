@@ -3,7 +3,6 @@
 import { useState, use } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import ReactMarkdown from "react-markdown";
 import {
   ArrowLeft,
   GitBranch,
@@ -213,9 +212,9 @@ function RunCard({ run, agentId }: { run: PipelineRun; agentId: string }) {
                   <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
                     Final Output
                   </h4>
-                  <div className="prose prose-invert prose-sm max-w-none bg-zinc-800/30 rounded-lg p-4 text-zinc-300 overflow-auto max-h-96">
-                    <ReactMarkdown>{detail.finalOutput}</ReactMarkdown>
-                  </div>
+                  <pre className="bg-zinc-800/30 rounded-lg p-4 text-zinc-300 overflow-auto max-h-96 text-xs whitespace-pre-wrap font-mono leading-relaxed">
+                    {detail.finalOutput}
+                  </pre>
                 </div>
               )}
             </div>
