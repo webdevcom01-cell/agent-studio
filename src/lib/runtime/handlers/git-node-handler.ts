@@ -75,7 +75,7 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
   const gitEnv = buildGitEnv();
 
   // ── 1. Resolve credentials once, at handler startup ───────────────────────
-  const token = process.env.GITHUB_PAT;
+  const token = process.env.GITHUB_TOKEN ?? process.env.GITHUB_PAT;
   const repo = (node.data.prRepo as string) || process.env.GIT_REPO || "";
 
   try {
@@ -101,13 +101,13 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
     // misleading "not a git repository" error instead of a credentials error.
     if (!token) {
       throw new Error(
-        `STARTUP FAIL: GITHUB_PAT=MISSING, repo=${repo || "MISSING"}. ` +
-        "Set GITHUB_PAT in Railway → Service → Variables.",
+        `STARTUP FAIL: GITHUB_TOKEN=MISSING, repo=${repo || "MISSING"}. ` +
+        "Set GITHUB_TOKEN in Railway → Service → Variables.",
       );
     }
     if (!repo) {
       throw new Error(
-        `STARTUP FAIL: GITHUB_PAT=present, repo=MISSING. ` +
+        `STARTUP FAIL: GITHUB_TOKEN=present, repo=MISSING. ` +
         "Set GIT_REPO env var on Railway (owner/repo) or prRepo on the git_node.",
       );
     }
@@ -142,7 +142,7 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
         }
 
         case "push": {
-          const token = process.env.GITHUB_PAT;
+          const token = process.env.GITHUB_TOKEN ?? process.env.GITHUB_PAT;
           // Use || so that an empty-string GIT_REPO falls through to prRepo
           const repo = process.env.GIT_REPO || (node.data.prRepo as string) || "";
 
@@ -164,8 +164,8 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
           // ── 2. Fail fast with clear messages if credentials are missing ───
           if (!token) {
             throw new Error(
-              "GITHUB_PAT env var is not set on Railway. " +
-              "Go to Railway → Service → Variables → add GITHUB_PAT=<your PAT>.",
+              "GITHUB_TOKEN env var is not set on Railway. " +
+              "Go to Railway → Service → Variables → add GITHUB_TOKEN=<your PAT>.",
             );
           }
           if (!repo) {
@@ -187,7 +187,7 @@ export const gitNodeHandler: NodeHandler = async (node, context) => {
           if (!tokenCheck.ok) {
             const body = await tokenCheck.text().catch(() => "");
             throw new Error(
-              `GITHUB_PAT rejected by GitHub (HTTP ${tokenCheck.status}). ` +
+              `GITHUB_TOKEN rejected by GitHub (HTTP ${tokenCheck.status}). ` +
               `Token may be expired or missing 'repo' scope. ` +
               `GitHub response: ${body.slice(0, 200)}`,
             );
@@ -407,10 +407,10 @@ interface CreatePROptions {
 
 async function createGitHubPR(opts: CreatePROptions): Promise<PRResult> {
   const { branch, title, body, baseBranch, repo } = opts;
-  const token = process.env.GITHUB_PAT;
+  const token = process.env.GITHUB_TOKEN ?? process.env.GITHUB_PAT;
 
   if (!token) {
-    throw new Error("GITHUB_PAT environment variable is required for create_pr operation");
+    throw new Error("GITHUB_TOKEN environment variable is required for create_pr operation");
   }
 
   if (!repo || !repo.includes("/")) {

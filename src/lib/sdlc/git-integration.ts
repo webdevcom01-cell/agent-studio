@@ -134,9 +134,9 @@ export async function integrateWithGit(
 ): Promise<GitIntegrationResult> {
   const { repoUrl, workDir, runId, taskDescription } = input;
 
-  const token = process.env.GITHUB_PAT;
+  const token = process.env.GITHUB_TOKEN ?? process.env.GITHUB_PAT;
   if (!token) {
-    return { success: false, error: "GITHUB_PAT env var not set" };
+    return { success: false, error: "GITHUB_TOKEN env var not set" };
   }
 
   const repoInfo = parseRepoInfo(repoUrl);
