@@ -508,6 +508,12 @@ export async function runPipeline(
               schema: CodeGenOutputSchema,
               maxOutputTokens: 8192, // Larger budget — full file content in response
               abortSignal: ac.signal,
+              // Disable OpenAI strict-mode response_format — our Zod schema uses optional()
+              // fields and min/max constraints that are rejected by strict mode. Using
+              // strictJsonSchema: false falls back to JSON mode with client-side Zod validation.
+              providerOptions: {
+                openai: { strictJsonSchema: false },
+              },
             });
 
             stepInputTokens = result.usage.inputTokens ?? 0;
