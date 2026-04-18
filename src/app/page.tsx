@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Plus, Bot, MessageSquare, Database, Trash2, MoreVertical,
   Download, Upload, Plug, ArrowRightLeft, Sparkles, Loader2,
-  Webhook, Brain, FlaskConical, Workflow,
+  Webhook, Brain, FlaskConical, Workflow, GitBranch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -424,6 +424,12 @@ export default function DashboardPage(): React.ReactElement {
                     <Link href={`/evals/${agent.id}`}>
                       <FlaskConical className="size-3" />
                       Evals
+                    </Link>
+                  </Button>
+                  <Button size="sm" variant="outline" asChild className="h-7 flex-1 text-xs font-normal">
+                    <Link href={`/pipelines/${agent.id}`}>
+                      <GitBranch className="size-3" />
+                      Pipelines
                     </Link>
                   </Button>
                   <Button size="sm" asChild className="h-7 flex-1 text-xs font-normal">

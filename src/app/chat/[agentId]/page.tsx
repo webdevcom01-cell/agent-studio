@@ -13,6 +13,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Workflow,
+  GitBranch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -139,6 +140,10 @@ export default function ChatPage({
 
         <Button variant="ghost" size="icon-sm" asChild title="Open in Builder" aria-label="Open in Builder">
           <Link href={`/builder/${agentId}`}><Workflow className="size-3.5" /></Link>
+        </Button>
+
+        <Button variant="ghost" size="icon-sm" asChild title="SDLC Pipelines" aria-label="SDLC Pipelines">
+          <Link href={`/pipelines/${agentId}`}><GitBranch className="size-3.5" /></Link>
         </Button>
 
         <div className="mx-1 h-4 w-px bg-border" />
