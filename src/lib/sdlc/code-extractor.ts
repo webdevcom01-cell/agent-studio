@@ -36,6 +36,10 @@ import { writeFile } from "node:fs/promises";
 import { join, dirname, relative, resolve } from "node:path";
 import { logger } from "@/lib/logger";
 import { runVerificationCommands } from "@/lib/runtime/verification-commands";
+import {
+  executeInE2BSandbox,
+  executeWorkspaceInE2BSandbox,
+} from "@/lib/sandbox/e2b-executor";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -300,6 +304,19 @@ export async function executeRealTestsFromFiles(
     };
   }
 
+  // E2B path — use isolated cloud sandbox when API key is set
+  if (process.env.E2B_API_KEY) {
+    logger.info("code-extractor: using E2B sandbox", { agentId, fileCount: files.length });
+    try {
+      return await executeInE2BSandbox(files, workDir, agentId);
+    } catch (err) {
+      logger.warn("code-extractor: E2B failed, falling back to local execution", {
+        agentId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   // ── Ensure workspace is clean before writing ────────────────────────────
   // Remove stale files from previous pipeline runs so the typecheck and
   // test runner only see what the current run produced.
@@ -500,6 +517,19 @@ export async function runWorkspaceTests(
   workDir: string,
   agentId: string,
 ): Promise<WorkspaceExecResult> {
+  // E2B path
+  if (process.env.E2B_API_KEY) {
+    logger.info("code-extractor: runWorkspaceTests using E2B sandbox", { agentId });
+    try {
+      return await executeWorkspaceInE2BSandbox(workDir, agentId);
+    } catch (err) {
+      logger.warn("code-extractor: E2B workspace execution failed, falling back", {
+        agentId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   const genDir = join(workDir, GENERATED_SUBDIR);
 
   if (!existsSync(genDir)) {

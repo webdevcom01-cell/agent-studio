@@ -42,6 +42,7 @@ const envSchema = z.object({
   OBSIDIAN_GITHUB_TOKEN: optionalStr,
   OBSIDIAN_VAULT_BRANCH: optionalStr,
   OBSIDIAN_VAULT_PATH: optionalStr,
+  E2B_API_KEY: optionalStr,
   ECC_MCP_URL: optionalStr,
   ECC_ENABLED: optionalStr,
   OTEL_EXPORTER_OTLP_ENDPOINT: optionalStr,
