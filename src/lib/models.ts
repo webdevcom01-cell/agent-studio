@@ -20,6 +20,7 @@ export const ALL_MODELS: ModelOption[] = [
   // ── OpenAI — always available (required key) ────────────────────────────
   // GPT-4.1 series (April 2025): outperforms GPT-4o across the board
   // o4-mini / o3: reasoning models — o3 is the strongest general reasoner
+  { id: "gpt-4o-mini",  name: "GPT-4o Mini",   provider: "OpenAI", tier: "fast"     },
   { id: "gpt-4.1-mini", name: "GPT-4.1 Mini",  provider: "OpenAI", tier: "fast"     },
   { id: "gpt-4.1",      name: "GPT-4.1",       provider: "OpenAI", tier: "balanced" },
   { id: "o4-mini",      name: "o4 Mini",        provider: "OpenAI", tier: "powerful" },

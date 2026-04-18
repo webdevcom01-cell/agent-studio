@@ -44,10 +44,9 @@ describe("resolveStepModel", () => {
   });
 
   it("returns first available candidate for phase when smart routing enabled", () => {
-    // gpt-4o-mini is not in the model catalog → skipped; gpt-4.1 has no envKey → available
+    // gpt-4o-mini is first in implementation priority and has no envKey → always available
     const result = resolveStepModel("implementation", {}, "codegen", "fallback-model", true);
-    // First available candidate for implementation is gpt-4.1 (no envKey → always available)
-    expect(result).toBe("gpt-4.1");
+    expect(result).toBe("gpt-4o-mini");
   });
 
   it("returns defaultModelId when no candidates available (all envKeys missing)", () => {
@@ -84,14 +83,14 @@ describe("resolveStepModel", () => {
 
   it("picks candidate by phase priority order for testing phase", () => {
     const result = resolveStepModel("testing", {}, "run_tests", "fallback", true);
-    // gpt-4o-mini not in catalog → skipped; gpt-4.1-mini has no envKey → available
-    expect(result).toBe("gpt-4.1-mini");
+    // gpt-4o-mini is first in testing priority and has no envKey → always available
+    expect(result).toBe("gpt-4o-mini");
   });
 
   it("picks candidate by phase priority for other phase", () => {
     const result = resolveStepModel("other", {}, "sandbox_verify", "fallback", true);
-    // gpt-4o-mini not in catalog → no available candidates → returns defaultModelId
-    expect(result).toBe("fallback");
+    // gpt-4o-mini is the only candidate in other priority and has no envKey → always available
+    expect(result).toBe("gpt-4o-mini");
   });
 });
 
@@ -110,12 +109,11 @@ describe("getEscalationModel", () => {
   });
 
   it("returns next model in priority list for attempt === 2", () => {
-    // implementation priority: ["deepseek-chat", "gpt-4.1", "deepseek-reasoner"]
-    // currentModelId = deepseek-chat (idx 0) → next = gpt-4.1 (idx 1)
-    // gpt-4.1 requires OPENAI_API_KEY — stub it so it appears available
-    vi.stubEnv("OPENAI_API_KEY", "sk-test");
+    // implementation priority: ["gpt-4o-mini", "gpt-4.1", "deepseek-reasoner"]
+    // currentModelId = "deepseek-chat" → idx = -1 (not in list)
+    // targetIdx = Math.min(-1 + 1, 2) = 0 → candidates[0] = "gpt-4o-mini" (no envKey → available)
     const result = getEscalationModel("implementation", "deepseek-chat", 2);
-    expect(result).toBe("gpt-4.1");
+    expect(result).toBe("gpt-4o-mini");
   });
 
   it("returns last model in priority list for attempt >= 3", () => {
@@ -207,21 +205,21 @@ describe("resolveStepModelAdaptive", () => {
       },
     ]);
     const result = await resolveStepModelAdaptive("implementation", {}, "codegen", "fallback");
-    // Static priority for implementation: gpt-4o-mini skipped (not in catalog), gpt-4.1 available
-    expect(result).toBe("gpt-4.1");
+    // Static priority for implementation: gpt-4o-mini first, no envKey → available
+    expect(result).toBe("gpt-4o-mini");
   });
 
   it("falls back to static priority when DB returns empty (cold start)", async () => {
     mockPrisma.modelPerformanceStat.findMany.mockResolvedValueOnce([]);
     const result = await resolveStepModelAdaptive("implementation", {}, "codegen", "fallback");
-    // First available in implementation priority = gpt-4.1 (gpt-4o-mini not in catalog)
-    expect(result).toBe("gpt-4.1");
+    // First available in implementation priority = gpt-4o-mini (no envKey)
+    expect(result).toBe("gpt-4o-mini");
   });
 
   it("falls back to defaultModelId when no static candidate available", async () => {
-    // 'other' priority = ["gpt-4o-mini"] — not in catalog → no candidates → returns defaultModelId
+    // 'other' priority = ["gpt-4o-mini"] — in catalog, no envKey → available → returns gpt-4o-mini
     const result = await resolveStepModelAdaptive("other", {}, "sandbox_verify", "my-default");
-    expect(result).toBe("my-default");
+    expect(result).toBe("gpt-4o-mini");
   });
 
   it("logs warn and falls back to static priority when DB throws", async () => {
@@ -231,8 +229,8 @@ describe("resolveStepModelAdaptive", () => {
       "model-router: adaptive DB query failed, using static priority",
       expect.objectContaining({ phase: "implementation" }),
     );
-    // Static fallback: first available in implementation priority = gpt-4.1
-    expect(result).toBe("gpt-4.1");
+    // Static fallback: first available in implementation priority = gpt-4o-mini
+    expect(result).toBe("gpt-4o-mini");
   });
 
   it("prefers model with highest success rate when multiple DB candidates exist", async () => {

@@ -3,10 +3,10 @@ import { ALL_MODELS } from "@/lib/models";
 export type StepPhase = "planning" | "implementation" | "testing" | "review" | "other";
 
 const PHASE_MODEL_PRIORITY: Record<StepPhase, string[]> = {
-  planning:       ["deepseek-reasoner", "o4-mini", "gpt-4o-mini"],
+  planning:       ["gpt-4o-mini", "deepseek-reasoner", "o4-mini"],
   implementation: ["gpt-4o-mini", "gpt-4.1", "deepseek-reasoner"],
   testing:        ["gpt-4o-mini", "gpt-4.1-mini"],
-  review:         ["claude-sonnet-4-6", "deepseek-reasoner", "gpt-4o-mini"],
+  review:         ["gpt-4o-mini", "claude-sonnet-4-6", "deepseek-reasoner"],
   other:          ["gpt-4o-mini"],
 };
 
