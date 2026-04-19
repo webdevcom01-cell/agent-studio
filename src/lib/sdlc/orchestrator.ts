@@ -636,6 +636,11 @@ export async function runPipeline(
         // test results, we write the actual generated code to disk, run the
         // TypeScript compiler, and run Vitest. The real stdout/stderr is then
         // fed into the feedback loop so the AI fixes actual errors.
+        // Tracks whether the implementation step produced zero files after real execution.
+        // Declared outside the try/catch so we can throw after the best-effort block,
+        // since errors thrown inside the catch are swallowed as "best-effort".
+        let zeroFilesAfterExec = false;
+
         try {
           // Use structured ParsedFile[] when generateObject succeeded (avoids markdown round-trip);
           // fall back to parseCodeBlocks on the text output when generateText was used.
@@ -644,7 +649,7 @@ export async function runPipeline(
             : await executeRealTests(stepOutput, workDir, agentId);
 
           if (execResult.filesWritten === 0) {
-            logger.warn("Pipeline: implementation step produced zero files — workspace will be empty", {
+            logger.error("Pipeline: implementation step produced zero files", {
               runId, stepIdx, stepId,
               usedStructuredOutput: implFiles !== null,
               implFilesCount: implFiles?.length ?? 0,
@@ -652,6 +657,7 @@ export async function runPipeline(
               stepOutputLength: stepOutput.length,
               stepOutputSample: stepOutput.slice(0, 300),
             });
+            zeroFilesAfterExec = true;
           }
 
           if (execResult.filesWritten > 0) {
@@ -774,6 +780,17 @@ export async function runPipeline(
             runId, stepIdx,
             error: execErr instanceof Error ? execErr.message : String(execErr),
           });
+        }
+
+        // Zero-files guard: throw AFTER the best-effort try/catch so the error
+        // propagates to the main pipeline handler instead of being swallowed.
+        // A pipeline that produces no files is broken — fail fast and clearly.
+        if (zeroFilesAfterExec) {
+          throw new Error(
+            `Implementation step "${stepId}" produced no files. ` +
+            `The AI did not generate any code — check model availability, ` +
+            `prompt configuration, and structured output support for the selected model.`,
+          );
         }
       }
 
