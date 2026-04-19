@@ -137,16 +137,36 @@ beforeEach(() => {
   mockIndexCodebase.mockResolvedValue({ filesIndexed: 3 });
   mockSearchCodebase.mockResolvedValue([]);
   mockBuildCodeContext.mockReturnValue("");
-  mockExecuteRealTests.mockResolvedValue(NO_FILES_RESULT);
-  mockExecuteRealTestsFromFiles.mockResolvedValue(NO_FILES_RESULT);
+  // Return 1 file so the zero-files guard in IMPLEMENTATION_STEP passes.
+  mockExecuteRealTests.mockResolvedValue({
+    filesWritten: 1,
+    writtenPaths: ["src/lib/auth.ts"],
+    testOutput: "Tests passed.",
+    typecheckPassed: true,
+    testsPassed: true,
+  });
+  mockExecuteRealTestsFromFiles.mockResolvedValue({
+    filesWritten: 1,
+    writtenPaths: ["src/lib/auth.ts"],
+    testOutput: "Tests passed.",
+    typecheckPassed: true,
+    testsPassed: true,
+  });
   mockDidTestsFail.mockReturnValue(false);
 
   mockGenerateText.mockResolvedValue({
     text: "step output",
     usage: { inputTokens: 10, outputTokens: 20 },
   });
+  // Non-empty files so the orchestrator doesn't fall back to generateText path.
   mockGenerateObject.mockResolvedValue({
-    object: { files: [], summary: "done", description: "desc", dependencies: [], envVariables: [], prismaSchemaChanges: undefined },
+    object: {
+      files: [{ path: "src/lib/auth.ts", content: "export function auth() {}", language: "typescript", isNew: true }],
+      summary: "done",
+      dependencies: [],
+      envVariables: [],
+      prismaSchemaChanges: undefined,
+    },
     usage: { inputTokens: 10, outputTokens: 20 },
   });
   mockRunFeedbackIteration.mockResolvedValue({

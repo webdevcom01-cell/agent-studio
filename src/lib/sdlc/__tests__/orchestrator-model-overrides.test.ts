@@ -137,16 +137,36 @@ beforeEach(() => {
   mockIndexCodebase.mockResolvedValue({ filesIndexed: 0 });
   mockSearchCodebase.mockResolvedValue([]);
   mockBuildCodeContext.mockReturnValue("");
-  mockExecuteRealTests.mockResolvedValue(NO_FILES_RESULT);
-  mockExecuteRealTestsFromFiles.mockResolvedValue(NO_FILES_RESULT);
+  // Return 1 file so the zero-files guard in IMPLEMENTATION_STEP passes.
+  mockExecuteRealTests.mockResolvedValue({
+    filesWritten: 1,
+    writtenPaths: ["src/lib/auth.ts"],
+    testOutput: "Tests passed.",
+    typecheckPassed: true,
+    testsPassed: true,
+  });
+  mockExecuteRealTestsFromFiles.mockResolvedValue({
+    filesWritten: 1,
+    writtenPaths: ["src/lib/auth.ts"],
+    testOutput: "Tests passed.",
+    typecheckPassed: true,
+    testsPassed: true,
+  });
   mockDidTestsFail.mockReturnValue(false);
 
   mockGenerateText.mockResolvedValue({
     text: "step output",
     usage: { inputTokens: 10, outputTokens: 20 },
   });
+  // Non-empty files so the orchestrator doesn't fall back to generateText path.
   mockGenerateObject.mockResolvedValue({
-    object: { files: [], summary: "done", description: "desc", dependencies: [], envVariables: [], prismaSchemaChanges: undefined },
+    object: {
+      files: [{ path: "src/lib/auth.ts", content: "export function auth() {}", language: "typescript", isNew: true }],
+      summary: "done",
+      dependencies: [],
+      envVariables: [],
+      prismaSchemaChanges: undefined,
+    },
     usage: { inputTokens: 10, outputTokens: 20 },
   });
   mockRunFeedbackIteration.mockResolvedValue({
@@ -166,7 +186,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("stepModelOverrides", () => {
-  it("uses default model for all steps when no overrides provided", async () => {
+  it("uses default model for planning steps and phase model for implementation steps when no overrides provided", async () => {
     await runPipeline(
       { ...baseInput, pipeline: ["discovery", "codegen"], workspaceDir: mkWorkDir() },
       callbacks,
@@ -174,8 +194,11 @@ describe("stepModelOverrides", () => {
 
     const calls = mockGetModel.mock.calls.map((c) => c[0] as string);
     expect(calls).toHaveLength(2);
+    // discovery is a planning step — uses default model (no phase routing for planning when useSmartRouting=false)
     expect(calls[0]).toBe("deepseek-chat");
-    expect(calls[1]).toBe("deepseek-chat");
+    // codegen is an IMPLEMENTATION_STEP — resolveStepModel always uses phase priority for implementation
+    // regardless of useSmartRouting. PHASE_MODEL_PRIORITY["implementation"][0] = "gpt-4.1" (no envKey → always available).
+    expect(calls[1]).toBe("gpt-4.1");
   });
 
   it("uses override model for the specified step", async () => {
@@ -217,13 +240,13 @@ describe("stepModelOverrides", () => {
 
   it("passes stepModelId (not resolvedModelId) to runFeedbackIteration when override is set", async () => {
     // codegen is an IMPLEMENTATION_STEP — after generateText, real-exec runs.
-    // Real-exec returns failures → feedback loop fires → runFeedbackIteration receives stepModelId.
+    // Real-exec returns failures (testsPassed=false) → feedback loop fires → runFeedbackIteration receives stepModelId.
     mockExecuteRealTests.mockResolvedValue({
       filesWritten: 1,
       writtenPaths: ["/tmp/sdlc/workspace/src/lib/foo.ts"],
-      testOutput: "tsc error TS2339",
+      testOutput: "tsc error TS2339: Property does not exist",
       typecheckPassed: false,
-      testsPassed: true,
+      testsPassed: false,  // must be false to trigger the impl-step feedback loop
     });
     // generateObject fails so generateText fallback is used (implFiles=null → executeRealTests)
     mockGenerateObject.mockRejectedValueOnce(new Error("model does not support structured output"));
@@ -259,7 +282,15 @@ describe("stepModelOverrides", () => {
     //
     // If line 651 still uses resolvedModelId, call 3 would be "deepseek-chat" and the
     // assertion below (exactly 2 calls with "gpt-4o") would fail — catching the regression.
-    mockExecuteRealTests.mockResolvedValue(NO_FILES_RESULT);
+    // filesWritten must be > 0 to pass the zero-files guard; testsPassed=false keeps
+    // implResolution="none" so the TEST_STEP feedback loop is eligible to run.
+    mockExecuteRealTests.mockResolvedValue({
+      filesWritten: 1,
+      writtenPaths: ["src/lib/auth.ts"],
+      testOutput: "FAIL: real tests failed",
+      typecheckPassed: true,
+      testsPassed: false,
+    });
 
     mockGenerateText
       .mockResolvedValueOnce({ text: "// codegen output", usage: { inputTokens: 10, outputTokens: 10 } })

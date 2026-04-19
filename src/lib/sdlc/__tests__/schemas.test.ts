@@ -21,12 +21,15 @@ describe("CodeGenOutputSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("accepts empty files array (schema is permissive; orchestrator guards at runtime)", () => {
-    // .min(1) was removed from the schema because OpenAI strict-mode response_format
-    // does not support the minItems JSON schema keyword. The orchestrator performs a
-    // runtime check instead: if result.object.files.length === 0 it falls back to generateText.
+  it("rejects empty files array via superRefine", () => {
+    // .min(1) was removed from the z.array() to avoid the minItems JSON Schema keyword
+    // (not supported by OpenAI strict-mode response_format). Validation is instead enforced
+    // via .superRefine() which is invisible to JSON Schema generation but runs during safeParse.
     const result = CodeGenOutputSchema.safeParse({ files: [], summary: "empty" });
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].path).toContain("files");
+    }
   });
 
   it("optional fields are undefined when omitted (no defaults)", () => {

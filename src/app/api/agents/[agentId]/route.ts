@@ -17,6 +17,7 @@ const updateAgentSchema = z.object({
   tags: z.array(z.string().max(50)).max(20).optional(),
   isPublic: z.boolean().optional(),
   expectedDurationSeconds: z.number().int().min(5).max(600).nullable().optional(),
+  eccEnabled: z.boolean().optional(),
 }).strict();
 
 interface RouteParams {

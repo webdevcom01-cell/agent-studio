@@ -18,7 +18,7 @@ import { logger } from "@/lib/logger";
 import { getEnv } from "@/lib/env";
 import {
   evolveAgentInstincts,
-  promoteInstinctToSkill,
+  requestInstinctPromotion,
   decayStaleInstincts,
 } from "@/lib/ecc/instinct-engine";
 import { isECCEnabled } from "@/lib/ecc";
@@ -62,12 +62,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         for (const candidate of candidates) {
           try {
             const content = await generateSkillContent(candidate.instinct);
-            await promoteInstinctToSkill(candidate.instinct.id, content);
+            // Use HITL gate: creates a HumanApprovalRequest instead of
+            // promoting directly. An admin must approve before the skill
+            // enters the knowledge base (EU AI Act compliance).
+            await requestInstinctPromotion(candidate.instinct.id, content);
             totalPromoted++;
           } catch (err) {
             errors.push({
               agentId: agent.id,
-              error: `Promotion failed for ${candidate.instinct.name}: ${err instanceof Error ? err.message : String(err)}`,
+              error: `Promotion request failed for ${candidate.instinct.name}: ${err instanceof Error ? err.message : String(err)}`,
             });
           }
         }
@@ -84,7 +87,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     logger.info("Evolve cron complete", {
       agentsProcessed: agents.length,
       clustered: totalClustered,
-      promoted: totalPromoted,
+      promotionRequestsCreated: totalPromoted,
       decayed,
       errors: errors.length,
     });
@@ -94,7 +97,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       data: {
         agentsProcessed: agents.length,
         clustered: totalClustered,
-        promoted: totalPromoted,
+        // "promoted" here means approval requests were created (HITL pending)
+        promotionRequestsCreated: totalPromoted,
         decayed,
         errors,
       },

@@ -117,13 +117,23 @@ const SUCCESS_RESPONSE = {
   usage: { inputTokens: 100, outputTokens: 50 },
 };
 
+/** Default successful extractor result — 1 file written so the zero-files guard passes. */
+const FILES_RESULT = {
+  filesWritten: 1,
+  writtenPaths: ["src/lib/auth.ts"],
+  testOutput: "Tests passed.",
+  typecheckPassed: true,
+  testsPassed: true,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetModel.mockReturnValue(FAKE_MODEL);
   mockGetAgentSystemPrompt.mockReturnValue("System prompt for step.");
   mockFireSdkLearnHook.mockResolvedValue(undefined);
-  mockExecuteRealTests.mockResolvedValue(NO_FILES_RESULT);
-  mockExecuteRealTestsFromFiles.mockResolvedValue(NO_FILES_RESULT);
+  // Return 1 file so IMPLEMENTATION_STEP zero-files guard passes.
+  mockExecuteRealTests.mockResolvedValue(FILES_RESULT);
+  mockExecuteRealTestsFromFiles.mockResolvedValue(FILES_RESULT);
 });
 
 // ---------------------------------------------------------------------------

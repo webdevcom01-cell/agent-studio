@@ -10,9 +10,11 @@ export const CodeGenFileSchema = z.object({
   isNew: z.boolean().describe("true = new file, false = modifying existing"),
 });
 
-export const CodeGenOutputSchema = z.object({
-  // No .min(1) — minItems is not supported by OpenAI structured output strict mode
-  files: z.array(CodeGenFileSchema).describe("Generated or modified source files"),
+export const CodeGenOutputSchema = z
+  .object({
+    // No .min(1) — minItems is not supported by OpenAI structured output strict mode.
+    // Non-empty validation is enforced via .superRefine() below (invisible to JSON Schema).
+    files: z.array(CodeGenFileSchema).describe("Generated or modified source files"),
   // .optional() instead of .default([]) — OpenAI strict mode rejects the 'default' JSON schema keyword
   dependencies: z
     .array(
@@ -38,8 +40,20 @@ export const CodeGenOutputSchema = z.object({
     .string()
     .optional()
     .describe("Prisma schema additions/changes, if any"),
-  summary: z.string().describe("Short human-readable description of what was generated"),
-});
+    summary: z.string().describe("Short human-readable description of what was generated"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.files.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.too_small,
+        minimum: 1,
+        type: "array",
+        inclusive: true,
+        message: "CodeGenOutput must contain at least one file",
+        path: ["files"],
+      });
+    }
+  });
 
 export type CodeGenOutput = z.infer<typeof CodeGenOutputSchema>;
 
