@@ -1,4 +1,5 @@
 import { ALL_MODELS } from "@/lib/models";
+import { logger } from "@/lib/logger";
 
 export type StepPhase = "planning" | "implementation" | "testing" | "review" | "other";
 
@@ -29,9 +30,25 @@ export function resolveStepModel(
   // because gpt-4o-mini does not support the structured output schema (generateObject fails).
   if (useSmartRouting || phase === "implementation") {
     const candidates = PHASE_MODEL_PRIORITY[phase];
-    for (const candidate of candidates) {
-      if (isModelAvailable(candidate)) return candidate;
+    for (let i = 0; i < candidates.length; i++) {
+      if (isModelAvailable(candidates[i])) {
+        if (i > 0) {
+          logger.info("model-router: phase model fallback", {
+            phase,
+            stepId,
+            requested: candidates[0],
+            resolved: candidates[i],
+          });
+        }
+        return candidates[i];
+      }
     }
+    logger.info("model-router: all phase candidates unavailable, using default model fallback", {
+      phase,
+      stepId,
+      candidates,
+      resolved: defaultModelId,
+    });
   }
   return defaultModelId;
 }
@@ -65,10 +82,28 @@ export function getEscalationModel(
       : Math.min(currentIdx + 1, candidates.length - 1);
 
   const candidate = candidates[targetIdx];
-  if (candidate && isModelAvailable(candidate)) return candidate;
+  if (candidate && isModelAvailable(candidate)) {
+    if (candidate !== currentModelId) {
+      logger.info("model-router: escalating model for retry", {
+        phase,
+        attempt,
+        from: currentModelId,
+        to: candidate,
+      });
+    }
+    return candidate;
+  }
 
   for (const c of candidates) {
-    if (c !== currentModelId && isModelAvailable(c)) return c;
+    if (c !== currentModelId && isModelAvailable(c)) {
+      logger.info("model-router: escalating model for retry", {
+        phase,
+        attempt,
+        from: currentModelId,
+        to: c,
+      });
+      return c;
+    }
   }
 
   return currentModelId;
@@ -117,8 +152,14 @@ export async function resolveStepModelAdaptive(
         return stat.modelId;
       }
     }
+
+    // DB was queried successfully but no model met the threshold — fall back to static priority
+    logger.info("model-router: adaptive routing using static priority (no qualifying DB stats)", {
+      phase,
+      stepId,
+      sampledModels: sorted.length,
+    });
   } catch (err) {
-    const { logger } = await import("@/lib/logger");
     logger.warn("model-router: adaptive DB query failed, using static priority", {
       phase,
       error: err instanceof Error ? err.message : String(err),

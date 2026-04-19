@@ -2,6 +2,40 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { isModelAvailable, resolveStepModel, getEscalationModel, resolveStepModelAdaptive } from "../model-router";
 import type { StepPhase } from "../model-router";
 
+// ---------------------------------------------------------------------------
+// Controlled model catalog
+//
+// The real models.ts may evolve (models added, envKeys changed). Mocking
+// ALL_MODELS here pins the catalog so these tests are deterministic regardless
+// of what providers the developer has configured locally.
+// ---------------------------------------------------------------------------
+vi.mock("@/lib/models", () => ({
+  ALL_MODELS: [
+    { id: "gpt-4.1",           envKey: "OPENAI_API_KEY" },
+    { id: "gpt-4o",            envKey: "OPENAI_API_KEY" },
+    { id: "gpt-4o-mini",       envKey: undefined },       // always available
+    { id: "gpt-4.1-mini",      envKey: "OPENAI_API_KEY" },
+    { id: "deepseek-chat",     envKey: undefined },       // always available
+    { id: "deepseek-reasoner", envKey: undefined },       // always available
+    { id: "o4-mini",           envKey: undefined },       // always available
+    { id: "claude-sonnet-4-6", envKey: "ANTHROPIC_API_KEY" },
+  ],
+}));
+
+// ---------------------------------------------------------------------------
+// Global env isolation — clear keyed API vars before each test so model
+// availability is controlled entirely by the catalog mock above.
+// Individual tests stub keys as needed (e.g. to make OPENAI models available).
+// ---------------------------------------------------------------------------
+beforeEach(() => {
+  vi.stubEnv("OPENAI_API_KEY", "");
+  vi.stubEnv("ANTHROPIC_API_KEY", "");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("isModelAvailable", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -38,8 +72,10 @@ describe("resolveStepModel", () => {
     expect(result).toBe("gpt-4.1");
   });
 
-  it("returns defaultModelId when useSmartRouting=false even if candidates available", () => {
-    const result = resolveStepModel("implementation", {}, "codegen", "deepseek-chat", false);
+  it("returns defaultModelId when useSmartRouting=false for non-implementation phase", () => {
+    // planning + useSmartRouting=false → condition (false || false) → skips priority list
+    // Note: implementation phase always uses priority regardless of useSmartRouting
+    const result = resolveStepModel("planning", {}, "codegen", "deepseek-chat", false);
     expect(result).toBe("deepseek-chat");
   });
 
@@ -117,9 +153,10 @@ describe("getEscalationModel", () => {
   });
 
   it("returns last model in priority list for attempt >= 3", () => {
-    // implementation priority last = deepseek-reasoner (no envKey → always available)
+    // implementation priority: ["gpt-4.1", "gpt-4o", "gpt-4o-mini"]
+    // last (idx 2) = "gpt-4o-mini" (no envKey → always available)
     const result = getEscalationModel("implementation", "deepseek-chat", 3);
-    expect(result).toBe("deepseek-reasoner");
+    expect(result).toBe("gpt-4o-mini");
   });
 
   it("escalates to next candidate even when current is at index 0", () => {
