@@ -28,6 +28,7 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === "/api/openapi.json") return true;
   if (pathname === "/api/docs") return true;
   if (pathname === "/login") return true;
+  if (pathname === "/register") return true;
   if (pathname === "/onboarding") return true;
   if (pathname.startsWith("/embed")) return true;
   if (pathname === "/evals/standards") return true;

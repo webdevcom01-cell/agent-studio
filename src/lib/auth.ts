@@ -2,6 +2,7 @@
  * NextAuth v5 configuration
  *
  * Supported providers (any combination via env vars):
+ *   - Email/Password   (always enabled — no env var required)
  *   - GitHub OAuth       AUTH_GITHUB_ID + AUTH_GITHUB_SECRET
  *   - Google OAuth       AUTH_GOOGLE_ID + AUTH_GOOGLE_SECRET
  *   - Generic OIDC       AUTH_OIDC_ISSUER + AUTH_OIDC_CLIENT_ID + AUTH_OIDC_CLIENT_SECRET
@@ -15,6 +16,8 @@
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
+import { compare } from "bcryptjs";
 import { createEncryptedAdapter } from "@/lib/auth-adapter";
 import { prisma } from "@/lib/prisma";
 
@@ -60,7 +63,40 @@ function buildOIDCProvider() {
 
 const oidcProvider = buildOIDCProvider();
 
+// ── Credentials provider (email + password) ───────────────────────────────────
+// Always enabled. Users registered via /api/auth/register have a bcrypt hash
+// stored in User.password. OAuth-only users have password = null and cannot
+// use this provider.
+
+const credentialsProvider = Credentials({
+  id: "credentials",
+  name: "Email",
+  credentials: {
+    email: { label: "Email", type: "email" },
+    password: { label: "Password", type: "password" },
+  },
+  async authorize(credentials) {
+    const email = credentials?.email as string | undefined;
+    const password = credentials?.password as string | undefined;
+
+    if (!email || !password) return null;
+
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+      select: { id: true, email: true, name: true, image: true, password: true },
+    });
+
+    if (!user?.password) return null; // OAuth-only user or not found
+
+    const passwordMatch = await compare(password, user.password);
+    if (!passwordMatch) return null;
+
+    return { id: user.id, email: user.email, name: user.name, image: user.image };
+  },
+});
+
 const providers = [
+  credentialsProvider,
   ...(process.env.AUTH_GITHUB_ID
     ? [
         GitHub({
