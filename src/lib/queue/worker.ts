@@ -578,7 +578,7 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
       return { pipelineRunId, cancelled: true };
     }
 
-    await markPipelineCompleted(pipelineRunId, result.finalOutput, result.prUrl);
+    await markPipelineCompleted(pipelineRunId, result.finalOutput, result.prUrl, result.gitError);
     await job.updateProgress(100);
 
     // Fire-and-forget: persist per-step metrics and aggregate model stats

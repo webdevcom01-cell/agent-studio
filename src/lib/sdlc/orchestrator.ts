@@ -193,6 +193,8 @@ export interface OrchestratorResult {
   /** Per-step telemetry — keyed by step index */
   stepMetrics?: Record<number, StepMetric>;
   prUrl?: string;
+  /** Error message from git/PR integration if it failed (pipeline still COMPLETED). */
+  gitError?: string;
 }
 
 /**
@@ -225,6 +227,7 @@ export async function runPipeline(
 
   const workDir = input.workspaceDir ?? `${SDLC_WORKSPACE_BASE}/${runId}`;
   let gitPrUrl: string | undefined;
+  let gitError: string | undefined;
   const cleanupWorkspace = !input.workspaceDir;
 
   // Tracks whether the pipeline exited cleanly (success or cancellation).
@@ -1013,9 +1016,10 @@ export async function runPipeline(
       gitPrUrl = gitResult.prUrl;
       logger.info("orchestrator: git PR created", { runId, prUrl: gitPrUrl });
     } else {
+      gitError = gitResult.error;
       logger.warn("orchestrator: git integration skipped or failed", {
         runId,
-        error: gitResult.error,
+        error: gitError,
       });
     }
   }
@@ -1031,6 +1035,7 @@ export async function runPipeline(
     durationMs: Date.now() - startedAt,
     stepMetrics: stepMetricsMap,
     prUrl: gitPrUrl,
+    gitError,
   };
   } finally {
     if (cleanupWorkspace) {
