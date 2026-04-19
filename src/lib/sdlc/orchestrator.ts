@@ -227,6 +227,11 @@ export async function runPipeline(
   let gitPrUrl: string | undefined;
   const cleanupWorkspace = !input.workspaceDir;
 
+  // Tracks whether the pipeline exited cleanly (success or cancellation).
+  // Set to true at every non-error return point so the finally block
+  // knows whether to clean up or preserve the workspace for debugging.
+  let pipelineSucceeded = false;
+
   try {
   const { getModel } = await import("@/lib/ai");
   const { generateText, generateObject } = await import("ai");
@@ -360,6 +365,7 @@ export async function runPipeline(
     // Cancellation check before each step
     if (await isCancelled()) {
       logger.info("Pipeline cancelled before step", { runId, stepIdx, stepId });
+      pipelineSucceeded = true;
       return {
         finalOutput: buildSummary(stepOutputs, pipeline),
         stepCount: stepIdx,
@@ -960,6 +966,7 @@ export async function runPipeline(
       logger.info("Pipeline: approval checkpoint — pausing for human review", {
         runId, stepIdx, stepId, nextStep: pipeline[stepIdx + 1],
       });
+      pipelineSucceeded = true;
       return {
         finalOutput: buildSummary(stepOutputs, pipeline),
         stepCount: stepIdx + 1,
@@ -1015,6 +1022,7 @@ export async function runPipeline(
 
   const finalOutput = buildSummary(stepOutputs, pipeline);
 
+  pipelineSucceeded = true;
   return {
     finalOutput,
     stepCount: pipeline.length,
@@ -1026,14 +1034,21 @@ export async function runPipeline(
   };
   } finally {
     if (cleanupWorkspace) {
-      try {
-        rmSync(workDir, { recursive: true, force: true });
-        logger.info("Pipeline: workspace cleaned up", { runId, workDir });
-      } catch (cleanErr) {
-        logger.warn("Pipeline: workspace cleanup failed", {
+      if (pipelineSucceeded) {
+        try {
+          rmSync(workDir, { recursive: true, force: true });
+          logger.info("Pipeline: workspace cleaned up", { runId, workDir });
+        } catch (cleanErr) {
+          logger.warn("Pipeline: workspace cleanup failed", {
+            runId,
+            workDir,
+            error: cleanErr instanceof Error ? cleanErr.message : String(cleanErr),
+          });
+        }
+      } else {
+        logger.error("Pipeline: workspace preserved for post-mortem inspection after failure", {
           runId,
           workDir,
-          error: cleanErr instanceof Error ? cleanErr.message : String(cleanErr),
         });
       }
     }
