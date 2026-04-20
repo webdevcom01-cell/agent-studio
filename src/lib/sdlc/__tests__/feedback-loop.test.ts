@@ -210,6 +210,29 @@ describe("didTestsFail", () => {
   it("returns true when failure and pass signals coexist (fail wins)", () => {
     expect(didTestsFail("✓ 5 passed\nFAIL 1 failed")).toBe(true);
   });
+
+  // ── C1: false positive on "0 failed" (vitest all-pass summary) ─────────────
+
+  it("does NOT false-positive on vitest '0 failed' summary (C1 regression)", () => {
+    // Real vitest output when all tests pass
+    expect(didTestsFail("Tests: 0 failed, 5 passed")).toBe(false);
+  });
+
+  it("does NOT false-positive on vitest Test Files '0 failed' summary", () => {
+    expect(didTestsFail("Test Files  0 failed | 3 passed (3)")).toBe(false);
+  });
+
+  it("does NOT false-positive on mixed-case '0 Failed'", () => {
+    expect(didTestsFail("0 Failed, 10 passed")).toBe(false);
+  });
+
+  it("still detects '1 failed' as failure", () => {
+    expect(didTestsFail("Tests: 1 failed, 4 passed")).toBe(true);
+  });
+
+  it("still detects '10 failed' as failure", () => {
+    expect(didTestsFail("Test Files  10 failed | 2 passed")).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

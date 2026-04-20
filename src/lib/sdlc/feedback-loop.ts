@@ -246,12 +246,19 @@ export async function runFeedbackIteration(
 /**
  * Determine whether test output indicates failure.
  * Returns true if tests failed (retry needed).
+ *
+ * NOTE: the plain `/\bfailed\b/i` check must NOT fire on vitest's
+ * "Tests: 0 failed, 5 passed" summary — that means all tests passed.
+ * We therefore only count "failed" as a signal when it is NOT preceded
+ * by a literal zero (e.g. "0 failed").
  */
 export function didTestsFail(testOutput: string): boolean {
   if (!testOutput) return false;
-  return (
-    hasTestFailures(testOutput) ||
-    /\bFAIL\b/.test(testOutput) ||
-    /\bfailed\b/i.test(testOutput)
-  );
+  // Structured parser + runtime errors (most reliable signal)
+  if (hasTestFailures(testOutput)) return true;
+  // Vitest "FAIL <file>" lines (capital FAIL = failing test file)
+  if (/\bFAIL\b/.test(testOutput)) return true;
+  // Prose "failed" — but skip "0 failed" which means all passed
+  if (/\bfailed\b/i.test(testOutput) && !/\b0\s+failed\b/i.test(testOutput)) return true;
+  return false;
 }
