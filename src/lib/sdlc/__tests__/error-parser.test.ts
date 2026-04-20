@@ -5,6 +5,8 @@ import {
   formatErrorsForFeedback,
   hasCompilerErrors,
   hasTestFailures,
+  parseRuntimeErrors,
+  formatRuntimeErrorsForFeedback,
 } from "../error-parser";
 
 describe("parseTscErrors", () => {
@@ -75,6 +77,98 @@ describe("formatErrorsForFeedback", () => {
   });
 });
 
+describe("parseRuntimeErrors", () => {
+  it("detects ReferenceError with missingSymbol when vi is not defined", () => {
+    const output = "ReferenceError: vi is not defined\n    at src/lib/auth.test.ts:5:10";
+    const errors = parseRuntimeErrors(output);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].type).toBe("ReferenceError");
+    expect(errors[0].missingSymbol).toBe("vi");
+    expect(errors[0].message).toContain("vi is not defined");
+  });
+
+  it("detects ReferenceError for describe not defined", () => {
+    const output = "ReferenceError: describe is not defined";
+    const errors = parseRuntimeErrors(output);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].missingSymbol).toBe("describe");
+  });
+
+  it("detects TypeError", () => {
+    const output = "TypeError: Cannot read properties of undefined (reading 'id')";
+    const errors = parseRuntimeErrors(output);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].type).toBe("TypeError");
+  });
+
+  it("detects SyntaxError", () => {
+    const output = "SyntaxError: Unexpected token '}'\n    at src/lib/foo.ts:12";
+    const errors = parseRuntimeErrors(output);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].type).toBe("SyntaxError");
+  });
+
+  it("detects Cannot find module errors", () => {
+    const output = "Error: Cannot find module '@/lib/auth'\nRequire stack:\n- src/test.ts";
+    const errors = parseRuntimeErrors(output);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].type).toBe("Cannot find module");
+    expect(errors[0].missingSymbol).toBe("@/lib/auth");
+  });
+
+  it("returns [] for clean vitest output with no runtime errors", () => {
+    const output = "✓ all tests passed (3)\n  ✓ should return user when valid 1ms";
+    expect(parseRuntimeErrors(output)).toEqual([]);
+  });
+
+  it("extracts multiple runtime errors from a single output", () => {
+    const output = [
+      "ReferenceError: vi is not defined",
+      "ReferenceError: expect is not defined",
+    ].join("\n");
+    const errors = parseRuntimeErrors(output);
+    expect(errors.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("formatRuntimeErrorsForFeedback", () => {
+  it("returns empty string for no errors", () => {
+    expect(formatRuntimeErrorsForFeedback([])).toBe("");
+  });
+
+  it("formats a ReferenceError with missing symbol guidance", () => {
+    const errors = [{ type: "ReferenceError" as const, message: "ReferenceError: vi is not defined", missingSymbol: "vi" }];
+    const result = formatRuntimeErrorsForFeedback(errors);
+    expect(result).toContain("ReferenceError");
+    expect(result).toContain("vi");
+  });
+
+  it("formats output that includes the Runtime Errors header and symbol name", () => {
+    const errors = [{ type: "ReferenceError" as const, message: "ReferenceError: vi is not defined", missingSymbol: "vi" }];
+    const result = formatRuntimeErrorsForFeedback(errors);
+    expect(result).toContain("Runtime Errors");
+    expect(result).toContain("`vi`");
+  });
+});
+
+describe("hasTestFailures", () => {
+  it("returns true for FAIL output with × marker", () => {
+    expect(hasTestFailures(" FAIL  src/lib/auth.test.ts")).toBe(true);
+  });
+
+  it("returns true for runtime errors (ReferenceError)", () => {
+    expect(hasTestFailures("ReferenceError: vi is not defined")).toBe(true);
+  });
+
+  it("returns true for TypeError in test output", () => {
+    expect(hasTestFailures("TypeError: Cannot read properties of undefined")).toBe(true);
+  });
+
+  it("returns false for passing output with no failures or errors", () => {
+    expect(hasTestFailures("✓ all tests passed")).toBe(false);
+  });
+});
+
 describe("hasCompilerErrors", () => {
   it("returns true for error output", () => {
     expect(hasCompilerErrors("src/foo.ts(1,1): error TS2304: Cannot find name 'x'.")).toBe(true);
@@ -85,12 +179,3 @@ describe("hasCompilerErrors", () => {
   });
 });
 
-describe("hasTestFailures", () => {
-  it("returns true for FAIL output", () => {
-    expect(hasTestFailures(" FAIL  src/lib/auth.test.ts")).toBe(true);
-  });
-
-  it("returns false for passing output", () => {
-    expect(hasTestFailures("✓ all tests passed")).toBe(false);
-  });
-});
