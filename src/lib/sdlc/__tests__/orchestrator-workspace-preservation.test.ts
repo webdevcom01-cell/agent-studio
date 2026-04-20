@@ -52,6 +52,7 @@ vi.mock("@/lib/ecc/sdk-learn-hook", () => ({
 
 vi.mock("../agent-prompts", () => ({
   getAgentSystemPrompt: mockGetAgentSystemPrompt,
+  getImplementationSystemPrompt: mockGetAgentSystemPrompt,
 }));
 
 vi.mock("@/lib/logger", () => ({ logger: mockLogger }));

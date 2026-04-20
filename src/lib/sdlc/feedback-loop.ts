@@ -29,7 +29,9 @@ import { logger } from "@/lib/logger";
 import {
   parseTscErrors,
   parseVitestFailures,
+  parseRuntimeErrors,
   formatErrorsForFeedback,
+  formatRuntimeErrorsForFeedback,
   hasTestFailures,
 } from "@/lib/sdlc/error-parser";
 
@@ -75,10 +77,47 @@ export interface FeedbackLoopResult {
 export function buildFeedbackPrompt(input: FeedbackLoopInput): string {
   const tscErrors = parseTscErrors(input.testOutput);
   const vitestFailures = parseVitestFailures(input.testOutput);
+  const runtimeErrors = parseRuntimeErrors(input.testOutput);
+
+  // Build structured error section: prefer parsed details, fall back to raw output
   const structuredErrors = formatErrorsForFeedback(tscErrors, vitestFailures);
-  const errorSection = structuredErrors
-    ? `# Errors (Structured)\n${structuredErrors}`
-    : `# Raw Output\n\`\`\`\n${input.testOutput.slice(0, 2000)}\n\`\`\``;
+  const runtimeSection = formatRuntimeErrorsForFeedback(runtimeErrors);
+
+  let errorSection: string;
+  if (structuredErrors || runtimeSection) {
+    const parts: string[] = [];
+    if (runtimeSection) parts.push(runtimeSection);
+    if (structuredErrors) parts.push(structuredErrors);
+    errorSection = `# Errors (Structured)\n${parts.join("\n\n")}`;
+  } else {
+    errorSection = `# Raw Output\n\`\`\`\n${input.testOutput.slice(0, 2000)}\n\`\`\``;
+  }
+
+  // Detect missing-import errors so we can give targeted guidance
+  const missingSymbols = runtimeErrors
+    .filter((e) => e.type === "ReferenceError" && e.missingSymbol)
+    .map((e) => e.missingSymbol as string);
+  const missingModules = runtimeErrors
+    .filter((e) => e.type === "Cannot find module" && e.missingSymbol)
+    .map((e) => e.missingSymbol as string);
+
+  const importGuidance =
+    missingSymbols.length > 0 || missingModules.length > 0
+      ? `
+## CRITICAL: Missing Imports Detected
+The runtime errors above are caused by missing import statements — the code runs but fails immediately before any test executes.
+
+${missingSymbols.length > 0 ? `**Undefined symbols** (add imports): ${missingSymbols.map((s) => `\`${s}\``).join(", ")}
+
+Common fixes:
+- \`vi\`, \`describe\`, \`it\`, \`expect\`, \`beforeEach\`, \`afterEach\` → \`import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';\`
+- \`jest\` → replace with \`vi\` from vitest (this project uses Vitest, NOT Jest)
+- Any other undefined symbol → add the appropriate import at the TOP of the file` : ""}
+${missingModules.length > 0 ? `**Missing modules**: ${missingModules.map((m) => `\`${m}\``).join(", ")}
+Install or correct the import path for each missing module.` : ""}
+
+**Action**: Add ALL missing imports to the top of the affected file(s) before fixing any logic errors.`
+      : "";
 
   return `# Task
 ${input.taskDescription}
@@ -94,6 +133,7 @@ ${input.previousImplementation.slice(0, 4000)}
 \`\`\`
 
 ${errorSection}
+${importGuidance}
 
 # Instructions
 You are a senior engineer fixing a failing implementation. Based on the test failures above:
@@ -105,6 +145,9 @@ You are a senior engineer fixing a failing implementation. Based on the test fai
 
 Do NOT output the same broken code. Do NOT add TODO comments. Do NOT write placeholders.
 Write complete, correct, production-ready TypeScript that passes all tests.
+
+**Test files MUST start with:** \`import { describe, it, expect, vi } from 'vitest';\`
+This project uses Vitest — never use Jest globals (\`jest\`, etc.).
 
 Attempt ${input.attempt} of ${MAX_RETRIES}. This is critical — be thorough.${input.attempt >= 2 ? `
 

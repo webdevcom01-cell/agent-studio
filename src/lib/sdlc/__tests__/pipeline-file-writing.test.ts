@@ -35,7 +35,7 @@ const mockRunVerificationCommands = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/logger", () => ({ logger: mockLogger }));
 vi.mock("@/lib/ai", () => ({ getModel: mockGetModel }));
 vi.mock("ai", () => ({ generateText: mockGenerateText, generateObject: mockGenerateObject }));
-vi.mock("../agent-prompts", () => ({ getAgentSystemPrompt: mockGetAgentSystemPrompt }));
+vi.mock("../agent-prompts", () => ({ getAgentSystemPrompt: mockGetAgentSystemPrompt, getImplementationSystemPrompt: mockGetAgentSystemPrompt }));
 vi.mock("../feedback-loop", () => ({
   runFeedbackIteration: mockRunFeedbackIteration,
   didTestsFail: mockDidTestsFail,

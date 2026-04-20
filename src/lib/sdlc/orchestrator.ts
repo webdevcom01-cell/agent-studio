@@ -255,7 +255,7 @@ export async function runPipeline(
   const { getModel } = await import("@/lib/ai");
   const { generateText, generateObject } = await import("ai");
   const { fireSdkLearnHook } = await import("@/lib/ecc/sdk-learn-hook");
-  const { getAgentSystemPrompt } = await import("./agent-prompts");
+  const { getAgentSystemPrompt, getImplementationSystemPrompt } = await import("./agent-prompts");
   const { loadRelevantMemory } = await import("./pipeline-memory");
 
   // Resolve model lazily — gpt-4o-mini is always available, no extra API key needed.
@@ -358,7 +358,7 @@ export async function runPipeline(
         if (IMPLEMENTATION_STEPS.has(pipeline[i])) {
           lastImplStepIdx = i;
           lastImplOutput = prevOutput;
-          lastImplSystemPrompt = getAgentSystemPrompt(pipeline[i]);
+          lastImplSystemPrompt = getImplementationSystemPrompt(pipeline[i]);
           lastImplCodeContext = ""; // RAG context unavailable for resumed steps
         }
       }
@@ -434,7 +434,10 @@ export async function runPipeline(
         isOverride: !!stepModelOverrides[stepId],
         isSmartRouted: useSmartRouting && !stepModelOverrides[stepId],
       });
-      const systemPrompt = getAgentSystemPrompt(stepId);
+      // Implementation steps get the extended prompt with mandatory vitest import rules.
+      const systemPrompt = IMPLEMENTATION_STEPS.has(stepId)
+        ? getImplementationSystemPrompt(stepId)
+        : getAgentSystemPrompt(stepId);
       let stepFeedbackAttempts = 0;
       let stepOutcome: "success" | "retried" = "success";
 

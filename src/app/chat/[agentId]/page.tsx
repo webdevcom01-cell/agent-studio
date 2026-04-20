@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, use, useCallback } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ArrowLeft,
   Send,
@@ -252,7 +253,7 @@ export default function ChatPage({
                       <>
                         {msg.content ? (
                           <div className="prose prose-sm prose-invert max-w-none">
-                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                           </div>
                         ) : (
                           <span className="italic text-muted-foreground">…</span>

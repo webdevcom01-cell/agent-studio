@@ -60,6 +60,7 @@ vi.mock("../code-extractor", () => ({
 
 vi.mock("../agent-prompts", () => ({
   getAgentSystemPrompt: mockGetAgentSystemPrompt,
+  getImplementationSystemPrompt: mockGetAgentSystemPrompt,
 }));
 
 vi.mock("@/lib/ecc/sdk-learn-hook", () => ({

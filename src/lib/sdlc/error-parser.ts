@@ -113,10 +113,82 @@ export function formatErrorsForFeedback(
   return sections.join("\n\n");
 }
 
+export interface RuntimeError {
+  type: "ReferenceError" | "TypeError" | "SyntaxError" | "Cannot find module" | "other";
+  message: string;
+  /** The name/symbol that is undefined or missing, if detectable */
+  missingSymbol?: string;
+}
+
+/**
+ * Parse runtime errors that occur BEFORE any test executes.
+ * These include ReferenceError (vi is not defined), TypeError, SyntaxError,
+ * and module resolution errors. Vitest's test runner emits these as:
+ *   ReferenceError: vi is not defined
+ *   TypeError: X is not a function
+ *   Cannot find module 'X'
+ */
+export function parseRuntimeErrors(output: string): RuntimeError[] {
+  const errors: RuntimeError[] = [];
+  const seen = new Set<string>();
+
+  // ReferenceError: X is not defined
+  for (const m of output.matchAll(/ReferenceError:\s+(\S+)\s+is not defined/g)) {
+    const msg = m[0];
+    if (seen.has(msg)) continue;
+    seen.add(msg);
+    errors.push({ type: "ReferenceError", message: msg, missingSymbol: m[1] });
+  }
+
+  // TypeError: X is not a function / X is not a constructor
+  for (const m of output.matchAll(/TypeError:\s+(.+?)(?:\n|$)/g)) {
+    const msg = m[0].trim();
+    if (seen.has(msg)) continue;
+    seen.add(msg);
+    errors.push({ type: "TypeError", message: msg });
+  }
+
+  // SyntaxError
+  for (const m of output.matchAll(/SyntaxError:\s+(.+?)(?:\n|$)/g)) {
+    const msg = m[0].trim();
+    if (seen.has(msg)) continue;
+    seen.add(msg);
+    errors.push({ type: "SyntaxError", message: msg });
+  }
+
+  // Cannot find module 'X'
+  for (const m of output.matchAll(/Cannot find module ['"](.+?)['"]/g)) {
+    const msg = m[0];
+    if (seen.has(msg)) continue;
+    seen.add(msg);
+    errors.push({ type: "Cannot find module", message: msg, missingSymbol: m[1] });
+  }
+
+  return errors;
+}
+
+/**
+ * Format runtime errors into a human-readable section for the feedback prompt.
+ */
+export function formatRuntimeErrorsForFeedback(errors: RuntimeError[]): string {
+  if (errors.length === 0) return "";
+  const items = errors.map((e) => {
+    if (e.missingSymbol) {
+      return `- ${e.type}: \`${e.missingSymbol}\` — ${e.message}`;
+    }
+    return `- ${e.type}: ${e.message}`;
+  });
+  return `### Runtime Errors (before tests ran)\n\n${items.join("\n")}`;
+}
+
 export function hasCompilerErrors(tscOutput: string): boolean {
   return parseTscErrors(tscOutput).length > 0;
 }
 
 export function hasTestFailures(vitestOutput: string): boolean {
-  return parseVitestFailures(vitestOutput).length > 0;
+  // Structured Vitest failures (×/✗/FAIL markers)
+  if (parseVitestFailures(vitestOutput).length > 0) return true;
+  // Runtime errors that prevent tests from running at all
+  if (parseRuntimeErrors(vitestOutput).length > 0) return true;
+  return false;
 }
