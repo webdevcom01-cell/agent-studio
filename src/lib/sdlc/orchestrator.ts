@@ -26,6 +26,8 @@
 
 import { rmSync } from "node:fs";
 import { logger } from "@/lib/logger";
+import { startSpan } from "@/lib/observability/tracer";
+import { recordTokenUsage, recordChatLatency } from "@/lib/observability/metrics";
 import {
   indexCodebase,
   searchCodebase,
@@ -235,6 +237,20 @@ export async function runPipeline(
   // knows whether to clean up or preserve the workspace for debugging.
   let pipelineSucceeded = false;
 
+  // Hoisted before try/finally so the finally block can close the span and
+  // set final attributes regardless of which code path exits the function.
+  const startedAt = Date.now();
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  const pipelineSpan = startSpan("sdlc.pipeline.run", {
+    kind: "client",
+    attributes: {
+      "sdlc.run.id": runId,
+      "sdlc.agent.id": agentId,
+      "sdlc.pipeline.step_count": pipeline.length,
+    },
+  });
+
   try {
   const { getModel } = await import("@/lib/ai");
   const { generateText, generateObject } = await import("ai");
@@ -245,9 +261,6 @@ export async function runPipeline(
   // Resolve model lazily — gpt-4o-mini is always available, no extra API key needed.
   const resolvedModelId = modelId ?? "gpt-4o-mini";
 
-  const startedAt = Date.now();
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
   const stepMetricsMap: Record<number, StepMetric> = {};
 
   const priorMemory = await loadRelevantMemory(agentId);
@@ -402,6 +415,18 @@ export async function runPipeline(
         ? await resolveStepModelAdaptive(phase, stepModelOverrides, stepId, resolvedModelId)
         : resolveStepModel(phase, stepModelOverrides, stepId, resolvedModelId, false);
       const model = getModel(stepModelId);
+
+      const stepSpan = startSpan("sdlc.pipeline.step", {
+        kind: "client",
+        parentContext: pipelineSpan.traceContext,
+        attributes: {
+          "sdlc.step.id": stepId,
+          "sdlc.step.index": stepIdx,
+          "sdlc.step.phase": phase,
+          "gen_ai.request.model": stepModelId,
+        },
+      });
+
       logger.info("Pipeline: model resolved for step", {
         runId, stepIdx, stepId,
         stepModelId,
@@ -606,6 +631,10 @@ export async function runPipeline(
       totalOutputTokens += stepOutputTokens;
 
       const stepDurationMs = Date.now() - stepStart;
+
+      // Emit per-step OTEL metrics — non-blocking
+      recordTokenUsage(agentId, stepModelId, stepInputTokens, stepOutputTokens);
+      recordChatLatency(agentId, stepModelId, stepDurationMs);
 
       // Fire learn hook — non-blocking, never throws
       void fireSdkLearnHook({
@@ -949,6 +978,16 @@ export async function runPipeline(
         feedbackAttempts: stepFeedbackAttempts,
         outcome: stepOutcome,
       };
+
+      // Close the step span with final attributes
+      stepSpan.setAttributes({
+        "gen_ai.usage.input_tokens": stepInputTokens,
+        "gen_ai.usage.output_tokens": stepOutputTokens,
+        "sdlc.step.duration_ms": Date.now() - stepStart,
+        "sdlc.step.outcome": stepOutcome,
+        "sdlc.step.feedback_attempts": stepFeedbackAttempts,
+      });
+      stepSpan.end();
     }
 
     // ── HITL approval checkpoint ──────────────────────────────────────────
@@ -1038,6 +1077,15 @@ export async function runPipeline(
     gitError,
   };
   } finally {
+    // Close the pipeline span — always fires regardless of success/failure
+    pipelineSpan.setAttributes({
+      "sdlc.pipeline.total_input_tokens": totalInputTokens,
+      "sdlc.pipeline.total_output_tokens": totalOutputTokens,
+      "sdlc.pipeline.duration_ms": Date.now() - startedAt,
+      "sdlc.pipeline.succeeded": pipelineSucceeded,
+    });
+    pipelineSpan.end();
+
     if (cleanupWorkspace) {
       if (pipelineSucceeded) {
         try {
