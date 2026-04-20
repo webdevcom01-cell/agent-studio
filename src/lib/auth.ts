@@ -108,7 +108,7 @@ const providers = [
         }),
       ]
     : []),
-  ...(process.env.AUTH_GOOGLE_ID ? [Google] : []),
+  ...(process.env.AUTH_GOOGLE_ID ? [Google({ allowDangerousEmailAccountLinking: true })] : []),
   ...(oidcProvider ? [oidcProvider] : []),
 ];
 
