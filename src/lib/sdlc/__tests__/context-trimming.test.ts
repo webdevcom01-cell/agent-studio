@@ -184,3 +184,124 @@ describe("buildContextDoc — output ordering", () => {
     expect(gammaIdx).toBeGreaterThan(betaIdx);
   });
 });
+
+// ---------------------------------------------------------------------------
+// preambleCount=2: task + priorMemory both protected (C2+D4 fix)
+//
+// When a pipeline run has prior memory, contextParts layout is:
+//   [task, memory, step-0, step-1, …]
+// CONTEXT_STEP_OFFSET=2 is passed to buildContextDoc so both the task
+// AND the memory are shielded from trimming.
+// ---------------------------------------------------------------------------
+
+describe("buildContextDoc — preambleCount=2 (priorMemory present)", () => {
+  const MEMORY_MARKER = "PRIOR_MEMORY_CONTENT_UNIQUE";
+  const TASK_MARKER = "TASK_DESCRIPTION_UNIQUE";
+
+  it("preserves both task AND memory when preambleCount=2 and content is under budget", () => {
+    const task = `# Task\n${TASK_MARKER}`;
+    const memory = `# Prior Memory\n${MEMORY_MARKER}`;
+    const s1 = step(1, "small step output");
+    const parts = [task, memory, s1];
+
+    const out = buildContextDoc(parts, 2);
+    expect(out).toContain(TASK_MARKER);
+    expect(out).toContain(MEMORY_MARKER);
+    expect(out).toContain("small step output");
+  });
+
+  it("preserves both task AND memory even when steps are massively trimmed", () => {
+    const task = `# Task\n${TASK_MARKER}`;
+    const memory = `# Prior Memory\n${MEMORY_MARKER}`;
+    // Fill with oversized step content that forces aggressive trimming
+    const bigSteps = Array.from({ length: 8 }, (_, i) => step(i + 1, chars(3_000, String(i))));
+    const parts = [task, memory, ...bigSteps];
+
+    const out = buildContextDoc(parts, 2);
+
+    // Both preamble items must survive verbatim
+    expect(out).toContain(TASK_MARKER);
+    expect(out).toContain(MEMORY_MARKER);
+
+    // Output must respect the budget
+    expect(out.length).toBeLessThan(24_000 + 1_000);
+  });
+
+  it("task appears before memory appears before steps in output", () => {
+    const task = `# Task\n${TASK_MARKER}`;
+    const memory = `# Prior Memory\n${MEMORY_MARKER}`;
+    const s1 = step(1, "STEP_ONE");
+    const parts = [task, memory, s1];
+
+    const out = buildContextDoc(parts, 2);
+
+    const taskIdx = out.indexOf(TASK_MARKER);
+    const memIdx = out.indexOf(MEMORY_MARKER);
+    const stepIdx = out.indexOf("STEP_ONE");
+
+    expect(taskIdx).toBeGreaterThan(-1);
+    expect(memIdx).toBeGreaterThan(taskIdx);
+    expect(stepIdx).toBeGreaterThan(memIdx);
+  });
+
+  it("only parts[2]+ are treated as trimmable steps (step index starts at offset 2)", () => {
+    const task = `# Task\n${TASK_MARKER}`;
+    const memory = `# Prior Memory\n${MEMORY_MARKER}`;
+    // Build enough step content to force trimming — 12 steps × 3 000 chars > MAX_CONTEXT_CHARS
+    const manySteps = Array.from({ length: 12 }, (_, i) =>
+      step(i + 1, `STEP${i}-` + chars(3_000, String(i))),
+    );
+    const recentStep = step(13, "MOST_RECENT_STEP_CONTENT");
+    const parts = [task, memory, ...manySteps, recentStep];
+
+    const out = buildContextDoc(parts, 2);
+
+    // Preamble always present
+    expect(out).toContain(TASK_MARKER);
+    expect(out).toContain(MEMORY_MARKER);
+
+    // Most recent step is one of the protected recent steps → must survive
+    expect(out).toContain("MOST_RECENT_STEP_CONTENT");
+
+    // Some old steps should be trimmed (either budget-exhausted or slice path)
+    // Both trimming markers are acceptable: "[context trimmed" or "…[trimmed]"
+    const hasTrimmed = out.includes("[context trimmed") || out.includes("…[trimmed]");
+    expect(hasTrimmed).toBe(true);
+
+    // Output stays within budget
+    expect(out.length).toBeLessThan(24_000 + 1_000);
+  });
+
+  it("handles preambleCount=2 with exactly 0 steps beyond the preamble", () => {
+    const task = `# Task\n${TASK_MARKER}`;
+    const memory = `# Prior Memory\n${MEMORY_MARKER}`;
+    const parts = [task, memory];
+
+    const out = buildContextDoc(parts, 2);
+    expect(out).toContain(TASK_MARKER);
+    expect(out).toContain(MEMORY_MARKER);
+  });
+
+  it("preambleCount=1 (default) treats only task as preamble — memory slot would be trimmed", () => {
+    // This test documents the *old* (unfixed) behaviour when callers pass preambleCount=1
+    // while memory is present. The memory slot becomes part of the trimmable steps pool,
+    // so with enough pressure it can be shortened. Contrast with preambleCount=2.
+    const task = `# Task\n${TASK_MARKER}`;
+    const memory = `# Prior Memory\n${MEMORY_MARKER}-` + chars(4_000, "M");
+    const bigSteps = Array.from({ length: 7 }, (_, i) => step(i + 1, chars(3_500, String(i))));
+    const parts = [task, memory, ...bigSteps];
+
+    // With preambleCount=2 the memory survives at full length
+    const out2 = buildContextDoc(parts, 2);
+    expect(out2).toContain(MEMORY_MARKER);
+
+    // With preambleCount=1 the memory is in the trimmable pool and may be shortened
+    const out1 = buildContextDoc(parts, 1);
+    // Task is always safe
+    expect(out1).toContain(TASK_MARKER);
+    // Memory marker should still appear (it's one of the first trimmable items)
+    // but unlike the preambleCount=2 case it can be cut — so we just verify
+    // the output fits within budget (the key guarantee).
+    expect(out1.length).toBeLessThan(24_000 + 1_000);
+  });
+});

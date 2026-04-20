@@ -270,6 +270,11 @@ export async function runPipeline(
   if (priorMemory) {
     contextParts.push(priorMemory);
   }
+  // Number of leading slots in contextParts before step-0's output:
+  //   1 when no priorMemory  → [task, step-0, step-1, …]
+  //   2 when priorMemory present → [task, memory, step-0, step-1, …]
+  // Used wherever a specific step index must be targeted by offset.
+  const CONTEXT_STEP_OFFSET = priorMemory ? 2 : 1;
   const stepOutputs: string[] = [];
 
   // ── Phase tracking ──────────────────────────────────────────────────────────
@@ -478,7 +483,7 @@ export async function runPipeline(
       }
 
       // Prompt assembly — layered by phase
-      const contextDoc = buildContextDoc(contextParts);
+      const contextDoc = buildContextDoc(contextParts, CONTEXT_STEP_OFFSET);
       const promptSections: string[] = [contextDoc];
 
       // IMPLEMENTATION_STEPS receive the full architecture plan so the AI
@@ -898,15 +903,15 @@ export async function runPipeline(
           await onStepComplete(lastImplStepIdx, currentImpl);
 
           // Update the context window so the re-run test step sees the fix.
-          // contextParts index: 0 = task, 1 = step-0, 2 = step-1, …
-          // so step N is at contextParts[N + 1].
-          contextParts[lastImplStepIdx + 1] =
+          // contextParts layout: [task, (priorMemory?), step-0, step-1, …]
+          // CONTEXT_STEP_OFFSET accounts for the optional priorMemory slot (1 or 2).
+          contextParts[lastImplStepIdx + CONTEXT_STEP_OFFSET] =
             `# Step ${lastImplStepIdx + 1} output (${pipeline[lastImplStepIdx]}) [revised-attempt-${attempt}]\n` +
             currentImpl.slice(0, CONTEXT_SLICE_PER_STEP);
 
           // ── Step B: Re-run the test step against the revised implementation ─
           const testSystemPrompt = getAgentSystemPrompt(stepId);
-          const rerunContextDoc = buildContextDoc(contextParts);
+          const rerunContextDoc = buildContextDoc(contextParts, CONTEXT_STEP_OFFSET);
 
           const rerunPrompt = [
             rerunContextDoc,
@@ -1173,11 +1178,19 @@ function serializeCodeGenOutput(output: import("./schemas").CodeGenOutput): stri
  *
  * Exported for unit testing.
  */
-export function buildContextDoc(parts: string[]): string {
+/**
+ * @param parts       The full contextParts array: [task, (priorMemory?), step-0, step-1, …]
+ * @param preambleCount  How many leading slots are "preamble" (never trimmed).
+ *                    Pass 1 when no priorMemory, 2 when priorMemory is present.
+ *                    Defaults to 1 for backward compatibility.
+ */
+export function buildContextDoc(parts: string[], preambleCount = 1): string {
   const joined = parts.join("\n\n---\n\n");
   if (joined.length <= MAX_CONTEXT_CHARS) return joined;
 
-  const stepParts = parts.slice(1); // parts[0] = task, always kept at full length
+  // Preamble = task + optional priorMemory — always kept at full length, never trimmed.
+  const preamble = parts.slice(0, preambleCount);
+  const stepParts = parts.slice(preambleCount); // actual step outputs only
   const n = stepParts.length;
   const allocated: string[] = new Array<string>(n);
 
@@ -1196,8 +1209,9 @@ export function buildContextDoc(parts: string[]): string {
   // ── Phase 2: distribute remaining budget over older steps newest-first ──────
   // Separator overhead: "\n\n---\n\n" = 9 chars; rough estimate with parts count.
   const separatorOverhead = parts.length * 9;
+  const preambleLength = preamble.reduce((sum, p) => sum + p.length, 0);
   let remaining =
-    MAX_CONTEXT_CHARS - parts[0].length - protectedCharsUsed - separatorOverhead;
+    MAX_CONTEXT_CHARS - preambleLength - protectedCharsUsed - separatorOverhead;
 
   for (let i = n - protectedCount - 1; i >= 0; i--) {
     if (remaining <= 0) {
@@ -1212,7 +1226,7 @@ export function buildContextDoc(parts: string[]): string {
     }
   }
 
-  return [parts[0], ...allocated].join("\n\n---\n\n");
+  return [...preamble, ...allocated].join("\n\n---\n\n");
 }
 
 function buildSummary(outputs: string[], pipeline: string[]): string {
