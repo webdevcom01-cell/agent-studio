@@ -11,6 +11,12 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHash } from "node:crypto";
+
+/** Compute the same SHA-256 hash the implementation uses. */
+function sha256(content: string): string {
+  return createHash("sha256").update(content, "utf-8").digest("hex");
+}
 
 // ---------------------------------------------------------------------------
 // Mocks — must be hoisted before imports
@@ -240,6 +246,196 @@ describe("indexCodebase — concurrent ingestion (TASK 5)", () => {
         where: { agentId: "agent-1" },
         create: expect.objectContaining({ agentId: "agent-1" }),
         update: {},
+      }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// indexCodebase — hash-based cache (P1)
+// ---------------------------------------------------------------------------
+
+describe("indexCodebase — hash-based content caching (P1)", () => {
+  const CONTENT = "export const x = 1;";
+  const CONTENT_HASH = sha256(CONTENT);
+
+  /** Build a mock existing KBSource as returned by fetchExistingCodebaseSources */
+  function makeExistingSource(
+    id: string,
+    relativePath: string,
+    contentHash: string | null,
+  ) {
+    return {
+      id,
+      name: relativePath,
+      customMetadata: {
+        codebaseIndex: true,
+        filePath: relativePath,
+        contentHash,
+        indexedAt: "2026-01-01T00:00:00.000Z",
+      },
+    };
+  }
+
+  it("skips unchanged file when content hash matches stored hash", async () => {
+    mockExistsSync.mockReturnValue(true);
+    mockPrismaKBUpsert.mockResolvedValue(makeKB());
+
+    // Existing source with CORRECT hash
+    mockPrismaKBSourceFindMany.mockResolvedValue([
+      makeExistingSource("src-1", "file.ts", CONTENT_HASH),
+    ]);
+
+    mockReaddir.mockResolvedValue(["file.ts"]);
+    mockStat.mockResolvedValue(makeStatFile(CONTENT.length));
+    mockReadFile.mockResolvedValue(CONTENT);
+
+    const result = await indexCodebase("/tmp/sdlc", "agent-1");
+
+    expect(result.filesIndexed).toBe(0);
+    expect(result.skipped).toBe(1);
+    // Embedding must NOT be called for unchanged files
+    expect(mockIngestSource).not.toHaveBeenCalled();
+    expect(mockPrismaKBSourceCreate).not.toHaveBeenCalled();
+  });
+
+  it("re-indexes file when content hash has changed", async () => {
+    mockExistsSync.mockReturnValue(true);
+    mockPrismaKBUpsert.mockResolvedValue(makeKB());
+    mockPrismaKBChunkDeleteMany.mockResolvedValue({ count: 1 });
+    mockPrismaKBSourceDeleteMany.mockResolvedValue({ count: 1 });
+    mockPrismaKBSourceCreate.mockResolvedValue(makeSource("src-new"));
+    mockIngestSource.mockResolvedValue(undefined);
+
+    // Existing source with STALE hash
+    mockPrismaKBSourceFindMany.mockResolvedValue([
+      makeExistingSource("src-1", "file.ts", "old-hash-that-doesnt-match"),
+    ]);
+
+    mockReaddir.mockResolvedValue(["file.ts"]);
+    mockStat.mockResolvedValue(makeStatFile(CONTENT.length));
+    mockReadFile.mockResolvedValue(CONTENT); // content produces CONTENT_HASH
+
+    const result = await indexCodebase("/tmp/sdlc", "agent-1");
+
+    expect(result.filesIndexed).toBe(1);
+    expect(result.skipped).toBe(0);
+
+    // Old source must be deleted before creating the new one
+    expect(mockPrismaKBChunkDeleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { sourceId: { in: ["src-1"] } } }),
+    );
+    expect(mockPrismaKBSourceDeleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ["src-1"] } } }),
+    );
+
+    // New source must store the updated hash
+    expect(mockPrismaKBSourceCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customMetadata: expect.objectContaining({
+            contentHash: CONTENT_HASH,
+          }),
+        }),
+      }),
+    );
+    expect(mockIngestSource).toHaveBeenCalledTimes(1);
+  });
+
+  it("deletes stale source for file that no longer exists in workspace", async () => {
+    mockExistsSync.mockReturnValue(true);
+    mockPrismaKBUpsert.mockResolvedValue(makeKB());
+    mockPrismaKBChunkDeleteMany.mockResolvedValue({ count: 3 });
+    mockPrismaKBSourceDeleteMany.mockResolvedValue({ count: 1 });
+
+    // DB has a source for "deleted.ts" but it's no longer in the workspace
+    mockPrismaKBSourceFindMany.mockResolvedValue([
+      makeExistingSource("src-old", "deleted.ts", "some-hash"),
+    ]);
+
+    // Workspace is empty (the file was deleted)
+    mockReaddir.mockResolvedValue([]);
+
+    const result = await indexCodebase("/tmp/sdlc", "agent-1");
+
+    expect(result.filesIndexed).toBe(0);
+
+    // Stale source must be cleaned up
+    expect(mockPrismaKBChunkDeleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { sourceId: { in: ["src-old"] } } }),
+    );
+    expect(mockPrismaKBSourceDeleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ["src-old"] } } }),
+    );
+  });
+
+  it("mixed run: skips unchanged, re-indexes changed, indexes new, removes deleted", async () => {
+    const unchangedContent = "const a = 1;";
+    const changedContent = "const b = 2; // updated";
+    const newContent = "const c = 3;";
+
+    mockExistsSync.mockReturnValue(true);
+    mockPrismaKBUpsert.mockResolvedValue(makeKB());
+    mockPrismaKBChunkDeleteMany.mockResolvedValue({ count: 1 });
+    mockPrismaKBSourceDeleteMany.mockResolvedValue({ count: 1 });
+
+    let createCount = 0;
+    mockPrismaKBSourceCreate.mockImplementation(async () =>
+      makeSource(`src-new-${++createCount}`),
+    );
+    mockIngestSource.mockResolvedValue(undefined);
+
+    mockPrismaKBSourceFindMany.mockResolvedValue([
+      makeExistingSource("src-unchanged", "unchanged.ts", sha256(unchangedContent)),
+      makeExistingSource("src-changed", "changed.ts", "old-hash"),   // hash mismatch
+      makeExistingSource("src-deleted", "deleted.ts", "some-hash"),  // not in workspace
+      // "new.ts" is NOT in existing sources → will be indexed fresh
+    ]);
+
+    // Workspace has: unchanged.ts, changed.ts, new.ts (NOT deleted.ts)
+    mockReaddir.mockResolvedValue(["unchanged.ts", "changed.ts", "new.ts"]);
+    mockStat.mockResolvedValue(makeStatFile(50));
+
+    mockReadFile.mockImplementation(async (path: string) => {
+      if ((path as string).includes("unchanged")) return unchangedContent;
+      if ((path as string).includes("changed")) return changedContent;
+      return newContent;
+    });
+
+    const result = await indexCodebase("/tmp/sdlc", "agent-1");
+
+    expect(result.skipped).toBe(1);      // unchanged.ts
+    expect(result.filesIndexed).toBe(2); // changed.ts + new.ts
+
+    // 2 sources re-indexed (changed + new)
+    expect(mockIngestSource).toHaveBeenCalledTimes(2);
+    expect(mockPrismaKBSourceCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it("stores contentHash in customMetadata of newly created source", async () => {
+    const content = "export function hello() { return 'hi'; }";
+    const expectedHash = sha256(content);
+
+    mockExistsSync.mockReturnValue(true);
+    mockPrismaKBUpsert.mockResolvedValue(makeKB());
+    mockPrismaKBSourceFindMany.mockResolvedValue([]); // no prior sources
+    mockPrismaKBSourceCreate.mockResolvedValue(makeSource("src-1"));
+    mockIngestSource.mockResolvedValue(undefined);
+
+    mockReaddir.mockResolvedValue(["lib.ts"]);
+    mockStat.mockResolvedValue(makeStatFile(content.length));
+    mockReadFile.mockResolvedValue(content);
+
+    await indexCodebase("/tmp/sdlc", "agent-1");
+
+    expect(mockPrismaKBSourceCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customMetadata: expect.objectContaining({
+            codebaseIndex: true,
+            contentHash: expectedHash,
+          }),
+        }),
       }),
     );
   });

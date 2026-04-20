@@ -27,6 +27,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, extname, relative } from "node:path";
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { ingestSource } from "@/lib/knowledge/ingest";
 import { searchKnowledgeBase } from "@/lib/knowledge/search";
@@ -55,91 +56,167 @@ const CODEBASE_SOURCE_TAG = "codebaseIndex";
 // Public API
 // ---------------------------------------------------------------------------
 
+/** SHA-256 hash of file content — used to skip unchanged files between runs. */
+function computeContentHash(content: string): string {
+  return createHash("sha256").update(content, "utf-8").digest("hex");
+}
+
+interface FileEntry {
+  relativePath: string;
+  fullPath: string;
+  content: string;
+  hash: string;
+}
+
 /**
  * Index all code files in workingDir into the agent's KnowledgeBase.
- * Returns the number of files indexed.
+ *
+ * Hash-based caching: every file's SHA-256 content hash is stored in
+ * `customMetadata.contentHash`. On subsequent runs, files whose content
+ * hasn't changed are skipped entirely — no new embedding API calls, no
+ * DB churn. Only new and modified files are re-embedded.
+ *
+ * Returns counts of indexed (re-embedded) and skipped (unchanged) files.
  */
 export async function indexCodebase(
   workingDir: string,
   agentId: string,
-): Promise<{ filesIndexed: number; knowledgeBaseId: string }> {
+): Promise<{ filesIndexed: number; knowledgeBaseId: string; skipped: number }> {
   if (!existsSync(workingDir)) {
     logger.warn("codebase-rag: workingDir does not exist, skipping index", { workingDir });
-    return { filesIndexed: 0, knowledgeBaseId: "" };
+    return { filesIndexed: 0, knowledgeBaseId: "", skipped: 0 };
   }
 
   // 1. Find or create the agent's KnowledgeBase
   const kb = await findOrCreateKB(agentId);
 
-  // 2. Remove stale codebase sources from the previous run
-  await deleteCodebaseSources(kb.id);
+  // 2. Fetch existing codebase sources with their stored content hashes
+  const existingSources = await fetchExistingCodebaseSources(kb.id);
+  const existingByPath = new Map<string, { id: string; contentHash: string | null }>();
+  for (const src of existingSources) {
+    const meta = src.customMetadata as Record<string, unknown> | null;
+    existingByPath.set(src.name, {
+      id: src.id,
+      contentHash: (meta?.contentHash as string) ?? null,
+    });
+  }
 
   // 3. Collect indexable files
-  const files = await collectFiles(workingDir);
+  const filePaths = await collectFiles(workingDir);
   logger.info("codebase-rag: files collected for indexing", {
     agentId,
     workingDir,
-    count: files.length,
+    count: filePaths.length,
   });
 
-  if (files.length === 0) {
-    return { filesIndexed: 0, knowledgeBaseId: kb.id };
+  // 4. Read all files and compute content hashes (parallel, bounded by OS)
+  const currentFiles = new Map<string, FileEntry>();
+  await Promise.all(
+    filePaths.map(async (fullPath) => {
+      try {
+        const content = await readFile(fullPath, "utf-8");
+        if (!content.trim()) return; // skip empty / whitespace-only files
+        const relativePath = relative(workingDir, fullPath);
+        const hash = computeContentHash(content);
+        currentFiles.set(relativePath, { relativePath, fullPath, content, hash });
+      } catch (err) {
+        logger.warn("codebase-rag: failed to read file for hashing", {
+          fullPath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }),
+  );
+
+  if (currentFiles.size === 0) {
+    // No indexable content — remove any stale DB sources
+    if (existingSources.length > 0) {
+      const staleIds = existingSources.map((s) => s.id);
+      await prisma.kBChunk.deleteMany({ where: { sourceId: { in: staleIds } } });
+      await prisma.kBSource.deleteMany({ where: { id: { in: staleIds } } });
+    }
+    return { filesIndexed: 0, knowledgeBaseId: kb.id, skipped: 0 };
   }
 
-  // 4. Ingest files concurrently using a worker-pool semaphore.
-  //
-  //    Each worker picks the next file from the queue when it finishes the current
-  //    one. This keeps all CONCURRENCY slots busy at all times — unlike a fixed
-  //    batch approach where a slow file in a batch stalls the whole batch.
-  //
-  //    CONCURRENCY=5 is chosen to balance throughput against:
-  //      - DB connection pool pressure (prisma default pool ≈ 10)
-  //      - OpenAI embeddings rate limit (~3 000 RPM on free tier)
-  //      - Railway Railway memory constraints (avoid OOM on large repos)
-  let indexed = 0;
-  const queue = [...files]; // mutable work queue
-  const indexFile = async (filePath: string): Promise<void> => {
-    try {
-      const content = await readFile(filePath, "utf-8");
-      if (!content.trim()) return;
+  // 5. Classify each current file: skip (unchanged hash), re-index (hash changed), new (no prior source)
+  //    Also collect stale sources for files that have been deleted from the workspace.
+  const currentPaths = new Set(currentFiles.keys());
+  const staleSourceIds = existingSources
+    .filter((s) => !currentPaths.has(s.name))
+    .map((s) => s.id);
 
-      const relativePath = relative(workingDir, filePath);
-      const language = extToLanguage(extname(filePath));
+  const toIndex: Array<FileEntry & { oldSourceId?: string }> = [];
+  let skipped = 0;
 
-      const source = await prisma.kBSource.create({
-        data: {
-          type: "TEXT",
-          name: relativePath,
-          rawContent: content,
-          knowledgeBaseId: kb.id,
-          language,
-          customMetadata: {
-            [CODEBASE_SOURCE_TAG]: true,
-            filePath: relativePath,
-            indexedAt: new Date().toISOString(),
-          },
-        },
-      });
-
-      // chunk + embed + store vectors (the expensive part — runs concurrently)
-      await ingestSource(source.id, content);
-      indexed++;
-    } catch (err) {
-      logger.warn("codebase-rag: failed to index file", {
-        filePath,
-        error: err instanceof Error ? err.message : String(err),
-      });
+  for (const [relativePath, entry] of currentFiles) {
+    const existing = existingByPath.get(relativePath);
+    if (existing && existing.contentHash === entry.hash) {
+      // Content unchanged — reuse existing KBSource and its embeddings
+      skipped++;
+    } else {
+      toIndex.push({ ...entry, oldSourceId: existing?.id });
     }
-  };
+  }
 
-  // Spin up CONCURRENCY workers; each drains from the shared queue
+  // 6. Delete stale sources (deleted files) and changed sources (to be replaced)
+  const idsToDelete = [
+    ...staleSourceIds,
+    ...toIndex.filter((f) => f.oldSourceId !== undefined).map((f) => f.oldSourceId!),
+  ];
+  if (idsToDelete.length > 0) {
+    await prisma.kBChunk.deleteMany({ where: { sourceId: { in: idsToDelete } } });
+    await prisma.kBSource.deleteMany({ where: { id: { in: idsToDelete } } });
+  }
+
+  logger.info("codebase-rag: cache analysis complete", {
+    agentId,
+    total: currentFiles.size,
+    toIndex: toIndex.length,
+    skipped,
+    staleDeleted: staleSourceIds.length,
+  });
+
+  if (toIndex.length === 0) {
+    logger.info("codebase-rag: all files unchanged — skipping embedding", { agentId });
+    return { filesIndexed: 0, knowledgeBaseId: kb.id, skipped };
+  }
+
+  // 7. Index new/changed files with worker pool.
+  //    CONCURRENCY=5: balances throughput vs DB pool + OpenAI RPM limits.
+  let indexed = 0;
+  const queue = [...toIndex];
   const CONCURRENCY = 5;
+
   await Promise.all(
     Array.from({ length: CONCURRENCY }, async () => {
       while (queue.length > 0) {
         const next = queue.shift();
         if (next === undefined) break;
-        await indexFile(next);
+        try {
+          const source = await prisma.kBSource.create({
+            data: {
+              type: "TEXT",
+              name: next.relativePath,
+              rawContent: next.content,
+              knowledgeBaseId: kb.id,
+              language: extToLanguage(extname(next.fullPath)),
+              customMetadata: {
+                [CODEBASE_SOURCE_TAG]: true,
+                filePath: next.relativePath,
+                contentHash: next.hash,        // ← stored for next-run comparison
+                indexedAt: new Date().toISOString(),
+              },
+            },
+          });
+          // chunk + embed + store vectors (the expensive part)
+          await ingestSource(source.id, next.content);
+          indexed++;
+        } catch (err) {
+          logger.warn("codebase-rag: failed to index file", {
+            filePath: next.relativePath,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     }),
   );
@@ -148,10 +225,11 @@ export async function indexCodebase(
     agentId,
     knowledgeBaseId: kb.id,
     filesIndexed: indexed,
+    skipped,
     concurrency: CONCURRENCY,
   });
 
-  return { filesIndexed: indexed, knowledgeBaseId: kb.id };
+  return { filesIndexed: indexed, knowledgeBaseId: kb.id, skipped };
 }
 
 /**
@@ -226,27 +304,19 @@ async function findOrCreateKB(agentId: string) {
   });
 }
 
-async function deleteCodebaseSources(knowledgeBaseId: string): Promise<void> {
-  // Filter at the DB level using a JSON path predicate so we don't load the
-  // entire KnowledgeBase (potentially thousands of documents) into Node memory.
-  // The @> operator checks that customMetadata contains { codebaseIndex: true }.
-  const codebaseSources = await prisma.kBSource.findMany({
+/**
+ * Fetch all codebase-indexed sources for a KnowledgeBase, including their
+ * stored content hashes. Used by indexCodebase to determine which files
+ * can be skipped (unchanged) vs. need re-embedding (new or modified).
+ */
+async function fetchExistingCodebaseSources(knowledgeBaseId: string) {
+  return prisma.kBSource.findMany({
     where: {
       knowledgeBaseId,
       customMetadata: { path: [CODEBASE_SOURCE_TAG], equals: true },
     },
-    select: { id: true },
+    select: { id: true, name: true, customMetadata: true },
   });
-
-  if (codebaseSources.length === 0) return;
-
-  const ids = codebaseSources.map((s) => s.id);
-
-  // Delete chunks first, then sources (explicit cascade for clarity)
-  await prisma.kBChunk.deleteMany({ where: { sourceId: { in: ids } } });
-  await prisma.kBSource.deleteMany({ where: { id: { in: ids } } });
-
-  logger.info("codebase-rag: deleted stale codebase sources", { count: ids.length });
 }
 
 async function collectFiles(dir: string, depth = 0): Promise<string[]> {
