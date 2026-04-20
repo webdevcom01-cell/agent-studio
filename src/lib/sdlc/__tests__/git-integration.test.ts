@@ -91,6 +91,54 @@ describe("integrateWithGit", () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain("clone failed");
   });
+
+  it("redacts GitHub token from error message when git clone fails with auth URL in error", async () => {
+    const SECRET_TOKEN = "ghp_super_secret_token_12345";
+    process.env.GITHUB_PAT = SECRET_TOKEN;
+    mockExistsSync.mockReturnValue(false);
+
+    // Simulate git emitting the auth URL in its error output (real git does this)
+    mockExecFile.mockImplementation(
+      (_cmd: unknown, _args: unknown, _opts: unknown, cb: (err: Error, stdout: string, stderr: string) => void) => {
+        cb(
+          new Error(
+            `fatal: repository 'https://x-access-token:${SECRET_TOKEN}@github.com/owner/repo.git/' not found`,
+          ),
+          "",
+          "",
+        );
+      },
+    );
+
+    const result = await integrateWithGit(makeGitInput());
+    expect(result.success).toBe(false);
+
+    // Token must NOT appear in the returned error or log
+    expect(result.error).not.toContain(SECRET_TOKEN);
+    expect(result.error).toContain("[REDACTED]");
+
+    // Logger must also not contain the token
+    const warnCall = mockLogger.warn.mock.calls[0];
+    expect(JSON.stringify(warnCall)).not.toContain(SECRET_TOKEN);
+    expect(JSON.stringify(warnCall)).toContain("[REDACTED]");
+  });
+
+  it("redacts bare token occurrence in error string", async () => {
+    const SECRET_TOKEN = "ghp_bare_token_xyz";
+    process.env.GITHUB_PAT = SECRET_TOKEN;
+    mockExistsSync.mockReturnValue(false);
+
+    mockExecFile.mockImplementation(
+      (_cmd: unknown, _args: unknown, _opts: unknown, cb: (err: Error, stdout: string, stderr: string) => void) => {
+        cb(new Error(`Authentication failed using token ${SECRET_TOKEN}`), "", "");
+      },
+    );
+
+    const result = await integrateWithGit(makeGitInput());
+    expect(result.success).toBe(false);
+    expect(result.error).not.toContain(SECRET_TOKEN);
+    expect(result.error).toContain("[REDACTED]");
+  });
 });
 
 describe("createGithubPR", () => {

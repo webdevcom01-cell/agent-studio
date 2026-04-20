@@ -68,6 +68,21 @@ async function runGit(
   return { stdout: stdout.trim(), stderr: stderr.trim() };
 }
 
+/**
+ * Redact any embedded GitHub PAT from a string before logging or returning it.
+ * Covers both the `https://x-access-token:<token>@` URL form and bare token occurrences.
+ */
+function redactToken(message: string, token: string): string {
+  if (!token) return message;
+  // Replace URL-embedded credential form first (more specific match)
+  const withoutUrlCred = message.replace(
+    `x-access-token:${token}@`,
+    "x-access-token:[REDACTED]@",
+  );
+  // Then replace any remaining bare token occurrence (e.g. in error text)
+  return withoutUrlCred.split(token).join("[REDACTED]");
+}
+
 function copyDirRecursive(src: string, dest: string): void {
   if (!existsSync(src)) return;
   mkdirSync(dest, { recursive: true });
@@ -208,7 +223,9 @@ export async function integrateWithGit(
 
     return { success: true, branchName, commitHash, prUrl };
   } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
+    const rawError = err instanceof Error ? err.message : String(err);
+    // Scrub the token from error strings before logging or returning to callers.
+    const error = redactToken(rawError, token ?? "");
     logger.warn("git-integration: failed", { runId, error });
     return { success: false, error };
   } finally {
