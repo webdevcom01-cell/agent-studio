@@ -143,4 +143,72 @@ describe("applyPatchToWorkspace", () => {
     expect(result.failed).toBe(1);
     expect(result.errors[0]).toBe("No file path for block");
   });
+
+  // ── Path traversal / workspace escape (S3/C8) ──────────────────────────────
+
+  it("rejects absolute paths from AI input (e.g. /etc/passwd)", async () => {
+    const workDir = makeTmpDir();
+    try {
+      const blocks = [{ filePath: "/etc/passwd", searchFor: "root", replaceWith: "hacked" }];
+      const result = await applyPatchToWorkspace(blocks, workDir);
+
+      expect(result.failed).toBe(1);
+      expect(result.applied).toBe(0);
+      expect(result.errors[0]).toContain("Rejected unsafe path");
+      expect(result.errors[0]).toContain("/etc/passwd");
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects ../ traversal that escapes workDir", async () => {
+    const workDir = makeTmpDir();
+    try {
+      // "../../etc/passwd" would escape a /tmp/patch-test-xxx workDir
+      const blocks = [
+        { filePath: "../../etc/passwd", searchFor: "root", replaceWith: "hacked" },
+      ];
+      const result = await applyPatchToWorkspace(blocks, workDir);
+
+      expect(result.failed).toBe(1);
+      expect(result.applied).toBe(0);
+      expect(result.errors[0]).toContain("Rejected unsafe path");
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects deep ../ traversal regardless of depth", async () => {
+    const workDir = makeTmpDir();
+    try {
+      const blocks = [
+        { filePath: "subdir/../../../sensitive-file.txt", searchFor: "x", replaceWith: "y" },
+      ];
+      const result = await applyPatchToWorkspace(blocks, workDir);
+
+      expect(result.failed).toBe(1);
+      expect(result.errors[0]).toContain("Rejected unsafe path");
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it("allows legitimate relative paths inside workDir", async () => {
+    const workDir = makeTmpDir();
+    try {
+      const subDir = join(workDir, "subdir");
+      mkdirSync(subDir, { recursive: true });
+      writeFileSync(join(subDir, "file.ts"), "const x = 1;", "utf-8");
+
+      const blocks = [
+        { filePath: "subdir/file.ts", searchFor: "const x = 1;", replaceWith: "const x = 2;" },
+      ];
+      const result = await applyPatchToWorkspace(blocks, workDir);
+
+      expect(result.applied).toBe(1);
+      expect(result.failed).toBe(0);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
 });

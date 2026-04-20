@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { join, isAbsolute } from "node:path";
+import { join, isAbsolute, resolve } from "node:path";
 import { logger } from "@/lib/logger";
 
 export interface PatchBlock {
@@ -38,14 +38,40 @@ export function parseSearchReplaceBlocks(text: string): PatchBlock[] {
   return blocks;
 }
 
-function resolveFilePath(filePath: string, workDir: string): string {
-  if (isAbsolute(filePath) && existsSync(filePath)) return filePath;
+/**
+ * Resolve an AI-provided relative file path to a safe absolute path.
+ *
+ * Safety rules:
+ *  1. Absolute paths from AI input are ALWAYS rejected — they can reference
+ *     arbitrary filesystem locations regardless of workDir.
+ *  2. All resolved paths must be fully contained inside one of the two
+ *     allowed roots (workDir or srcRoot) — path traversal via `..` is blocked
+ *     by comparing `resolve()`'d paths with the allowed root prefixes.
+ *
+ * Returns `null` when the path fails validation; the caller emits an error.
+ */
+function resolveFilePath(filePath: string, workDir: string): string | null {
+  // Rule 1: reject absolute paths from AI input
+  if (isAbsolute(filePath)) return null;
+
   const srcRoot = existsSync("/app/src") ? "/app/src" : join(process.cwd(), "src");
+  const resolvedWorkDir = resolve(workDir);
+  const resolvedSrcRoot = resolve(srcRoot);
+
+  // Rule 2a: "src/…" files are resolved relative to srcRoot's parent
   if (filePath.startsWith("src/")) {
-    const fromSrcRoot = join(srcRoot, "..", filePath);
-    if (existsSync(fromSrcRoot)) return fromSrcRoot;
+    const candidate = resolve(srcRoot, "..", filePath);
+    const isInsideSrc = candidate === resolvedSrcRoot || candidate.startsWith(resolvedSrcRoot + "/");
+    if (isInsideSrc && existsSync(candidate)) return candidate;
   }
-  return join(workDir, filePath);
+
+  // Rule 2b: everything else must land inside workDir
+  const candidate = resolve(workDir, filePath);
+  const isInsideWorkDir =
+    candidate === resolvedWorkDir || candidate.startsWith(resolvedWorkDir + "/");
+  if (!isInsideWorkDir) return null;
+
+  return candidate;
 }
 
 export async function applyPatchToWorkspace(
@@ -65,6 +91,14 @@ export async function applyPatchToWorkspace(
       continue;
     }
     const filePath = resolveFilePath(rawPath, workDir);
+    if (!filePath) {
+      failed++;
+      errors.push(
+        `Rejected unsafe path "${rawPath}": must be relative and within the workspace`,
+      );
+      logger.warn("applyPatchToWorkspace: rejected unsafe path", { rawPath, workDir });
+      continue;
+    }
     try {
       const content = readFileSync(filePath, "utf-8");
       if (!content.includes(block.searchFor)) {
