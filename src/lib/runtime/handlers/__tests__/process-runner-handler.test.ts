@@ -124,4 +124,59 @@ describe("processRunnerHandler", () => {
       expect.any(String),
     );
   });
+
+  it("resolves {{template}} vars in cwd/workingDir before spawning", async () => {
+    mockRunVerificationCommands.mockResolvedValue({
+      allPassed: true,
+      output: "",
+      results: [{ command: "vitest", passed: true, output: "", durationMs: 1000 }],
+    });
+
+    const ctx = makeContext();
+    ctx.variables = { taskSummary: "button", runId: "abc123" };
+
+    await processRunnerHandler(
+      makeNode({
+        command: "vitest",
+        workingDir: "/tmp/sdlc-{{taskSummary}}-{{runId}}",
+      }) as never,
+      ctx,
+    );
+
+    // 4th arg to runVerificationCommands is cwd — must be the resolved path,
+    // not the literal "/tmp/sdlc-{{taskSummary}}-{{runId}}".
+    expect(mockRunVerificationCommands).toHaveBeenCalledWith(
+      expect.any(Array),
+      "agent-1",
+      expect.any(Number),
+      "/tmp/sdlc-button-abc123",
+    );
+  });
+
+  it("also resolves templates in the cwd field (alias for workingDir)", async () => {
+    mockRunVerificationCommands.mockResolvedValue({
+      allPassed: true,
+      output: "",
+      results: [{ command: "vitest", passed: true, output: "", durationMs: 1000 }],
+    });
+
+    const ctx = makeContext();
+    ctx.variables = { slug: "card", runId: "xyz789" };
+
+    await processRunnerHandler(
+      makeNode({
+        command: "vitest",
+        workingDir: undefined,
+        cwd: "/tmp/sdlc-{{slug}}-{{runId}}",
+      }) as never,
+      ctx,
+    );
+
+    expect(mockRunVerificationCommands).toHaveBeenCalledWith(
+      expect.any(Array),
+      "agent-1",
+      expect.any(Number),
+      "/tmp/sdlc-card-xyz789",
+    );
+  });
 });
