@@ -160,15 +160,25 @@ export const fileWriterHandler: NodeHandler = async (node, context) => {
       updatedVariables: { [outputVariable]: result },
     };
   } catch (error) {
-    logger.error("file-writer-handler error", { nodeId: node.id, error });
+    // Pass error as 2nd arg so logger.error extracts .message and .stack from
+    // Error instances instead of stringifying the whole context to "[object Object]".
+    logger.error("file-writer-handler error", error, { nodeId: node.id });
+    const errMessage = error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : String(error);
     return {
-      messages: [{ role: "assistant", content: "An error occurred in file_writer node." }],
+      messages: [
+        {
+          role: "assistant",
+          content: `An error occurred in file_writer node: ${errMessage}`,
+        },
+      ],
       nextNodeId: (node.data.onErrorNodeId as string) ?? null,
       waitForInput: false,
       updatedVariables: {
         [outputVariable]: {
           filesWritten: [],
-          errors: ["Internal file writer error"],
+          errors: [`Internal file writer error: ${errMessage}`],
           targetDir,
           success: false,
         },
