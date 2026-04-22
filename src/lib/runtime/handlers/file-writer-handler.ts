@@ -11,7 +11,11 @@ interface CodeFile {
 
 export const fileWriterHandler: NodeHandler = async (node, context) => {
   const inputVariable = (node.data.inputVariable as string) || "codeOutput";
-  const targetDir = (node.data.targetDir as string) || "";
+  const rawTargetDir = (node.data.targetDir as string) || "";
+  // Resolve template vars in targetDir so paths like /tmp/sdlc-{{slug}}-{{runId}}
+  // expand to the concrete run directory — required so file-writer and
+  // process-runner (which also resolves cwd) land on the same physical dir.
+  const targetDir = resolveTemplate(rawTargetDir, context.variables);
   const outputVariable = (node.data.outputVariable as string) || "fileWriteResult";
 
   // Direct mode: filePath + content are set directly on the node (with template syntax)
