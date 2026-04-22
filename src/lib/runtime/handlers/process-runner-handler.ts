@@ -63,7 +63,11 @@ export const processRunnerHandler: NodeHandler = async (node, context) => {
   // Resolve templates in command and args array
   const rawCommand = (node.data.command as string) || "";
   const rawArgs = Array.isArray(node.data.args) ? (node.data.args as string[]) : [];
-  const workingDir = (node.data.cwd as string) || (node.data.workingDir as string) || process.cwd();
+  const rawWorkingDir = (node.data.cwd as string) || (node.data.workingDir as string) || process.cwd();
+  // Resolve template vars in cwd so paths like /tmp/sdlc-{{taskSummary}}-{{runId}}
+  // expand to the concrete run directory — matches the expansion that
+  // file-writer now performs on targetDir so both handlers share the same path.
+  const workingDir = resolveTemplate(rawWorkingDir, context.variables);
   const timeoutMs = typeof node.data.timeoutMs === "number" ? node.data.timeoutMs : DEFAULT_TIMEOUT_MS;
   const outputVariable = (node.data.outputVariable as string) || "processResult";
 

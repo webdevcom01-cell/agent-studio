@@ -133,4 +133,45 @@ describe("fileWriterHandler", () => {
       fileWriterHandler(makeNode() as never, makeContext({ codeOutput })),
     ).resolves.toBeDefined();
   });
+
+  it("resolves {{template}} vars in targetDir before writing files", async () => {
+    const codeOutput = {
+      files: [{ path: "foo.ts", content: "export const x = 1;", language: "typescript", isNew: true }],
+      summary: "ok",
+    };
+
+    const result = await fileWriterHandler(
+      makeNode({ targetDir: "/tmp/sdlc-{{slug}}-{{runId}}" }) as never,
+      makeContext({ codeOutput, slug: "button", runId: "abc123" }),
+    );
+
+    expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
+    // First arg to writeFileSync is the resolved path — must be the concrete
+    // directory, not the literal "/tmp/sdlc-{{slug}}-{{runId}}".
+    const writtenPath = mockWriteFileSync.mock.calls[0][0] as string;
+    expect(writtenPath).toBe("/tmp/sdlc-button-abc123/foo.ts");
+
+    const output = result.updatedVariables?.fileWriteResult as Record<string, unknown>;
+    expect(output.success).toBe(true);
+    expect(output.targetDir).toBe("/tmp/sdlc-button-abc123");
+  });
+
+  it("resolves templates in direct-mode targetDir (filePath + content variant)", async () => {
+    const result = await fileWriterHandler(
+      makeNode({
+        inputVariable: undefined,
+        targetDir: "/tmp/sdlc-{{taskSummary}}-{{runId}}",
+        filePath: "output.txt",
+        content: "hello",
+      }) as never,
+      makeContext({ taskSummary: "card", runId: "xyz789" }),
+    );
+
+    expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
+    const writtenPath = mockWriteFileSync.mock.calls[0][0] as string;
+    expect(writtenPath).toBe("/tmp/sdlc-card-xyz789/output.txt");
+
+    const output = result.updatedVariables?.fileWriteResult as Record<string, unknown>;
+    expect(output.success).toBe(true);
+  });
 });
