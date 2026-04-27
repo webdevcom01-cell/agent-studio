@@ -56,6 +56,46 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
     };
   }
 
+  // Org-level RBAC: if the agent belongs to an organization and the triggering
+  // user is known, verify they are at least a MEMBER of that organization.
+  // Personal agents (no organizationId) and system/anonymous executions
+  // (no context.userId) bypass this check.
+  if (context.userId) {
+    const agentOrg = await prisma.agent.findUnique({
+      where: { id: context.agentId },
+      select: { organizationId: true },
+    });
+
+    if (agentOrg?.organizationId) {
+      const membership = await prisma.organizationMember.findUnique({
+        where: {
+          userId_organizationId: {
+            userId: context.userId,
+            organizationId: agentOrg.organizationId,
+          },
+        },
+        select: { role: true },
+      });
+
+      if (!membership) {
+        logger.warn("MCP tool org RBAC denial", {
+          agentId: context.agentId,
+          userId: context.userId,
+          organizationId: agentOrg.organizationId,
+        });
+        return {
+          messages: [],
+          nextNodeId: null,
+          waitForInput: false,
+          updatedVariables: {
+            ...context.variables,
+            [outputVariable]: "[Error: Access denied — User does not have permission to invoke tools for this agent]",
+          },
+        };
+      }
+    }
+  }
+
   const resolvedArgs: Record<string, unknown> = {};
   for (const [param, template] of Object.entries(inputMapping)) {
     resolvedArgs[param] = resolveTemplate(template, context.variables);
