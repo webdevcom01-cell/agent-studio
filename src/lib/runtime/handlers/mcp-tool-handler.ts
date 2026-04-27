@@ -84,12 +84,12 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
           organizationId: agentOrg.organizationId,
         });
         return {
-          messages: [],
+          messages: [{ role: "assistant", content: "[Error: Access denied — User does not have org membership to invoke tools for this agent]" }],
           nextNodeId: null,
           waitForInput: false,
           updatedVariables: {
             ...context.variables,
-            [outputVariable]: "[Error: Access denied — User does not have permission to invoke tools for this agent]",
+            [outputVariable]: "[Error: Access denied — User does not have org membership to invoke tools for this agent]",
           },
         };
       }
