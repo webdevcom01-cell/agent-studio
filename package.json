@@ -80,7 +80,7 @@
     "mammoth": "^1.12.0",
     "motion": "^12.38.0",
     "mysql2": "^3.20.0",
-    "next": "15.5.14",
+    "next": "15.5.15",
     "next-auth": "5.0.0-beta.30",
     "openapi3-ts": "^4.5.0",
     "pdf-parse": "^1.1.1",
