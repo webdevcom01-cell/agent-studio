@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { RuntimeContext } from "../types";
+import type { RuntimeContext } from "../../types";
 import type { FlowNode } from "@/types";
 
 // ── Shared mocks (hoisted so they apply to all handler imports) ───────────────

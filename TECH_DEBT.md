@@ -1,7 +1,7 @@
 # Tech Debt Baseline — agent-studio
 
-Last updated: 2026-03-27
-Baseline established after Phases 1–6 cleanup.
+Last updated: 2026-04-27
+Baseline established after Phases 1–6 cleanup. Knip baseline added 2026-04-27.
 
 ---
 
@@ -33,7 +33,47 @@ Result: **0 errors** (baseline established 2026-03-27, confirmed after full clea
 Run: `pnpm knip:ci`
 Requires: `pnpm install` (knip v5 added as devDependency)
 
-Not yet baselined — run after first `pnpm install` to establish baseline.
+See baseline section below for current numbers.
+
+---
+
+## Knip Baseline (2026-04-27)
+
+Run: `pnpm knip` | knip v5.88.1
+
+| Category | Count |
+|----------|-------|
+| Unused exports (values + functions) | 44 |
+| Unused exported types | 43 |
+| **Total unused exports** | **87** |
+| Unused files | 8 |
+| Unused dependencies (prod) | 12 |
+| Unused devDependencies | 6 |
+| **Total unused dependencies** | **18** |
+
+### Known False Positives — do not act on these
+
+- **`@radix-ui/*` (7 packages)** — consumed through `src/components/ui/` barrel re-exports; knip cannot trace through them. The associated unused export warnings (`DialogClose`, `DropdownMenuGroup`, `CardFooter`, etc.) are the same root cause.
+- **`tailwindcss`** — consumed by PostCSS/build config, not imported in JS files.
+- **`eslint` + `eslint-config-next`** — used by the editor and build pipeline, not by `import` statements.
+
+### Real Bug — fix before next release
+
+- **Unresolved import** in `src/lib/runtime/handlers/__tests__/schema-drift-empty-data.test.ts:13` — `../types` does not resolve. This test may be silently skipped or broken.
+
+### Files Flagged for Investigation
+
+These three files are fully unused (no importers found anywhere) and are candidates for deletion or revival:
+
+| File | Risk | Action needed |
+|------|------|---------------|
+| `src/lib/cache/index.ts` | High — a cache module with zero consumers suggests abandoned mid-impl or its consumer was deleted | Investigate before next feature work that touches caching |
+| `src/lib/security/index.ts` | Medium — security utilities that nothing calls | Review contents; delete or wire up |
+| `src/lib/session/session-tracker.ts` | Medium — session tracking with no consumers | Review contents; delete or wire up |
+
+### Budget Rule
+
+Knip count must not grow between quarterly scans. New dead code findings must be resolved or explicitly documented here with a justification.
 
 ---
 

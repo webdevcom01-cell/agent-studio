@@ -1,6 +1,5 @@
 /**
- * Tests for git-node-handler — focusing on sanitizeBranchName()
- * which was the root cause of git pipeline failures.
+ * Tests for git-node-handler — sanitizeBranchName() and workingDir template resolution.
  *
  * The SDLC orchestrator passes {{taskSummary}} into the branch field,
  * producing strings like:
@@ -9,8 +8,113 @@
  * `git checkout -B` to fail with a fatal error.
  */
 
-import { describe, it, expect } from "vitest";
-import { sanitizeBranchName } from "../git-node-handler";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { sanitizeBranchName, gitNodeHandler } from "../git-node-handler";
+import type { RuntimeContext } from "../../types";
+
+// ── Module mocks ──────────────────────────────────────────────────────────────
+// vi.mock() is hoisted before imports — use vi.hoisted() to share state with factories.
+
+const { mockExecFile, mockExistsSync } = vi.hoisted(() => ({
+  mockExecFile: vi.fn().mockResolvedValue({ stdout: "", stderr: "" }),
+  mockExistsSync: vi.fn(() => false),
+}));
+
+vi.mock("node:child_process", () => ({
+  execFile: (...args: unknown[]) => mockExecFile(...args),
+}));
+
+vi.mock("node:util", () => ({
+  // promisify(execFile) → execFile is already a mock that returns a Promise
+  promisify: (fn: unknown) => fn,
+}));
+
+vi.mock("node:fs", () => ({
+  existsSync: (...args: unknown[]) => mockExistsSync(...args),
+}));
+
+vi.mock("@/lib/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+// Mock global fetch so token-check doesn't hit network
+const mockFetch = vi.fn();
+vi.stubGlobal("fetch", mockFetch);
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function makeNode(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "node-git",
+    type: "git_node",
+    data: {
+      workingDir: "/tmp/sdlc",
+      branch: "feat/test",
+      commitMessage: "chore: test commit",
+      operations: ["checkout_branch", "add", "commit"],
+      outputVariable: "gitResult",
+      nextNodeId: "next",
+      onErrorNodeId: "error",
+      prRepo: "owner/repo",
+      ...overrides,
+    },
+  };
+}
+
+function makeContext(variables: Record<string, unknown> = {}): RuntimeContext {
+  return {
+    agentId: "agent-1",
+    conversationId: "conv-1",
+    variables,
+    history: [],
+    nodes: [],
+    edges: [],
+  } as unknown as RuntimeContext;
+}
+
+// ── gitNodeHandler workingDir template resolution ─────────────────────────────
+
+describe("gitNodeHandler — workingDir template resolution", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockExistsSync.mockReturnValue(false);
+    // All git subcommands succeed by default
+    mockExecFile.mockResolvedValue({ stdout: "", stderr: "" });
+    // Mock GitHub token validation (used in push — not needed for commit-only tests)
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ login: "bot" }) });
+    process.env.GITHUB_TOKEN = "ghp_testtoken";
+    process.env.GIT_REPO = "owner/repo";
+  });
+
+  it("resolves {{slug}} and {{runId}} in workingDir before running git", async () => {
+    const ctx = makeContext({ slug: "status-badge", runId: "e9a4b7c2" });
+
+    await gitNodeHandler(
+      makeNode({ workingDir: "/tmp/sdlc-{{slug}}-{{runId}}" }) as never,
+      ctx,
+    );
+
+    // Every execFile call's cwd option must be the resolved path
+    const cwds = mockExecFile.mock.calls.map(
+      (call) => (call[2] as { cwd?: string })?.cwd,
+    );
+    expect(cwds.every((cwd) => cwd === "/tmp/sdlc-status-badge-e9a4b7c2")).toBe(true);
+    expect(cwds.some((cwd) => cwd?.includes("{{"))).toBe(false);
+  });
+
+  it("leaves a literal path unchanged when no template vars are present", async () => {
+    const ctx = makeContext({});
+
+    await gitNodeHandler(makeNode({ workingDir: "/tmp/sdlc" }) as never, ctx);
+
+    const cwds = mockExecFile.mock.calls.map(
+      (call) => (call[2] as { cwd?: string })?.cwd,
+    );
+    expect(cwds.every((cwd) => cwd === "/tmp/sdlc")).toBe(true);
+  });
+});
+
+// ── sanitizeBranchName ────────────────────────────────────────────────────────
 
 describe("sanitizeBranchName", () => {
   it("passes through a clean branch name unchanged", () => {

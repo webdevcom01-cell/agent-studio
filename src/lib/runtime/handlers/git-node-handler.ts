@@ -51,7 +51,8 @@ interface PRResult {
 
 export const gitNodeHandler: NodeHandler = async (node, context) => {
   // Resolve working directory — prefer /tmp/sdlc if it exists (SDLC pipeline writes there)
-  const configuredDir = (node.data.workingDir as string) || process.cwd();
+  const rawWorkingDir = (node.data.workingDir as string) || process.cwd();
+  const configuredDir = interpolateVariables(rawWorkingDir, context.variables);
   const workingDir =
     configuredDir === process.cwd() && existsSync(join(SDLC_TMP, "src"))
       ? SDLC_TMP

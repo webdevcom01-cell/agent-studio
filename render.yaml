@@ -3,7 +3,7 @@ services:
     name: agent-studio
     runtime: node
     buildCommand: pnpm install && pnpm db:generate && pnpm build
-    startCommand: pnpm db:push && node .next/standalone/server.js
+    startCommand: pnpm prisma migrate deploy && node .next/standalone/server.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
