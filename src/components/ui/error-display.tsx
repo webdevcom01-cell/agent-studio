@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
+import { logger } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -19,8 +20,7 @@ export function ErrorDisplay({
 }: ErrorDisplayProps): React.ReactElement {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") {
-      // eslint-disable-next-line no-console
-      console.error(error);
+      logger.error("Component error", error);
     }
   }, [error]);
 

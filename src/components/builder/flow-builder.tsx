@@ -104,6 +104,7 @@ import { AgentMCPSelector } from "@/components/mcp/agent-mcp-selector";
 import type { FlowContent, FlowNode } from "@/types";
 import type { NodeTypes as ReactFlowNodeTypes } from "@xyflow/react";
 import { cn } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 interface FlowBuilderProps {
   agentId: string;
@@ -541,8 +542,7 @@ function FlowBuilderCanvas({
       }
     } catch (error) {
       if (process.env.NODE_ENV === "development") {
-        // eslint-disable-next-line no-console
-        console.error("Save failed:", error);
+        logger.error("Save failed", error);
       }
     } finally {
       setIsSaving(false);
