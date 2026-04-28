@@ -20,7 +20,13 @@
       "Bash(pnpm db:migrate:*)",
       "Bash(pnpm install:*)",
       "Bash(grep:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(pnpm knip *)",
+      "Bash(npx tsc *)",
+      "Bash(pnpm prisma *)",
+      "Bash(psql *)",
+      "Bash(git fetch *)",
+      "Bash(gh pr *)"
     ]
   }
 }
