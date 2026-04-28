@@ -28,11 +28,11 @@
 ## 🟡 SLEDEĆA NEDELJA (Sprint 3: 12. – 16. maj 2026)
 > Max 5 stavki. P1 = važni za kvalitet agenata i Faza 1 pripremu.
 
-- [ ] **AGENT-03** Code Gen Agent — PR Gate score 43/48. Implementovati `project_context` i `sandbox_verify` node types per AGENT-IMPROVEMENT-PLAN.md.
+- ✅ **AGENT-03** (2026-04-28) Code Gen Agent — `project_context` i `sandbox_verify` node tipovi kompletni. Handlers, UI, validators, property panel, node-picker. 21/21 testova zeleni, TypeScript clean.
 - ✅ **DEBT-05** (2026-04-28) ESLint suppressions — 2x no-console zamenjeno sa logger.error. Ostalo 11 legitimnih suppressiona (react-hooks, no-constant-condition, no-img-element).
-- [ ] **DEBT-06** Knip unused exports — Posle baselineа (DEBT-01), postupno uklanjati unused code. Fokus na top 10 najlakših.
+- ✅ **DEBT-06** (2026-04-28) Knip unused exports — 10 unused exports uklonjeni iz 8 fajlova (-17 linija). UI barrel re-exports, resetEnvCache, resetRateLimits, EXPORT_COOLDOWN_MS. TypeScript clean, commit 1d245a2.
 - ✅ **INFRA-03** (2026-04-28) Vercel verifikacija — Railway je jedina aktivna produkcija. Vercel registrovan ali output:standalone konflikt. Scheduled flows cron ostavljen za kasniji sprint.
-- [ ] **SEC-05** AuditLog proširiti — Doplatiti `AuditLog` table za admin akcije (user management, org changes). Trenutno loguje samo MCP tool denials i flow executions.
+- ✅ **SEC-05** (2026-04-28) AuditLog admin akcije — writeAuditLog dodat u 4 rute: org.member.remove, org.member.add, org.invite.send, org.approval.respond. Typed wrappers, fire-and-forget, TypeScript clean. Commit 69db316.
 
 ---
 
@@ -143,3 +143,12 @@
 > Završeno: GIT-03, SEC-07 (9 Dependabot PRs), DEBT-02 (E2E CI), ENV-01 (Redis), SEC-06 (OAuth encryption).
 > Blokiralo: #66 pnpm-lock.yaml conflict → zatvoren, Dependabot će recreirati.
 > Išlo glatko: Redis setup via brew, OAuth encryption već bila skoro kompletna (samo key nedostajao).
+
+---
+
+### Sprint 3 Retrospektiva — 28. apr 2026
+
+> **Rezultat: 5/5 ✅ Sve završeno u jednom danu.**
+> Završeno: AGENT-03 (project_context + sandbox_verify node tipovi, 21/21 testova), SEC-05 (AuditLog admin akcije, 4 rute), DEBT-06 (Knip -17 linija), DEBT-05 (ESLint no-console → logger), INFRA-03 (Vercel verifikacija).
+> Blokiralo: Ništa — sprint prošao glatko.
+> Išlo glatko: Oba nova node tipa su bila skoro kompletna, samo verifikacija i test run. SEC-05 koristio postojeće typed wrappers iz audit.ts.
