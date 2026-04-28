@@ -22,7 +22,3 @@ export function checkRateLimit(
     );
   }
 }
-
-export function resetRateLimits(): void {
-  // In-memory store is cleared via stopCleanup() in the core module
-}

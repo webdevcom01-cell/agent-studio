@@ -17,7 +17,6 @@ export interface ExportData {
   exportedAt: string;
 }
 
-const EXPORT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 export async function generateUserExport(userId: string): Promise<ExportData> {
   const user = await prisma.user.findUniqueOrThrow({
@@ -101,4 +100,3 @@ export async function generateUserExport(userId: string): Promise<ExportData> {
   };
 }
 
-export { EXPORT_COOLDOWN_MS };

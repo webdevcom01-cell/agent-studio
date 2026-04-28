@@ -127,7 +127,3 @@ export function getEnv(): Env {
   }
   return cached;
 }
-
-export function resetEnvCache(): void {
-  cached = null;
-}
