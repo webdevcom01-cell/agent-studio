@@ -53,7 +53,7 @@
   - ✅ Batch 2: Deploy Decision Agent (thresholds), Doc Updater Agent (files checklist), Frontend Developer Agent (scope boundary), Refactor Cleaner (before/after format)
   - ✅ Batch 3: API Tester Agent (assertion schema), Build Error Resolver (escalation), CI/CD Pipeline Generator (platform config), Code Generation Agent (output format), Architecture Decision Agent (trade-off schema)
   - ✅ Batch 4: Performance Regression Detector (SLA thresholds), Python Reviewer (output schema), Product Discovery Agent (PRD schema), Reality Checker Agent (verdict schema)
-- [ ] **AGENT-02** 11 agenata "Critical Gaps" — Refaktorisati ili obrisati. Proceniti koji imaju business value.
+- ✅ **AGENT-02** (2026-04-28) 11 agenata "Critical Gaps" — Sve rešeno: 5 obrisanih (PR Gate, Security Audit Pipeline, FAQ, Visual Storyteller, Web Browser), 3 rewritovana (Bug Detection 17K, Test Engineering 17K, TDD Workflow 15K), 3 već uredna sa role tag-om.
 - [ ] **AGENT-04** Swarm Security Analyst flagship — 67/70. Ostale 2 poene: poboljšati cost estimation i cross-agent deduplication.
 - [ ] **AGENT-05** SDLC-AGENTS-PLAN.md faze 0-9 — Sve faze "Pending". Infra je kompletna, treba pokrenuti implementaciju 4 nova agenta + 3 upgrade-a.
 
