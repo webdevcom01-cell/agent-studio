@@ -1,4 +1,4 @@
 mcp[cli]>=1.9.0
 asyncpg>=0.30.0
 starlette>=0.45.0
-uvicorn>=0.34.0
+uvicorn>=0.46.0
