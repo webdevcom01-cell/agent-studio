@@ -5,7 +5,7 @@ import { requireOrgAdmin, isAuthError } from "@/lib/api/auth-guard";
 import { sendEmail } from "@/lib/email/client";
 import { randomBytes } from "node:crypto";
 import { logger } from "@/lib/logger";
-import { writeAuditLog } from "@/lib/security/audit";
+import { auditOrgInviteSend } from "@/lib/security/audit";
 
 interface RouteParams {
   params: Promise<{ orgId: string }>;
@@ -94,13 +94,7 @@ export async function POST(
 
     logger.info("Invitation sent", { orgId, email, role });
 
-    void writeAuditLog({
-      userId: authResult.userId,
-      action: "CREATE",
-      resourceType: "org_invitation",
-      resourceId: invitation.id,
-      after: { email, role, orgId, expiresAt },
-    });
+    auditOrgInviteSend(authResult.userId, orgId, invitation.id, email, role);
 
     return NextResponse.json({
       success: true,

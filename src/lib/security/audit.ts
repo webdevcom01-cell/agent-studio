@@ -240,6 +240,36 @@ export function auditOrgRoleChange(
   }).catch(() => {});
 }
 
+export function auditOrgInviteSend(
+  actorUserId: string,
+  orgId: string,
+  invitationId: string,
+  email: string,
+  role: string,
+  req?: RequestContext,
+): void {
+  writeAuditLog({
+    userId: actorUserId, action: "CREATE", resourceType: "OrgInvitation",
+    resourceId: invitationId,
+    after: { orgId, email, role }, ipAddress: req?.ip, userAgent: req?.userAgent,
+  }).catch(() => {});
+}
+
+export function auditOrgApprovalRespond(
+  actorUserId: string,
+  requestId: string,
+  decision: string,
+  response?: string,
+  req?: RequestContext,
+): void {
+  writeAuditLog({
+    userId: actorUserId, action: "UPDATE", resourceType: "HumanApprovalRequest",
+    resourceId: requestId,
+    before: { status: "pending" }, after: { decision, response: response ?? null },
+    ipAddress: req?.ip, userAgent: req?.userAgent,
+  }).catch(() => {});
+}
+
 // ── Skill RBAC ────────────────────────────────────────────────────────────────
 
 export function auditSkillAccess(

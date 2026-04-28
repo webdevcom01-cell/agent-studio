@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
-import { writeAuditLog } from "@/lib/security/audit";
+import { auditOrgMemberAdd } from "@/lib/security/audit";
 
 interface RouteParams {
   params: Promise<{ token: string }>;
@@ -78,13 +78,7 @@ export async function POST(
       role: invitation.role,
     });
 
-    void writeAuditLog({
-      userId: authResult.userId,
-      action: "CREATE",
-      resourceType: "org_member",
-      resourceId: invitation.organizationId,
-      after: { userId: authResult.userId, role: invitation.role, via: "invitation" },
-    });
+    auditOrgMemberAdd(authResult.userId, invitation.organizationId, authResult.userId, invitation.role);
 
     return NextResponse.json({
       success: true,
