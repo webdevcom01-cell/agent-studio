@@ -3,7 +3,7 @@ import { resolveTemplate } from "../template";
 import { callMCPTool } from "@/lib/mcp/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { auditMCPToolCall } from "@/lib/security/audit";
+import { auditMCPToolCall, writeAuditLog } from "@/lib/security/audit";
 import { enforceSkillAccess, RBACError } from "@/lib/security/rbac";
 import { isECCEnabled } from "@/lib/ecc/feature-flag";
 import { validateMCPInputArgs, validateNamedSchema } from "@/lib/mcp/schema-validator";
@@ -45,6 +45,13 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
       toolName,
       reason: accessCheck.reason,
     });
+    writeAuditLog({
+      userId: context.userId,
+      action: "ACCESS_DENIED",
+      resourceType: "MCPTool",
+      resourceId: `${mcpServerId}:${toolName}`,
+      after: { agentId: context.agentId, reason: accessCheck.reason },
+    }).catch(() => {});
     return {
       messages: [],
       nextNodeId: null,
@@ -83,6 +90,13 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
           userId: context.userId,
           organizationId: agentOrg.organizationId,
         });
+        writeAuditLog({
+          userId: context.userId,
+          action: "ACCESS_DENIED",
+          resourceType: "MCPTool",
+          resourceId: `${mcpServerId}:${toolName}`,
+          after: { agentId: context.agentId, reason: "User does not have org membership" },
+        }).catch(() => {});
         return {
           messages: [{ role: "assistant", content: "[Error: Access denied — User does not have org membership to invoke tools for this agent]" }],
           nextNodeId: null,
