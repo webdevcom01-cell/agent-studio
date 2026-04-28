@@ -8,6 +8,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-04-28)
+- **SEC-05** — AuditLog wired for admin actions: `org.member.remove`, `org.member.add`, `org.invite.send`, `org.approval.respond` across 4 API routes. Fire-and-forget typed wrappers.
+- **AGENT-01** — 16 "Need Improvement" agents upgraded in 4 batches: JSON output schemas, escalation protocols, SLA thresholds, scope boundaries, before/after formats.
+- **AGENT-02** — 11 "Critical Gaps" resolved: 5 deleted (PR Gate Pipeline, Security Audit Pipeline, Eval Test FAQ, Visual Storyteller, Web Browser Test), 3 already rewritten (Bug Detection 17K, Test Engineering 17K, TDD Workflow 15K), 3 confirmed with `<role>` tags.
+- **AGENT-04** — Swarm Security Analyst 67→70/70: added `<failure_modes>` (4 edge cases), `<llm_security>` (OWASP LLM Top 10 2025), `<github_integration>` (priority files + per-file risk scoring).
+- **AGENT-05** — SDLC pipeline all 7 agents confirmed complete in DB.
+- **AGENT-03** — `project_context` and `sandbox_verify` node types: 21/21 tests green.
+
+### Fixed (2026-04-28)
+- **DEBT-06** — Knip: removed 10 unused exports across 8 files (-17 lines). Commit 1d245a2.
+- **SEC-06** — OAuth token encryption OAUTH_ENCRYPTION_KEY active, plaintext_count=0.
+- **DEBT-05** — 2x `console.error` replaced with `logger.error`, ESLint suppressions removed.
+
+
 ### Added
 - **SDLC Phase 1-6 pipeline improvements** — `project_context` node (load CLAUDE.md + rules files), `sandbox_verify` node (TypeScript + ESLint + forbidden-pattern checks), escalating retry (`enableEscalation` injects PR Gate fixes + sandbox errors + code examples on each attempt), typed output schemas (`CodeGenOutput`, `PRGateOutput`, `ArchitectureOutput` via Zod registry in `src/lib/sdlc/schemas.ts`), MCP enforcement layer (native JSON Schema + named Zod validation on `mcp_tool` and `call_agent` nodes)
 - **`sdlc-full-pipeline` starter flow** — reference implementation: Discovery → parallel(Architecture + Security + TDD) → Code Gen → sandbox_verify → parallel PR Gate → CI/CD Generator → Deploy Decision

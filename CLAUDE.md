@@ -54,7 +54,7 @@ OAuth login (GitHub + Google).
 ## 4. KEY PATTERNS (summary)
 
 ### Runtime Engine
-- 62 node handlers in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants)
+- 67 node handlers in `src/lib/runtime/handlers/index.ts` (+ 2 streaming variants)
 - Safety limits: MAX_ITERATIONS=50, MAX_HISTORY=100
 - Handlers return `ExecutionResult`, never throw — always graceful fallback
 

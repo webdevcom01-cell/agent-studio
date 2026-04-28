@@ -39,7 +39,7 @@
 ## 🟢 BACKLOG (prioritizovano po kategoriji)
 
 ### 🔒 Sigurnost & Compliance
-- [ ] **SEC-08** `SENTRY_DSN` setup — Sentry za production error tracking (zasebno od OTEL tracing-a). Optional ali preporučeno za Faza 1.
+- ⏸️ **SEC-08** Sentry DSN — Kod 100% spreman (sentry.server/client/edge config, PII redaction, @sentry/nextjs v9.47.1). Čeka samo DSN string. Odgođeno za Faza 1.
 
 ### 🚀 SaaS Migracija (Faza 1 → Oktobar 2026)
 - [ ] **SAAS-02** Stripe Billing infrastruktura — Faza 5 target. Subscription model: Free/Pro/Enterprise. Metering po broju executions.
@@ -54,11 +54,11 @@
   - ✅ Batch 3: API Tester Agent (assertion schema), Build Error Resolver (escalation), CI/CD Pipeline Generator (platform config), Code Generation Agent (output format), Architecture Decision Agent (trade-off schema)
   - ✅ Batch 4: Performance Regression Detector (SLA thresholds), Python Reviewer (output schema), Product Discovery Agent (PRD schema), Reality Checker Agent (verdict schema)
 - ✅ **AGENT-02** (2026-04-28) 11 agenata "Critical Gaps" — Sve rešeno: 5 obrisanih (PR Gate, Security Audit Pipeline, FAQ, Visual Storyteller, Web Browser), 3 rewritovana (Bug Detection 17K, Test Engineering 17K, TDD Workflow 15K), 3 već uredna sa role tag-om.
-- [ ] **AGENT-04** Swarm Security Analyst flagship — 67/70. Ostale 2 poene: poboljšati cost estimation i cross-agent deduplication.
-- [ ] **AGENT-05** SDLC-AGENTS-PLAN.md faze 0-9 — Sve faze "Pending". Infra je kompletna, treba pokrenuti implementaciju 4 nova agenta + 3 upgrade-a.
+- ✅ **AGENT-04** (2026-04-28) Swarm Security Analyst 67→70/70. Dodato: failure_modes (4 edge cases), LLM Top10 2025 (LLM01/02/03/06/09), GitHub integration patterns. 22K→24.9K chars. Commit fd8a6f0.
+- ✅ **AGENT-05** (2026-04-28) SDLC pipeline agenti — svi 7 već implementirani: SDLC Pipeline Orchestrator (18K), SDLC Autonomous Pipeline (10K), Product Discovery (14K), Deploy Decision (14K) + 3 upgrade-a. Plan iz marta izvršen.
 
 ### ⚙️ Infrastruktura & DevOps
-- [ ] **INFRA-04** pgvector 0.8.2 upgrade plan — Pratiti Railway PostgreSQL + pgvector kompatibilnost pri future Postgres upgrades.
+- 👁️ **INFRA-04** pgvector monitoring — vector(1536) aktivan u Prisma schema. Pratiti Railway Postgres upgrade najave. Akcija samo pri breaking change. Nije hitno.
 - ✅ **INFRA-05** (2026-04-28) Docker Compose verifikacija — sve OK. app, worker, postgres, redis, migrate, ecc-mcp sve konfigurisano. Dockerfile ima sve targete.
 
 ---
