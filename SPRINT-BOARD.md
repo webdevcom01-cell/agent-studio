@@ -17,22 +17,14 @@
 ## 🔴 OVA NEDELJA (Sprint: 28. apr – 2. maj 2026)
 > Max 5 stavki. P0 = blokiraju produkcijsku sigurnost ili CI/CD.
 
-- [ ] **SEC-01** `ADMIN_USER_IDS` — Setovati u Railway env vars i lokalno u `.env.local`. Bez toga nema zaštite admin endpointa. → `src/app/api/admin/*/route.ts`
-- [ ] **SEC-02** `CRON_SECRET` — Generisati (`openssl rand -hex 32`), dodati u Railway + lokalno. Bez toga `/api/cron/*` je javno dostupan.
-- [ ] **GIT-01** Merge `fix/git-node-template-resolution` → `main` — Grana je gotova, stoji nemergovana. PR + squash merge + delete branch.
 - [ ] **GIT-02** Merge `fix/human-approval-conversational-fallback` → `main` — Isto kao GIT-01.
-- [ ] **DEP-01** Axios CVE Dependabot PR — Review + merge Dependabot PR za axios (kritična ranjivost). Proveriti da li postoje i drugi critical CVE Dependabot PRs.
 
 ---
 
 ## 🟡 SLEDEĆA NEDELJA (Sprint: 5. – 9. maj 2026)
 > Max 5 stavki. P1 = važni za stabilnost, kvalitet ili Faza 0 SaaS kriterijume.
 
-- [ ] **SEC-03** RBAC enforcement u `mcp-tool-handler` — Dodati proveru organizacijske role pre tool poziva. Faza 0 acceptance kriterijum. → `src/lib/mcp-tool-handler.ts`
-- [ ] **INFRA-01** Railway ECC `numReplicas: 2` — Verifikovati railway.json konfiguraciju. Faza 0 acceptance kriterijum za HA.
-- [ ] **DEBT-01** Knip baseline — Pokrenuti `pnpm knip`, zabeležiti broj unused exports u TECH_DEBT.md. Neće se popraviti odmah — samo baseline.
 - [ ] **ENV-01** `REDIS_URL` lokalno — Odkomentarisati u `.env.local`, pokrenuti Redis lokalno ili koristiti Upstash. BullMQ bez Redisa → silent fail.
-- [ ] **CLEANUP-01** Obrisati 15 dummy/test agenata — Pokrenuti SQL iz AGENT-EVAL-RESULTS.md. Smanjuje noise u UI i troškove storage-a.
 
 ---
 
@@ -42,8 +34,7 @@
 - [ ] **SEC-04** `SENTRY_DSN` + `OTEL_EXPORTER_OTLP_ENDPOINT` — Setovati za production error tracking i tracing. Faza 0 kriterijum.
 - [ ] **SEC-05** AuditLog proširiti — Doplatiti `AuditLog` table za sve admin akcije. Trenutno underused. Faza 0 kriterijum.
 - [ ] **SEC-06** OAuth token encryption migracija — `tokensEncrypted: Boolean` polje u schema.prisma je već tu. Implementirati zero-downtime encrypt/decrypt. → `prisma/schema.prisma`
-- [ ] **SEC-07** Pregled svih Dependabot PRs (7 pending) — Remaining 6 PRs posle DEP-01. Review + merge ili dismiss sa razlogom.
-- [ ] **INFRA-02** Render.yaml fix — `pnpm db:push` zameniti sa `prisma migrate deploy` u `startCommand`. Produkcijski rizik pri svakom deployu.
+- [ ] **SEC-07** Pregled svih Dependabot PRs (remaining) — Ostali Dependabot PRs posle DEP-01. Review + merge ili dismiss sa razlogom.
 
 ### 🚀 SaaS Migracija (Faza 0 → Oktobar 2026)
 - [ ] **SAAS-01** Faza 0 Acceptance Criteria — Sva 4 kriterijuma moraju biti green pre prelaska na Faza 1: ECC HA, RBAC, AuditLog, OTEL.
@@ -55,20 +46,18 @@
 ### 🤖 Kvalitet Agenata
 - [ ] **AGENT-01** 16 agenata "Need Improvement" — Poboljšati prema scoring rubric iz AGENT-EVAL-RESULTS.md. Fokus na system prompt kvalitet i tool selection.
 - [ ] **AGENT-02** 11 agenata "Critical Gaps" — Refaktorisati ili obrisati. Proceniti koji imaju business value.
-- [ ] **AGENT-03** Code Gen Agent — PR Gate score 43/48. Implementovati `project_context` i `sandbox_verify` node typs per AGENT-IMPROVEMENT-PLAN.md.
+- [ ] **AGENT-03** Code Gen Agent — PR Gate score 43/48. Implementovati `project_context` i `sandbox_verify` node types per AGENT-IMPROVEMENT-PLAN.md.
 - [ ] **AGENT-04** Swarm Security Analyst flagship — 67/70. Ostale 2 poene: poboljšati cost estimation i cross-agent deduplication.
 - [ ] **AGENT-05** SDLC-AGENTS-PLAN.md faze 0-9 — Sve faze "Pending". Infra je kompletna, treba pokrenuti implementaciju 4 nova agenta + 3 upgrade-a.
 
 ### 🏗 Tehnički Dug
 - [ ] **DEBT-02** E2E testovi CI automatizacija — Trenutno samo `workflow_dispatch` (manuelno). Dodati na pull_request trigger. → `.github/workflows/ci.yml`
-- [ ] **DEBT-03** 5 lokalne grane — Pregledati i ili mergovati ili obrisati: `feat/execution-context-v2`, `feat/memory-architecture-v2`, `feat/multi-provider-llm`, `feat/notification-system`, `feat/advanced-capabilities`.
-- [ ] **DEBT-04** `_tmp_*` fajlovi — Obrisati sve `_tmp_*` fajlove iz root direktorijuma.
 - [ ] **DEBT-05** ESLint suppressions audit — 11 `eslint-disable` komentara. Proveriti da li su još relevantni ili se mogu ukloniti.
 - [ ] **DEBT-06** Knip unused exports — Posle baselineа (DEBT-01), postupno uklanjati unused code.
 
 ### ⚙️ Infrastruktura & DevOps
 - [ ] **INFRA-03** Vercel deployment verifikacija — Proveriti da li je Vercel connected i properly configured kao secondary target.
-- [ ] **INFRA-04** pgvector 0.8.2 upgrade plan — Pratiti Railway Railway PostgreSQL + pgvector kompatibilnost pri future Postgres upgrades.
+- [ ] **INFRA-04** pgvector 0.8.2 upgrade plan — Pratiti Railway PostgreSQL + pgvector kompatibilnost pri future Postgres upgrades.
 - [ ] **INFRA-05** Docker Compose za lokalni dev — Verifikovati da `docker-compose.yml` pokreće sve servise (DB + Redis) bez manuelnih koraka.
 
 ---
@@ -76,7 +65,33 @@
 ## ✅ DONE (ovaj sprint)
 > Pomeri ovde završene stavke sa datumom.
 
-_(Prazno — prvi sprint počinje 28. aprila 2026)_
+### Sprint 1 — 28. apr 2026
+
+**Iz Ova nedelja:**
+- ✅ **SEC-01** (2026-04-28) `ADMIN_USER_IDS` — Setovano u Railway env vars i lokalno u `.env.local`.
+- ✅ **SEC-02** (2026-04-28) `CRON_SECRET` — Generisan i dodat u Railway + lokalno.
+- ✅ **DEP-01** (2026-04-28) Axios CVE Dependabot PR — Reviewovan i mergovan.
+- ✅ **GIT-01** (2026-04-28) Merge `fix/git-node-template-resolution` → `main` — PR + squash merge + branch deleted.
+
+**Iz Sledeća nedelja:**
+- ✅ **SEC-03** (2026-04-28) RBAC enforcement u `mcp-tool-handler` — Organizacijska role provera implementirana. Faza 0 ✓
+- ✅ **INFRA-01** (2026-04-28) Railway ECC `numReplicas: 2` — Verifikovano, već aktivno. Faza 0 ✓
+- ✅ **DEBT-01** (2026-04-28) Knip baseline — Pokrenuto, baseline zabeležen u TECH_DEBT.md.
+- ✅ **CLEANUP-01** (2026-04-28) Obrisati 15 dummy/test agenata — SQL izvršen, agenti obrisani.
+
+**Iz Backlog:**
+- ✅ **INFRA-02** (2026-04-28) Render.yaml fix — `pnpm db:push` zamenjen sa `prisma migrate deploy` u `startCommand`.
+- ✅ **DEBT-03** (2026-04-28) 5 lokalnih grana — Pregledano, 5 grana obrisano.
+- ✅ **DEBT-04** (2026-04-28) `_tmp_*` fajlovi — Svi `_tmp_*` fajlovi obrisani iz root-a.
+
+**Bonus (van originalnog board-a):**
+- ✅ (2026-04-28) `NEXTAUTH_SECRET` dodat u Railway + `.env.local`
+- ✅ (2026-04-28) follow-redirects security fix mergovan
+- ✅ (2026-04-28) production-dependencies group (20 paketa) mergovan
+- ✅ (2026-04-28) dev-dependencies group (5 paketa) mergovan
+- ✅ (2026-04-28) vite 7.3.2 mergovan
+- ✅ (2026-04-28) xmldom 0.9.10 mergovan
+- ✅ (2026-04-28) Test bug fix: schema-drift-empty-data
 
 ---
 
@@ -84,11 +99,11 @@ _(Prazno — prvi sprint počinje 28. aprila 2026)_
 
 | Metrika | Cilj | Status |
 |---------|------|--------|
-| Ova nedelja završeno | 5/5 | 0/5 |
-| Sledeća nedelja ready | 5/5 | 5/5 ✓ |
-| Backlog veličina | < 30 | ~25 |
-| Faza 0 kriterijumi | 4/4 green | 0/4 |
-| Critical CVEs | 0 | TBD |
+| Ova nedelja završeno | 5/5 | 5/5 ✅ |
+| Sledeća nedelja ready | 5/5 | 1/5 (ENV-01) |
+| Backlog veličina | < 30 | ~20 |
+| Faza 0 kriterijumi | 4/4 green | 2/4 (RBAC ✅, ECC ✅, AuditLog ❌, OTEL ❌) |
+| Critical CVEs | 0 | 0 ✅ (axios fixed) |
 
 ---
 
