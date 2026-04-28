@@ -48,10 +48,11 @@
 - [ ] **SAAS-05** Faza 1: Agent Marketplace — Public agent catalog, clone/fork workflow, rating sistem.
 
 ### 🤖 Kvalitet Agenata
-- 🔄 **AGENT-01** 16 agenata "Need Improvement" — Poboljšati prema scoring rubric iz AGENT-EVAL-RESULTS.md. Fokus na system prompt kvalitet i tool selection.
-  - ✅ Batch 1 (2026-04-28): Planner Agent (output schema), Agent Studio Help (escalation protocol), Baidu SEO Specialist (audit JSON schema)
-  - ✅ Batch 2 (2026-04-28): Deploy Decision Agent (thresholds), Doc Updater Agent (files checklist), Frontend Developer Agent (scope boundary), Refactor Cleaner (before/after format)
-  - ✅ Batch 3 (2026-04-28): API Tester Agent (assertion schema), Build Error Resolver (escalation), CI/CD Pipeline Generator (platform config), Code Generation Agent (output format), Architecture Decision Agent (trade-off schema)
+- ✅ **AGENT-01** (2026-04-28) 16 agenata "Need Improvement" — Sve poboljšane. 4 batcha, 16 agenata, structured output schemas + escalation protocols.
+  - ✅ Batch 1: Planner Agent (output schema), Agent Studio Help (escalation protocol), Baidu SEO Specialist (audit JSON schema)
+  - ✅ Batch 2: Deploy Decision Agent (thresholds), Doc Updater Agent (files checklist), Frontend Developer Agent (scope boundary), Refactor Cleaner (before/after format)
+  - ✅ Batch 3: API Tester Agent (assertion schema), Build Error Resolver (escalation), CI/CD Pipeline Generator (platform config), Code Generation Agent (output format), Architecture Decision Agent (trade-off schema)
+  - ✅ Batch 4: Performance Regression Detector (SLA thresholds), Python Reviewer (output schema), Product Discovery Agent (PRD schema), Reality Checker Agent (verdict schema)
 - [ ] **AGENT-02** 11 agenata "Critical Gaps" — Refaktorisati ili obrisati. Proceniti koji imaju business value.
 - [ ] **AGENT-04** Swarm Security Analyst flagship — 67/70. Ostale 2 poene: poboljšati cost estimation i cross-agent deduplication.
 - [ ] **AGENT-05** SDLC-AGENTS-PLAN.md faze 0-9 — Sve faze "Pending". Infra je kompletna, treba pokrenuti implementaciju 4 nova agenta + 3 upgrade-a.
