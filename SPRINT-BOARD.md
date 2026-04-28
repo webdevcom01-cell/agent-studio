@@ -29,9 +29,9 @@
 > Max 5 stavki. P1 = važni za kvalitet agenata i Faza 1 pripremu.
 
 - [ ] **AGENT-03** Code Gen Agent — PR Gate score 43/48. Implementovati `project_context` i `sandbox_verify` node types per AGENT-IMPROVEMENT-PLAN.md.
-- [ ] **DEBT-05** ESLint suppressions audit — 11 `eslint-disable` komentara. Proveriti da li su još relevantni ili se mogu ukloniti.
+- ✅ **DEBT-05** (2026-04-28) ESLint suppressions — 2x no-console zamenjeno sa logger.error. Ostalo 11 legitimnih suppressiona (react-hooks, no-constant-condition, no-img-element).
 - [ ] **DEBT-06** Knip unused exports — Posle baselineа (DEBT-01), postupno uklanjati unused code. Fokus na top 10 najlakših.
-- [ ] **INFRA-03** Vercel deployment verifikacija — Proveriti da li je Vercel connected i properly configured kao secondary target.
+- ✅ **INFRA-03** (2026-04-28) Vercel verifikacija — Railway je jedina aktivna produkcija. Vercel registrovan ali output:standalone konflikt. Scheduled flows cron ostavljen za kasniji sprint.
 - [ ] **SEC-05** AuditLog proširiti — Doplatiti `AuditLog` table za admin akcije (user management, org changes). Trenutno loguje samo MCP tool denials i flow executions.
 
 ---
@@ -55,7 +55,7 @@
 
 ### ⚙️ Infrastruktura & DevOps
 - [ ] **INFRA-04** pgvector 0.8.2 upgrade plan — Pratiti Railway PostgreSQL + pgvector kompatibilnost pri future Postgres upgrades.
-- [ ] **INFRA-05** Docker Compose za lokalni dev — Verifikovati da `docker-compose.yml` pokreće sve servise (DB + Redis) bez manuelnih koraka.
+- ✅ **INFRA-05** (2026-04-28) Docker Compose verifikacija — sve OK. app, worker, postgres, redis, migrate, ecc-mcp sve konfigurisano. Dockerfile ima sve targete.
 
 ---
 
