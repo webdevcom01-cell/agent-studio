@@ -92,6 +92,7 @@
 - ✅ (2026-04-28) vite 7.3.2 mergovan
 - ✅ (2026-04-28) xmldom 0.9.10 mergovan
 - ✅ (2026-04-28) Test bug fix: schema-drift-empty-data
+- ✅ (2026-04-28) AuditLog wired za RBAC denials u mcp-tool-handler (ACCESS_DENIED events) — Faza 0 AuditLog ✓
 
 ---
 
@@ -102,7 +103,7 @@
 | Ova nedelja završeno | 5/5 | 5/5 ✅ |
 | Sledeća nedelja ready | 5/5 | 1/5 (ENV-01) |
 | Backlog veličina | < 30 | ~20 |
-| Faza 0 kriterijumi | 4/4 green | 2/4 (RBAC ✅, ECC ✅, AuditLog ❌, OTEL ❌) |
+| Faza 0 kriterijumi | 4/4 green | 2/4 (RBAC ✅, ECC ✅, AuditLog ✅, OTEL ❌) |
 | Critical CVEs | 0 | 0 ✅ (axios fixed) |
 
 ---
