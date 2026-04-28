@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireOrgAdmin, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
+import { writeAuditLog } from "@/lib/security/audit";
 
 interface RouteParams {
   params: Promise<{ orgId: string; memberId: string }>;
@@ -44,6 +45,14 @@ export async function DELETE(
       orgId,
       memberId,
       removedUserId: member.userId,
+    });
+
+    void writeAuditLog({
+      userId: authResult.userId,
+      action: "DELETE",
+      resourceType: "org_member",
+      resourceId: memberId,
+      before: { userId: member.userId, role: member.role, organizationId: orgId },
     });
 
     return NextResponse.json({ success: true });

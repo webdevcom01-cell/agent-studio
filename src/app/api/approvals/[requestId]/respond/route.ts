@@ -4,6 +4,7 @@ import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { promoteInstinctToSkill } from "@/lib/ecc/instinct-engine";
+import { writeAuditLog } from "@/lib/security/audit";
 
 interface RouteParams {
   params: Promise<{ requestId: string }>;
@@ -85,6 +86,15 @@ export async function POST(
         }
       }
     }
+
+    void writeAuditLog({
+      userId: authResult.userId,
+      action: "UPDATE",
+      resourceType: "approval_request",
+      resourceId: requestId,
+      before: { status: "pending" },
+      after: { status: parsed.data.decision, response: parsed.data.response ?? null },
+    });
 
     return NextResponse.json({
       success: true,
