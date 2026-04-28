@@ -48,7 +48,9 @@
 - [ ] **SAAS-05** Faza 1: Agent Marketplace — Public agent catalog, clone/fork workflow, rating sistem.
 
 ### 🤖 Kvalitet Agenata
-- [ ] **AGENT-01** 16 agenata "Need Improvement" — Poboljšati prema scoring rubric iz AGENT-EVAL-RESULTS.md. Fokus na system prompt kvalitet i tool selection.
+- 🔄 **AGENT-01** 16 agenata "Need Improvement" — Poboljšati prema scoring rubric iz AGENT-EVAL-RESULTS.md. Fokus na system prompt kvalitet i tool selection.
+  - ✅ Batch 1 (2026-04-28): Planner Agent (output schema), Agent Studio Help (escalation protocol), Baidu SEO Specialist (audit JSON schema)
+  - ✅ Batch 2 (2026-04-28): Deploy Decision Agent (thresholds), Doc Updater Agent (files checklist), Frontend Developer Agent (scope boundary), Refactor Cleaner (before/after format)
 - [ ] **AGENT-02** 11 agenata "Critical Gaps" — Refaktorisati ili obrisati. Proceniti koji imaju business value.
 - [ ] **AGENT-04** Swarm Security Analyst flagship — 67/70. Ostale 2 poene: poboljšati cost estimation i cross-agent deduplication.
 - [ ] **AGENT-05** SDLC-AGENTS-PLAN.md faze 0-9 — Sve faze "Pending". Infra je kompletna, treba pokrenuti implementaciju 4 nova agenta + 3 upgrade-a.
