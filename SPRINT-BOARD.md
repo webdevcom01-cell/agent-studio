@@ -17,8 +17,8 @@
 ## 🔴 OVA NEDELJA (Sprint 2: 5. – 9. maj 2026)
 > Max 5 stavki. P0/P1 = blokiraju stabilnost ili Faza 1 SaaS pripremu.
 
-- [ ] **ENV-01** `REDIS_URL` lokalno — Odkomentarisati u `.env.local`, pokrenuti Redis lokalno ili koristiti Upstash. BullMQ bez Redisa → silent fail u lokalnom dev-u.
-- [ ] **SEC-06** OAuth token encryption migracija — `tokensEncrypted: Boolean` polje u schema.prisma je već tu. Implementirati zero-downtime encrypt/decrypt. → `prisma/schema.prisma`
+- ✅ **ENV-01** (2026-04-28) Redis lokalno — brew install redis, PONG potvrđen, BullMQ konekcija OK (Redis 8.6.2).
+- ✅ **SEC-06** (2026-04-28) OAuth token encryption — OAUTH_ENCRYPTION_KEY generisan, dodat lokalno i na Railway. plaintext_count=0, migracija nije potrebna.
 - ✅ **DEBT-02** (2026-04-28) E2E CI automatizacija — github.event_name == 'push' dodat u ci.yml. E2E sada radi na svakom push na main.
 - ✅ **SEC-07** (2026-04-28) Dependabot PRs — mergováno: #51, #50, #48, #65, #59, #60, #61, #62, #46. Zatvoreno: #66 (pnpm-lock conflict).
 - ✅ **GIT-03** (2026-04-28) Stale remote grane obrisane — fix/git-node-template-resolution, sdlc/* već bile obrisane ili uklonjene.
@@ -134,3 +134,12 @@
 ---
 
 *SPRINT-BOARD.md kreiran: 2026-04-27 | Sprint 1 zatvoren: 2026-04-28 | Sledeći Monthly Review: poslednji petak maja 2026*
+
+---
+
+### Sprint 2 Retrospektiva — 28. apr 2026
+
+> **Rezultat: 5/5 ✅ Sve završeno u jednom danu.**
+> Završeno: GIT-03, SEC-07 (9 Dependabot PRs), DEBT-02 (E2E CI), ENV-01 (Redis), SEC-06 (OAuth encryption).
+> Blokiralo: #66 pnpm-lock.yaml conflict → zatvoren, Dependabot će recreirati.
+> Išlo glatko: Redis setup via brew, OAuth encryption već bila skoro kompletna (samo key nedostajao).
