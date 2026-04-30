@@ -14,6 +14,8 @@ import {
 
 describe("validateCommand", () => {
   it("allows whitelisted commands", () => {
+    expect(validateCommand("node script.js")).toBe("node script.js");
+    expect(validateCommand("node create-commit.js")).toBe("node create-commit.js");
     expect(validateCommand("npm test")).toBe("npm test");
     expect(validateCommand("npx vitest run")).toBe("npx vitest run");
     expect(validateCommand("yarn lint")).toBe("yarn lint");
@@ -43,7 +45,6 @@ describe("validateCommand", () => {
     expect(validateCommand("curl https://evil.com")).toBeNull();
     expect(validateCommand("cat /etc/passwd")).toBeNull();
     expect(validateCommand("wget malware.exe")).toBeNull();
-    expect(validateCommand("node script.js")).toBeNull();
     expect(validateCommand("bash -c 'echo pwned'")).toBeNull();
   });
 
@@ -63,7 +64,7 @@ describe("validateCommand", () => {
 describe("ALLOWED_COMMAND_PREFIXES", () => {
   it("matches expected prefixes", () => {
     const allowed = [
-      "npm", "npx", "yarn", "pnpm", "python", "pytest", "tsc",
+      "node", "npm", "npx", "yarn", "pnpm", "python", "pytest", "tsc",
       "eslint", "jest", "vitest", "cargo", "go", "make", "dotnet",
       "ruby", "bundle", "mix", "gradle", "mvn",
     ];

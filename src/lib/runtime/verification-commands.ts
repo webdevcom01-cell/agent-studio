@@ -19,7 +19,7 @@ import { logger } from "@/lib/logger";
  * Whitelist of allowed command prefixes for verification commands.
  * Only common build/test/lint tools are permitted.
  */
-export const ALLOWED_COMMAND_PREFIXES = /^(npm|npx|yarn|pnpm|python|pytest|tsc|eslint|jest|vitest|cargo|go|make|dotnet|ruby|bundle|mix|gradle|mvn)\b/;
+export const ALLOWED_COMMAND_PREFIXES = /^(node|npm|npx|yarn|pnpm|python|pytest|tsc|eslint|jest|vitest|cargo|go|make|dotnet|ruby|bundle|mix|gradle|mvn)\b/;
 
 /**
  * Shell metacharacters that indicate command chaining/injection.
