@@ -54,10 +54,10 @@ describe("validateEnv", () => {
     expect(() => validateEnv(env)).toThrow("OPENAI_API_KEY");
   });
 
-  it("throws when DEEPSEEK_API_KEY is missing", () => {
+  it("does not throw when DEEPSEEK_API_KEY is missing (optional)", () => {
     const { DEEPSEEK_API_KEY: _, ...env } = VALID_ENV;
     void _;
-    expect(() => validateEnv(env)).toThrow("DEEPSEEK_API_KEY");
+    expect(() => validateEnv(env)).not.toThrow();
   });
 
   it("throws when required var is empty string", () => {

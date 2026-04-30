@@ -7,17 +7,22 @@ import {
   AVAILABLE_SCHEMAS,
 } from "../schemas";
 
+const VALID_FILE = { path: "src/foo.ts", content: "export const x = 1;", language: "typescript", isNew: true };
+const VALID_CODEGEN = {
+  files: [VALID_FILE],
+  summary: "Generated a module",
+  slug: "sum-array",
+  runId: "a3f9e1b7",
+};
+
 describe("CodeGenOutputSchema", () => {
   it("parses a valid CodeGenOutput", () => {
-    const result = CodeGenOutputSchema.safeParse({
-      files: [{ path: "src/foo.ts", content: "export const x = 1;", language: "typescript", isNew: true }],
-      summary: "Generated a module",
-    });
+    const result = CodeGenOutputSchema.safeParse(VALID_CODEGEN);
     expect(result.success).toBe(true);
   });
 
   it("rejects missing files array", () => {
-    const result = CodeGenOutputSchema.safeParse({ summary: "oops" });
+    const result = CodeGenOutputSchema.safeParse({ summary: "oops", slug: "x", runId: "00000000" });
     expect(result.success).toBe(false);
   });
 
@@ -25,10 +30,28 @@ describe("CodeGenOutputSchema", () => {
     // .min(1) was removed from the z.array() to avoid the minItems JSON Schema keyword
     // (not supported by OpenAI strict-mode response_format). Validation is instead enforced
     // via .superRefine() which is invisible to JSON Schema generation but runs during safeParse.
-    const result = CodeGenOutputSchema.safeParse({ files: [], summary: "empty" });
+    const result = CodeGenOutputSchema.safeParse({ files: [], summary: "empty", slug: "x", runId: "00000000" });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0].path).toContain("files");
+    }
+  });
+
+  it("rejects missing slug", () => {
+    const { slug: _slug, ...withoutSlug } = VALID_CODEGEN;
+    const result = CodeGenOutputSchema.safeParse(withoutSlug);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path.includes("slug"))).toBe(true);
+    }
+  });
+
+  it("rejects missing runId", () => {
+    const { runId: _runId, ...withoutRunId } = VALID_CODEGEN;
+    const result = CodeGenOutputSchema.safeParse(withoutRunId);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path.includes("runId"))).toBe(true);
     }
   });
 
@@ -38,6 +61,8 @@ describe("CodeGenOutputSchema", () => {
     const result = CodeGenOutputSchema.safeParse({
       files: [{ path: "a.ts", content: "const x = 1", language: "typescript", isNew: false }],
       summary: "ok",
+      slug: "my-task",
+      runId: "b1c2d3e4",
     });
     expect(result.success).toBe(true);
     if (result.success) {
@@ -48,13 +73,21 @@ describe("CodeGenOutputSchema", () => {
 
   it("accepts optional prismaSchemaChanges", () => {
     const result = CodeGenOutputSchema.safeParse({
-      files: [{ path: "a.ts", content: "x", language: "typescript", isNew: true }],
-      summary: "with prisma",
+      ...VALID_CODEGEN,
       prismaSchemaChanges: "model Foo { id Int @id }",
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.prismaSchemaChanges).toBe("model Foo { id Int @id }");
+    }
+  });
+
+  it("exposes slug and runId on parsed output", () => {
+    const result = CodeGenOutputSchema.safeParse(VALID_CODEGEN);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.slug).toBe("sum-array");
+      expect(result.data.runId).toBe("a3f9e1b7");
     }
   });
 });
@@ -128,11 +161,7 @@ describe("resolveSchema", () => {
 
 describe("validateAgainstSchema", () => {
   it("returns success for valid CodeGenOutput", () => {
-    const value = {
-      files: [{ path: "a.ts", content: "x", language: "typescript", isNew: true }],
-      summary: "ok",
-    };
-    const result = validateAgainstSchema("CodeGenOutput", value);
+    const result = validateAgainstSchema("CodeGenOutput", VALID_CODEGEN);
     expect(result.success).toBe(true);
   });
 

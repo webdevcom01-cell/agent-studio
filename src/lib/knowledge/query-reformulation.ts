@@ -73,7 +73,7 @@ export async function reformulateWithHistory(
   try {
     const { text } = await Promise.race([
       generateText({
-        model: getModel("deepseek-chat"),
+        model: getModel("gpt-4.1-mini"),
         prompt: `You are a query reformulation assistant.
 Rewrite the user's latest question into a self-contained search query that can be understood without the conversation history.
 

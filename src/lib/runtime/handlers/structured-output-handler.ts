@@ -19,7 +19,7 @@ export const structuredOutputHandler: NodeHandler = async (node, context) => {
   const outputFormat = (node.data.outputFormat as string) ?? "object";
   const secondaryOutputVariable =
     (node.data.secondaryOutputVariable as string) || "";
-  const modelId = (node.data.model as string) || "deepseek-chat";
+  const modelId = (node.data.model as string) || "gpt-4.1-mini";
 
   if (!prompt) {
     return {

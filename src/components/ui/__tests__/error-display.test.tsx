@@ -13,9 +13,11 @@ vi.mock("next/link", () => ({
   }) => <a href={href}>{children}</a>,
 }));
 
+const mockLogger = vi.hoisted(() => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn() }));
+vi.mock("@/lib/logger", () => ({ logger: mockLogger }));
+
 beforeEach(() => {
-  vi.restoreAllMocks();
-  vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.clearAllMocks();
 });
 
 function createError(message: string, digest?: string): Error & { digest?: string } {
@@ -75,12 +77,11 @@ describe("ErrorDisplay", () => {
     expect(link.closest("a")?.getAttribute("href")).toBe("/");
   });
 
-  it("logs the error on mount", () => {
+  it("logs the error on mount via logger", () => {
     const err = createError("logged error");
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     render(<ErrorDisplay error={err} reset={() => {}} />);
 
-    expect(errorSpy).toHaveBeenCalledWith(err);
+    expect(mockLogger.error).toHaveBeenCalledWith("Component error", err);
   });
 });

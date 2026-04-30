@@ -10,7 +10,7 @@ import { z } from "zod";
 import { getModel } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 
-const EVAL_MODEL = "deepseek-chat";
+const EVAL_MODEL = "gpt-4.1-mini";
 const EVAL_TIMEOUT_MS = 30_000;
 
 const ScoreSchema = z.object({

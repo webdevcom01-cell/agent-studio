@@ -27,7 +27,7 @@ import type { GenerateEvalSuiteRequest } from "./generator-schemas";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const GENERATOR_TIMEOUT_MS = 60_000;
-const PRIMARY_MODEL = "deepseek-chat";
+const PRIMARY_MODEL = "gpt-4.1-mini";
 const FALLBACK_MODEL = "gpt-4o-mini";
 const MAX_ROUNDS = 2;
 

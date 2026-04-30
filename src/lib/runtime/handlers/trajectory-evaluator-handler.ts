@@ -41,7 +41,7 @@ export const trajectoryEvaluatorHandler: NodeHandler = async (node, context) => 
     (node.data.outputVariable as string) || DEFAULT_OUTPUT_VARIABLE;
   const evaluatorModel = (node.data.evaluatorModel as string)
     || (node.data.model as string)
-    || "deepseek-chat";
+    || "gpt-4.1-mini";
   const passingScore = (node.data.passingScore as number) ?? DEFAULT_PASSING_SCORE;
   const weightCoherence = (node.data.weightCoherence as number) ?? 0.3;
   const weightEfficiency = (node.data.weightEfficiency as number) ?? 0.3;

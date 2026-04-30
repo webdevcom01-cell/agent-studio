@@ -20,7 +20,7 @@ interface SubTaskResult {
   id: string;
   description: string;
   complexity: "simple" | "moderate" | "complex";
-  /** Resolved model ID (e.g. "deepseek-chat"), logged and stored for observability */
+  /** Resolved model ID (e.g. "gpt-4.1-mini"), logged and stored for observability */
   model: string;
   /** The tier that was selected (may differ from natural tier when cost monitor overrides) */
   tier: "fast" | "balanced" | "powerful" | "error";

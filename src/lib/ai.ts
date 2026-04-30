@@ -110,7 +110,7 @@ export function getModel(modelId: string) {
     return moonshot(modelId);
   }
   // Default fallback
-  return getDeepSeek()("deepseek-chat");
+  return getOpenAI()("gpt-4.1-mini");
 }
 
 export function getEmbeddingModel() {
@@ -128,7 +128,7 @@ export function getEmbeddingModelById(modelId: string) {
   }
 }
 
-export const DEFAULT_MODEL = "deepseek-chat";
+export const DEFAULT_MODEL = "gpt-4.1-mini";
 
 
 export function getAvailableModels(): ModelOption[] {

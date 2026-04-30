@@ -33,7 +33,7 @@ import {
 } from "./schemas";
 
 const AI_PHASE_TIMEOUT_MS = 180_000;
-const PRIMARY_MODEL = "deepseek-chat";
+const PRIMARY_MODEL = "gpt-4.1-mini";
 const FALLBACK_MODEL = "gpt-4o-mini";
 
 interface TokenUsage {

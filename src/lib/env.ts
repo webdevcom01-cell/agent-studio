@@ -11,7 +11,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   DIRECT_URL: z.string().min(1, "DIRECT_URL is required"),
   OPENAI_API_KEY: z.string().min(1, "OPENAI_API_KEY is required"),
-  DEEPSEEK_API_KEY: z.string().min(1, "DEEPSEEK_API_KEY is required"),
+  DEEPSEEK_API_KEY: optionalStr,
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters"),
   AUTH_GITHUB_ID: optionalStr,
   AUTH_GITHUB_SECRET: optionalStr,

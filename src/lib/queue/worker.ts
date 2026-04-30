@@ -414,11 +414,12 @@ async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<u
  * Creates a conversation, runs executeFlow, and stores the output in ManagedAgentTask.
  */
 async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> {
-  const { taskId, agentId, userId, message, variables } = job.data;
+  const { taskId, agentId, userId, message, variables, conversationId: resumeConversationId } = job.data;
 
   const { prisma } = await import("@/lib/prisma");
   const { executeFlow } = await import("@/lib/runtime/engine");
   const { parseFlowContent } = await import("@/lib/validators/flow-content");
+  const { loadContext } = await import("@/lib/runtime/context");
   const { markRunning, markCompleted, markFailed, markAbandoned } = await import("@/lib/managed-tasks/manager");
   const { logger: log } = await import("@/lib/logger");
   type TaskOutput = import("@/lib/managed-tasks/manager").TaskOutput;
@@ -430,35 +431,29 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
   let conversationId: string | null = null;
 
   try {
-    const agent = await prisma.agent.findFirst({
+    const agentExists = await prisma.agent.findFirst({
       where: { id: agentId, userId },
-      include: { flow: true },
+      select: { id: true },
     });
+    if (!agentExists) throw new Error(`Agent "${agentId}" not found`);
 
-    if (!agent) throw new Error(`Agent "${agentId}" not found`);
-    if (!agent.flow) throw new Error(`Agent "${agentId}" has no flow configured`);
-
-    const flowContent = parseFlowContent(agent.flow.content);
     await job.updateProgress(20);
 
-    const conversation = await prisma.conversation.create({
-      data: {
-        agentId,
-        status: "ACTIVE",
-        variables: variables as import("@/generated/prisma").Prisma.InputJsonValue,
-      },
-    });
-    conversationId = conversation.id;
+    // Resume existing paused conversation (e.g. after human_approval) or start fresh.
+    const context = resumeConversationId
+      ? await loadContext(agentId, resumeConversationId)
+      : await loadContext(agentId);
 
-    const context = {
-      conversationId,
-      agentId,
-      flowContent,
-      currentNodeId: null as string | null,
-      variables: { ...variables },
-      messageHistory: [] as Array<{ role: "user" | "assistant" | "system"; content: string }>,
-      isNewConversation: true,
-    };
+    conversationId = context.conversationId;
+
+    if (!resumeConversationId) {
+      // Seed initial variables only for new conversations
+      context.variables = { ...variables };
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: { variables: context.variables as import("@/generated/prisma").Prisma.InputJsonValue },
+      });
+    }
 
     await job.updateProgress(30);
     const result = await executeFlow(context, message);
@@ -484,10 +479,19 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
     };
 
     await markCompleted(taskId, output);
-    await prisma.conversation.update({ where: { id: conversationId }, data: { status: "COMPLETED" } });
+
+    // Keep conversation ACTIVE when paused at a human_approval node so it can be resumed.
+    // saveContext() already set status=ACTIVE in that case; only override when fully done.
+    if (!result.waitingForInput) {
+      await prisma.conversation.update({ where: { id: conversationId }, data: { status: "COMPLETED" } });
+    }
+
     await job.updateProgress(100);
 
-    log.info("MCP flow job completed", { jobId: job.id, taskId, agentId, durationMs });
+    log.info("MCP flow job completed", {
+      jobId: job.id, taskId, agentId, durationMs,
+      waitingForInput: result.waitingForInput ?? false,
+    });
 
     return output;
   } catch (err) {

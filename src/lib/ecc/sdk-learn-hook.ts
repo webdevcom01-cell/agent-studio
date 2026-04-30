@@ -97,6 +97,9 @@ export async function fireSdkLearnHook(
       agentId: record.agentId,
       error: err instanceof Error ? err.message : String(err),
     });
+    recordMetric("sdk.learn_hook.failed", 1, "count", {
+      agentId: record.agentId,
+    });
   }
 }
 

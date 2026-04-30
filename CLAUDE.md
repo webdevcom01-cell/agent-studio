@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # agent-studio — Project Context for Claude
 
 ## 1. PROJECT OVERVIEW
@@ -79,15 +83,25 @@ All API routes: `{ success: true, data: T }` or `{ success: false, error: string
 - Supports session resume, MCP tool injection, streaming output
 - Handler: `src/lib/runtime/handlers/claude-agent-sdk-handler.ts`
 
+### MCP `trigger_agent` Tool — HITL Session Continuation
+- `trigger_agent` accepts optional `sessionId` to resume a paused `human_approval` conversation
+- Workflow: `trigger_agent` → poll `get_task_status` → when `status=PAUSED`, `output.sessionId` is returned → call `trigger_agent` again with `sessionId` + approval message to continue
+- Worker uses `loadContext(agentId, sessionId)` to restore conversation state; conversation stays `ACTIVE` (not `COMPLETED`) while `waitForInput=true`
+- Invalid or already-completed sessionIds return a 4xx-style MCP error before enqueueing
+
 ### SDLC Pipeline Orchestration
 - `src/lib/sdlc/` — async webhook triggers, RAG KB seed, code review node, PR creation
 - Issue idempotency prevents duplicate pipeline runs; workspace: `/tmp/sdlc` (Railway `/app` fallback)
-- API routes: `/api/sdlc/*`
+- API routes: `/api/agents/[agentId]/pipelines/*`
+- **Requires `GITHUB_TOKEN` (or `GITHUB_PAT`)** for git commit + PR creation steps; without it the pipeline returns `INCOMPLETE`
+- Rate limited: 5 pipeline triggers per minute per agent (returns 429 with `Retry-After` header)
 
 ### BullMQ Managed Agent Tasks
 - `src/lib/queue/` — long-running async task execution with status polling, cancel, pause, resume
-- `AgentTask` Prisma model tracks state (PENDING → RUNNING → COMPLETED/FAILED)
-- Worker process: `pnpm worker` — must run alongside Next.js in production
+- `ManagedAgentTask` Prisma model tracks state (PENDING → RUNNING → PAUSED → COMPLETED/FAILED/CANCELLED/ABANDONED)
+- Worker process: `pnpm worker` — must run alongside Next.js in production (locally: load `.env.local` first)
+- Job types: `flow.execute`, `eval.run`, `webhook.retry`, `webhook.execute`, `kb.ingest`, `managed.task.run`, `mcp.flow.run`, `pipeline.run`
+- Priority levels: chat=1, webhook=2, webhook-retry=3, pipeline=5, managed=8, sdlc=8, eval=10
 - Per-step timeouts, transaction-safe state, idempotent cancel
 
 ### ECC SDK Learn Hook
@@ -115,11 +129,17 @@ pnpm dev / build / start         # Dev (Turbopack) / build / production
 pnpm worker                      # BullMQ worker (required in production)
 pnpm test / test:e2e             # Vitest unit / Playwright E2E
 pnpm typecheck / lint            # TypeScript / ESLint
-pnpm precheck                    # Pre-push: TS + vitest + lucide mocks + strings
+pnpm precheck                    # Pre-push: TS → vitest → lucide mocks → placeholder strings
 pnpm db:generate/migrate/push/studio/seed
 pnpm test:coverage / test:load   # Coverage report / k6 load test
 pnpm mcp:playwright              # Playwright MCP server (port 3100)
 pnpm knip / knip:fix             # Unused dep detection / auto-fix
+
+# Run a single test file
+pnpm test src/lib/queue/__tests__/worker.test.ts
+
+# Run worker locally (requires full env)
+set -a && source .env.local && set +a && pnpm worker
 ```
 
 ---
@@ -148,7 +168,7 @@ Short: `NodeType` union → `NODE_TYPES` array → handler → register → node
 - Public: add path to `src/middleware.ts` matcher; validate input with Zod; never expose internals in catch
 
 ### Testing
-- Unit: Vitest, `__tests__/` next to source; 3211+ tests across 245 files
+- Unit: Vitest, `__tests__/` next to source; 3828+ tests across 288 files
 - E2E: Playwright, `e2e/tests/`, `.spec.ts`; test behavior, not implementation
 
 ### AI Model Config

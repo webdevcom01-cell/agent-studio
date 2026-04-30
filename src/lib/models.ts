@@ -64,7 +64,7 @@ export const ALL_MODELS: ModelOption[] = [
   { id: "kimi-k2-thinking",     name: "Kimi K2 Thinking", provider: "Moonshot", tier: "powerful", envKey: "MOONSHOT_API_KEY" },
 ];
 
-export const DEFAULT_MODEL = "deepseek-chat";
+export const DEFAULT_MODEL = "gpt-4.1-mini";
 
 /**
  * All model IDs as a tuple — single source of truth for Zod enum validation.

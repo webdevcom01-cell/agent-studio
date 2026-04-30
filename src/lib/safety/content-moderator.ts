@@ -22,7 +22,7 @@ const ModerationSchema = z.object({
  */
 export async function moderateContent(
   text: string,
-  model: string = "deepseek-chat",
+  model: string = "gpt-4.1-mini",
 ): Promise<ModerationResult> {
   try {
     const { object } = await generateObject({

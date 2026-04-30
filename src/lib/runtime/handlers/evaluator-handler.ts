@@ -64,7 +64,7 @@ export const evaluatorHandler: NodeHandler = async (node, context) => {
     const { getModel } = await import("@/lib/ai");
     const { generateText } = await import("ai");
 
-    const model = getModel(modelId || "deepseek-chat");
+    const model = getModel(modelId || "gpt-4.1-mini");
 
     const criteriaText = criteria
       .map(

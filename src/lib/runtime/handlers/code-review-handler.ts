@@ -8,7 +8,7 @@
  * Autonomous Pipeline flow.
  *
  * Node data fields:
- *   model           — AI model ID (default: deepseek-chat)
+ *   model           — AI model ID (default: gpt-4.1-mini)
  *   filesVariable   — variable name holding CodeGenOutput or file list (default: "generatedCode")
  *   testResultVar   — variable name holding test results string (default: "testResults")
  *   outputVariable  — where to store CodeReviewOutput (default: "reviewResult")
@@ -52,7 +52,7 @@ Be precise, actionable, and concise. Only flag real issues — do not invent pro
 For BLOCK decisions, always provide fixInstructions that the fix loop can act on directly.`;
 
 export const codeReviewHandler: NodeHandler = async (node, context) => {
-  const modelId = (node.data.model as string) || "deepseek-chat";
+  const modelId = (node.data.model as string) || "gpt-4.1-mini";
   const filesVariable = (node.data.filesVariable as string) || "generatedCode";
   const testResultVar = (node.data.testResultVar as string) || "testResults";
   const outputVariable = (node.data.outputVariable as string) || "reviewResult";

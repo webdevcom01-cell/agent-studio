@@ -22,7 +22,7 @@ export const semanticRouterHandler: NodeHandler = async (node, context) => {
   const inputVariable = (node.data.inputVariable as string) ?? "";
   const routes = parseRoutes(node.data.routes as unknown);
   const fallbackRoute = (node.data.fallbackRoute as string) ?? "fallback";
-  const modelId = (node.data.model as string) || "deepseek-chat";
+  const modelId = (node.data.model as string) || "gpt-4.1-mini";
   const confidenceThreshold =
     (node.data.confidenceThreshold as number) ?? DEFAULT_CONFIDENCE_THRESHOLD;
   const outputVariable =

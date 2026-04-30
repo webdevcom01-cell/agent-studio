@@ -31,6 +31,9 @@ const ENDPOINT_LIMITS: Record<string, EndpointRateLimit> = {
   // Admin — moderate
   "admin": { maxRequests: 30, windowMs: 60_000 },
 
+  // Pipeline — very restrictive (each run is expensive AI compute)
+  "pipeline": { maxRequests: 5, windowMs: 60_000 },
+
   // Export — strict (expensive)
   "export": { maxRequests: 1, windowMs: 86_400_000 }, // 1 per day
 
@@ -53,6 +56,7 @@ export function categorizeEndpoint(pathname: string): string {
   if (pathname.includes("/chat")) return "chat";
   if (pathname.includes("/upload")) return "upload";
   if (pathname.includes("/knowledge")) return "api:knowledge";
+  if (pathname.includes("/pipelines")) return "pipeline";
   if (pathname.includes("/trigger/")) return "webhook";
   if (pathname.includes("/admin/")) return "admin";
   if (pathname.includes("/export")) return "export";

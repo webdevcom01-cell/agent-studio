@@ -84,7 +84,7 @@ async function llmRerank(
   query: string,
   candidates: SearchResult[],
   topK: number = 5,
-  modelId: string = "deepseek-chat"
+  modelId: string = "gpt-4.1-mini"
 ): Promise<SearchResult[]> {
   if (candidates.length === 0) return [];
   if (candidates.length <= topK) return candidates;

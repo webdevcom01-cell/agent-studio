@@ -79,6 +79,8 @@ describe("validateNamedSchema", () => {
     const value = {
       files: [{ path: "a.ts", content: "x", language: "typescript", isNew: true }],
       summary: "generated",
+      slug: "test-task",
+      runId: "a1b2c3d4",
     };
     const result = validateNamedSchema("CodeGenOutput", value, "Output");
     expect(result.valid).toBe(true);

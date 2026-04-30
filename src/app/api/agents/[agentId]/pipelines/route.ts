@@ -5,6 +5,8 @@ import { logger } from "@/lib/logger";
 import { createPipelineRun, listPipelineRuns } from "@/lib/sdlc/pipeline-manager";
 import { analyzeTask, buildPipelineConfig } from "@/lib/ecc/meta-orchestrator";
 import { addPipelineRunJob } from "@/lib/queue";
+import { checkRateLimitAsync } from "@/lib/rate-limit";
+import { getEndpointLimit } from "@/lib/rate-limit-config";
 import type { PipelineRunStatus } from "@/generated/prisma";
 
 // ---------------------------------------------------------------------------
@@ -84,6 +86,24 @@ export async function POST(
   const authResult = await requireAgentOwner(agentId);
   if (isAuthError(authResult)) return authResult;
   const { userId } = authResult;
+
+  const { maxRequests, windowMs } = getEndpointLimit("pipeline");
+  const rateLimit = await checkRateLimitAsync(`pipeline:${agentId}`, maxRequests);
+  if (!rateLimit.allowed) {
+    const retryAfterSec = Math.ceil(rateLimit.retryAfterMs / 1000);
+    return NextResponse.json(
+      { success: false, error: `Rate limit exceeded. Try again in ${retryAfterSec}s.` },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(retryAfterSec),
+          "X-RateLimit-Limit": String(maxRequests),
+          "X-RateLimit-Window": String(windowMs / 1000),
+          "X-RateLimit-Remaining": "0",
+        },
+      },
+    );
+  }
 
   try {
     const body: unknown = await req.json();

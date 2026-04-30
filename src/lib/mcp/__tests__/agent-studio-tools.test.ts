@@ -19,6 +19,7 @@ vi.mock("@/lib/prisma", () => ({
     conversation: {
       create: vi.fn(),
       update: vi.fn(),
+      findFirst: vi.fn(),
     },
     knowledgeBase: {
       findFirst: vi.fn(),
@@ -329,13 +330,16 @@ describe("trigger_agent", () => {
       USER_ID,
     );
 
-    expect(mockAddMcpFlowJob).toHaveBeenCalledWith({
-      taskId: "task-1",
-      agentId: "agent-1",
-      userId: USER_ID,
-      message: "hello",
-      variables: { topic: "AI" },
-    });
+    expect(mockAddMcpFlowJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: "task-1",
+        agentId: "agent-1",
+        userId: USER_ID,
+        message: "hello",
+        variables: { topic: "AI" },
+        conversationId: undefined,
+      }),
+    );
   });
 
   it("returns isError when agentId is missing", async () => {
@@ -440,6 +444,81 @@ describe("trigger_agent", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("Failed to queue");
+  });
+
+  // ── Session continuation (sessionId / HITL resume) ────────────────────────
+
+  it("resumes existing session when sessionId is provided", async () => {
+    mockPrisma.agent.findFirst.mockResolvedValueOnce(agentWithFlow as never);
+    mockPrisma.conversation.findFirst.mockResolvedValueOnce({ id: "conv-1", status: "ACTIVE" } as never);
+
+    const result = await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "approve", sessionId: "conv-1" },
+      USER_ID,
+    );
+    const data = JSON.parse(result.content[0].text);
+
+    expect(result.isError).toBeUndefined();
+    expect(data.taskId).toBe("task-1");
+    expect(data.message).toContain("Session resumed");
+  });
+
+  it("passes conversationId to addMcpFlowJob when sessionId provided", async () => {
+    mockPrisma.agent.findFirst.mockResolvedValueOnce(agentWithFlow as never);
+    mockPrisma.conversation.findFirst.mockResolvedValueOnce({ id: "conv-1", status: "ACTIVE" } as never);
+
+    await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "approve", sessionId: "conv-1" },
+      USER_ID,
+    );
+
+    expect(mockAddMcpFlowJob).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: "conv-1" }),
+    );
+  });
+
+  it("returns isError when sessionId not found for this agent", async () => {
+    mockPrisma.agent.findFirst.mockResolvedValueOnce(agentWithFlow as never);
+    mockPrisma.conversation.findFirst.mockResolvedValueOnce(null);
+
+    const result = await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "approve", sessionId: "missing-conv" },
+      USER_ID,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("not found");
+  });
+
+  it("returns isError when session is already COMPLETED", async () => {
+    mockPrisma.agent.findFirst.mockResolvedValueOnce(agentWithFlow as never);
+    mockPrisma.conversation.findFirst.mockResolvedValueOnce({ id: "conv-1", status: "COMPLETED" } as never);
+
+    const result = await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "approve", sessionId: "conv-1" },
+      USER_ID,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("completed");
+  });
+
+  it("returns isError when session is ABANDONED", async () => {
+    mockPrisma.agent.findFirst.mockResolvedValueOnce(agentWithFlow as never);
+    mockPrisma.conversation.findFirst.mockResolvedValueOnce({ id: "conv-1", status: "ABANDONED" } as never);
+
+    const result = await callAgentStudioTool(
+      "trigger_agent",
+      { agentId: "agent-1", message: "approve", sessionId: "conv-1" },
+      USER_ID,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("abandoned");
   });
 });
 

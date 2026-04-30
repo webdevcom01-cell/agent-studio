@@ -105,7 +105,7 @@ export const AGENT_STUDIO_TOOLS: MCPToolDefinition[] = [
   {
     name: "trigger_agent",
     description:
-      "Run an agent with a user message. Enqueues the agent flow for async execution and returns a taskId immediately. Poll get_task_status with the taskId to retrieve the result when status is COMPLETED. Use this to get answers, generate content, or automate tasks via your agents.",
+      "Run an agent with a user message. Enqueues the agent flow for async execution and returns a taskId immediately. Poll get_task_status with the taskId to retrieve the result when status is COMPLETED. Use this to get answers, generate content, or automate tasks via your agents. To resume a paused flow (e.g. after a human_approval checkpoint), pass the sessionId returned by the previous task alongside the user's approval message.",
     inputSchema: {
       type: "object",
       properties: {
@@ -121,6 +121,11 @@ export const AGENT_STUDIO_TOOLS: MCPToolDefinition[] = [
           type: "string",
           description:
             "Optional JSON string of input variables to inject into the flow (e.g. '{\"topic\":\"AI\"}').",
+        },
+        sessionId: {
+          type: "string",
+          description:
+            "Optional conversation session ID to resume a paused flow. Obtain from a previous get_task_status response (output.sessionId). Use this to continue after a human_approval checkpoint.",
         },
       },
       required: ["agentId", "message"],
@@ -319,6 +324,7 @@ async function toolTriggerAgent(
 ): Promise<MCPToolResult> {
   const agentId = typeof args.agentId === "string" ? args.agentId : null;
   const message = typeof args.message === "string" ? args.message.trim() : null;
+  const sessionId = typeof args.sessionId === "string" ? args.sessionId.trim() : undefined;
 
   if (!agentId) return err("agentId is required.");
   if (!message) return err("message is required and cannot be empty.");
@@ -346,6 +352,18 @@ async function toolTriggerAgent(
   if (!agent) return err(`Agent "${agentId}" not found.`);
   if (!agent.flow) return err(`Agent "${agentId}" has no flow configured.`);
 
+  // When resuming, validate that the conversation belongs to this agent and is still active.
+  if (sessionId) {
+    const conv = await prisma.conversation.findFirst({
+      where: { id: sessionId, agentId },
+      select: { id: true, status: true },
+    });
+    if (!conv) return err(`Session "${sessionId}" not found for this agent.`);
+    if (conv.status === "COMPLETED" || conv.status === "ABANDONED") {
+      return err(`Session "${sessionId}" is already ${conv.status.toLowerCase()} and cannot be resumed.`);
+    }
+  }
+
   // Create a ManagedAgentTask record (PENDING) — worker will execute and update it
   const task = await createTask({
     name: `MCP: ${agent.name}`,
@@ -357,7 +375,14 @@ async function toolTriggerAgent(
 
   // Enqueue the async flow job — returns immediately
   try {
-    await addMcpFlowJob({ taskId: task.id, agentId, userId, message, variables: inputVariables });
+    await addMcpFlowJob({
+      taskId: task.id,
+      agentId,
+      userId,
+      message,
+      variables: inputVariables,
+      conversationId: sessionId,
+    });
   } catch (queueError) {
     try {
       await markFailed(task.id, "Failed to enqueue job");
@@ -368,12 +393,19 @@ async function toolTriggerAgent(
     return err("Failed to queue agent execution. Please try again.");
   }
 
-  logger.info("trigger_agent enqueued async flow job", { taskId: task.id, agentId, userId });
+  logger.info("trigger_agent enqueued async flow job", {
+    taskId: task.id,
+    agentId,
+    userId,
+    resuming: !!sessionId,
+  });
 
   return ok({
     taskId: task.id,
     status: "PENDING",
-    message: "Agent triggered. Poll get_task_status with taskId to retrieve the result.",
+    message: sessionId
+      ? "Session resumed. Poll get_task_status with taskId to retrieve the result."
+      : "Agent triggered. Poll get_task_status with taskId to retrieve the result.",
   });
 }
 

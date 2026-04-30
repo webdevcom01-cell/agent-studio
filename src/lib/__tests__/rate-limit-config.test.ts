@@ -27,6 +27,12 @@ describe("getEndpointLimit", () => {
     expect(limit.maxRequests).toBe(1);
     expect(limit.windowMs).toBe(86_400_000);
   });
+
+  it("returns restrictive limits for pipeline", () => {
+    const limit = getEndpointLimit("pipeline");
+    expect(limit.maxRequests).toBe(5);
+    expect(limit.windowMs).toBe(60_000);
+  });
 });
 
 describe("categorizeEndpoint", () => {
@@ -48,6 +54,10 @@ describe("categorizeEndpoint", () => {
 
   it("categorizes admin endpoint", () => {
     expect(categorizeEndpoint("/api/admin/jobs")).toBe("admin");
+  });
+
+  it("categorizes pipeline endpoint", () => {
+    expect(categorizeEndpoint("/api/agents/abc/pipelines")).toBe("pipeline");
   });
 
   it("falls back to default", () => {

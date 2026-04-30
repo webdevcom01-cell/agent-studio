@@ -39,8 +39,8 @@ const DEFAULT_MAX_TOKENS = 2000;
  *   sets __persistent_mode context variables so end-handler routes back until verified
  */
 export const reflexiveLoopHandler: NodeHandler = async (node, context) => {
-  const executorModel = (node.data.executorModel as string) || "deepseek-chat";
-  const evaluatorModel = (node.data.evaluatorModel as string) || "deepseek-chat";
+  const executorModel = (node.data.executorModel as string) || "gpt-4.1-mini";
+  const evaluatorModel = (node.data.evaluatorModel as string) || "gpt-4.1-mini";
   const mode = (node.data.mode as string) === "persistent" ? "persistent" : "bounded";
   const iterationCap = mode === "persistent" ? MAX_PERSISTENT_ITERATIONS : MAX_ITERATIONS;
   const maxIterations = Math.min(

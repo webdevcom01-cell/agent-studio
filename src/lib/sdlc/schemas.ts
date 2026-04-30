@@ -40,7 +40,17 @@ export const CodeGenOutputSchema = z
     .string()
     .optional()
     .describe("Prisma schema additions/changes, if any"),
-    summary: z.string().describe("Short human-readable description of what was generated"),
+  summary: z.string().describe("Short human-readable description of what was generated"),
+  slug: z
+    .string()
+    .describe(
+      "Kebab-case task identifier, max 30 characters, used as workspace dir and git branch suffix (e.g. 'sum-array', 'user-auth-jwt')",
+    ),
+  runId: z
+    .string()
+    .describe(
+      "Random 8-character lowercase hex string unique to this run (e.g. 'a3f9e1b7'). Must differ on every invocation.",
+    ),
   })
   .superRefine((data, ctx) => {
     if (data.files.length === 0) {

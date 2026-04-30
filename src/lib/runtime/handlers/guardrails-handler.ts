@@ -243,7 +243,7 @@ async function evaluateCustomPolicy(
     const { z } = await import("zod");
 
     const { object } = await generateObject({
-      model: getModel("deepseek-chat"),
+      model: getModel("gpt-4.1-mini"),
       schema: z.object({
         passed: z.boolean(),
         reason: z.string(),

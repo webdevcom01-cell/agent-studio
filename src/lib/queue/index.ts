@@ -85,6 +85,8 @@ export interface McpFlowRunJobData {
   userId: string;
   message: string;
   variables: Record<string, unknown>;
+  /** When set, resumes an existing paused conversation (e.g. after a human_approval node). */
+  conversationId?: string;
 }
 
 /** P5 — SDLC Pipeline Run (multi-agent sequential execution via meta-orchestrator) */

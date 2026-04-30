@@ -120,7 +120,7 @@ async function ensureVirtualSource(): Promise<void> {
       name: "ECC Skills (System)",
       description: "Virtual agent for ECC skill vectorization",
       systemPrompt: "",
-      model: "deepseek-chat",
+      model: "gpt-4.1-mini",
     },
     update: {},
   });

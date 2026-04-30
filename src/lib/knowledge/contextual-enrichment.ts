@@ -67,7 +67,7 @@ export async function enrichChunksWithContext(
       batch.map(async (chunk): Promise<string> => {
         try {
           const { text } = await generateText({
-            model: getModel("deepseek-chat"),
+            model: getModel("gpt-4.1-mini"),
             prompt: buildContextPrompt(docPreview, chunk),
             maxOutputTokens: MAX_CONTEXT_TOKENS,
             temperature: 0,
