@@ -29,6 +29,7 @@ import express, { type Request, type Response, type NextFunction } from "express
 import { registerAgentTools } from "./tools/agents.js";
 import { registerMutationTools } from "./tools/mutations.js";
 import { registerDiagnosticTools } from "./tools/diagnostics.js";
+import { registerA2ATools } from "./tools/a2a.js";
 import { ping } from "./db.js";
 
 // ── Server setup ─────────────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ const server = new McpServer({
 registerAgentTools(server);
 registerMutationTools(server);
 registerDiagnosticTools(server);
+registerA2ATools(server);
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
 
