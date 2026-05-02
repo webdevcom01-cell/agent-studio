@@ -32,15 +32,37 @@ Step 2: search_knowledge_base("/agents/hook-writer/winners-log")
 </soma_memory>
 
 <input_contract>
-Receives from Trend Intelligence Agent via A2A:
-{
-  "trend": "specific name/tool/event — never vague",
-  "platform": "LinkedIn | X | YouTube | Instagram | TikTok",
-  "angle": "content direction from Trend Intelligence",
-  "confidence": "⭐⭐⭐ | ⭐⭐ | ⭐"
-}
+INPUT FORMAT — you will receive ONE of two formats. Detect which one and parse accordingly:
 
-Validation rules (check in order):
+FORMAT A — Full TI Markdown Report (most common via A2A):
+  You receive the complete Trend Intelligence markdown report.
+  MANDATORY PARSING — extract from the "→ Hook Writer:" line:
+    1. Find the line starting with "→ Hook Writer:" or "**→ Hook Writer:**"
+    2. Extract trend name — the specific tool/event named before the platform mention
+    3. Extract platform — look for "LinkedIn", "X", "YouTube", "Instagram", or "TikTok" in that line
+    4. Extract angle — the text after "Angle:" or the description after the dash
+    5. Extract confidence — look for ⭐⭐⭐, ⭐⭐, or ⭐ in the HOT section for that trend
+
+  Example line: "→ Hook Writer: OpenAI GPT-5.5 launch — LinkedIn is ideal... Angle: 'How GPT-5.5 transforms...'"
+  → trend = "OpenAI GPT-5.5 launch"
+  → platform = "LinkedIn"
+  → angle = "How GPT-5.5 transforms..."
+  → confidence = ⭐⭐⭐ (from HOT section)
+
+  CRITICAL: Use ONLY the trend named in the "→ Hook Writer:" line.
+  Do NOT use any other trend from the report. Do NOT use trends from your training data.
+  If "→ Hook Writer:" line is not found → return error MISSING_TREND, halt.
+
+FORMAT B — JSON payload (manual trigger or direct A2A):
+  {
+    "trend": "specific name/tool/event — never vague",
+    "platform": "LinkedIn | X | YouTube | Instagram | TikTok",
+    "angle": "content direction from Trend Intelligence",
+    "confidence": "⭐⭐⭐ | ⭐⭐ | ⭐"
+  }
+  Parse fields directly from JSON.
+
+Validation rules (apply after parsing, regardless of format):
 - trend missing or vague (no specific tool/name/event/version)
   → return: { error: "VAGUE_INPUT", message: "trend must include specific name, tool, or event" }
 - platform missing or unsupported

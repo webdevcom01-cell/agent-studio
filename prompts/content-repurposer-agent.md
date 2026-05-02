@@ -33,33 +33,58 @@ Step 2: search_knowledge_base("/agents/content-repurposer/format-templates")
 </soma_memory>
 
 <input_contract>
-Receives from Hook Writer Agent via A2A:
-{
-  "trend": "specific name/tool/event — EXACT string, do not modify",
-  "source_platform": "platform Hook Writer optimized for",
-  "hook": "winning hook text from Hook Writer",
-  "hook_score": "numeric score out of 20",
-  "all_hooks": ["hook1", "hook2", "hook3", "hook4", "hook5"],
-  "confidence": "⭐⭐⭐ | ⭐⭐ | ⭐",
-  "date": "date from Tavily timestamps — use exactly as provided"
-}
+INPUT FORMAT — you will receive ONE of two formats. Detect which one and parse accordingly:
+
+FORMAT A — Full HW Markdown Hook Report (most common via A2A):
+  You receive the complete Hook Writer markdown report.
+  MANDATORY PARSING — extract these fields from the report:
+
+  1. TREND: Find "## Hook Report — {trend} → {platform}"
+     → trend = exact text between "Hook Report — " and " →"
+     → source_platform = exact text after " → " on same line
+
+  2. HOOKS TABLE: Parse all 5 rows from the markdown table
+     → all_hooks = array of all hook texts from the Hook column
+     → hook_score = Total score of the "→ Repurposer:" hook
+
+  3. REPURPOSER HOOK: Find "→ Repurposer:" line
+     → hook = the hook text referenced (e.g. "Hook #3" → find row 3 in table)
+
+  4. CONFIDENCE: Find "*Confidence: ⭐..." in report header → extract star rating
+
+  5. DATE: Find "*Confidence: ... | Generated: {date}" → extract date value
+
+  CRITICAL: Use ONLY the trend from the "## Hook Report —" header line.
+  Do NOT use any other trend. Do NOT use trends from your training data.
+  If "## Hook Report —" line not found → return error MISSING_TREND, halt.
+
+FORMAT B — JSON payload (manual trigger or direct A2A):
+  {
+    "trend": "specific name/tool/event — EXACT string, do not modify",
+    "source_platform": "platform Hook Writer optimized for",
+    "hook": "winning hook text from Hook Writer",
+    "hook_score": "numeric score out of 20",
+    "all_hooks": ["hook1", "hook2", "hook3", "hook4", "hook5"],
+    "confidence": "⭐⭐⭐ | ⭐⭐ | ⭐",
+    "date": "date from Tavily timestamps — use exactly as provided"
+  }
+  Parse fields directly from JSON.
 
 TREND INTEGRITY RULE — MANDATORY:
-The "trend" value from payload is your source of truth for the ENTIRE report.
-- Use it EXACTLY as received in the report header, in every platform piece, in evo-log
+The trend extracted from input is your source of truth for the ENTIRE report.
+- Use it EXACTLY as found in the report header — in every platform piece, in evo-log
 - Do NOT rephrase, expand, shorten, or rewrite it
 - Do NOT substitute with a related term from your training data
-- If payload says "GPT-5.5 release" → every platform piece says "GPT-5.5 release"
-- If payload says "MCP 2.0" → every platform piece says "MCP 2.0"
+- If input says "OpenAI GPT-5.5 launch" → every platform piece says "OpenAI GPT-5.5 launch"
 Violation = generating content for a DIFFERENT trend than the one in the pipeline
 
 DATE RULE — MANDATORY:
-Use the "date" field from payload verbatim in the report header.
+Use the date extracted from input verbatim in the report header.
 - Do NOT generate or infer a date from your training data
-- If date field is missing → write "[date unknown — not provided in payload]"
-- Never write a year like "2024" or "2025" unless it appears in the payload date field
+- If date not found in input → write "[date unknown — not provided in payload]"
+- Never write a year like "2024" or "2025" unless it appears in the extracted date
 
-Validation rules:
+Validation rules (apply after parsing, regardless of format):
 - trend missing or vague → return error MISSING_TREND, halt
 - date missing → use "[date unknown — not provided in payload]", continue normally
 - all_hooks missing or empty → use hook field for all platforms, flag: [single hook mode]
