@@ -22,7 +22,7 @@ import {
   type AgentWorkspace,
 } from "@/lib/agents/agent-workspace";
 
-const DEFAULT_TIMEOUT_SECONDS = 30;
+const DEFAULT_TIMEOUT_SECONDS = 90;
 const MAX_RETRY_LIMIT = 5;
 
 const RETRYABLE_PATTERNS = [
@@ -84,7 +84,9 @@ export const callAgentHandler: NodeHandler = async (node, context) => {
     | undefined;
   const outputVariable = (node.data.outputVariable as string) || "agent_result";
   const timeoutSeconds =
-    (node.data.timeoutSeconds as number) || DEFAULT_TIMEOUT_SECONDS;
+    (node.data.timeout as number) ||
+    (node.data.timeoutSeconds as number) ||
+    DEFAULT_TIMEOUT_SECONDS;
   const onError = (node.data.onError as string) || "continue";
   const depth = (context as RuntimeContextWithDepth)._a2aDepth ?? 0;
   const callStack = (context as RuntimeContextWithDepth)._a2aCallStack ?? [
