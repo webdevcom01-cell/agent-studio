@@ -134,9 +134,12 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return response;
   }
 
+  // Server-to-server API key requests have no session cookie.
+  // Pass them through; the route handler validates the key via requireAuth().
+  const hasApiKey = request.headers.has("x-api-key");
   const hasSession = hasSessionCookie(request);
 
-  if (!hasSession) {
+  if (!hasApiKey && !hasSession) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     const response = NextResponse.redirect(loginUrl);
