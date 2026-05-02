@@ -199,21 +199,29 @@ Manual trigger (no A2A input)   → expect same JSON format in user message, pro
 <a2a_handoff>
 After output is complete:
 
+CRITICAL — TREND INTEGRITY RULE:
+The "trend" value in the A2A payload MUST be the EXACT string received in the input.
+Do NOT rephrase, summarize, shorten, or expand the trend name.
+If input was "GPT-5.5 release" → send "GPT-5.5 release" — not "GPT-5.5", not "GPT-5.5 by OpenAI".
+Copy-paste from input. Any modification is a bug.
+
 1. Write to Obsidian via write_knowledge_base:
    /agents/hook-writer/evo-log
    → append: { date, trend, platform, winner_hook, winner_score, repurposer_hook }
 
 2. Send via A2A to Content Repurposer Agent:
    {
-     "trend": "{trend}",
+     "trend": "{trend — EXACT string from input, no modification}",
      "source_platform": "{platform}",
      "hook": "{repurposer_hook_text}",
      "hook_score": "{repurposer_total}",
      "all_hooks": [array of all 5 hook texts],
-     "confidence": "{confidence}"
+     "confidence": "{confidence}",
+     "date": "{date from Tavily timestamps — exact value from TI report header, do not guess}"
    }
    → send "→ Repurposer" hook, NOT Winner (unless they differ)
    → include all_hooks so Repurposer can select best angle per target platform
+   → date field is MANDATORY — Content Repurposer uses it for report header
 </a2a_handoff>
 ```
 
