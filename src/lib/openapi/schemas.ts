@@ -34,7 +34,7 @@ export const AgentSchema = registry.register(
         .string()
         .nullable()
         .openapi({ example: "You are a helpful assistant..." }),
-      model: z.string().openapi({ example: "deepseek-chat" }),
+      model: z.string().openapi({ example: "gpt-4.1-mini" }),
       category: z
         .string()
         .nullable()
@@ -68,7 +68,7 @@ export const CreateAgentBodySchema = z
     model: z
       .string()
       .optional()
-      .openapi({ example: "deepseek-chat" }),
+      .openapi({ example: "gpt-4.1-mini" }),
     templateId: z
       .string()
       .optional()

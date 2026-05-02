@@ -12,7 +12,7 @@
  *   5. Persist suite + test cases via Prisma
  *   6. Return created suite ID for the UI to navigate to
  *
- * Model strategy: deepseek-chat primary (cost-efficient), gpt-4o-mini fallback.
+ * Model strategy: gpt-4.1-mini primary (cost-efficient), gpt-4o-mini fallback.
  * Timeout: 60s (eval generation is simpler than full CLI pipeline phases).
  */
 

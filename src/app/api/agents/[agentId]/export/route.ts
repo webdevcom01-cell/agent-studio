@@ -46,7 +46,7 @@ export async function GET(
         name: agent.name,
         description: agent.description ?? "",
         systemPrompt: agent.systemPrompt ?? "You are a helpful assistant.",
-        model: agent.model ?? "deepseek-chat",
+        model: agent.model ?? "gpt-4.1-mini",
       },
       flow: {
         nodes: flowContent.nodes ?? [],

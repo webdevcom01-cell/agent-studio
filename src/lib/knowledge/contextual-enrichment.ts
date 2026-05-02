@@ -15,7 +15,7 @@
  * - 49% fewer failed retrievals (vs raw chunking)
  * - 67% fewer failed retrievals when combined with reranking
  *
- * Cost (deepseek-chat, 1000 chunks × ~300 input tokens):
+ * Cost (gpt-4.1-mini, 1000 chunks × ~300 input tokens):
  * - ~$0.02 per full KB re-ingest
  * - Use prompt caching (document prefix is identical for all chunks)
  *

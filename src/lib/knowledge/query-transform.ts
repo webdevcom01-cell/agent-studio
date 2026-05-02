@@ -10,7 +10,7 @@ import { getModel } from "@/lib/ai";
 import { logger } from "@/lib/logger";
 
 // Use gpt-4o-mini by default — cheap, fast, and reliable for query expansion.
-// Override via RAG_TRANSFORM_MODEL env var (e.g. "deepseek-chat") if preferred.
+// Override via RAG_TRANSFORM_MODEL env var (e.g. "gpt-4.1-mini") if preferred.
 const TRANSFORM_MODEL = process.env.RAG_TRANSFORM_MODEL ?? "gpt-4o-mini";
 const MAX_EXPANDED_QUERIES = 3;
 
@@ -23,7 +23,7 @@ export async function hydeTransform(
     const userPrompt = context ? `${query}\n\nContext: ${context}` : query;
 
     // Use a model compatible with the KB's embedding strategy.
-    // OpenAI-embedded KBs pair well with GPT-family for HyDE; others use deepseek-chat.
+    // OpenAI-embedded KBs pair well with GPT-family for HyDE; others use gpt-4.1-mini.
     const hydeModel =
       kbConfig?.embeddingModel?.toLowerCase().includes("openai") ||
       kbConfig?.embeddingModel?.toLowerCase().includes("text-embedding")

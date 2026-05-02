@@ -62,7 +62,7 @@ export async function POST(
       .join("\n\n");
 
     const { text: answer } = await generateText({
-      model: getModel("deepseek-chat"),
+      model: getModel("gpt-4.1-mini"),
       system: `Answer the question using ONLY the provided context. If the context doesn't contain enough information, say so.\n\nContext:\n${contextBlock}`,
       prompt: parsed.question,
       maxOutputTokens: 1000,

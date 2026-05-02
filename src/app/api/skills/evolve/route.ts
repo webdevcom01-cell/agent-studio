@@ -116,7 +116,7 @@ async function generateSkillContent(instinct: {
   frequency: number;
 }): Promise<string> {
   const { text } = await generateText({
-    model: getModel("deepseek-chat"),
+    model: getModel("gpt-4.1-mini"),
     maxOutputTokens: 1024,
     prompt: `Generate a concise SKILL.md body (no frontmatter) for a development skill that was learned from repeated successful patterns.
 
