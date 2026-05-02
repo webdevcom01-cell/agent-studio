@@ -11,10 +11,14 @@
             "id": "2e1b3d6369e8dee2",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "type": "markdown",
+              "state": {
+                "file": "soma-vault/README.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "README"
             }
           }
         ]
@@ -177,5 +181,7 @@
     }
   },
   "active": "2e1b3d6369e8dee2",
-  "lastOpenFiles": []
+  "lastOpenFiles": [
+    "Untitled"
+  ]
 }
