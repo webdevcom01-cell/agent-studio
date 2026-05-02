@@ -30,6 +30,7 @@ import { registerAgentTools } from "./tools/agents.js";
 import { registerMutationTools } from "./tools/mutations.js";
 import { registerDiagnosticTools } from "./tools/diagnostics.js";
 import { registerA2ATools } from "./tools/a2a.js";
+import { registerExecutionTools } from "./tools/execution.js";
 import { ping } from "./db.js";
 
 // ── Server setup ─────────────────────────────────────────────────────────────
@@ -43,6 +44,7 @@ registerAgentTools(server);
 registerMutationTools(server);
 registerDiagnosticTools(server);
 registerA2ATools(server);
+registerExecutionTools(server);
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
 
@@ -143,6 +145,8 @@ async function runHTTP(): Promise<void> {
     process.stderr.write(`[MCP] Endpoint: POST http://localhost:${port}/mcp\n`);
     process.stderr.write(`[MCP] Auth: ${process.env.MCP_API_KEY ? "✅ MCP_API_KEY set" : "⚠️  MCP_API_KEY not set — open access"}\n`);
     process.stderr.write(`[MCP] Database: ${process.env.DATABASE_URL ? "✅ DATABASE_URL set" : "❌ DATABASE_URL missing"}\n`);
+    process.stderr.write(`[MCP] Studio URL: ${process.env.AGENT_STUDIO_URL ? `✅ ${process.env.AGENT_STUDIO_URL}` : "⚠️  AGENT_STUDIO_URL not set — as_chat_with_agent disabled"}\n`);
+    process.stderr.write(`[MCP] Studio API key: ${process.env.AGENT_STUDIO_API_KEY ? "✅ set" : "⚠️  AGENT_STUDIO_API_KEY not set — as_chat_with_agent disabled"}\n`);
   });
 }
 
