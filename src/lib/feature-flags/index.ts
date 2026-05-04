@@ -32,8 +32,8 @@ interface FlagOverride {
 const DEFAULT_FLAGS: Record<string, FeatureFlag> = {
   "async-execution": {
     key: "async-execution",
-    enabled: true,
-    rolloutPercent: 100,
+    enabled: false, // Disabled until dedicated worker Railway service is deployed
+    rolloutPercent: 0,
     description: "Route chat requests through BullMQ job queue",
   },
   "webhook-retry": {

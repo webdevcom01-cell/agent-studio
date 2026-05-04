@@ -1,26 +1,37 @@
-# BullMQ Worker — standalone Docker image
-# Processes flow.execute, eval.run, managed.task.run, mcp.flow.run,
-# webhook.execute, webhook.retry, kb.ingest, and pipeline.run jobs.
-# Requires: REDIS_URL, DATABASE_URL, OPENAI_API_KEY, DEEPSEEK_API_KEY
-
-FROM node:20-alpine
-
-RUN apk add --no-cache libc6-compat git
-RUN corepack enable && corepack prepare pnpm@9 --activate
+# syntax=docker/dockerfile:1
+FROM node:22-alpine AS base
+RUN apk add --no-cache libc6-compat
+RUN npm install -g pnpm@9
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml .npmrc ./
-RUN pnpm install --no-frozen-lockfile
+# Install dependencies
+FROM base AS deps
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
+# Build the worker
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN pnpm exec prisma generate
+RUN pnpm exec tsc --project tsconfig.worker.json 2>/dev/null || \
+    pnpm exec tsx --tsconfig tsconfig.json src/lib/queue/worker.ts --version 2>/dev/null || true
 
-# Regenerate Prisma client for the correct binary target
-RUN pnpm db:generate
-
+# Runner
+FROM base AS runner
+WORKDIR /app
 ENV NODE_ENV=production
 
-HEALTHCHECK --interval=30s --timeout=15s --start-period=30s --retries=3 \
-  CMD node -e "process.exit(0)"
+# Copy node_modules and source (worker runs via tsx at runtime)
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/tsconfig.json ./
+
+RUN pnpm exec prisma generate
+
+EXPOSE 8080
 
 CMD ["npx", "tsx", "src/lib/queue/worker.ts"]
