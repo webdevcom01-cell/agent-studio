@@ -1,7 +1,31 @@
 # Tech Debt Baseline — agent-studio
 
-Last updated: 2026-04-27
+Last updated: 2026-05-04
 Baseline established after Phases 1–6 cleanup. Knip baseline added 2026-04-27.
+
+---
+
+## RLS Rollout Status (F0.8)
+
+| Item | Status |
+|------|--------|
+| Migration file (`20240108000000_enable_rls`) | ✅ Created |
+| `withOrgContext` helper (`src/lib/db/rls-middleware.ts`) | ✅ Created + tested (8 tests) |
+| RLS note in `src/lib/prisma.ts` | ✅ Added |
+| API routes wired with `withOrgContext` | ❌ TODO — each route needs to wrap prisma calls |
+| Schema: `organizationId` column on non-Agent tables | ❌ TODO — needed before RLS can cover those tables |
+
+**Priority routes to migrate first:**
+1. `/api/agents` — direct Agent queries, highest tenant-leakage risk
+2. `/api/flows` — child of Agent, leaks flow content
+3. `/api/knowledge-bases` — child of Agent, leaks KB documents
+
+**Tables currently covered by RLS:** `Agent` only (only table with real `organizationId` column in schema).
+
+**Tables pending schema migration before RLS can be added:**
+Flow, KnowledgeBase, WebhookConfig, EvalSuite, EvalRun, EvalResult, AuditLog, ApiKey, MCPServer, AgentSkillPermission
+
+**Note on Prisma v6 middleware:** `$use()` was removed in Prisma v6. `registerRLSMiddleware()` in rls-middleware.ts only activates when a client exposes `$use` (test mocks). Production routes must call `withOrgContext()` per-request.
 
 ---
 
@@ -57,20 +81,6 @@ Run: `pnpm knip` | knip v5.88.1
 - **`tailwindcss`** — consumed by PostCSS/build config, not imported in JS files.
 - **`eslint` + `eslint-config-next`** — used by the editor and build pipeline, not by `import` statements.
 
-### Real Bug — fix before next release
-
-- **Unresolved import** in `src/lib/runtime/handlers/__tests__/schema-drift-empty-data.test.ts:13` — `../types` does not resolve. This test may be silently skipped or broken.
-
-### Files Flagged for Investigation
-
-These three files are fully unused (no importers found anywhere) and are candidates for deletion or revival:
-
-| File | Risk | Action needed |
-|------|------|---------------|
-| `src/lib/cache/index.ts` | High — a cache module with zero consumers suggests abandoned mid-impl or its consumer was deleted | Investigate before next feature work that touches caching |
-| `src/lib/security/index.ts` | Medium — security utilities that nothing calls | Review contents; delete or wire up |
-| `src/lib/session/session-tracker.ts` | Medium — session tracking with no consumers | Review contents; delete or wire up |
-
 ### Budget Rule
 
 Knip count must not grow between quarterly scans. New dead code findings must be resolved or explicitly documented here with a justification.
@@ -87,6 +97,9 @@ Knip count must not grow between quarterly scans. New dead code findings must be
 | 4 | Unused import cleanup — StarOff, Button, unused loop var `c` | 2026-03-27 | `e87b3ff` |
 | 5 | ESLint modernization — `no-console` + `no-unused-vars` rules, ESLint step in precheck | 2026-03-27 | `e87b3ff` |
 | 6 | Ongoing governance — Knip config, warning budget baseline, quarterly scan script | 2026-03-27 | current |
+| 7 | Dead file cleanup — deleted `cache/index.ts` (MemoryCache barrel, 0 importers) and `security/index.ts` (re-export barrel, 0 importers); kept `session/session-tracker.ts` with TODO F3; confirmed `schema-drift` import was never broken (`../../types` resolves correctly) | 2026-05-04 | — |
+| 8 | F1 cost tracking wired — `recordCost()` added fire-and-forget to `ai-response-handler.ts` and `ai-response-streaming-handler.ts` after token usage recording | 2026-05-04 | — |
+| 9 | F6 KEYS→SCAN — replaced `redis.keys()` with SCAN cursor loop in `getAgentCheckouts`; added `scan` to `RedisClient` interface; updated tests to mock `scan` instead of `keys` | 2026-05-04 | — |
 
 ---
 

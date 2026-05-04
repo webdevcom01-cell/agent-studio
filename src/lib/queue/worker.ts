@@ -14,7 +14,7 @@
 
 import { Worker, type Job } from "bullmq";
 import { logger } from "@/lib/logger";
-import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData, WebhookExecuteJobData, ManagedTaskRunJobData, McpFlowRunJobData, PipelineRunJobData } from "./index";
+import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData, WebhookExecuteJobData, ManagedTaskRunJobData, McpFlowRunJobData, PipelineRunJobData, BudgetMonthlyResetJobData, HeartbeatRunJobData, GovernanceTimeoutJobData } from "./index";
 import type { TaskInput } from "@/lib/managed-tasks/manager";
 
 const QUEUE_NAME = "agent-studio";
@@ -46,6 +46,12 @@ async function processJob(job: Job<JobData>): Promise<unknown> {
       return processMcpFlowJob(job as Job<McpFlowRunJobData>);
     case "pipeline.run":
       return processPipelineRunJob(job as Job<PipelineRunJobData>);
+    case "budget.monthly.reset":
+      return processBudgetResetJob(job as Job<BudgetMonthlyResetJobData>);
+    case "heartbeat.run":
+      return processHeartbeatJob(job as Job<HeartbeatRunJobData>);
+    case "governance.timeout":
+      return processGovernanceTimeoutJob(job as Job<GovernanceTimeoutJobData>);
     default:
       throw new Error(`Unknown job type: ${(data as Record<string, unknown>).type}`);
   }
@@ -687,6 +693,39 @@ async function fireTaskCallback(
       await new Promise<void>((r) => setTimeout(r, 2000));
     }
   }
+}
+
+async function processBudgetResetJob(job: Job<BudgetMonthlyResetJobData>): Promise<unknown> {
+  const { resetAllBudgets } = await import("@/lib/budget/reset-worker");
+
+  await job.updateProgress(10);
+
+  const result = await resetAllBudgets();
+
+  await job.updateProgress(100);
+
+  logger.info("Budget reset job completed", { jobId: job.id, resetCount: result.count });
+
+  return result;
+}
+
+async function processHeartbeatJob(job: Job<HeartbeatRunJobData>): Promise<unknown> {
+  const { processHeartbeatRunJob } = await import("@/lib/heartbeat/heartbeat-worker");
+  return processHeartbeatRunJob(job);
+}
+
+async function processGovernanceTimeoutJob(job: Job<GovernanceTimeoutJobData>): Promise<unknown> {
+  const { processTimeouts } = await import("@/lib/governance/approval-engine");
+
+  await job.updateProgress(10);
+
+  const result = await processTimeouts();
+
+  await job.updateProgress(100);
+
+  logger.info("Governance timeout job completed", { jobId: job.id, ...result });
+
+  return result;
 }
 
 export function createWorker(): Worker<JobData> {

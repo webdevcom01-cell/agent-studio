@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockCallMCPTool = vi.hoisted(() => vi.fn());
 const mockFindUnique = vi.hoisted(() => vi.fn());
+const mockSkillPermFindUnique = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/mcp/client", () => ({
   callMCPTool: mockCallMCPTool,
@@ -11,6 +12,9 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     agentMCPServer: {
       findUnique: (...args: unknown[]) => mockFindUnique(...args),
+    },
+    agentSkillPermission: {
+      findUnique: (...args: unknown[]) => mockSkillPermFindUnique(...args),
     },
   },
 }));
@@ -48,6 +52,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Default: agent has the MCP server linked with no tool restrictions
   mockFindUnique.mockResolvedValue({ enabledTools: null });
+  // Default: no AgentSkillPermission record → backward-compatible allow
+  mockSkillPermFindUnique.mockResolvedValue(null);
 });
 
 describe("mcpToolHandler", () => {
@@ -291,6 +297,50 @@ describe("mcpToolHandler", () => {
           toolName: "tool",
         }),
       );
+    });
+  });
+
+  // ── AgentSkillPermission check (backward-compatible) ──────────────────────
+
+  describe("AgentSkillPermission check", () => {
+    it("allows when no AgentSkillPermission record exists (backward compat)", async () => {
+      mockSkillPermFindUnique.mockResolvedValue(null);
+      mockCallMCPTool.mockResolvedValue("ok");
+
+      const result = await mcpToolHandler(
+        makeNode({ mcpServerId: "server-1", toolName: "search", inputMapping: {} }),
+        makeContext(),
+      );
+
+      expect(mockCallMCPTool).toHaveBeenCalledTimes(1);
+      expect(result.updatedVariables?.mcp_result).toBe("ok");
+    });
+
+    it("allows when AgentSkillPermission record grants EXECUTE access", async () => {
+      mockSkillPermFindUnique.mockResolvedValue({ accessLevel: "EXECUTE" });
+      mockCallMCPTool.mockResolvedValue("ok");
+
+      const result = await mcpToolHandler(
+        makeNode({ mcpServerId: "server-1", toolName: "search", inputMapping: {} }),
+        makeContext(),
+      );
+
+      expect(mockCallMCPTool).toHaveBeenCalledTimes(1);
+      expect(result.updatedVariables?.mcp_result).toBe("ok");
+    });
+
+    it("blocks and returns Permission denied when record exists but level is below EXECUTE", async () => {
+      mockSkillPermFindUnique.mockResolvedValue({ accessLevel: "READ" });
+
+      const result = await mcpToolHandler(
+        makeNode({ mcpServerId: "server-1", toolName: "search", inputMapping: {} }),
+        makeContext(),
+      );
+
+      expect(mockCallMCPTool).not.toHaveBeenCalled();
+      expect(result.messages[0].content).toContain("Permission denied");
+      expect(result.messages[0].content).toContain("server-1");
+      expect(result.waitForInput).toBe(false);
     });
   });
 });

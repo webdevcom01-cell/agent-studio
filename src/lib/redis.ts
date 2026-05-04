@@ -20,6 +20,7 @@ interface RedisClient {
   setex(key: string, seconds: number, value: string): Promise<unknown>;
   del(...keys: string[]): Promise<number>;
   keys(pattern: string): Promise<string[]>;
+  scan(cursor: number, match: string, pattern: string, count: string, batchSize: number): Promise<[string, string[]]>;
   quit(): Promise<void>;
   status: string;
 }

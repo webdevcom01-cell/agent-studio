@@ -32,7 +32,7 @@ describe("isFeatureEnabled", () => {
   });
 
   it("returns false for disabled flag with 0% rollout", async () => {
-    expect(await isFeatureEnabled("async-execution")).toBe(false);
+    expect(await isFeatureEnabled("onboarding-wizard")).toBe(false);
   });
 
   it("uses Redis override when present", async () => {

@@ -155,6 +155,27 @@ model Agent {
   sdkSessions     AgentSdkSession[]
   managedTasks    ManagedAgentTask[]
   pipelineRuns    PipelineRun[]
+  budget          AgentBudget?
+
+  // F2 — Org Chart
+  departmentId        String?
+  department          Department?            @relation("AgentDepartment", fields: [departmentId], references: [id])
+  parentAgentId       String?
+  parentAgent         Agent?                 @relation("AgentHierarchy", fields: [parentAgentId], references: [id])
+  childAgents         Agent[]                @relation("AgentHierarchy")
+  permissionsGranted  AgentPermissionGrant[] @relation("GrantorAgent")
+  permissionsReceived AgentPermissionGrant[] @relation("GranteeAgent")
+
+  // F3 — Heartbeat Lifecycle
+  heartbeatConfig   HeartbeatConfig?
+  heartbeatContexts HeartbeatContext[]
+  heartbeatRuns     HeartbeatRun[]
+
+  // F4 — Goal Alignment
+  goalLinks         AgentGoalLink[]
+
+  // F5 — Board Governance
+  approvalPolicies  ApprovalPolicy[]
 
   @@index([userId])
   @@index([userId, updatedAt])
@@ -816,6 +837,7 @@ model FlowSchedule {
   nodeId           String?
 
   executions       ScheduledExecution[]
+  heartbeatConfig  HeartbeatConfig?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
@@ -1259,6 +1281,224 @@ model FlowTrace {
 }
 
 // ---------------------------------------------------------------------------
+// F4 — Goal Alignment (company missions, goals, agent-goal linking)
+// ---------------------------------------------------------------------------
+
+model CompanyMission {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  statement      String   @db.Text
+  vision         String?  @db.Text
+  values         Json     @default("[]")
+  goals          Goal[]
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+}
+
+model Goal {
+  id            String          @id @default(cuid())
+  organizationId String
+  missionId     String?
+  mission       CompanyMission? @relation(fields: [missionId], references: [id])
+  parentGoalId  String?
+  parentGoal    Goal?           @relation("GoalHierarchy", fields: [parentGoalId], references: [id])
+  childGoals    Goal[]          @relation("GoalHierarchy")
+  title         String
+  description   String?         @db.Text
+  successMetric String?
+  targetDate    DateTime?
+  /// "ACTIVE" | "COMPLETED" | "PAUSED" | "CANCELLED"
+  status        String          @default("ACTIVE")
+  priority      Int             @default(50)
+  agentLinks    AgentGoalLink[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([organizationId, status])
+  @@index([parentGoalId])
+}
+
+model AgentGoalLink {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  goalId    String
+  goal      Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  /// "OWNER" | "CONTRIBUTOR" | "OBSERVER"
+  role      String   @default("CONTRIBUTOR")
+  createdAt DateTime @default(now())
+
+  @@unique([agentId, goalId])
+  @@index([agentId])
+  @@index([goalId])
+}
+
+// ---------------------------------------------------------------------------
+// F3 — Heartbeat Lifecycle (repeating agent runs with persistent context)
+// ---------------------------------------------------------------------------
+
+model HeartbeatConfig {
+  id             String        @id @default(cuid())
+  agentId        String        @unique
+  agent          Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  organizationId String
+  enabled        Boolean       @default(true)
+  /// Standard cron expression, e.g. "0 * * * *" (every hour).
+  cronExpression String
+  timezone       String        @default("UTC")
+  /// Optional system prompt override injected at the start of each heartbeat run.
+  systemPrompt   String?       @db.Text
+  /// Maximum number of context items to keep (oldest pruned when exceeded).
+  maxContextItems Int          @default(50)
+  /// Link to the FlowSchedule that drives the cron triggers.
+  flowScheduleId String?       @unique
+  flowSchedule   FlowSchedule? @relation(fields: [flowScheduleId], references: [id])
+  runs           HeartbeatRun[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([organizationId])
+}
+
+model HeartbeatContext {
+  id             String    @id @default(cuid())
+  agentId        String
+  agent          Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  organizationId String
+  key            String
+  value          Json
+  ttlSeconds     Int?
+  expiresAt      DateTime?
+  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime  @default(now())
+
+  @@unique([agentId, key])
+  @@index([agentId])
+  @@index([expiresAt])
+}
+
+model HeartbeatRun {
+  id              String          @id @default(cuid())
+  agentId         String
+  agent           Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  organizationId  String
+  configId        String
+  config          HeartbeatConfig @relation(fields: [configId], references: [id])
+  /// "RUNNING" | "COMPLETED" | "FAILED" | "SKIPPED"
+  status          String
+  startedAt       DateTime        @default(now())
+  completedAt     DateTime?
+  durationMs      Int?
+  /// Snapshot of HeartbeatContext key-value map at the start of this run.
+  contextSnapshot Json?
+  output          Json?
+  error           String?         @db.Text
+
+  @@index([agentId, startedAt])
+  @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// F2 — Agent Org Chart (department hierarchy + A2A permission delegation)
+// ---------------------------------------------------------------------------
+
+model Department {
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  organizationId String
+  parentId       String?
+  parent         Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  children       Department[] @relation("DepartmentHierarchy")
+  agents         Agent[]      @relation("AgentDepartment")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([parentId])
+}
+
+model AgentPermissionGrant {
+  id             String    @id @default(cuid())
+  grantorAgentId String
+  granteeAgentId String
+  grantor        Agent     @relation("GrantorAgent", fields: [grantorAgentId], references: [id], onDelete: Cascade)
+  grantee        Agent     @relation("GranteeAgent", fields: [granteeAgentId], references: [id], onDelete: Cascade)
+  organizationId String
+  permission     String
+  scope          String?
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@unique([grantorAgentId, granteeAgentId, permission, scope])
+  @@index([granteeAgentId])
+  @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// F1 — Platform Budget System (cost tracking, no payments)
+// ---------------------------------------------------------------------------
+
+model AgentBudget {
+  id              String        @id @default(cuid())
+  agentId         String        @unique
+  agent           Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  /// Hard limit in USD — when reached, blocks new requests if isHardStop=true. 0 = no limit.
+  hardLimitUsd    Decimal       @default(0) @db.Decimal(10, 2)
+  /// Soft limit in USD — triggers alert only. 0 = no limit.
+  softLimitUsd    Decimal       @default(0) @db.Decimal(10, 2)
+  /// Fraction of hardLimitUsd that triggers a threshold alert (e.g. 0.8 = 80%).
+  alertThreshold  Float         @default(0.8)
+  /// When true, hitting hardLimitUsd blocks new chat requests.
+  isHardStop      Boolean       @default(true)
+  /// Start of the current billing period.
+  periodStart     DateTime      @default(now())
+  /// Accumulated spend for the current period in USD.
+  currentSpendUsd Decimal       @default(0) @db.Decimal(10, 2)
+  costEvents      CostEvent[]
+  alerts          BudgetAlert[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([agentId])
+  @@index([periodStart])
+}
+
+model CostEvent {
+  id           String      @id @default(cuid())
+  budgetId     String
+  budget       AgentBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  agentId      String
+  /// USD cost for this event.
+  costUsd      Decimal     @db.Decimal(10, 4)
+  /// Model used.
+  modelId      String
+  inputTokens  Int         @default(0)
+  outputTokens Int         @default(0)
+  /// Source context: "chat", "eval", "managed-task", etc.
+  source       String      @default("chat")
+  createdAt    DateTime    @default(now())
+
+  @@index([budgetId, createdAt])
+  @@index([agentId, createdAt])
+}
+
+model BudgetAlert {
+  id        String      @id @default(cuid())
+  budgetId  String
+  budget    AgentBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  agentId   String
+  /// "soft_limit_reached" | "hard_limit_reached" | "threshold_reached"
+  alertType String
+  spendUsd  Decimal     @db.Decimal(10, 2)
+  limitUsd  Decimal     @db.Decimal(10, 2)
+  createdAt DateTime    @default(now())
+
+  @@index([budgetId, createdAt])
+  @@index([agentId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
 // Multi-tenancy — Organization + RBAC (Phase 2)
 // ---------------------------------------------------------------------------
 
@@ -1330,4 +1570,85 @@ model ModelPerformanceStat {
   updatedAt         DateTime @updatedAt
 
   @@unique([modelId, phase])
+}
+
+// ---------------------------------------------------------------------------
+// F7 — Clipmart: Portable Template Marketplace
+// ---------------------------------------------------------------------------
+
+model Template {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?  @db.Text
+  /// "GENERAL" | "SALES" | "SUPPORT" | "ENGINEERING" | "MARKETING"
+  category       String   @default("GENERAL")
+  tags           Json     @default("[]")
+  version        String   @default("1.0.0")
+  isPublic       Boolean  @default(false)
+  sourceAgentId  String?
+  importCount    Int      @default(0)
+  payload        Json
+  checksum       String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([isPublic, category])
+}
+
+// ---------------------------------------------------------------------------
+// F5 — Board Governance (approval policies + human-in-the-loop decisions)
+// ---------------------------------------------------------------------------
+
+model ApprovalPolicy {
+  id             String           @id @default(cuid())
+  agentId        String
+  agent          Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  organizationId String
+  /// Human-readable name for this policy.
+  name           String
+  /// Action pattern this policy matches (e.g. "send_email", "deploy", "*").
+  actionPattern  String
+  /// Comma-separated list of approver user IDs.
+  approverIds    String[]
+  /// Seconds before an unanswered request auto-expires (null = no timeout).
+  timeoutSeconds Int?
+  /// When true, a timeout counts as auto-approved; when false, it counts as rejected.
+  timeoutApprove Boolean          @default(false)
+  isActive       Boolean          @default(true)
+  decisions      PolicyDecision[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([agentId])
+  @@index([organizationId])
+}
+
+model PolicyDecision {
+  id             String         @id @default(cuid())
+  policyId       String
+  policy         ApprovalPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  agentId        String
+  organizationId String
+  /// The action the agent is requesting approval for.
+  action         String
+  /// Arbitrary context the agent supplies alongside the request.
+  context        Json?
+  /// "PENDING" | "APPROVED" | "REJECTED" | "TIMEOUT" | "CANCELLED"
+  status         String         @default("PENDING")
+  /// ID of the user who resolved this decision (null if timeout/cancelled).
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  /// Optional note left by the approver.
+  resolverNote   String?        @db.Text
+  /// When the pending decision expires (policy.timeoutSeconds applied at creation).
+  expiresAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([policyId])
+  @@index([agentId, status])
+  @@index([organizationId, status])
+  @@index([status, expiresAt])
 }

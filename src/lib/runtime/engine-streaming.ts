@@ -14,6 +14,7 @@ import { shouldCompact, compactContext } from "./context-compaction";
 import { createHooksFromFlowContent, emitHook } from "./hooks";
 import { emitSessionEvent } from "./session-events";
 import { injectHotMemoryIntoContext } from "@/lib/memory/hot-cold-tier";
+import { injectGoalContextIntoContext } from "@/lib/goals/goal-context";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
 import { claudeAgentSdkStreamingHandler } from "./handlers/claude-agent-sdk-streaming-handler";
@@ -127,6 +128,9 @@ export function executeFlowStreaming(
 
         // Inject hot memory into context (fire-and-forget, never blocks flow)
         await injectHotMemoryIntoContext(context);
+
+        // Inject goal alignment context (F4)
+        await injectGoalContextIntoContext(context);
 
         writeAuditLog({
           userId: context.userId,

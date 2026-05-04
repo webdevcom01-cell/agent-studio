@@ -33,9 +33,11 @@ const PARAMS = { params: Promise.resolve({ agentId: AGENT_ID }) };
 function makeFile(
   name: string,
   type: string,
-  sizeBytes: number = 100
+  sizeBytes: number = 100,
+  magic?: number[]
 ): File {
   const content = new Uint8Array(sizeBytes);
+  if (magic) magic.forEach((b, i) => { content[i] = b; });
   return new File([content], name, { type });
 }
 
@@ -64,7 +66,7 @@ beforeEach(() => {
 
 describe("POST /api/agents/[agentId]/knowledge/sources/upload", () => {
   it("accepts valid PDF with correct MIME type", async () => {
-    const file = makeFile("document.pdf", "application/pdf");
+    const file = makeFile("document.pdf", "application/pdf", 100, [0x25, 0x50, 0x44, 0x46]);
     const res = await POST(makeRequest(file), PARAMS);
     expect(res.status).toBe(201);
     const body = await res.json();
@@ -74,7 +76,9 @@ describe("POST /api/agents/[agentId]/knowledge/sources/upload", () => {
   it("accepts valid DOCX with correct MIME type", async () => {
     const file = makeFile(
       "report.docx",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      100,
+      [0x50, 0x4B, 0x03, 0x04],
     );
     const res = await POST(makeRequest(file), PARAMS);
     expect(res.status).toBe(201);

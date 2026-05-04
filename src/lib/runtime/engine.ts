@@ -8,6 +8,7 @@ import { shouldCompact, compactContext } from "./context-compaction";
 import { createHooksFromFlowContent, emitHook } from "./hooks";
 import { emitSessionEvent } from "./session-events";
 import { injectHotMemoryIntoContext } from "@/lib/memory/hot-cold-tier";
+import { injectGoalContextIntoContext } from "@/lib/goals/goal-context";
 import type { FlowNode } from "@/types";
 
 /**
@@ -159,6 +160,9 @@ export async function executeFlow(
 
   // Inject hot memory into context (fire-and-forget, never blocks flow)
   await injectHotMemoryIntoContext(context);
+
+  // Inject goal alignment context (F4) — non-fatal, sets __goal_prompt variable
+  await injectGoalContextIntoContext(context);
 
   // Audit: flow execution start
   writeAuditLog({

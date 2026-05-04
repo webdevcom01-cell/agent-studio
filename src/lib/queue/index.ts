@@ -114,6 +114,24 @@ export interface PipelineRunJobData {
   repoUrl?: string;
 }
 
+/** F1 — Monthly budget period reset (triggered by daily cron, runs in worker) */
+export interface BudgetMonthlyResetJobData {
+  type: "budget.monthly.reset";
+}
+
+/** F3 — Heartbeat Lifecycle (repeating agent run with persistent context) */
+export interface HeartbeatRunJobData {
+  type: "heartbeat.run";
+  agentId: string;
+  configId: string;
+  organizationId: string;
+}
+
+/** F5 — Board Governance (process expired policy decisions) */
+export interface GovernanceTimeoutJobData {
+  type: "governance.timeout";
+}
+
 export type JobData =
   | FlowExecuteJobData
   | EvalRunJobData
@@ -122,7 +140,10 @@ export type JobData =
   | WebhookExecuteJobData
   | ManagedTaskRunJobData
   | McpFlowRunJobData
-  | PipelineRunJobData;
+  | PipelineRunJobData
+  | BudgetMonthlyResetJobData
+  | HeartbeatRunJobData
+  | GovernanceTimeoutJobData;
 
 const PRIORITY_MAP: Record<string, number> = {
   chat: 1,
@@ -414,6 +435,80 @@ export async function addMcpFlowJob(
   });
 
   return job.id ?? `mcp-flow-${data.taskId}`;
+}
+
+/**
+ * F1: Enqueue a monthly budget reset job.
+ * Priority 10 (low) — background housekeeping, never user-facing.
+ * Deduplicated by stable jobId so double-firing the cron has no effect.
+ */
+export async function addBudgetResetJob(): Promise<string> {
+  const q = getQueue();
+  const dateKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  const job = await q.add(
+    "budget.monthly.reset",
+    { type: "budget.monthly.reset" as const },
+    {
+      priority: PRIORITY_MAP.eval, // lowest priority tier
+      jobId: `budget-reset-${dateKey}`,
+      attempts: 3,
+      removeOnComplete: { age: 86400 },
+      removeOnFail: { age: 604800 },
+    },
+  );
+
+  logger.info("Budget reset job enqueued", { jobId: job.id, dateKey });
+
+  return job.id ?? `budget-reset-${dateKey}`;
+}
+
+/**
+ * F3: Enqueue a heartbeat run for immediate async execution.
+ * Priority 5 (pipeline) — not interactive, but timely (triggered by scheduler).
+ */
+export async function addHeartbeatRunJob(
+  data: Omit<HeartbeatRunJobData, "type">,
+): Promise<string> {
+  const q = getQueue();
+
+  const job = await q.add(
+    "heartbeat.run",
+    { ...data, type: "heartbeat.run" as const },
+    {
+      priority: PRIORITY_MAP.pipeline,
+      jobId: `heartbeat-${data.configId}-${Date.now()}`,
+      attempts: 2,
+      removeOnComplete: { age: 86400 },
+      removeOnFail: { age: 604800 },
+    },
+  );
+
+  logger.info("Heartbeat run job enqueued", { jobId: job.id, agentId: data.agentId, configId: data.configId });
+
+  return job.id ?? `heartbeat-${data.configId}`;
+}
+
+/** F5 — Board Governance: process all expired PENDING decisions. */
+export async function addGovernanceTimeoutJob(): Promise<string> {
+  const q = getQueue();
+  const dateKey = new Date().toISOString().slice(0, 13); // hourly dedup
+
+  const job = await q.add(
+    "governance.timeout",
+    { type: "governance.timeout" as const },
+    {
+      priority: PRIORITY_MAP.eval,
+      jobId: `governance-timeout-${dateKey}`,
+      attempts: 2,
+      removeOnComplete: { age: 86400 },
+      removeOnFail: { age: 604800 },
+    },
+  );
+
+  logger.info("Governance timeout job enqueued", { jobId: job.id });
+
+  return job.id ?? `governance-timeout-${dateKey}`;
 }
 
 export async function closeQueue(): Promise<void> {

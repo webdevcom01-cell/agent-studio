@@ -1,5 +1,9 @@
 import { PrismaClient } from "@/generated/prisma";
 
+// RLS NOTE: For tenant-isolated queries, use withOrgContext(prisma, orgId, fn)
+// from '@/lib/db/rls-middleware'. Direct prisma usage in API routes should
+// always be wrapped. Admin/cron jobs bypass RLS via BYPASSRLS on the DB role.
+
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
   prismaRead: PrismaClient | undefined;

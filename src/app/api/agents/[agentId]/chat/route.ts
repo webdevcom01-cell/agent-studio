@@ -4,7 +4,7 @@ import { executeFlowStreaming } from "@/lib/runtime/engine-streaming";
 import { loadContext } from "@/lib/runtime/context";
 import { trackChatResponse, trackError } from "@/lib/analytics";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimitAsync } from "@/lib/rate-limit";
+import { checkRateLimit, checkRateLimitAsync } from "@/lib/rate-limit";
 import { parseBodyWithLimit, BodyTooLargeError } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
@@ -12,6 +12,8 @@ import { logger } from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { addFlowJob, getJobStatus } from "@/lib/queue";
 import { createJobEventStream } from "@/lib/queue/events";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { checkBudget } from "@/lib/budget/cost-tracker";
 
 const MAX_MESSAGE_LENGTH = 10_000;
 
@@ -33,6 +35,20 @@ export async function POST(
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     request.headers.get("x-real-ip") ??
     "unknown";
+  const ipRateResult = checkRateLimit(`chat:ip:${clientIp}`, 30);
+  if (!ipRateResult.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests from this IP" },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.ceil(ipRateResult.retryAfterMs / 1000)),
+          "X-RateLimit-Remaining": "0",
+        },
+      }
+    );
+  }
+
   const rateKey = `chat:${agentId}:${clientIp}`;
   const rateResult = await checkRateLimitAsync(rateKey);
 
@@ -78,7 +94,8 @@ export async function POST(
   const conversationId =
     typeof body.conversationId === "string" ? body.conversationId : undefined;
   const isStreaming = body.stream === true;
-  const isAsync = body.async === true;
+  const asyncFlagEnabled = await isFeatureEnabled("async-execution");
+  const isAsync = body.async === true || (body.async === undefined && asyncFlagEnabled);
   // Eval compare: optional flow version override (only used for head-to-head eval runs)
   const evalFlowVersionId =
     typeof body.flowVersionId === "string" && body.flowVersionId.length > 0
@@ -121,6 +138,15 @@ export async function POST(
   if (isDebug || evalFlowVersionId || evalModelOverride) {
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
+  }
+
+  // ── Budget check (F1) ────────────────────────────────────────────────
+  const budgetResult = await checkBudget(agentId);
+  if (!budgetResult.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Monthly spend limit reached. Contact your administrator." },
+      { status: 402 },
+    );
   }
 
   // ── Async job-based execution (Phase 1.2) ─────────────────────────────

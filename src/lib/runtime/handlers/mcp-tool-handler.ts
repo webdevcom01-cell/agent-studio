@@ -4,7 +4,7 @@ import { callMCPTool } from "@/lib/mcp/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { auditMCPToolCall, writeAuditLog } from "@/lib/security/audit";
-import { enforceSkillAccess, RBACError } from "@/lib/security/rbac";
+import { checkSkillAccess, enforceSkillAccess, RBACError } from "@/lib/security/rbac";
 import { isECCEnabled } from "@/lib/ecc/feature-flag";
 import { validateMCPInputArgs, validateNamedSchema } from "@/lib/mcp/schema-validator";
 
@@ -61,6 +61,38 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
         [outputVariable]: `[Error: Access denied — ${accessCheck.reason}]`,
       },
     };
+  }
+
+  // AgentSkillPermission check — backward-compatible:
+  // No record → allow (legacy agents without explicit permissions never blocked).
+  // Record exists with level < EXECUTE → deny gracefully, no throw.
+  try {
+    const skillPerm = await prisma.agentSkillPermission.findUnique({
+      where: { agentId_skillId: { agentId: context.agentId, skillId: mcpServerId } },
+      select: { accessLevel: true },
+    });
+
+    if (skillPerm !== null) {
+      const hasAccess = await checkSkillAccess(context.agentId, mcpServerId, "EXECUTE");
+      if (!hasAccess) {
+        logger.warn("MCP server skill permission denied", {
+          agentId: context.agentId,
+          mcpServerId,
+        });
+        return {
+          messages: [
+            {
+              role: "assistant",
+              content: `Permission denied: agent does not have EXECUTE access to MCP server ${mcpServerId}`,
+            },
+          ],
+          nextNodeId: null,
+          waitForInput: false,
+        };
+      }
+    }
+  } catch {
+    // DB error → fail-open (do not block on transient failures)
   }
 
   // Org-level RBAC: if the agent belongs to an organization and the triggering

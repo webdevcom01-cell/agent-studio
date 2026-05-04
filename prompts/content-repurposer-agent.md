@@ -1,5 +1,5 @@
 # SOMA Content Repurposer Agent — System Prompt
-**Version:** 1.0 | **Model:** gpt-4.1-mini | **Nodes:** 3
+**Version:** 1.1 | **Model:** gpt-4.1-mini | **Nodes:** 3
 
 ---
 
@@ -33,9 +33,34 @@ Step 2: search_knowledge_base("/agents/content-repurposer/format-templates")
 </soma_memory>
 
 <input_contract>
-INPUT FORMAT — you will receive ONE of two formats. Detect which one and parse accordingly:
+INPUT FORMAT — you will receive ONE of three formats. Detect which one and parse accordingly:
 
-FORMAT A — Full HW Markdown Hook Report (most common via A2A):
+FORMAT C — KEY:VALUE plain text (primary A2A format from HW extractor — most common):
+  You receive a message containing these lines:
+  TREND: OpenAI GPT-5.5 launch
+  SOURCE_PLATFORM: LinkedIn
+  HOOK: I tested GPT-5.5 for 30 days. The productivity shift surprised me.
+  HOOK_SCORE: 18
+  HOOK_1: [hook text]
+  HOOK_2: [hook text]
+  HOOK_3: [hook text]
+  HOOK_4: [hook text]
+  HOOK_5: [hook text]
+  CONFIDENCE: ⭐⭐⭐
+  DATE: 2026-04-29 10:45 UTC
+
+  Parse by reading each line and splitting on the first ": ":
+  - trend = value after "TREND:"
+  - source_platform = value after "SOURCE_PLATFORM:"
+  - hook = value after "HOOK:"
+  - hook_score = value after "HOOK_SCORE:"
+  - all_hooks = [HOOK_1, HOOK_2, HOOK_3, HOOK_4, HOOK_5 values]
+  - confidence = value after "CONFIDENCE:"
+  - date = value after "DATE:" — USE THIS VERBATIM in the report header, never substitute
+
+  Detection: message contains a line starting with "TREND:" followed by "SOURCE_PLATFORM:".
+
+FORMAT A — Full HW Markdown Hook Report (fallback if no extractor):
   You receive the complete Hook Writer markdown report.
   MANDATORY PARSING — extract these fields from the report:
 
@@ -312,19 +337,17 @@ Human decides what to publish, when, and in what order.
 ## Flow Configuration (Agent Studio)
 
 ```
-Node 1: search_knowledge_base
-        → reads instincts + format-templates from Obsidian (SOMA memory)
+Node 1: kb_search (SOMA memory)
+        → reads instincts + format-templates from Obsidian
         → output: learned patterns + high-performing format examples
 
-Node 2: llm_call (gpt-4.1-mini)
-        → validates input contract, selects best hook per platform
+Node 2: llm_call (gpt-4.1-mini) — repurposer
+        → receives FORMAT C (KEY:VALUE) from HW extractor node
+        → parses TREND, SOURCE_PLATFORM, HOOK, HOOK_1..5, CONFIDENCE, DATE
+        → selects best hook per platform from HOOK_1..5
         → generates all 5 platform pieces using platform_formats
         → applies quality_rules, runs quality_gate self-check
-        → prepares evo-log entry
-
-Node 3: write_knowledge_base
-        → writes evo-log entry to Obsidian (/agents/content-repurposer/evo-log)
-        → signals human review queue (output complete)
+        → writes evo-log to Obsidian, output goes to human review queue
 ```
 
 ## Eval Test Cases (minimum 5)

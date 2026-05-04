@@ -33,7 +33,9 @@ import { registerA2ATools } from "./tools/a2a.js";
 import { registerExecutionTools } from "./tools/execution.js";
 import { registerKnowledgeTools } from "./tools/knowledge.js";
 import { registerEvalTools } from "./tools/evals.js";
+import { registerF1F7Tools } from "./tools/f1-f7.js";
 import { ping } from "./db.js";
+import { resolveAuthMode } from "./auth.js";
 
 // ── Server setup ─────────────────────────────────────────────────────────────
 
@@ -42,13 +44,15 @@ const server = new McpServer({
   version: "1.0.0",
 });
 
-registerAgentTools(server);
-registerMutationTools(server);
-registerDiagnosticTools(server);
-registerA2ATools(server);
-registerExecutionTools(server);
-registerKnowledgeTools(server);
-registerEvalTools(server);
+registerAgentTools(server);      // 4 tools: list_agents, get_agent, inspect_flow, get_recent_executions
+registerMutationTools(server);   // 6 tools: update_model, set_public, patch_node, update_prompt, delete, update_flow
+registerDiagnosticTools(server); // 3 tools: diagnose_models, health_check, find_broken_flows
+registerA2ATools(server);        // 2 tools: get_agent_call_log, list_agent_calls
+registerExecutionTools(server);  // 1 tool:  chat_with_agent
+registerKnowledgeTools(server);  // 5 tools: list_kb, search_kb, add_kb_url, add_kb_text, kb_status
+registerEvalTools(server);       // 5 tools: list_evals, run_eval, get_eval_result, create_eval_case, create_agent
+registerF1F7Tools(server);       // 9 tools: get/set_budget, get_org_chart, assign_department, list/link_goals, get_heartbeat, set_heartbeat_context, export_template
+                                 // Total: 35 tools
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
 
@@ -145,7 +149,11 @@ async function runHTTP(): Promise<void> {
 
   const port = parseInt(process.env.PORT ?? "3000", 10);
   app.listen(port, () => {
+    const authMode = (() => {
+      try { return resolveAuthMode(); } catch { return "UNCONFIGURED"; }
+    })();
     process.stderr.write(`[MCP] agent-studio-mcp-server running on port ${port}\n`);
+    process.stderr.write(`[MCP] Auth mode: ${authMode}\n`);
     process.stderr.write(`[MCP] Endpoint: POST http://localhost:${port}/mcp\n`);
     process.stderr.write(`[MCP] Auth: ${process.env.MCP_API_KEY ? "✅ MCP_API_KEY set" : "⚠️  MCP_API_KEY not set — open access"}\n`);
     process.stderr.write(`[MCP] Database: ${process.env.DATABASE_URL ? "✅ DATABASE_URL set" : "❌ DATABASE_URL missing"}\n`);
@@ -153,6 +161,8 @@ async function runHTTP(): Promise<void> {
     process.stderr.write(`[MCP] Studio API key: ${process.env.AGENT_STUDIO_API_KEY ? "✅ set" : "⚠️  AGENT_STUDIO_API_KEY not set — as_chat_with_agent disabled"}\n`);
     process.stderr.write(`[MCP] KB tools: 5 registered\n`);
     process.stderr.write(`[MCP] Eval tools: 5 registered\n`);
+    process.stderr.write(`[MCP] F1-F7 tools: 9 registered (budget, org-chart, goals, heartbeat, templates)\n`);
+    process.stderr.write(`[MCP] Total tools: 35\n`);
   });
 }
 

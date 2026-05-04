@@ -7,6 +7,7 @@ import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { validateMagicBytes } from "@/lib/security/magic-numbers";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".xlsx", ".xls", ".csv", ".pptx"];
@@ -106,6 +107,15 @@ export async function POST(
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
+
+    const magicCheck = validateMagicBytes(buffer, ext);
+    if (!magicCheck.valid) {
+      return NextResponse.json(
+        { success: false, error: "File content does not match the declared file type" },
+        { status: 400 }
+      );
+    }
+
     const extractedText = await parseSource({
       type: "FILE",
       fileBuffer: buffer,

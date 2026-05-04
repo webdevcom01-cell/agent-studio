@@ -63,6 +63,9 @@ vi.mock("@/lib/api/sanitize-error", () => ({
     err instanceof Error ? err.message : fallback
   ),
 }));
+vi.mock("@/lib/feature-flags", () => ({
+  isFeatureEnabled: vi.fn().mockResolvedValue(false),
+}));
 
 import { POST } from "../route";
 
@@ -83,6 +86,8 @@ function makeRequest(body: Record<string, unknown>): NextRequest {
 // Import mocked modules so we can re-apply defaults in beforeEach
 import * as RateLimit from "@/lib/rate-limit";
 import * as BodyLimit from "@/lib/api/body-limit";
+import * as FeatureFlags from "@/lib/feature-flags";
+import * as Queue from "@/lib/queue";
 
 beforeEach(() => {
   // clearAllMocks resets call counts but preserves mock implementations set in vi.mock(...)
@@ -174,5 +179,46 @@ describe("POST /api/agents/[agentId]/chat — rate-limit headers", () => {
     const nowSec = Math.floor(Date.now() / 1000);
     expect(Number(reset)).toBeGreaterThan(nowSec);
     expect(Number(reset)).toBeLessThan(nowSec + 120);
+  });
+});
+
+describe("POST /api/agents/[agentId]/chat — async-execution feature flag", () => {
+  it("routes through BullMQ when body.async is undefined and flag is enabled", async () => {
+    vi.mocked(FeatureFlags.isFeatureEnabled).mockResolvedValue(true);
+
+    const res = await POST(makeRequest({ message: "Hello" }), PARAMS);
+
+    // Async path returns 202 with jobId
+    expect(res.status).toBe(202);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.jobId).toBe("job-1");
+    expect(body.data.status).toBe("queued");
+    expect(vi.mocked(Queue.addFlowJob)).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays sync when body.async is false even if flag is enabled (backward compat)", async () => {
+    vi.mocked(FeatureFlags.isFeatureEnabled).mockResolvedValue(true);
+
+    const res = await POST(makeRequest({ message: "Hello", async: false }), PARAMS);
+
+    // Sync path returns 200 with messages
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.messages).toBeDefined();
+    expect(vi.mocked(Queue.addFlowJob)).not.toHaveBeenCalled();
+  });
+
+  it("routes through BullMQ when body.async is true even if flag is disabled (explicit override)", async () => {
+    vi.mocked(FeatureFlags.isFeatureEnabled).mockResolvedValue(false);
+
+    const res = await POST(makeRequest({ message: "Hello", async: true }), PARAMS);
+
+    expect(res.status).toBe(202);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.jobId).toBe("job-1");
+    expect(vi.mocked(Queue.addFlowJob)).toHaveBeenCalledTimes(1);
   });
 });

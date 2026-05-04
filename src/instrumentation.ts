@@ -40,6 +40,12 @@ export async function register(): Promise<void> {
         { hint: "Generate with: openssl rand -base64 32" },
       );
     }
+    if (!process.env.SENTRY_DSN) {
+      logger.warn(
+        "[Sentry] SENTRY_DSN not set — errors will not be reported to Sentry",
+        { hint: "Set SENTRY_DSN in Railway environment variables" },
+      );
+    }
   }
 
   // ── Start metrics flusher if OTLP endpoint is configured ──────────────────

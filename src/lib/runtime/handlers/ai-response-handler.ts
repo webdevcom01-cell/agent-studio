@@ -16,6 +16,7 @@ import { emitHook } from "../hooks";
 import { resolveTemplate } from "../template";
 import { checkInputSafety, checkOutputSafety } from "@/lib/safety/engine-safety-middleware";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
+import { recordCost } from "@/lib/budget/cost-tracker";
 
 const MAX_TOOL_STEPS = 20;
 
@@ -163,6 +164,13 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     const hotMemory = context.variables["__hot_memory"];
     if (typeof hotMemory === "string" && hotMemory.length > 0) {
       effectiveSystemPrompt = `${hotMemory}\n\n${effectiveSystemPrompt}`;
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
+    // ── Goal alignment injection (F4) ────────────────────────────────────
+    const goalPrompt = context.variables["__goal_prompt"];
+    if (typeof goalPrompt === "string" && goalPrompt.length > 0) {
+      effectiveSystemPrompt = `${effectiveSystemPrompt}\n\n${goalPrompt}`;
     }
     // ──────────────────────────────────────────────────────────────────────────
 
@@ -400,6 +408,15 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     recordChatLatency(context.agentId, modelId, durationMs);
     if (inputTokens > 0 || outputTokens > 0) {
       recordTokenUsage(context.agentId, modelId, inputTokens, outputTokens);
+      // F1: Cost tracking — fire-and-forget, never blocks execution
+      recordCost({
+        agentId: context.agentId,
+        costUsd: (inputTokens * 0.003 + outputTokens * 0.015) / 1000,
+        modelId,
+        inputTokens,
+        outputTokens,
+        source: "chat",
+      }).catch(() => {});
     }
 
     writeAuditLog({
