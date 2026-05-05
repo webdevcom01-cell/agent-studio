@@ -46,7 +46,7 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
             content: `Human review ${responseText}.`,
           },
         ],
-        nextNodeId: null,
+        nextNodeId: approved ? null : "rejected",
         waitForInput: false,
         updatedVariables: {
           [outputVariable]: responseText,
@@ -95,7 +95,7 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
         .catch(() => {});
       return {
         messages: [{ role: "assistant", content: `Human review ${responseText}.` }],
-        nextNodeId: null,
+        nextNodeId: approvedByText ? null : "rejected",
         waitForInput: false,
         updatedVariables: {
           [outputVariable]: responseText,
@@ -125,7 +125,7 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
             content: `Human ${updated.status}: ${updated.response ?? ""}`.trim(),
           },
         ],
-        nextNodeId: null,
+        nextNodeId: updated.status === "rejected" ? "rejected" : null,
         waitForInput: false,
         updatedVariables: {
           [outputVariable]: updated.response ?? updated.status,
@@ -195,10 +195,10 @@ function handleTimeout(
       messages: [
         {
           role: "assistant",
-          content: `Human approval timed out after ${timeoutMinutes} minutes`,
+          content: `Human approval timed out after ${timeoutMinutes} minutes — pipeline stopped.`,
         },
       ],
-      nextNodeId: null,
+      nextNodeId: "rejected",
       waitForInput: false,
       updatedVariables: { _approval_request_id: null },
     };

@@ -90,6 +90,7 @@ describe("humanApprovalHandler", () => {
     );
 
     expect(result.waitForInput).toBe(false);
+    expect(result.nextNodeId).toBeNull();
     expect(result.updatedVariables?.result).toBe("looks good");
     expect(result.updatedVariables?._approval_request_id).toBeNull();
     expect(result.messages[0].content).toContain("approved");
@@ -109,6 +110,7 @@ describe("humanApprovalHandler", () => {
     );
 
     expect(result.waitForInput).toBe(false);
+    expect(result.nextNodeId).toBe("rejected");
     expect(result.updatedVariables?.result).toBe("not good");
     expect(result.messages[0].content).toContain("rejected");
   });
@@ -147,6 +149,7 @@ describe("humanApprovalHandler", () => {
     );
 
     expect(result.messages[0].content).toContain("timed out");
+    expect(result.nextNodeId).toBeNull();
     expect(result.updatedVariables?.result).toBeNull();
     expect(result.updatedVariables?._approval_request_id).toBeNull();
   });
@@ -170,6 +173,7 @@ describe("humanApprovalHandler", () => {
     );
 
     expect(result.updatedVariables?.result).toBe("fallback");
+    expect(result.nextNodeId).toBeNull();
     expect(result.messages[0].content).toContain("default value");
   });
 
@@ -191,7 +195,7 @@ describe("humanApprovalHandler", () => {
     );
 
     expect(result.messages[0].content).toContain("timed out");
-    expect(result.nextNodeId).toBeNull();
+    expect(result.nextNodeId).toBe("rejected");
   });
 
   it("prompts for conversational approval when no userId in context (first visit)", async () => {
@@ -221,6 +225,7 @@ describe("humanApprovalHandler", () => {
 
     expect(result.messages[0].content).toContain("approved");
     expect(result.waitForInput).toBe(false);
+    expect(result.nextNodeId).toBeNull();
     expect(result.updatedVariables?.result).toBe("approved");
     expect(result.updatedVariables?._approval_waiting).toBeNull();
   });
@@ -236,7 +241,40 @@ describe("humanApprovalHandler", () => {
 
     expect(result.messages[0].content).toContain("rejected");
     expect(result.waitForInput).toBe(false);
+    expect(result.nextNodeId).toBe("rejected");
     expect(result.updatedVariables?.result).toBe("rejected");
+  });
+
+  it("routes to rejected when authenticated user types 'reject' in chat", async () => {
+    mockPrisma.humanApprovalRequest.update.mockResolvedValue({});
+
+    const result = await humanApprovalHandler(
+      makeNode({ outputVariable: "result" }),
+      makeContext({
+        variables: { _approval_request_id: "req-1", last_message: "reject" },
+      }),
+    );
+
+    expect(result.nextNodeId).toBe("rejected");
+    expect(result.waitForInput).toBe(false);
+    expect(result.updatedVariables?.result).toBe("rejected");
+    expect(result.updatedVariables?._approval_request_id).toBeNull();
+  });
+
+  it("routes to null when authenticated user types 'approve' in chat", async () => {
+    mockPrisma.humanApprovalRequest.update.mockResolvedValue({});
+
+    const result = await humanApprovalHandler(
+      makeNode({ outputVariable: "result" }),
+      makeContext({
+        variables: { _approval_request_id: "req-1", last_message: "approve" },
+      }),
+    );
+
+    expect(result.nextNodeId).toBeNull();
+    expect(result.waitForInput).toBe(false);
+    expect(result.updatedVariables?.result).toBe("approved");
+    expect(result.updatedVariables?._approval_request_id).toBeNull();
   });
 
   it("handles missing request on resume", async () => {
