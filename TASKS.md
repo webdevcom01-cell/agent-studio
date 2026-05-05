@@ -6,6 +6,91 @@
 
 ---
 
+## FAZA G — Paperclip Integration (COMPLETED)
+
+> Commit: `eff5e22` — 2026-05-04
+> 81 files changed, 7042 insertions. ~3,960 tests passing.
+
+### F0 — Foundation
+
+- [x] F0.3 — RBAC enforcement in MCP tool handler (`checkSkillAccess`, backward-compatible)
+- [x] F0.5 — Sentry DSN warning in `src/instrumentation.ts` if DSN missing in production
+- [x] F0.6 — MCP server auth: `mcp-server/src/auth.ts` — `validateApiKey()`, USER/ADMIN modes
+- [x] F0.7 — `async-execution` feature flag wired at 100% in `src/lib/feature-flags/index.ts` and checked in chat route — **flag is DISABLED in production until worker service is deployed on Railway**
+- [x] F0.8 — PostgreSQL RLS: `prisma/migrations/20240108000000_enable_rls/migration.sql` + `src/lib/db/rls-middleware.ts` (`withOrgContext` sets `app.current_org_id` session param via `prisma.$extends`)
+
+### F1 — Platform Budget System
+
+- [x] Prisma models: `AgentBudget`, `CostEvent`, `BudgetAlert`
+- [x] `src/lib/budget/cost-tracker.ts` — `checkBudget` (fail-open: error → allow), `recordCost` (fire-and-forget)
+- [x] `recordCost()` wired into `ai-response-handler.ts` and `ai-response-streaming-handler.ts` after every AI call
+- [x] Chat route returns **402** when `checkBudget` returns `exceeded: true`
+- [x] Monthly reset cron: `POST /api/cron/budget-reset` (BullMQ, requires `CRON_SECRET`)
+- [x] REST: `GET|POST /api/agents/[agentId]/budget`
+
+### F2 — Agent Org Chart
+
+- [x] Prisma models: `Department`, `AgentPermissionGrant`
+- [x] `src/lib/org-chart/hierarchy.ts` — `getAgentAncestors`, `getAgentDescendants`, `checkA2APermission`, `grantPermission`
+- [x] `call_agent` handler checks `checkA2APermission` before forwarding; timeout configurable via `node.data.timeout` (ms, default 90 000)
+- [x] REST: `/api/departments`, `/api/departments/[departmentId]`, `/api/agents/[agentId]/permissions`, `/api/agents/[agentId]/children`, `/api/agents/[agentId]/department`
+
+### F3 — Heartbeat Lifecycle
+
+- [x] Prisma models: `HeartbeatConfig`, `HeartbeatContext`, `HeartbeatRun`
+- [x] `src/lib/heartbeat/context-manager.ts` — TTL/expiry, pruning, `buildContextPrompt`
+- [x] `src/lib/heartbeat/heartbeat-worker.ts` — BullMQ worker; `registerSession` on start, `removeSession` in `finally`
+- [x] `buildContextPrompt` output prepended to agent system prompt at execution time
+- [x] REST: `/api/agents/[agentId]/heartbeat`, `/heartbeat/context`, `/heartbeat/runs`
+
+### F4 — Goal Alignment
+
+- [x] Prisma models: `CompanyMission`, `Goal`, `AgentGoalLink`
+- [x] `src/lib/goals/goal-context.ts` — builds goal context string injected before flow execution in both `engine.ts` and `engine-streaming.ts`
+- [x] REST: `/api/mission`, `/api/goals`, `/api/goals/[goalId]`, `/api/agents/[agentId]/goals`
+
+### F5 — Board Governance
+
+- [x] Prisma models: `ApprovalPolicy`, `PolicyDecision`
+- [x] `src/lib/governance/approval-engine.ts` — `checkPolicies` (fail-open), `requestApproval` (idempotent dedup), `resolveDecision`
+- [x] `processTimeouts` resolves expired decisions using `ApprovalPolicy.timeoutApprove` flag (not a hardcoded TIMEOUT status)
+- [x] Hourly governance timeout cron: `POST /api/cron/governance-timeout` (requires `CRON_SECRET`)
+- [x] REST: `/api/policies`, `/api/policies/[policyId]`, `/api/policies/[policyId]/decisions`, `/api/decisions/[decisionId]`, `/api/agents/[agentId]/pending-approvals`
+
+### F6 — Cross-Session Atomic Tasks
+
+- [x] `src/lib/tasks/atomic-checkout.ts` — Redis distributed lock: `SET NX EX` acquire + Lua script for atomic release/renew
+- [x] `SCAN` cursor loop (never `KEYS`) for `getAgentCheckouts`
+- [x] `src/lib/tasks/swarm-coordinator.ts` — `distributeTask` (round-robin), `releaseAllAgentTasks`
+- [x] REST: `/api/tasks/[taskId]/checkout` (200/409/403), `/checkout/renew`, `/checkout/force-release`, `/api/agents/[agentId]/checkouts`
+
+### F7 — Clipmart Templates
+
+- [x] Prisma model: `Template` with marketplace fields (`isPublic`, `category`, `importCount`)
+- [x] `src/lib/templates/template-engine.ts` — `exportTemplate`: scrubs secrets, replaces MCP URLs with `{{MCP_URL}}` placeholders, appends SHA-256 checksum
+- [x] `importTemplate`: verifies checksum, generates new IDs, returns `warnings[]` for remaining placeholders
+- [x] REST: `/api/templates`, `/api/templates/[templateId]`, `/api/templates/[templateId]/import`, `/api/templates/import`, `/api/agents/[agentId]/export`
+
+### F8 — MCP Server v2
+
+- [x] `mcp-server/src/auth.ts` — `validateApiKey()` calls `/api/keys/validate`; USER mode (API key) + ADMIN mode (shared secret)
+- [x] `mcp-server/src/tools/f1-f7.ts` — 9 new MCP tools: budget check/record, org-chart, goals, heartbeat context, template export
+- [x] `/api/keys/validate` — returns `{ valid, userId, organizationId, scopes }`
+- [x] Per-IP rate limiting on chat route: 30 req/min sliding window, `Retry-After` header on 429
+- [x] Magic number file validation: `src/lib/security/magic-numbers.ts` — validates PDF, DOCX, XLSX, XLS, PPTX, CSV by byte signature before processing
+
+---
+
+## OPEN ITEMS
+
+- [ ] **G-BLOCKER**: Deploy dedicated BullMQ worker service on Railway — `async-execution` flag is disabled until this is done
+- [ ] A1.9: Integration test: flow with hooks → webhook receives events *(deferred from OpenClaw plan)*
+- [ ] B3.3: Per-task model selection log in cost tracking *(deferred — needs token pricing integration)*
+- [ ] C3.4: Bayesian hybrid search benchmark *(deferred — requires production data for meaningful NDCG/MRR)*
+- [ ] DOCS: Review and update stale docs in `docs/*.md` *(flagged: 30+ days old, out of sync with Paperclip changes)*
+
+---
+
 ## FAZA A — Runtime Engine Hooks (P0 — Highest Impact)
 
 These address the most critical architectural gaps in the runtime engine.

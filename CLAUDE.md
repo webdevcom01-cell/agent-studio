@@ -18,6 +18,14 @@ persistence), **SDLC pipeline orchestration** (webhook triggers, RAG seed, PR cr
 extraction on session end), and ECC integration (Skills Browser, Meta-Orchestrator, Learn node).
 OAuth login (GitHub + Google).
 
+**Paperclip systems (F0–F8):** Platform Budget (spend caps, 402 enforcement, monthly reset),
+Agent Org Chart (departments, A2A permission grants, hierarchy), Heartbeat Lifecycle (scheduled
+context injection, BullMQ worker), Goal Alignment (mission + goals injected into every execution),
+Board Governance (approval policies, fail-open policy checks, timeout cron), Cross-Session Atomic
+Tasks (Redis distributed locks, swarm coordinator), Clipmart Templates (export/import with secret
+scrubbing + SHA-256 checksum), MCP Server v2 (9 new tools, USER/ADMIN auth, per-IP rate limiting),
+PostgreSQL RLS (`withOrgContext` middleware).
+
 ---
 
 ## 2. TECH STACK
@@ -111,13 +119,79 @@ All API routes: `{ success: true, data: T }` or `{ success: false, error: string
 
 ---
 
-## 5. LOCAL SETUP
+## 5. PAPERCLIP SYSTEMS (F0–F8)
+
+### Platform Budget System (F1)
+- `src/lib/budget/cost-tracker.ts` — `checkBudget` (fail-open: budget miss → allow), `recordCost` (fire-and-forget)
+- Prisma models: `AgentBudget`, `CostEvent`, `BudgetAlert`
+- `recordCost()` called in both `ai-response-handler.ts` and `ai-response-streaming-handler.ts` after every AI call
+- Chat route (`/api/agents/[agentId]/chat`) returns **402** when `checkBudget` returns `exceeded: true`
+- Monthly reset cron: `POST /api/cron/budget-reset` (BullMQ job, requires `CRON_SECRET`)
+- Budget REST: `/api/agents/[agentId]/budget` (GET current, POST set limit)
+
+### Agent Org Chart (F2)
+- `src/lib/org-chart/hierarchy.ts` — `getAgentAncestors`, `getAgentDescendants`, `checkA2APermission`, `grantPermission`
+- Prisma models: `Department`, `AgentPermissionGrant`
+- A2A `call_agent` checks permission via `checkA2APermission` before forwarding; configurable timeout via `node.data.timeout` (ms, default 90 000)
+- REST: `/api/departments`, `/api/departments/[departmentId]`, `/api/agents/[agentId]/permissions`, `/api/agents/[agentId]/children`, `/api/agents/[agentId]/department`
+
+### Heartbeat Lifecycle (F3)
+- `src/lib/heartbeat/` — `context-manager.ts` (TTL/expiry, pruning, `buildContextPrompt`), `heartbeat-scheduler.ts`, `heartbeat-worker.ts`
+- Prisma models: `HeartbeatConfig`, `HeartbeatContext`, `HeartbeatRun`
+- BullMQ worker calls `registerSession` on start and `removeSession` in `finally` (session-tracker integration)
+- `buildContextPrompt` output prepended to agent system prompt at execution time
+- REST: `/api/agents/[agentId]/heartbeat`, `/api/agents/[agentId]/heartbeat/context`, `/api/agents/[agentId]/heartbeat/runs`
+
+### Goal Alignment (F4)
+- `src/lib/goals/goal-context.ts` — builds goal context string from `CompanyMission` + active `Goal` rows linked to the agent
+- Injected into both `engine.ts` and `engine-streaming.ts` before flow execution
+- Prisma models: `CompanyMission`, `Goal`, `AgentGoalLink`
+- REST: `/api/mission`, `/api/goals`, `/api/goals/[goalId]`, `/api/agents/[agentId]/goals`
+
+### Board Governance (F5)
+- `src/lib/governance/approval-engine.ts` — `checkPolicies` (fail-open: policy error → allow), `requestApproval` (idempotent dedup), `resolveDecision`
+- `processTimeouts` auto-resolves expired decisions using `ApprovalPolicy.timeoutApprove` flag (not a hardcoded TIMEOUT status)
+- Prisma models: `ApprovalPolicy`, `PolicyDecision`
+- Hourly governance timeout cron: `POST /api/cron/governance-timeout` (requires `CRON_SECRET`)
+- REST: `/api/policies`, `/api/policies/[policyId]`, `/api/policies/[policyId]/decisions`, `/api/decisions/[decisionId]`, `/api/agents/[agentId]/pending-approvals`
+
+### Cross-Session Atomic Tasks (F6)
+- `src/lib/tasks/atomic-checkout.ts` — Redis distributed lock: `SET NX EX` acquire + Lua script for atomic release/renew
+- Uses `SCAN` cursor loop (never `KEYS`) for `getAgentCheckouts` to avoid blocking Redis
+- `src/lib/tasks/swarm-coordinator.ts` — `distributeTask` (round-robin across online agents), `releaseAllAgentTasks`
+- REST: `/api/tasks/[taskId]/checkout` (200/409 conflict/403 forbidden), `/api/tasks/[taskId]/checkout/renew`, `/api/tasks/[taskId]/checkout/force-release`, `/api/agents/[agentId]/checkouts`
+
+### Clipmart Templates (F7)
+- `src/lib/templates/template-engine.ts` — `exportTemplate`: scrubs secrets (API keys, tokens), replaces MCP URLs with `{{MCP_URL}}` placeholders, appends SHA-256 checksum
+- `importTemplate`: verifies checksum, generates new IDs, returns `warnings[]` for any remaining placeholders
+- Prisma model: `Template` with marketplace fields (`isPublic`, `category`, `importCount`)
+- REST: `/api/templates`, `/api/templates/[templateId]`, `/api/templates/[templateId]/import`, `/api/templates/import`, `/api/agents/[agentId]/export`
+
+### MCP Server v2 (F8)
+- `mcp-server/src/auth.ts` — `validateApiKey()` calls `/api/keys/validate`; supports USER mode (API key) and ADMIN mode (shared secret)
+- `mcp-server/src/tools/f1-f7.ts` — 9 new MCP tools covering budget check/record, org-chart queries, goal listing, heartbeat context, template export
+- `/api/keys/validate` returns `{ valid, userId, organizationId, scopes }`
+- Per-IP rate limiting on chat route: 30 req/min sliding window, `Retry-After` header on 429
+- Magic number file validation: `src/lib/security/magic-numbers.ts` — validates PDF, DOCX, XLSX, XLS, PPTX, CSV uploads by byte signature before processing
+
+### PostgreSQL RLS
+- `src/lib/db/rls-middleware.ts` — `withOrgContext(orgId, fn)` sets `app.current_org_id` session parameter then executes `fn` inside a transaction
+- Applied via `prisma.$extends` in `src/lib/prisma.ts`; migration: `prisma/migrations/20240108000000_enable_rls/`
+
+### async-execution Feature Flag
+- ⚠️ Flag is wired at 100% rollout in `src/lib/feature-flags/index.ts` and checked in the chat route
+- **Currently disabled in production** — the worker service is not yet deployed on Railway; do not enable via env until the worker is live
+
+---
+
+## 6. LOCAL SETUP
 
 ```bash
 pnpm install && cp .env.example .env.local
 # Required: DATABASE_URL, DIRECT_URL, DEEPSEEK_API_KEY, OPENAI_API_KEY, AUTH_SECRET, AUTH_GITHUB_ID/SECRET, AUTH_GOOGLE_ID/SECRET
-# Optional: REDIS_URL, CRON_SECRET, ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY, MOONSHOT_API_KEY
-# ECC: ECC_ENABLED, ECC_MCP_URL | Observability: OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME
+# Optional: REDIS_URL, ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY, MOONSHOT_API_KEY
+# Required in production: CRON_SECRET (budget-reset + governance-timeout crons), ADMIN_USER_IDS
+# ECC: ECC_ENABLED, ECC_MCP_URL | Observability: OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME | Errors: SENTRY_DSN, NEXT_PUBLIC_SENTRY_DSN
 pnpm db:push && pnpm db:generate && pnpm dev  # http://localhost:3000
 ```
 
@@ -144,7 +218,7 @@ set -a && source .env.local && set +a && pnpm worker
 
 ---
 
-## 6. CLAUDE WORKING GUIDELINES
+## 7. CLAUDE WORKING GUIDELINES
 
 ### Pre-Push Workflow
 Run `pnpm precheck` before every commit+push. All 4 checks must PASS: TypeScript → vitest → lucide mocks → placeholder strings.
@@ -168,7 +242,7 @@ Short: `NodeType` union → `NODE_TYPES` array → handler → register → node
 - Public: add path to `src/middleware.ts` matcher; validate input with Zod; never expose internals in catch
 
 ### Testing
-- Unit: Vitest, `__tests__/` next to source; 3828+ tests across 288 files
+- Unit: Vitest, `__tests__/` next to source; 3960+ tests across 300 files
 - E2E: Playwright, `e2e/tests/`, `.spec.ts`; test behavior, not implementation
 
 ### AI Model Config
