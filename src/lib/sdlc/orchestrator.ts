@@ -257,24 +257,33 @@ export async function runPipeline(
   const { fireSdkLearnHook } = await import("@/lib/ecc/sdk-learn-hook");
   const { getAgentSystemPrompt, getImplementationSystemPrompt } = await import("./agent-prompts");
   const { loadRelevantMemory } = await import("./pipeline-memory");
+  const { loadVaultContext } = await import("./vault-context");
 
   // Resolve model lazily — gpt-4o-mini is always available, no extra API key needed.
   const resolvedModelId = modelId ?? "gpt-4o-mini";
 
   const stepMetricsMap: Record<number, StepMetric> = {};
 
-  const priorMemory = await loadRelevantMemory(agentId);
+  // Load memory and vault context in parallel — both are non-blocking
+  const [priorMemory, vaultContext] = await Promise.all([
+    loadRelevantMemory(agentId),
+    loadVaultContext(taskDescription),
+  ]);
 
   // Context document — accumulated from previous step outputs
   const contextParts: string[] = [`# Task\n${taskDescription}`];
+  if (vaultContext) {
+    contextParts.push(vaultContext);
+  }
   if (priorMemory) {
     contextParts.push(priorMemory);
   }
   // Number of leading slots in contextParts before step-0's output:
-  //   1 when no priorMemory  → [task, step-0, step-1, …]
-  //   2 when priorMemory present → [task, memory, step-0, step-1, …]
+  //   1 when neither vaultContext nor priorMemory
+  //   2 when one of them present
+  //   3 when both present
   // Used wherever a specific step index must be targeted by offset.
-  const CONTEXT_STEP_OFFSET = priorMemory ? 2 : 1;
+  const CONTEXT_STEP_OFFSET = (vaultContext ? 1 : 0) + (priorMemory ? 1 : 0) + 1;
   const stepOutputs: string[] = [];
 
   // ── Phase tracking ──────────────────────────────────────────────────────────
