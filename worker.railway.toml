@@ -8,3 +8,11 @@ healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
+watchPaths = [
+  "src/**",
+  "prisma/**",
+  "package.json",
+  "pnpm-lock.yaml",
+  "Dockerfile.worker",
+  "worker.railway.toml"
+]
