@@ -58,6 +58,7 @@ scripts/*
 !scripts/migrate-to-orgs.mjs
 !scripts/enable-ecc-sdlc.ts
 !scripts/setup-gitmcp.ts
+!scripts/sync-vault.ts
 services/*
 !services/ecc-skills-mcp
 !services/worker
