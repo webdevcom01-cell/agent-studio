@@ -95,11 +95,20 @@ vi.mock("../patch-applier", () => ({
   applyPatchToWorkspace: vi.fn().mockResolvedValue({ applied: 0, failed: 0, errors: [] }),
 }));
 
+vi.mock("../git-integration", () => ({
+  integrateWithGit: vi.fn().mockResolvedValue({
+    prUrl: "https://github.com/test/repo/pull/1",
+    branchName: "feat/sdlc-test-run",
+  }),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports
 // ---------------------------------------------------------------------------
 
 import { runPipeline } from "../orchestrator";
+import { integrateWithGit } from "../git-integration";
+const mockIntegrateWithGit = integrateWithGit as ReturnType<typeof vi.fn>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -394,6 +403,44 @@ describe("runPipeline — infrastructure nodes", () => {
 
     const [, output] = mockCallbacks.onStepComplete.mock.calls[0];
     expect(output).toMatch(/TypeScript/);
+  });
+
+  it("skips pr_generation when repoUrl is not provided", async () => {
+    await runPipeline(
+      { pipeline: ["pr_generation"], taskDescription: "test", workDir: "/tmp/test", runId: "r1" },
+      makeCallbacks(),
+    );
+    expect(mockIntegrateWithGit).not.toHaveBeenCalled();
+  });
+
+  it("calls integrateWithGit when pr_generation step runs with repoUrl", async () => {
+    await runPipeline(
+      { pipeline: ["pr_generation"], taskDescription: "test", workDir: "/tmp/test", runId: "r2", repoUrl: "https://github.com/test/repo" },
+      makeCallbacks(),
+    );
+    expect(mockIntegrateWithGit).toHaveBeenCalledWith(
+      expect.objectContaining({ repoUrl: "https://github.com/test/repo" }),
+    );
+  });
+
+  it("pr_generation builds stepOutputMap with correct name→output mapping", async () => {
+    await runPipeline(
+      {
+        pipeline: ["static_analysis", "ecc-code-reviewer", "pr_generation"],
+        taskDescription: "test",
+        workDir: "/tmp/test",
+        runId: "r3",
+        repoUrl: "https://github.com/test/repo",
+      },
+      makeCallbacks(),
+    );
+    expect(mockIntegrateWithGit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stepOutputs: expect.objectContaining({
+          static_analysis: expect.any(String),
+        }),
+      }),
+    );
   });
 
   it("does NOT fire learn hook for infrastructure nodes", async () => {

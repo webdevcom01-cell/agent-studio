@@ -190,6 +190,7 @@ describe("validateAgainstSchema", () => {
     expect(AVAILABLE_SCHEMAS).toContain("GitOutput");
     expect(AVAILABLE_SCHEMAS).toContain("DeployOutput");
     expect(AVAILABLE_SCHEMAS).toContain("CodeReviewOutput");
-    expect(AVAILABLE_SCHEMAS.length).toBe(8);
+    expect(AVAILABLE_SCHEMAS).toContain("StaticAnalysisOutput");
+    expect(AVAILABLE_SCHEMAS.length).toBe(9);
   });
 });

@@ -57,6 +57,7 @@ import {
 import { enrichWithSemanticSummaries, buildModuleMapContext } from "./module-map";
 import type { ModuleEntry } from "./module-map";
 import { parseSearchReplaceBlocks, applyPatchToWorkspace } from "./patch-applier";
+import { integrateWithGit } from "./git-integration";
 
 /** Base directory for SDLC pipeline workspaces — each run gets its own subdirectory */
 const SDLC_WORKSPACE_BASE = "/tmp/sdlc";
@@ -96,13 +97,14 @@ const TEST_STEPS = new Set([
 ]);
 
 /** Infrastructure nodes that are not real agents — executed inline */
-const INFRASTRUCTURE_NODES = new Set(["project_context", "sandbox_verify", "static_analysis"]);
+const INFRASTRUCTURE_NODES = new Set(["project_context", "sandbox_verify", "static_analysis", "pr_generation"]);
 
 /** System prompts for infrastructure nodes */
 const INFRA_PROMPTS: Record<string, string> = {
   project_context: "Gathering project context and indexing existing codebase...",
   sandbox_verify: "Verifying sandbox environment...",
   static_analysis: "Running TypeScript compiler + ESLint static analysis...",
+  pr_generation: "Creating GitHub Pull Request with pipeline summary...",
 };
 
 /** Per-step timeout for AI calls (5 minutes). Prevents hung pipelines. */
@@ -181,6 +183,7 @@ export interface OrchestratorInput {
   /** When true, use the smart model router to select the best available model per phase. */
   useSmartRouting?: boolean;
   repoUrl?: string;
+  pipelineType?: string;
 }
 
 export interface OrchestratorResult {
@@ -518,6 +521,34 @@ export async function runPipeline(
           contextParts.push(eslintLines);
         }
 
+      } else if (stepId === "pr_generation") {
+        const repoUrl = input.repoUrl;
+        if (!repoUrl) {
+          stepOutput = "pr_generation: skipped (no repoUrl provided)";
+        } else {
+          const stepOutputMap: Record<string, string> = {};
+          for (let i = 0; i < stepIdx; i++) {
+            if (stepOutputs[i] !== undefined) {
+              stepOutputMap[pipeline[i]] = stepOutputs[i];
+            }
+          }
+
+          try {
+            const gitResult = await integrateWithGit({
+              repoUrl,
+              workDir,
+              runId,
+              taskDescription: input.taskDescription,
+              pipelineName: input.pipelineType ?? "custom",
+              stepOutputs: stepOutputMap,
+            });
+            stepOutput = `✅ PR created: ${gitResult.prUrl ?? gitResult.branchName}`;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            stepOutput = `⚠️ pr_generation failed: ${msg}`;
+            logger.error("pr_generation: integrateWithGit failed", { runId, error: msg });
+          }
+        }
       } else {
         stepOutput = INFRA_PROMPTS[stepId] ?? `Infrastructure step: ${stepId}`;
       }
@@ -1163,8 +1194,8 @@ export async function runPipeline(
   await onProgress(100);
 
   // Tier 5 — Git/PR integration (best-effort, never blocks COMPLETED)
-  if (repoUrl) {
-    const { integrateWithGit } = await import("./git-integration");
+  const prStepAlreadyRan = pipeline.includes("pr_generation");
+  if (repoUrl && !prStepAlreadyRan) {
     const gitResult = await integrateWithGit({
       repoUrl,
       workDir,

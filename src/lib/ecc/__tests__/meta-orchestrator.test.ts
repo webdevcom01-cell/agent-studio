@@ -12,7 +12,7 @@ describe("analyzeTask", () => {
     expect(result.taskType).toBe("new-feature");
     expect(result.pipeline).toContain("ecc-planner");
     expect(result.pipeline).toContain("ecc-tdd-guide");
-    expect(result.complexity).toBe("moderate");
+    expect(result.complexity).toBe("complex");
   });
 
   it("routes bug fixes to tdd + reviewer + security", async () => {
@@ -88,7 +88,7 @@ describe("analyzeTask", () => {
     expect(simple.complexity).toBe("simple");
 
     const complex = await analyzeTask("Implement a new feature with tests", { useLLM: false });
-    expect(complex.complexity).toBe("moderate");
+    expect(complex.complexity).toBe("complex");
   });
 });
 
