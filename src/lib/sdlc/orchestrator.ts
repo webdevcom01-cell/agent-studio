@@ -542,7 +542,11 @@ export async function runPipeline(
               pipelineName: input.pipelineType ?? "custom",
               stepOutputs: stepOutputMap,
             });
-            stepOutput = `✅ PR created: ${gitResult.prUrl ?? gitResult.branchName}`;
+            stepOutput = gitResult.prUrl
+              ? `✅ PR created: ${gitResult.prUrl}`
+              : gitResult.branchName
+                ? `✅ Branch pushed: ${gitResult.branchName}`
+                : `⚠️ pr_generation: git integration failed (check GITHUB_TOKEN)`;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             stepOutput = `⚠️ pr_generation failed: ${msg}`;
