@@ -59,6 +59,8 @@ scripts/*
 !scripts/enable-ecc-sdlc.ts
 !scripts/setup-gitmcp.ts
 !scripts/sync-vault.ts
+!scripts/check-ecc-status.ts
+!scripts/enable-ecc-all.ts
 services/*
 !services/ecc-skills-mcp
 !services/worker
