@@ -258,6 +258,25 @@ async function extractAndLearnPattern(
       });
     }
   });
+
+  // Fire-and-forget: sync the updated instinct to Obsidian vault
+  void (async () => {
+    try {
+      const { isObsidianConfigured, createObsidianAdapter } = await import("./obsidian-adapter");
+      if (!isObsidianConfigured()) return;
+      const adapter = createObsidianAdapter();
+      await adapter.syncInstinctToVault(patternName, patternDescription, AUTO_CONFIDENCE_INITIAL);
+      logger.info("SDK Learn Hook: instinct synced to vault", {
+        agentId: record.agentId,
+        patternName,
+      });
+    } catch (vaultErr) {
+      logger.warn("SDK Learn Hook: vault sync failed (non-blocking)", {
+        agentId: record.agentId,
+        error: vaultErr instanceof Error ? vaultErr.message : String(vaultErr),
+      });
+    }
+  })();
 }
 
 // ---------------------------------------------------------------------------
