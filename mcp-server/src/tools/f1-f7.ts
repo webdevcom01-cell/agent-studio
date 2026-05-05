@@ -54,13 +54,15 @@ async function apiPost(path: string, body: unknown): Promise<unknown> {
   return res.json();
 }
 
-function ok(data: unknown): ReturnType<Parameters<McpServer["registerTool"]>[2]> {
+type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };
+
+function ok(data: unknown): ToolResult {
   return {
     content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
   };
 }
 
-function err(message: string): ReturnType<Parameters<McpServer["registerTool"]>[2]> {
+function err(message: string): ToolResult {
   return { content: [{ type: "text", text: `Error: ${message}` }], isError: true };
 }
 
