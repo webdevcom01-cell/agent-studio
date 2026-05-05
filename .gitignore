@@ -57,6 +57,7 @@ scripts/*
 !scripts/pre-push-check.sh
 !scripts/migrate-to-orgs.mjs
 !scripts/enable-ecc-sdlc.ts
+!scripts/setup-gitmcp.ts
 services/*
 !services/ecc-skills-mcp
 !services/worker
