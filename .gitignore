@@ -61,6 +61,7 @@ scripts/*
 !scripts/sync-vault.ts
 !scripts/check-ecc-status.ts
 !scripts/enable-ecc-all.ts
+!scripts/generate-dashboard.ts
 services/*
 !services/ecc-skills-mcp
 !services/worker
@@ -95,6 +96,7 @@ packages/cli/dist
 *.png
 *.tmp
 *.html
+reports/
 !public/*.html
 .~lock.*
 _tmp_*
