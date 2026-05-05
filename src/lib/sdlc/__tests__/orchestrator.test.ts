@@ -45,6 +45,15 @@ vi.mock("ai", () => ({
 vi.mock("../code-extractor", () => ({
   executeRealTests: mockExecuteRealTests,
   executeRealTestsFromFiles: mockExecuteRealTestsFromFiles,
+  runStaticAnalysis: vi.fn().mockResolvedValue({
+    typecheckPassed: true,
+    lintPassed: true,
+    typescriptErrors: [],
+    eslintErrors: [],
+    eslintWarnings: [],
+    summary: "✅ TypeScript: PASSED | ✅ ESLint: PASSED",
+    durationMs: 100,
+  }),
 }));
 
 vi.mock("@/lib/ecc/sdk-learn-hook", () => ({
@@ -340,6 +349,51 @@ describe("runPipeline — infrastructure nodes", () => {
 
     expect(mockGenerateText).not.toHaveBeenCalled();
     expect(cbs.onStepComplete).toHaveBeenCalledWith(0, expect.stringContaining("sandbox"));
+  });
+
+  it("skips AI call for static_analysis infrastructure node", async () => {
+    const mockCallbacks = {
+      onStepComplete: vi.fn().mockResolvedValue(undefined),
+      isCancelled: vi.fn().mockResolvedValue(false),
+      onProgress: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await runPipeline(
+      {
+        runId: "test-static-analysis",
+        agentId: "test-agent",
+        taskDescription: "test task",
+        pipeline: ["static_analysis"],
+        modelId: "claude-haiku-4-5",
+      },
+      mockCallbacks,
+    );
+
+    // static_analysis is an infrastructure node — no AI call should be made
+    expect(mockGenerateText).not.toHaveBeenCalled();
+    expect(mockCallbacks.onStepComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("static_analysis step output contains pass/fail summary string", async () => {
+    const mockCallbacks = {
+      onStepComplete: vi.fn().mockResolvedValue(undefined),
+      isCancelled: vi.fn().mockResolvedValue(false),
+      onProgress: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await runPipeline(
+      {
+        runId: "test-static-analysis-output",
+        agentId: "test-agent",
+        taskDescription: "test task",
+        pipeline: ["static_analysis"],
+        modelId: "claude-haiku-4-5",
+      },
+      mockCallbacks,
+    );
+
+    const [, output] = mockCallbacks.onStepComplete.mock.calls[0];
+    expect(output).toMatch(/TypeScript/);
   });
 
   it("does NOT fire learn hook for infrastructure nodes", async () => {

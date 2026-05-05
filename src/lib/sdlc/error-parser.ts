@@ -1,3 +1,5 @@
+import type { StaticAnalysisEslintIssue } from "./schemas";
+
 export interface TscError {
   file: string;
   line: number;
@@ -191,4 +193,63 @@ export function hasTestFailures(vitestOutput: string): boolean {
   // Runtime errors that prevent tests from running at all
   if (parseRuntimeErrors(vitestOutput).length > 0) return true;
   return false;
+}
+
+// ─── ESLint JSON output parser ────────────────────────────────────────────────
+
+interface EslintJsonMessage {
+  line: number;
+  column: number;
+  severity: number; // 1 = warning, 2 = error
+  ruleId: string | null;
+  message: string;
+}
+
+interface EslintJsonFileResult {
+  filePath: string;
+  messages: EslintJsonMessage[];
+}
+
+/**
+ * Parse ESLint `--format json` output into typed error/warning arrays.
+ * Returns empty arrays on malformed input — never throws.
+ */
+export function parseEslintOutput(jsonOutput: string): {
+  errors: StaticAnalysisEslintIssue[];
+  warnings: StaticAnalysisEslintIssue[];
+} {
+  if (!jsonOutput.trim()) return { errors: [], warnings: [] };
+
+  let parsed: EslintJsonFileResult[];
+  try {
+    parsed = JSON.parse(jsonOutput);
+  } catch {
+    return { errors: [], warnings: [] };
+  }
+
+  if (!Array.isArray(parsed)) return { errors: [], warnings: [] };
+
+  const errors: StaticAnalysisEslintIssue[] = [];
+  const warnings: StaticAnalysisEslintIssue[] = [];
+
+  for (const fileResult of parsed) {
+    if (!fileResult.filePath || !Array.isArray(fileResult.messages)) continue;
+    for (const msg of fileResult.messages) {
+      const issue: StaticAnalysisEslintIssue = {
+        file: fileResult.filePath,
+        line: msg.line ?? 0,
+        col: msg.column ?? 0,
+        severity: msg.severity === 2 ? "error" : "warning",
+        ruleId: msg.ruleId ?? "unknown",
+        message: msg.message ?? "",
+      };
+      if (msg.severity === 2) {
+        errors.push(issue);
+      } else {
+        warnings.push(issue);
+      }
+    }
+  }
+
+  return { errors, warnings };
 }

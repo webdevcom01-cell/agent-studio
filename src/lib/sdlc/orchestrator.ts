@@ -42,6 +42,7 @@ import {
   executeRealTests,
   executeRealTestsFromFiles,
   runWorkspaceTests,
+  runStaticAnalysis,
   type ParsedFile,
 } from "./code-extractor";
 import { CodeGenOutputSchema } from "./schemas";
@@ -95,12 +96,13 @@ const TEST_STEPS = new Set([
 ]);
 
 /** Infrastructure nodes that are not real agents — executed inline */
-const INFRASTRUCTURE_NODES = new Set(["project_context", "sandbox_verify"]);
+const INFRASTRUCTURE_NODES = new Set(["project_context", "sandbox_verify", "static_analysis"]);
 
 /** System prompts for infrastructure nodes */
 const INFRA_PROMPTS: Record<string, string> = {
   project_context: "Gathering project context and indexing existing codebase...",
   sandbox_verify: "Verifying sandbox environment...",
+  static_analysis: "Running TypeScript compiler + ESLint static analysis...",
 };
 
 /** Per-step timeout for AI calls (5 minutes). Prevents hung pipelines. */
@@ -416,8 +418,109 @@ export async function runPipeline(
     const stepStart = Date.now();
 
     if (INFRASTRUCTURE_NODES.has(stepId)) {
-      // ── Infrastructure node: no AI call ──────────────────────────────────
-      stepOutput = INFRA_PROMPTS[stepId] ?? `Infrastructure step: ${stepId}`;
+      if (stepId === "static_analysis") {
+        // ── Deterministic static analysis: tsc + eslint ──────────────────────
+        // Runs AFTER the implementation step has written files to workDir.
+        // TypeScript errors trigger a feedback loop back to the last impl step.
+        // ESLint findings are injected into the next reviewer step's context.
+        const staticResult = await runStaticAnalysis(workDir, runId, agentId);
+        stepOutput = staticResult.summary;
+
+        // ── TypeScript errors → feedback loop ──────────────────────────────
+        if (!staticResult.typecheckPassed && lastImplStepIdx >= 0) {
+          logger.info("Pipeline: TypeScript errors in static_analysis — entering feedback loop", {
+            runId, stepIdx,
+            errorCount: staticResult.typescriptErrors.length,
+            errors: staticResult.typescriptErrors.slice(0, 3).map((e) => `${e.file}:${e.line} ${e.code}`),
+          });
+
+          const tsErrorReport = staticResult.typescriptErrors
+            .map((e) => `${e.file}(${e.line},${e.col}): error ${e.code}: ${e.message}`)
+            .join("\n");
+
+          let currentImpl = lastImplOutput;
+          const phase: StepPhase = "implementation";
+          const stepModelId = resolvedModelId;
+
+          for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            const escalatedModelId = getEscalationModel(phase, stepModelId, attempt);
+            const feedbackResult = await runFeedbackIteration(
+              {
+                taskDescription,
+                architecturePlan,
+                previousImplementation: currentImpl,
+                testOutput: `TypeScript compilation errors:\n\`\`\`\n${tsErrorReport}\n\`\`\``,
+                codebaseContext: lastImplCodeContext,
+                agentId,
+                modelId: escalatedModelId,
+                attempt,
+              },
+              lastImplSystemPrompt,
+            );
+
+            totalInputTokens += feedbackResult.inputTokens;
+            totalOutputTokens += feedbackResult.outputTokens;
+
+            if (!feedbackResult.success) {
+              logger.warn("Pipeline: static_analysis feedback iteration failed", { runId, attempt });
+              break;
+            }
+
+            currentImpl = feedbackResult.revisedImplementation;
+
+            // Re-run tests to ensure the TS fix didn't break anything
+            const reExec = await executeRealTests(currentImpl, workDir, agentId);
+
+            // Re-run static analysis to verify TS errors are resolved
+            const reStatic = await runStaticAnalysis(workDir, runId, agentId);
+
+            logger.info("Pipeline: static_analysis feedback attempt complete", {
+              runId, attempt,
+              typecheckPassed: reStatic.typecheckPassed,
+              testsPassed: reExec.testsPassed,
+            });
+
+            if (reStatic.typecheckPassed && reExec.testsPassed) {
+              // Fix verified — update impl tracking state
+              lastImplOutput = currentImpl;
+              implResolution = "passing";
+              stepOutputs[lastImplStepIdx] = currentImpl;
+              contextParts[lastImplStepIdx + CONTEXT_STEP_OFFSET] =
+                `# Step ${lastImplStepIdx + 1} output (${pipeline[lastImplStepIdx]}) [ts-fixed-attempt-${attempt}]\n` +
+                currentImpl.slice(0, CONTEXT_SLICE_PER_STEP);
+              await onStepComplete(lastImplStepIdx, currentImpl);
+              stepOutput = reStatic.summary;
+              logger.info("Pipeline: TypeScript errors resolved by feedback loop", { runId, attempt });
+              break;
+            }
+
+            if (attempt === MAX_RETRIES) {
+              logger.warn("Pipeline: static_analysis max retries reached — TypeScript errors persist", {
+                runId, maxRetries: MAX_RETRIES,
+              });
+              stepOutput = `${staticResult.summary}\n\n⚠️ TypeScript errors persisted after ${MAX_RETRIES} fix attempts.`;
+            }
+          }
+        }
+
+        // ── ESLint findings → inject into next reviewer step's context ──────
+        if (!staticResult.lintPassed || staticResult.eslintWarnings.length > 0) {
+          const eslintLines = [
+            `## Static Analysis — ESLint Findings`,
+            `Errors: ${staticResult.eslintErrors.length} | Warnings: ${staticResult.eslintWarnings.length}`,
+            ...staticResult.eslintErrors.map(
+              (e) => `❌ ${e.file}:${e.line} [${e.ruleId}] ${e.message}`
+            ),
+            ...staticResult.eslintWarnings.map(
+              (w) => `⚠️ ${w.file}:${w.line} [${w.ruleId}] ${w.message}`
+            ),
+          ].join("\n");
+          contextParts.push(eslintLines);
+        }
+
+      } else {
+        stepOutput = INFRA_PROMPTS[stepId] ?? `Infrastructure step: ${stepId}`;
+      }
 
     } else {
       // ── Agent step ────────────────────────────────────────────────────────

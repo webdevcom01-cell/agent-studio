@@ -44,7 +44,7 @@ const TASK_TYPES = [
  * Infrastructure nodes that are not agents — excluded from complexity calculation.
  * These run as built-in pipeline nodes, not as agent calls.
  */
-const INFRASTRUCTURE_NODES = new Set(["project_context", "sandbox_verify"]);
+const INFRASTRUCTURE_NODES = new Set(["project_context", "sandbox_verify", "static_analysis"]);
 
 /**
  * Maps agent IDs to their default output schema.
@@ -69,14 +69,14 @@ const AGENT_CONTEXT_REQUIRED = new Set([
 ]);
 
 const ROUTING_TABLE: Record<string, string[]> = {
-  "new-feature":     ["project_context", "ecc-planner", "ecc-tdd-guide", "ecc-implementer", "sandbox_verify", "ecc-code-reviewer"],
-  "bug-fix":         ["project_context", "ecc-tdd-guide", "ecc-implementer", "sandbox_verify", "ecc-code-reviewer", "ecc-security-reviewer"],
+  "new-feature":     ["project_context", "ecc-planner", "ecc-tdd-guide", "ecc-implementer", "sandbox_verify", "static_analysis", "ecc-code-reviewer"],
+  "bug-fix":         ["project_context", "ecc-tdd-guide", "ecc-implementer", "sandbox_verify", "static_analysis", "ecc-code-reviewer", "ecc-security-reviewer"],
   "security-audit":  ["project_context", "ecc-security-reviewer", "ecc-security-engineer"],
   "code-review":     ["project_context", "ecc-code-reviewer"],
   "architecture":    ["ecc-architect", "ecc-planner"],
   "documentation":   ["ecc-doc-updater"],
   "performance":     ["ecc-performance-benchmarker", "ecc-architect"],
-  "refactor":        ["project_context", "ecc-planner", "ecc-refactor-cleaner", "sandbox_verify", "ecc-code-reviewer"],
+  "refactor":        ["project_context", "ecc-planner", "ecc-refactor-cleaner", "sandbox_verify", "static_analysis", "ecc-code-reviewer"],
   "testing":         ["ecc-tdd-guide", "ecc-e2e-runner"],
   "deployment":      ["ecc-workflow-optimizer"],
   "api-design":      ["ecc-planner", "ecc-code-reviewer"],

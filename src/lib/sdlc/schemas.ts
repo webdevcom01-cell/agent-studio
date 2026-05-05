@@ -209,6 +209,39 @@ export const CodeReviewOutputSchema = z.object({
 export type CodeReviewIssue = z.infer<typeof CodeReviewIssueSchema>;
 export type CodeReviewOutput = z.infer<typeof CodeReviewOutputSchema>;
 
+// ─── Static Analysis Output ───────────────────────────────────────────────────
+
+export const StaticAnalysisTsErrorSchema = z.object({
+  file: z.string().describe("Absolute file path where the error was found"),
+  line: z.number(),
+  col: z.number(),
+  code: z.string().describe("TypeScript error code, e.g. TS2345"),
+  message: z.string(),
+});
+
+export const StaticAnalysisEslintIssueSchema = z.object({
+  file: z.string().describe("Absolute file path where the issue was found"),
+  line: z.number(),
+  col: z.number(),
+  severity: z.enum(["error", "warning"]),
+  ruleId: z.string().describe("ESLint rule ID, e.g. @typescript-eslint/no-unused-vars"),
+  message: z.string(),
+});
+
+export const StaticAnalysisOutputSchema = z.object({
+  typecheckPassed: z.boolean(),
+  lintPassed: z.boolean(),
+  typescriptErrors: z.array(StaticAnalysisTsErrorSchema),
+  eslintErrors: z.array(StaticAnalysisEslintIssueSchema),
+  eslintWarnings: z.array(StaticAnalysisEslintIssueSchema),
+  summary: z.string().describe("One-line human-readable result, e.g. '✅ TypeScript: PASSED | ⚠️ ESLint: 0 errors, 2 warnings'"),
+  durationMs: z.number().default(0),
+});
+
+export type StaticAnalysisTsError = z.infer<typeof StaticAnalysisTsErrorSchema>;
+export type StaticAnalysisEslintIssue = z.infer<typeof StaticAnalysisEslintIssueSchema>;
+export type StaticAnalysisOutput = z.infer<typeof StaticAnalysisOutputSchema>;
+
 // ─── Schema registry ───────────────────────────────────────────────────────────
 
 const SCHEMA_REGISTRY: Record<string, z.ZodTypeAny> = {
@@ -220,6 +253,7 @@ const SCHEMA_REGISTRY: Record<string, z.ZodTypeAny> = {
   GitOutput: GitOutputSchema,
   DeployOutput: DeployOutputSchema,
   CodeReviewOutput: CodeReviewOutputSchema,
+  StaticAnalysisOutput: StaticAnalysisOutputSchema,
 };
 
 export const AVAILABLE_SCHEMAS = Object.keys(SCHEMA_REGISTRY);

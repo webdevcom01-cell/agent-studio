@@ -31,11 +31,13 @@
  *       Parses markdown code blocks, then delegates to executeRealTestsFromFiles.
  */
 
-import { mkdirSync, writeFileSync, existsSync, rmSync, readdirSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, rmSync, readdirSync, cpSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join, dirname, relative, resolve } from "node:path";
 import { logger } from "@/lib/logger";
 import { runVerificationCommands } from "@/lib/runtime/verification-commands";
+import type { StaticAnalysisOutput } from "./schemas";
+import { parseEslintOutput, parseTscErrors } from "./error-parser";
 import {
   executeInE2BSandbox,
   executeWorkspaceInE2BSandbox,
@@ -711,4 +713,174 @@ export async function runWorkspaceTests(
     typecheckPassed,
     testsPassed,
   };
+}
+
+// ─── Static Analysis (tsc + eslint) ──────────────────────────────────────────
+
+/**
+ * Run TypeScript compiler + ESLint against generated files.
+ *
+ * KEY DESIGN: generated files live in /tmp/sdlc/{runId}/ which is OUTSIDE
+ * the project root. Both `tsc` and ESLint flat config only cover files under
+ * the project root. So we:
+ *   1. Copy generated files into /app/src/sdlc-generated/{runId}/ (inside project)
+ *   2. Run tsc --noEmit with the real project tsconfig (resolves @/* aliases)
+ *   3. Filter tsc errors to only those in the staging dir
+ *   4. Run eslint on the staging dir (flat config applies correctly)
+ *   5. Clean up the staging dir in finally{}
+ *
+ * @param workDir  - The /tmp/sdlc/{runId} directory containing generated files
+ * @param runId    - Unique run identifier (used for staging dir isolation)
+ * @param agentId  - For logging
+ */
+export async function runStaticAnalysis(
+  workDir: string,
+  runId: string,
+  agentId: string,
+): Promise<StaticAnalysisOutput> {
+  const startTime = Date.now();
+  const APP_ROOT = existsSync("/app") ? "/app" : process.cwd();
+  const STAGING_BASE = join(APP_ROOT, "src", "sdlc-generated");
+  const stagingDir = join(STAGING_BASE, runId);
+
+  const allFiles: string[] = [];
+  function walkForStatic(dir: string): void {
+    try {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walkForStatic(full);
+        else allFiles.push(full);
+      }
+    } catch { /* skip unreadable dirs */ }
+  }
+  if (existsSync(workDir)) walkForStatic(workDir);
+
+  const tsFiles = allFiles.filter(
+    (p) => p.endsWith(".ts") || p.endsWith(".tsx") || p.endsWith(".mts"),
+  );
+
+  if (tsFiles.length === 0) {
+    logger.info("runStaticAnalysis: no TypeScript files found — skipping", { agentId, workDir });
+    return {
+      typecheckPassed: true,
+      lintPassed: true,
+      typescriptErrors: [],
+      eslintErrors: [],
+      eslintWarnings: [],
+      summary: "✅ Static analysis skipped (no TypeScript files)",
+      durationMs: Date.now() - startTime,
+    };
+  }
+
+  try {
+    // ── Step 1: Stage generated files inside project root ─────────────────
+    mkdirSync(stagingDir, { recursive: true });
+    cpSync(workDir, stagingDir, { recursive: true });
+    logger.info("runStaticAnalysis: staged files", { agentId, stagingDir, count: tsFiles.length });
+
+    // ── Step 2: TypeScript — run with real project tsconfig ───────────────
+    let tscOutput = "";
+    let typecheckPassed = true;
+
+    try {
+      const { results: tscResults } = await runVerificationCommands(
+        ["tsc --noEmit --pretty false"],
+        agentId,
+        90_000,
+        APP_ROOT,
+        1024 * 1024 * 5,
+      );
+      tscOutput = tscResults[0]?.output ?? "";
+      const allTsErrors = parseTscErrors(tscOutput);
+      const stagingRelative = relative(APP_ROOT, stagingDir);
+      const tsErrors = allTsErrors.filter(
+        (e) => e.file.includes(stagingDir) || e.file.includes(stagingRelative),
+      );
+      typecheckPassed = tsErrors.length === 0;
+
+      logger.info("runStaticAnalysis: tsc complete", {
+        agentId,
+        totalErrors: allTsErrors.length,
+        filteredErrors: tsErrors.length,
+        typecheckPassed,
+      });
+
+      // ── Step 3: ESLint ──────────────────────────────────────────────────
+      let lintErrors: ReturnType<typeof parseEslintOutput>["errors"] = [];
+      let lintWarnings: ReturnType<typeof parseEslintOutput>["warnings"] = [];
+      let lintPassed = true;
+
+      const eslintBin = join(APP_ROOT, "node_modules", ".bin", "eslint");
+      const eslintAvailable = existsSync(eslintBin);
+
+      if (eslintAvailable) {
+        try {
+          const { results: eslintResults } = await runVerificationCommands(
+            [`eslint "${stagingDir}" --format json --no-error-on-unmatched-pattern`],
+            agentId,
+            30_000,
+            APP_ROOT,
+            1024 * 1024 * 2,
+          );
+          const raw = eslintResults[0]?.output ?? "";
+          const parsed = parseEslintOutput(raw);
+          lintErrors = parsed.errors;
+          lintWarnings = parsed.warnings;
+          lintPassed = lintErrors.length === 0;
+          logger.info("runStaticAnalysis: eslint complete", {
+            agentId, lintErrors: lintErrors.length, lintWarnings: lintWarnings.length,
+          });
+        } catch (eslintErr) {
+          logger.warn("runStaticAnalysis: eslint command failed — skipping lint", {
+            agentId,
+            error: eslintErr instanceof Error ? eslintErr.message : String(eslintErr),
+          });
+        }
+      } else {
+        logger.warn("runStaticAnalysis: eslint binary not found — skipping lint", { agentId });
+      }
+
+      const summary = [
+        typecheckPassed
+          ? "✅ TypeScript: PASSED"
+          : `❌ TypeScript: ${tsErrors.length} error(s)`,
+        lintPassed
+          ? "✅ ESLint: PASSED"
+          : `⚠️ ESLint: ${lintErrors.length} error(s), ${lintWarnings.length} warning(s)`,
+      ].join(" | ");
+
+      return {
+        typecheckPassed,
+        lintPassed,
+        typescriptErrors: tsErrors,
+        eslintErrors: lintErrors,
+        eslintWarnings: lintWarnings,
+        summary,
+        durationMs: Date.now() - startTime,
+      };
+
+    } catch (tscErr) {
+      logger.warn("runStaticAnalysis: tsc command failed unexpectedly", {
+        agentId,
+        error: tscErr instanceof Error ? tscErr.message : String(tscErr),
+      });
+      return {
+        typecheckPassed: false,
+        lintPassed: true,
+        typescriptErrors: [],
+        eslintErrors: [],
+        eslintWarnings: [],
+        summary: `❌ TypeScript: compiler error — ${tscErr instanceof Error ? tscErr.message : String(tscErr)}`,
+        durationMs: Date.now() - startTime,
+      };
+    }
+
+  } finally {
+    try {
+      rmSync(stagingDir, { recursive: true, force: true });
+      logger.info("runStaticAnalysis: staging dir cleaned up", { agentId, stagingDir });
+    } catch {
+      logger.warn("runStaticAnalysis: failed to clean up staging dir", { agentId, stagingDir });
+    }
+  }
 }
