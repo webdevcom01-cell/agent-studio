@@ -84,9 +84,6 @@
 ## OPEN ITEMS
 
 - [ ] **G-BLOCKER**: Deploy dedicated BullMQ worker service on Railway — `async-execution` flag is disabled until this is done
-- [ ] A1.9: Integration test: flow with hooks → webhook receives events *(deferred from OpenClaw plan)*
-- [ ] B3.3: Per-task model selection log in cost tracking *(deferred — needs token pricing integration)*
-- [ ] C3.4: Bayesian hybrid search benchmark *(deferred — requires production data for meaningful NDCG/MRR)*
 - [ ] DOCS: Review and update stale docs in `docs/*.md` *(flagged: 30+ days old, out of sync with Paperclip changes)*
 
 ---

@@ -386,6 +386,6 @@ Railway Project
 ## Related Documentation
 
 - [SETUP.md](./SETUP.md) — Step-by-step deployment guide
-- [Node Reference](../10-node-reference.md) — All 55 node types
+- [Node Reference](../10-node-reference.md) — All 66 node types
 - [DevSecOps Guide](../../src/app/devsecops/) — Full DevSecOps pipeline reference
 - [ECC Security Templates](../../src/data/ecc-agent-templates.json) — Base security agent templates
