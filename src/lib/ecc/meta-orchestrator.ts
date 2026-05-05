@@ -69,8 +69,8 @@ const AGENT_CONTEXT_REQUIRED = new Set([
 ]);
 
 const ROUTING_TABLE: Record<string, string[]> = {
-  "new-feature":     ["project_context", "ecc-planner", "ecc-tdd-guide", "sandbox_verify", "ecc-code-reviewer"],
-  "bug-fix":         ["project_context", "ecc-tdd-guide", "sandbox_verify", "ecc-code-reviewer", "ecc-security-reviewer"],
+  "new-feature":     ["project_context", "ecc-planner", "ecc-tdd-guide", "ecc-implementer", "sandbox_verify", "ecc-code-reviewer"],
+  "bug-fix":         ["project_context", "ecc-tdd-guide", "ecc-implementer", "sandbox_verify", "ecc-code-reviewer", "ecc-security-reviewer"],
   "security-audit":  ["project_context", "ecc-security-reviewer", "ecc-security-engineer"],
   "code-review":     ["project_context", "ecc-code-reviewer"],
   "architecture":    ["ecc-architect", "ecc-planner"],

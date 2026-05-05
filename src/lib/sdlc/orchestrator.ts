@@ -81,7 +81,7 @@ const IMPLEMENTATION_STEPS = new Set([
   "code_generator", "feature_developer",
   // ECC-prefixed IDs
   "ecc-frontend-developer", "ecc-refactor-cleaner",
-  "ecc-build-error-resolver",
+  "ecc-build-error-resolver", "ecc-implementer",
 ]);
 
 /** Steps whose output may indicate test failures — trigger feedback loop.
