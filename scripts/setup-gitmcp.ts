@@ -31,7 +31,9 @@ if (!VAULT_REPO) {
 
 const GITMCP_URL = `https://gitmcp.io/${VAULT_REPO}`;
 
-// UI agent names to link — adjust if you rename agents
+// Set to true to link ALL user agents, false to use UI_AGENT_NAMES list
+const LINK_ALL_AGENTS = true;
+// Fallback list (used only when LINK_ALL_AGENTS = false)
 const UI_AGENT_NAMES = ["hook-writer", "content-repurposer", "trend-intelligence"];
 
 async function main() {
@@ -74,14 +76,13 @@ async function main() {
 
   // ── 3. Link to each UI agent ──────────────────────────────────────────────
   const agents = await prisma.agent.findMany({
-    where: {
-      userId: user.id,
-      name: { in: UI_AGENT_NAMES },
-    },
+    where: LINK_ALL_AGENTS
+      ? { userId: user.id }
+      : { userId: user.id, name: { in: UI_AGENT_NAMES } },
     select: { id: true, name: true },
   });
 
-  console.log(`\n🤖  Found ${agents.length} matching agents:`);
+  console.log(`\n🤖  Found ${agents.length} agents to link:`);
 
   for (const agent of agents) {
     const alreadyLinked = await prisma.agentMCPServer.findFirst({
@@ -103,12 +104,14 @@ async function main() {
     console.log(`   ↳ ${agent.name} — linked ✅`);
   }
 
-  const missing = UI_AGENT_NAMES.filter(
-    (n) => !agents.find((a) => a.name === n)
-  );
-  if (missing.length) {
-    console.log(`\n⚠️   Agents not found (create them in Agent Studio UI first):`);
-    missing.forEach((n) => console.log(`   - ${n}`));
+  if (!LINK_ALL_AGENTS) {
+    const missing = UI_AGENT_NAMES.filter(
+      (n) => !agents.find((a) => a.name === n)
+    );
+    if (missing.length) {
+      console.log(`\n⚠️   Agents not found (create them in Agent Studio UI first):`);
+      missing.forEach((n) => console.log(`   - ${n}`));
+    }
   }
 
   console.log("\n🎉  Done! Agents can now read from your Obsidian vault.\n");
