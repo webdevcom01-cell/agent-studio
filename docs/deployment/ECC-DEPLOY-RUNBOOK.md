@@ -2,7 +2,7 @@
 
 ## Pre-Deploy Checklist
 
-- [ ] All tests pass: `pnpm test` (1500+ tests)
+- [ ] All tests pass: `pnpm test` (3900+ tests)
 - [ ] TypeScript clean: `pnpm typecheck`
 - [ ] Prisma schema matches DB: `pnpm db:push --dry-run`
 - [ ] ECC_ENABLED env var set on Railway

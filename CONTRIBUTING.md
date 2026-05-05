@@ -44,6 +44,41 @@ Open [http://localhost:3000](http://localhost:3000) to verify everything is work
 
 ---
 
+## Available Commands
+
+<!-- AUTO-GENERATED from package.json scripts -->
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Start dev server with Turbopack (hot reload) |
+| `pnpm build` | Production build (runs `prisma generate` + `next build`) |
+| `pnpm start` | Start production server |
+| `pnpm lint` | Run Next.js ESLint |
+| `pnpm typecheck` | TypeScript type-check (no emit) |
+| `pnpm test` | Run Vitest unit tests |
+| `pnpm test:watch` | Run Vitest in watch mode |
+| `pnpm test:coverage` | Run Vitest with V8 coverage report |
+| `pnpm test:e2e` | Run Playwright E2E tests |
+| `pnpm test:e2e:ui` | Run Playwright in interactive UI mode |
+| `pnpm test:e2e:debug` | Run Playwright in debug mode |
+| `pnpm test:e2e:report` | Open the last Playwright HTML report |
+| `pnpm test:load` | Run k6 load test (`load-tests/agent-studio.js`) |
+| `pnpm worker` | Start BullMQ worker process |
+| `pnpm precheck` | Pre-push gate: TS → vitest → lucide mocks → placeholder strings |
+| `pnpm precheck:file <path>` | Run pre-push checks against a single file |
+| `pnpm db:generate` | Regenerate Prisma client |
+| `pnpm db:migrate` | Create and apply a new migration (dev) |
+| `pnpm db:migrate:deploy` | Apply pending migrations (production) |
+| `pnpm db:push` | Push schema to DB without a migration file |
+| `pnpm db:studio` | Open Prisma Studio |
+| `pnpm db:seed` | Seed the database (`prisma/seed.ts`) |
+| `pnpm mcp:playwright` | Start Playwright MCP server on port 3100 |
+| `pnpm knip` | Detect unused dependencies and exports |
+| `pnpm knip:fix` | Auto-fix unused dependencies and exports |
+| `pnpm changelog` | Append recent git log to `CHANGELOG.md` |
+<!-- AUTO-GENERATED -->
+
+---
+
 ## Branch Naming
 
 Create branches from `main` using one of these prefixes:
@@ -133,7 +168,7 @@ Without Redis, the worker exits immediately. The web app degrades gracefully —
 
 ## Adding a New Flow Node Type
 
-The project has 61 node types (see `NodeType` in `src/types/index.ts`). To add a new one, follow this checklist in order:
+The project has 66 node types (see `NodeType` in `src/types/index.ts`). To add a new one, follow this checklist in order:
 
 1. Add the type to the `NodeType` union in `src/types/index.ts`
 2. Add the type string to `NODE_TYPES` array in `src/lib/validators/flow-content.ts`
