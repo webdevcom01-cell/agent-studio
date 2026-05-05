@@ -12,6 +12,13 @@
  *   DATABASE_URL         — Prisma DB connection string
  */
 
+import { config } from "dotenv";
+import { resolve } from "path";
+
+// Load .env.local first (local overrides), then fall back to .env
+config({ path: resolve(process.cwd(), ".env.local") });
+config({ path: resolve(process.cwd(), ".env") });
+
 import { PrismaClient } from "../src/generated/prisma";
 
 const prisma = new PrismaClient();
