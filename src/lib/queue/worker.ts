@@ -610,6 +610,19 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
       );
     })();
 
+
+    // Fire-and-forget: Slack notification on pipeline completion
+    void firePipelineSlackNotification({
+      pipelineRunId,
+      agentId,
+      taskDescription: run.taskDescription,
+      success: true,
+      durationMs: result.durationMs,
+      stepCount: result.stepCount,
+      prUrl: result.prUrl,
+      gitError: result.gitError,
+    });
+
     logger.info("Pipeline run job completed", {
       jobId: job.id,
       pipelineRunId,
@@ -624,8 +637,78 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     await markPipelineFailed(pipelineRunId, errorMsg);
+    // Fire-and-forget: Slack notification on pipeline failure
+    void firePipelineSlackNotification({
+      pipelineRunId,
+      agentId,
+      taskDescription: run.taskDescription,
+      success: false,
+      errorMsg,
+    });
     logger.error("Pipeline run job failed", { jobId: job.id, pipelineRunId, agentId, error: err });
     throw err; // Re-throw so BullMQ records the failure
+  }
+}
+
+/**
+ * Fire-and-forget Slack notification for SDLC pipeline completion or failure.
+ * Reads webhook URL from SDLC_SLACK_WEBHOOK_URL or NOTIFICATION_WEBHOOK_URL env vars.
+ * Errors are silently logged — never propagated to the caller.
+ */
+async function firePipelineSlackNotification(params: {
+  pipelineRunId: string;
+  agentId: string;
+  taskDescription: string;
+  success: boolean;
+  durationMs?: number;
+  stepCount?: number;
+  prUrl?: string | null;
+  gitError?: string | null;
+  errorMsg?: string;
+}): Promise<void> {
+  const webhookUrl =
+    process.env.SDLC_SLACK_WEBHOOK_URL ?? process.env.NOTIFICATION_WEBHOOK_URL ?? "";
+  if (!webhookUrl) return;
+
+  const {
+    pipelineRunId, agentId, taskDescription, success,
+    durationMs, stepCount, prUrl, gitError, errorMsg,
+  } = params;
+
+  const durationSec = durationMs ? `${Math.round(durationMs / 1000)}s` : "—";
+  const icon = success ? "✅" : "❌";
+  const statusText = success ? "completed" : "failed";
+
+  const lines: string[] = [
+    `${icon} *SDLC Pipeline ${statusText}*`,
+    `*Task:* ${taskDescription.slice(0, 200)}`,
+    `*Run ID:* \`${pipelineRunId}\``,
+    `*Agent:* ${agentId}`,
+  ];
+
+  if (success) {
+    if (stepCount) lines.push(`*Steps:* ${stepCount}`);
+    if (durationSec) lines.push(`*Duration:* ${durationSec}`);
+    if (prUrl) lines.push(`*PR:* <${prUrl}|View Pull Request>`);
+    if (gitError) lines.push(`*Git warning:* ${gitError}`);
+  } else {
+    if (errorMsg) lines.push(`*Error:* \`${errorMsg.slice(0, 300)}\``);
+  }
+
+  const body = JSON.stringify({ text: lines.join("\n") });
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      logger.warn("Pipeline Slack notification failed", { status: res.status, pipelineRunId });
+    }
+  } catch (err) {
+    logger.warn("Pipeline Slack notification error", { pipelineRunId, error: err });
   }
 }
 
