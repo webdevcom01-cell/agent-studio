@@ -242,6 +242,33 @@ export type StaticAnalysisTsError = z.infer<typeof StaticAnalysisTsErrorSchema>;
 export type StaticAnalysisEslintIssue = z.infer<typeof StaticAnalysisEslintIssueSchema>;
 export type StaticAnalysisOutput = z.infer<typeof StaticAnalysisOutputSchema>;
 
+// ─── Security Review Output ──────────────────────────────────────────────────
+
+export const SecurityFindingSchema = z.object({
+  severity: z.enum(["CRITICAL", "HIGH", "MEDIUM", "LOW"]),
+  owaspCategory: z.string().describe("e.g. A01:2021-Broken Access Control"),
+  file: z.string(),
+  line: z.number().optional(),
+  message: z.string(),
+  fix: z.string().describe("Concrete remediation step"),
+  cwe: z.string().optional().describe("e.g. CWE-89 for SQL Injection"),
+});
+
+export const SecurityReviewOutputSchema = z.object({
+  decision: z.enum(["PASS", "PASS_WITH_NOTES", "BLOCK"]),
+  criticalCount: z.number(),
+  highCount: z.number(),
+  mediumCount: z.number(),
+  lowCount: z.number(),
+  findings: z.array(SecurityFindingSchema),
+  summary: z.string(),
+  securityScore: z.number().min(0).max(100),
+  blockedBy: z.array(z.string()).describe("CRITICAL/HIGH finding messages that cause BLOCK"),
+});
+
+export type SecurityFinding = z.infer<typeof SecurityFindingSchema>;
+export type SecurityReviewOutput = z.infer<typeof SecurityReviewOutputSchema>;
+
 // ─── Schema registry ───────────────────────────────────────────────────────────
 
 const SCHEMA_REGISTRY: Record<string, z.ZodTypeAny> = {
@@ -254,6 +281,7 @@ const SCHEMA_REGISTRY: Record<string, z.ZodTypeAny> = {
   DeployOutput: DeployOutputSchema,
   CodeReviewOutput: CodeReviewOutputSchema,
   StaticAnalysisOutput: StaticAnalysisOutputSchema,
+  SecurityReviewOutput: SecurityReviewOutputSchema,
 };
 
 export const AVAILABLE_SCHEMAS = Object.keys(SCHEMA_REGISTRY);

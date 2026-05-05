@@ -45,7 +45,7 @@ import {
   runStaticAnalysis,
   type ParsedFile,
 } from "./code-extractor";
-import { CodeGenOutputSchema } from "./schemas";
+import { CodeGenOutputSchema, CodeReviewOutputSchema, SecurityReviewOutputSchema } from "./schemas";
 import { resolveStepModel, getEscalationModel, resolveStepModelAdaptive } from "./model-router";
 import type { StepPhase } from "./model-router";
 import type { StepMetric } from "./metrics-collector";
@@ -72,7 +72,7 @@ const PLANNING_STEPS = new Set([
   "tdd_guide", "security_eng", "project_context",
   // ECC-prefixed IDs — meta-orchestrator pipelines
   "ecc-architect", "ecc-planner", "ecc-tdd-guide",
-  "ecc-security-engineer", "ecc-security-reviewer",
+  "ecc-security-engineer",
 ]);
 
 /** Steps that produce implementation code — receive architecturePlan + RAG context.
@@ -94,6 +94,13 @@ const TEST_STEPS = new Set([
   "sandbox", "run_tests", "test_runner",
   // ECC-prefixed IDs
   "ecc-e2e-runner", "ecc-tdd-pipeline",
+]);
+
+/** Steps that act as quality/security gates — use generateObject() for structured
+ *  output; decision is read and drives pipeline behavior (isDraft in pr_generation). */
+const GATE_STEPS = new Set([
+  "ecc-code-reviewer",
+  "ecc-security-reviewer",
 ]);
 
 /** Infrastructure nodes that are not real agents — executed inline */
@@ -562,6 +569,7 @@ export async function runPipeline(
       const phase: StepPhase = PLANNING_STEPS.has(stepId) ? "planning"
         : IMPLEMENTATION_STEPS.has(stepId) ? "implementation"
         : TEST_STEPS.has(stepId) ? "testing"
+        : GATE_STEPS.has(stepId) ? "review"
         : "other";
       const stepModelId = useSmartRouting
         ? await resolveStepModelAdaptive(phase, stepModelOverrides, stepId, resolvedModelId)
@@ -757,8 +765,44 @@ export async function runPipeline(
             stepOutputTokens = fallback.usage.outputTokens ?? 0;
             implFiles = null; // signals executeRealTests (markdown parsing path)
           }
+        } else if (GATE_STEPS.has(stepId)) {
+          // ── Gate step path — structured output for reviewers ────────────────
+          const gateSchema = stepId === "ecc-security-reviewer"
+            ? SecurityReviewOutputSchema
+            : CodeReviewOutputSchema;
+          try {
+            const result = await generateObject({
+              model,
+              system: systemPrompt,
+              prompt,
+              schema: gateSchema,
+              maxOutputTokens: 4096,
+              abortSignal: ac.signal,
+              providerOptions: { openai: { strictJsonSchema: false } },
+            });
+            stepOutput = JSON.stringify(result.object, null, 2);
+            stepInputTokens = result.usage.inputTokens ?? 0;
+            stepOutputTokens = result.usage.outputTokens ?? 0;
+          } catch (gateErr) {
+            if (gateErr instanceof Error && gateErr.name === "AbortError") throw gateErr;
+            logger.warn("Pipeline: gate generateObject failed, falling back to generateText", {
+              runId, stepIdx, stepId,
+              error: gateErr instanceof Error ? gateErr.message : String(gateErr),
+            });
+            const fallback = await generateText({
+              model,
+              system: systemPrompt,
+              prompt,
+              maxOutputTokens: 4096,
+              abortSignal: ac.signal,
+            });
+            stepOutput = fallback.text;
+            stepInputTokens = fallback.usage.inputTokens ?? 0;
+            stepOutputTokens = fallback.usage.outputTokens ?? 0;
+          }
+          // Gate steps: inject summary into context but NEVER into architecturePlan
         } else {
-          // ── Text generation path — planning, review, test steps ─────────────
+          // ── Text generation path — planning, test, other steps ──────────────
           const result = await generateText({
             model,
             system: systemPrompt,

@@ -191,6 +191,7 @@ describe("validateAgainstSchema", () => {
     expect(AVAILABLE_SCHEMAS).toContain("DeployOutput");
     expect(AVAILABLE_SCHEMAS).toContain("CodeReviewOutput");
     expect(AVAILABLE_SCHEMAS).toContain("StaticAnalysisOutput");
-    expect(AVAILABLE_SCHEMAS.length).toBe(9);
+    expect(AVAILABLE_SCHEMAS).toContain("SecurityReviewOutput");
+    expect(AVAILABLE_SCHEMAS.length).toBe(10);
   });
 });

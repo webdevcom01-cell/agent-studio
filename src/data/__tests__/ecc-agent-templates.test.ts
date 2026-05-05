@@ -37,9 +37,9 @@ describe("ecc-agent-templates.json", () => {
     }
   });
 
-  it("contains exactly 29 templates (25 agents + 4 pipelines)", () => {
-    expect(eccTemplateData.templates).toHaveLength(29);
-    expect(eccTemplateData.total).toBe(29);
+  it("contains exactly 30 templates (26 agents + 4 pipelines)", () => {
+    expect(eccTemplateData.templates).toHaveLength(30);
+    expect(eccTemplateData.total).toBe(30);
   });
 
   it("has unique template IDs", () => {
