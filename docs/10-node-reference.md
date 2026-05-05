@@ -1,4 +1,4 @@
-# Node Reference — All 61 Node Types
+# Node Reference — All 66 Node Types
 
 This document covers every node type in Agent Studio with all configurable fields. Open the Properties panel by clicking any node in the Builder.
 

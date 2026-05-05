@@ -7,7 +7,7 @@ Agent Studio is a visual builder for creating AI agents with multi-agent orchest
 ## Main Components
 
 ### 1. Flow Builder
-A visual editor (XyFlow) where you connect nodes to define conversation and automation flows. 61 node types available — from basic message/condition nodes to AI response, MCP tool calls, parallel execution, loops, webhooks, guardrails, cost monitoring, and the Learn node for continuous improvement. Includes `project_context` (load CLAUDE.md / rules files) and `sandbox_verify` (deterministic TypeScript + lint + pattern checks on generated code).
+A visual editor (XyFlow) where you connect nodes to define conversation and automation flows. 66 node types available — from basic message/condition nodes to AI response, MCP tool calls, parallel execution, loops, webhooks, guardrails, cost monitoring, and the Learn node for continuous improvement. Includes `project_context` (load CLAUDE.md / rules files) and `sandbox_verify` (deterministic TypeScript + lint + pattern checks on generated code).
 
 ### 2. Knowledge Base (KB)
 RAG pipeline: add URLs, upload files (PDF/DOCX), or paste text. Content is automatically scraped, chunked (400 tokens, 20% overlap), embedded (OpenAI text-embedding-3-small), and stored in pgvector. Hybrid search combines semantic cosine similarity (70%) + BM25 keyword search (30%) with optional LLM re-ranking.
@@ -82,7 +82,7 @@ Separate service running Python FastMCP. Exposes 3 tools: `get_skill`, `search_s
 
 1. Create an agent — give it a name and description (or pick a template)
 2. Add Knowledge Base — enter URLs, upload files, or paste text
-3. Build a flow — add and connect nodes in the Builder (55 node types)
+3. Build a flow — add and connect nodes in the Builder (66 node types)
 4. Configure webhooks — set up external triggers if needed
 5. Add evals — define test cases with assertions for quality assurance
 6. Test — use Test Chat to verify the agent works correctly
