@@ -36,6 +36,7 @@ export interface PipelineRun {
   agentId: string;
   userId: string | null;
   repoUrl: string | null;
+  sourceRepoUrl: string | null;
   prUrl: string | null;
   startedAt: Date | null;
   completedAt: Date | null;
@@ -51,6 +52,7 @@ export interface CreatePipelineRunInput {
   agentId: string;
   userId?: string;
   repoUrl?: string;
+  sourceRepoUrl?: string;
 }
 
 export interface ListPipelineRunsOptions {
@@ -79,6 +81,7 @@ function toRun(row: {
   agentId: string;
   userId: string | null;
   repoUrl: string | null;
+  sourceRepoUrl?: string | null;
   prUrl: string | null;
   startedAt: Date | null;
   completedAt: Date | null;
@@ -89,6 +92,7 @@ function toRun(row: {
     ...row,
     approvalFeedback: row.approvalFeedback ?? null,
     repoUrl: row.repoUrl,
+    sourceRepoUrl: row.sourceRepoUrl ?? null,
     prUrl: row.prUrl,
     stepResults:
       row.stepResults && typeof row.stepResults === "object" && !Array.isArray(row.stepResults)
@@ -113,6 +117,7 @@ export async function createPipelineRun(
       agentId: input.agentId,
       userId: input.userId ?? null,
       repoUrl: input.repoUrl ?? null,
+      sourceRepoUrl: input.sourceRepoUrl,
       status: "PENDING",
     },
   });

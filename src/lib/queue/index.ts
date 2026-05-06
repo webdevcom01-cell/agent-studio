@@ -112,6 +112,7 @@ export interface PipelineRunJobData {
   /** When true, use the smart model router to select the best available model per phase. */
   useSmartRouting?: boolean;
   repoUrl?: string;
+  sourceRepoUrl?: string;
 }
 
 /** F1 — Monthly budget period reset (triggered by daily cron, runs in worker) */

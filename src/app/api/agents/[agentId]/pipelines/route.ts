@@ -76,6 +76,7 @@ const CreatePipelineRunSchema = z.object({
    */
   useSmartRouting: z.boolean().default(false),
   repoUrl: z.string().url().optional(),
+  sourceRepoUrl: z.string().url().optional(),
 });
 
 export async function POST(
@@ -153,6 +154,7 @@ export async function POST(
       agentId,
       userId,
       repoUrl,
+      sourceRepoUrl: parsed.data.sourceRepoUrl,
     });
 
     // Step 4: Enqueue the pipeline runner job
@@ -164,6 +166,7 @@ export async function POST(
       requireApproval,
       useSmartRouting,
       repoUrl,
+      sourceRepoUrl: parsed.data.sourceRepoUrl,
     });
 
     logger.info("Pipeline run created and enqueued", {

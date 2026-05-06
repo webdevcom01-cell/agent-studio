@@ -8,6 +8,7 @@
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { existsSync, mkdirSync, rmSync, readdirSync, statSync, copyFileSync } from "node:fs";
+import { mkdir, rm } from "node:fs/promises";
 import { promisify } from "node:util";
 import { logger } from "@/lib/logger";
 
@@ -19,7 +20,7 @@ function tryParseJson<T>(str: string): T | null {
 
 const GITHUB_API = "https://api.github.com";
 const GIT_TIMEOUT_MS = 60_000;
-const GENERATED_SUBDIR = "workspace";
+export const GENERATED_SUBDIR = "workspace";
 
 export interface GitIntegrationInput {
   repoUrl: string;
@@ -308,5 +309,59 @@ export async function integrateWithGit(
     } catch {
       // ignore cleanup errors
     }
+  }
+}
+
+/**
+ * Shallow-clone a GitHub repo into targetDir for pipeline context.
+ * Used at pipeline START to populate workDir/workspace/ so RAG indexing
+ * has real codebase to work with. Removes .git after clone.
+ * Best-effort: caller should log and continue on failure.
+ */
+export async function cloneSourceRepo(params: {
+  sourceRepoUrl: string;
+  targetDir: string;
+  runId: string;
+}): Promise<{ success: boolean; error?: string; filesCloned?: number }> {
+  const { sourceRepoUrl, targetDir, runId } = params;
+
+  const repoInfo = parseRepoInfo(sourceRepoUrl);
+  if (!repoInfo) {
+    return { success: false, error: `Unsupported repo URL format: ${sourceRepoUrl}` };
+  }
+
+  const token = process.env.GITHUB_TOKEN ?? process.env.GITHUB_PAT;
+  if (!token) {
+    return { success: false, error: "GITHUB_TOKEN or GITHUB_PAT not configured" };
+  }
+
+  const authUrl = `https://${token}@github.com/${repoInfo.owner}/${repoInfo.repo}.git`;
+
+  try {
+    await mkdir(targetDir, { recursive: true });
+
+    // Shallow clone (depth=1) — array args, ne shell string
+    await execFileAsync("git", ["clone", "--depth", "1", authUrl, targetDir]);
+
+    // OBAVEZNO: brisanje .git da ne bi konfliktovalo kada integrateWithGit
+    // kopira workspace/ u klon target repo-a
+    await rm(join(targetDir, ".git"), { recursive: true, force: true });
+
+    // Brojimo fajlove za logovanje
+    const { stdout } = await execFileAsync("find", [targetDir, "-type", "f"]);
+    const filesCloned = stdout.trim().split("\n").filter(Boolean).length;
+
+    logger.info("cloneSourceRepo: completed", {
+      runId,
+      sourceRepoUrl,
+      targetDir,
+      filesCloned,
+    });
+
+    return { success: true, filesCloned };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    logger.warn("cloneSourceRepo: failed", { runId, sourceRepoUrl, error });
+    return { success: false, error };
   }
 }

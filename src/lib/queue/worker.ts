@@ -522,7 +522,7 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
   const {
     pipelineRunId, agentId, userId, modelId,
     requireApproval, startFromStep, existingStepResults, approvalFeedback,
-    useSmartRouting, repoUrl,
+    useSmartRouting, repoUrl, sourceRepoUrl,
   } = job.data;
 
   const {
@@ -566,6 +566,7 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
         approvalFeedback,
         useSmartRouting: useSmartRouting ?? false,
         repoUrl,
+        sourceRepoUrl,
       },
       {
         onStepComplete: async (stepIdx: number, output: string) => {

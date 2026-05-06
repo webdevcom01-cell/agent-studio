@@ -295,6 +295,7 @@ model PipelineRun {
   userId          String?
 
   repoUrl         String?
+  sourceRepoUrl   String?
   prUrl           String?
 
   startedAt       DateTime?

@@ -25,6 +25,7 @@
  */
 
 import { rmSync } from "node:fs";
+import { join } from "node:path";
 import { logger } from "@/lib/logger";
 import { startSpan } from "@/lib/observability/tracer";
 import { recordTokenUsage, recordChatLatency } from "@/lib/observability/metrics";
@@ -190,6 +191,7 @@ export interface OrchestratorInput {
   /** When true, use the smart model router to select the best available model per phase. */
   useSmartRouting?: boolean;
   repoUrl?: string;
+  sourceRepoUrl?: string;
   pipelineType?: string;
 }
 
@@ -321,6 +323,37 @@ export async function runPipeline(
    * TEST_STEP feedback loop is skipped entirely — the implementation is already proven.
    */
   let implResolution: "none" | "passing" | "exhausted" = "none";
+
+  // ── Source repo clone (Phase 7) ─────────────────────────────────────────
+  // Clone sourceRepoUrl into workspace/ BEFORE RAG indexing.
+  // GUARD: only on new runs (startFromStep === 0), not on resume/retry.
+  // On resume, workspace/ already contains generated code — re-cloning would
+  // overwrite it and break the implementation steps.
+  if (input.sourceRepoUrl && (startFromStep ?? 0) === 0) {
+    const { cloneSourceRepo, GENERATED_SUBDIR } = await import("./git-integration");
+    const cloneTarget = join(workDir, GENERATED_SUBDIR);
+    logger.info("Pipeline: cloning source repo for agent context", {
+      runId,
+      sourceRepoUrl: input.sourceRepoUrl,
+      cloneTarget,
+    });
+    const cloneResult = await cloneSourceRepo({
+      sourceRepoUrl: input.sourceRepoUrl,
+      targetDir: cloneTarget,
+      runId,
+    });
+    if (!cloneResult.success) {
+      logger.warn(
+        "Pipeline: source repo clone failed — continuing without source context",
+        { runId, error: cloneResult.error },
+      );
+    } else {
+      logger.info("Pipeline: source repo ready for RAG indexing", {
+        runId,
+        filesCloned: cloneResult.filesCloned,
+      });
+    }
+  }
 
   // ── RAG: index the workspace codebase ──────────────────────────────────────
   // Best-effort — if the workspace doesn't exist yet the pipeline still runs;

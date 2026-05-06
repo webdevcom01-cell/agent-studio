@@ -40,6 +40,7 @@ export async function POST(
       existingStepResults: stepResultsMap,
       approvalFeedback: parsed.data.feedback,
       repoUrl: run.repoUrl ?? undefined,
+      sourceRepoUrl: run.sourceRepoUrl ?? undefined,
     });
 
     logger.info("Pipeline run approved — Phase 2 job enqueued", {

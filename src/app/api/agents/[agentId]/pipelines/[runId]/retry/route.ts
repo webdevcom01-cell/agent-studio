@@ -85,6 +85,7 @@ export async function POST(
       startFromStep: run.currentStep,
       existingStepResults: run.stepResults,
       repoUrl: run.repoUrl ?? undefined,
+      sourceRepoUrl: run.sourceRepoUrl ?? undefined,
     });
 
     logger.info("Pipeline run retry enqueued", {
