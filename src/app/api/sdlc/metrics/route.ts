@@ -19,7 +19,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   try {
     const [modelStats, pipelineSummary] = await Promise.all([
-      getModelStats(phase),
+      getModelStats(agentId, phase),
       getPipelineSummary(agentId),
     ]);
 

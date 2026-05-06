@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, use, type FormEvent } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import {
@@ -18,8 +18,16 @@ import {
   Cpu,
   Timer,
   AlertCircle,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -236,6 +244,138 @@ function StatPill({
       <p className="text-sm font-bold tabular-nums">{value}</p>
       <p className="text-xs text-zinc-500 mt-0.5">{label}</p>
     </div>
+  );
+}
+
+function RunPipelineDialog({
+  agentId,
+  open,
+  onOpenChange,
+  onSuccess,
+}: {
+  agentId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+}) {
+  const [taskDescription, setTaskDescription] = useState("");
+  const [repoUrl, setRepoUrl] = useState("");
+  const [sourceRepoUrl, setSourceRepoUrl] = useState("");
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!taskDescription.trim()) return;
+    setRunning(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/pipelines`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskDescription: taskDescription.trim(),
+          ...(repoUrl.trim() ? { repoUrl: repoUrl.trim() } : {}),
+          ...(sourceRepoUrl.trim() ? { sourceRepoUrl: sourceRepoUrl.trim() } : {}),
+        }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (!res.ok || !json.success) {
+        setError(json.error ?? "Greška pri pokretanju pipeline-a");
+        return;
+      }
+      setTaskDescription("");
+      setRepoUrl("");
+      setSourceRepoUrl("");
+      onOpenChange(false);
+      onSuccess();
+    } catch {
+      setError("Greška pri slanju zahteva");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-100 max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-sm font-semibold">Pokreni Pipeline Run</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="text-xs text-zinc-400 block mb-1">
+              Task opis <span className="text-red-400">*</span>
+            </label>
+            <textarea
+              value={taskDescription}
+              onChange={(e) => setTaskDescription(e.target.value)}
+              placeholder="Npr: Dodaj rate limiting u src/lib/auth.ts..."
+              rows={3}
+              required
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 resize-none focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-zinc-400 block mb-1">
+              Target repo URL{" "}
+              <span className="text-zinc-600">(optional — gde se kreira PR)</span>
+            </label>
+            <input
+              type="url"
+              value={repoUrl}
+              onChange={(e) => setRepoUrl(e.target.value)}
+              placeholder="https://github.com/owner/target-repo"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-zinc-400 block mb-1">
+              Source repo URL{" "}
+              <span className="text-zinc-600">(optional — za RAG kontekst)</span>
+            </label>
+            <input
+              type="url"
+              value={sourceRepoUrl}
+              onChange={(e) => setSourceRepoUrl(e.target.value)}
+              placeholder="https://github.com/owner/source-repo"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+            />
+          </div>
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          <DialogFooter className="pt-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              disabled={running}
+              className="text-zinc-400"
+            >
+              Odustani
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={running || !taskDescription.trim()}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {running ? (
+                <>
+                  <Loader2 className="size-3 mr-1 animate-spin" />
+                  Pokretanje...
+                </>
+              ) : (
+                <>
+                  <Play className="size-3 mr-1" />
+                  Pokreni
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -497,6 +637,7 @@ export default function PipelinesPage({
 
   const runs: PipelineRun[] = data?.data?.runs ?? [];
   const [metricsKey, setMetricsKey] = useState(0);
+  const [showRunDialog, setShowRunDialog] = useState(false);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -519,8 +660,18 @@ export default function PipelinesPage({
                 mutate();
                 setMetricsKey((k) => k + 1);
               }}
+              title="Osveži"
             >
               <RefreshCw className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-zinc-400"
+              onClick={() => setShowRunDialog(true)}
+              title="Pokreni novi pipeline run"
+            >
+              <Plus className="size-4" />
             </Button>
             <span className="text-xs text-zinc-500">{runs.length} runova</span>
           </div>
@@ -538,7 +689,15 @@ export default function PipelinesPage({
           <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
             <Play className="size-10 text-zinc-700" />
             <p className="text-zinc-400 font-medium text-sm">Nema pipeline runova</p>
-            <p className="text-zinc-600 text-xs">Pokrenite pipeline run via API</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRunDialog(true)}
+              className="border-zinc-700 text-zinc-400 hover:text-zinc-100 mt-1"
+            >
+              <Plus className="size-3 mr-1.5" />
+              Pokreni prvi pipeline run
+            </Button>
           </div>
         ) : (
           <>
@@ -549,6 +708,16 @@ export default function PipelinesPage({
           </>
         )}
       </div>
+
+      <RunPipelineDialog
+        agentId={agentId}
+        open={showRunDialog}
+        onOpenChange={setShowRunDialog}
+        onSuccess={() => {
+          mutate();
+          setMetricsKey((k) => k + 1);
+        }}
+      />
     </div>
   );
 }

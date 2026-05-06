@@ -65,6 +65,7 @@ export async function recordAllStepMetrics(
 // ---------------------------------------------------------------------------
 
 interface StatAccumulator {
+  agentId: string;
   modelId: string;
   phase: string;
   runCount: number;
@@ -79,7 +80,7 @@ export async function aggregateRunMetrics(runId: string): Promise<void> {
   try {
     const run = await prisma.pipelineRun.findUnique({
       where: { id: runId },
-      select: { stepMetrics: true },
+      select: { stepMetrics: true, agentId: true },
     });
 
     if (
@@ -99,8 +100,9 @@ export async function aggregateRunMetrics(runId: string): Promise<void> {
     for (const metric of entries) {
       if (metric.modelId === "none") continue;
 
-      const key = `${metric.modelId}::${metric.phase}`;
+      const key = `${run.agentId}::${metric.modelId}::${metric.phase}`;
       const existing = grouped.get(key) ?? {
+        agentId: run.agentId,
         modelId: metric.modelId,
         phase: metric.phase,
         runCount: 0,
@@ -125,7 +127,11 @@ export async function aggregateRunMetrics(runId: string): Promise<void> {
       Array.from(grouped.values()).map((stat) =>
         prisma.modelPerformanceStat.upsert({
           where: {
-            modelId_phase: { modelId: stat.modelId, phase: stat.phase },
+            agentId_modelId_phase: {
+              agentId: stat.agentId,
+              modelId: stat.modelId,
+              phase: stat.phase,
+            },
           },
           create: stat,
           update: {
@@ -168,9 +174,9 @@ export interface ModelStatRow {
   successRate: number;
 }
 
-export async function getModelStats(phase?: string): Promise<ModelStatRow[]> {
+export async function getModelStats(agentId: string, phase?: string): Promise<ModelStatRow[]> {
   const stats = await prisma.modelPerformanceStat.findMany({
-    where: phase ? { phase } : undefined,
+    where: { agentId, ...(phase ? { phase } : {}) },
     orderBy: [{ phase: "asc" }, { runCount: "desc" }],
   });
 

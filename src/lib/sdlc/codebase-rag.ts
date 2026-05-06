@@ -102,7 +102,8 @@ export async function indexCodebase(
   }
 
   // 3. Collect indexable files
-  const filePaths = await collectFiles(workingDir);
+  const ignorePatterns = await loadIgnorePatterns(workingDir);
+  const filePaths = await collectFiles(workingDir, 0, ignorePatterns);
   logger.info("codebase-rag: files collected for indexing", {
     agentId,
     workingDir,
@@ -319,7 +320,29 @@ async function fetchExistingCodebaseSources(knowledgeBaseId: string) {
   });
 }
 
-async function collectFiles(dir: string, depth = 0): Promise<string[]> {
+
+/**
+ * Load custom ignore patterns from {workingDir}/.sdlcignore.
+ * Format: one directory/file name per line, lines starting with # are comments.
+ * Returns a Set of names to skip — merged with SKIP_DIRS at collection time.
+ * Best-effort: missing file or read error returns empty set silently.
+ */
+async function loadIgnorePatterns(workingDir: string): Promise<Set<string>> {
+  const ignorePath = join(workingDir, ".sdlcignore");
+  if (!existsSync(ignorePath)) return new Set();
+  try {
+    const content = await readFile(ignorePath, "utf-8");
+    const patterns = content
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("#"));
+    return new Set(patterns);
+  } catch {
+    return new Set();
+  }
+}
+
+async function collectFiles(dir: string, depth = 0, ignorePatterns: Set<string> = new Set()): Promise<string[]> {
   if (depth > 8) return [];
 
   const files: string[] = [];
@@ -333,13 +356,13 @@ async function collectFiles(dir: string, depth = 0): Promise<string[]> {
 
   for (const entry of entries) {
     if (files.length >= MAX_FILES) break;
-    if (SKIP_DIRS.has(entry)) continue;
+    if (SKIP_DIRS.has(entry) || ignorePatterns.has(entry)) continue;
 
     const fullPath = join(dir, entry);
     try {
       const info = await stat(fullPath);
       if (info.isDirectory()) {
-        const sub = await collectFiles(fullPath, depth + 1);
+        const sub = await collectFiles(fullPath, depth + 1, ignorePatterns);
         // Slice to respect the global limit even when a subdirectory alone exceeds it
         const capacity = MAX_FILES - files.length;
         files.push(...sub.slice(0, capacity));
