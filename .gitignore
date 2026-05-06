@@ -122,3 +122,8 @@ test_write_check
 agents_dump.json
 *.tgz
 pr-guardian-phase1.patch
+
+# Claude Code runtime files
+.claude/scheduled_tasks.lock
+*.canvas
+*.base
