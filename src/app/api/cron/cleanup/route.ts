@@ -22,6 +22,7 @@ import { recordMetric } from "@/lib/observability/metrics";
 
 const DEFAULT_RETENTION_DAYS = 90;
 const DEFAULT_STUCK_MINUTES = 10;
+const DEFAULT_STALE_RUN_MINUTES = 45;
 
 function verifyCronSecret(req: NextRequest): boolean {
   const env = getEnv();
@@ -50,6 +51,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const stuckMinutes = Math.max(
       1,
       parseInt(searchParams.get("stuckMinutes") ?? "", 10) || DEFAULT_STUCK_MINUTES
+    );
+    const staleRunMinutes = Math.max(
+      15,
+      parseInt(searchParams.get("staleRunMinutes") ?? "", 10) || DEFAULT_STALE_RUN_MINUTES,
     );
 
     // ── 1. FlowVersion cleanup ───────────────────────────────────────────
@@ -81,11 +86,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       });
     }
 
+    // ── 3. Stale pipeline run reset ──────────────────────────────────────────
+    const { detectAndResetStalePipelineRuns } = await import("@/lib/sdlc/pipeline-manager");
+    const staleRunResult = dryRun
+      ? await detectAndResetStalePipelineRuns(staleRunMinutes, true)
+      : await detectAndResetStalePipelineRuns(staleRunMinutes);
+
+    if (!dryRun && staleRunResult.resetCount > 0) {
+      recordMetric("pipeline_run.stale.reset", staleRunResult.resetCount, "count", {
+        staleRunMinutes,
+      });
+    }
+
+    logger.info("Stale pipeline run reset job", {
+      reset: staleRunResult.resetCount,
+      runIds: staleRunResult.runIds,
+      dryRun,
+      staleRunMinutes,
+    });
+
     return NextResponse.json({
       success: true,
       data: {
         versions: versionsResult,
         stuckSources: stuckResult,
+        stalePipelineRuns: staleRunResult,
         dryRun,
       },
     });

@@ -544,7 +544,11 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
   }
 
   // Mark as RUNNING
-  await markPipelineRunning(pipelineRunId, job.id ?? `pipeline-run-${pipelineRunId}`);
+  await markPipelineRunning(
+    pipelineRunId,
+    job.id ?? `pipeline-run-${pipelineRunId}`,
+    startFromStep ?? 0,
+  );
   await job.updateProgress(5);
 
   try {
@@ -811,6 +815,27 @@ async function processGovernanceTimeoutJob(job: Job<GovernanceTimeoutJobData>): 
   return result;
 }
 
+async function runStartupStaleScan(): Promise<void> {
+  try {
+    const { detectAndResetStalePipelineRuns } = await import("@/lib/sdlc/pipeline-manager");
+    const result = await detectAndResetStalePipelineRuns(60, /* dryRun */ true);
+    if (result.resetCount > 0) {
+      logger.warn(
+        "Worker startup: stale pipeline runs detected — use /api/cron/cleanup to reset",
+        {
+          count: result.resetCount,
+          runIds: result.runIds,
+        },
+      );
+    } else {
+      logger.info("Worker startup: no stale pipeline runs detected");
+    }
+  } catch (err) {
+    // Must never prevent worker from starting
+    logger.error("Worker startup stale scan failed (non-fatal)", { error: err });
+  }
+}
+
 export function createWorker(): Worker<JobData> {
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) {
@@ -871,6 +896,8 @@ const isDirectRun =
   process.argv[1]?.includes("worker");
 
 if (isDirectRun) {
+  void runStartupStaleScan();
+
   const worker = createWorker();
   const port = Number(process.env.PORT) || 8080;
   startHealthServer(port);

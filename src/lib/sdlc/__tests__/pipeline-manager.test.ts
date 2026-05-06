@@ -14,6 +14,7 @@ const mockFindUnique = vi.fn();
 const mockFindMany = vi.fn();
 const mockCount = vi.fn();
 const mockUpdate = vi.fn();
+const mockUpdateMany = vi.fn();
 const mockTransaction = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
@@ -24,6 +25,7 @@ vi.mock("@/lib/prisma", () => ({
       findMany: (...args: unknown[]) => mockFindMany(...args),
       count: (...args: unknown[]) => mockCount(...args),
       update: (...args: unknown[]) => mockUpdate(...args),
+      updateMany: (...args: unknown[]) => mockUpdateMany(...args),
     },
     $transaction: (...args: unknown[]) => mockTransaction(...args),
   },
@@ -47,6 +49,7 @@ import {
   advancePipelineStep,
   cancelPipelineRun,
   isPipelineCancelled,
+  detectAndResetStalePipelineRuns,
 } from "../pipeline-manager";
 
 // ---------------------------------------------------------------------------
@@ -388,5 +391,110 @@ describe("isPipelineCancelled", () => {
   it("returns false when run not found", async () => {
     mockFindUnique.mockResolvedValue(null);
     expect(await isPipelineCancelled("missing")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// markPipelineRunning — startFromStep
+// ---------------------------------------------------------------------------
+
+describe("markPipelineRunning — startFromStep", () => {
+  it("defaults currentStep to 0 when startFromStep not provided", async () => {
+    const row = makeRow({ status: "RUNNING", jobId: "job-1", startedAt: new Date(), currentStep: 0 });
+    mockUpdate.mockResolvedValue(row);
+
+    await markPipelineRunning("run-1", "job-1");
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ currentStep: 0 }),
+      }),
+    );
+  });
+
+  it("sets currentStep to startFromStep when provided", async () => {
+    const row = makeRow({ status: "RUNNING", jobId: "job-resume", startedAt: new Date(), currentStep: 5 });
+    mockUpdate.mockResolvedValue(row);
+
+    await markPipelineRunning("run-1", "job-resume", 5);
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ currentStep: 5 }),
+      }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// detectAndResetStalePipelineRuns
+// ---------------------------------------------------------------------------
+
+describe("detectAndResetStalePipelineRuns", () => {
+  it("marks stale RUNNING runs as FAILED via updateMany", async () => {
+    const staleRun = makeRow({
+      status: "RUNNING",
+      startedAt: new Date(Date.now() - 60 * 60 * 1000),
+      currentStep: 3,
+      pipeline: ["project_context", "ecc-planner", "ecc-code-reviewer", "ecc-implementer"],
+    });
+    mockFindMany.mockResolvedValue([staleRun]);
+    mockUpdateMany.mockResolvedValue({ count: 1 });
+
+    const result = await detectAndResetStalePipelineRuns(45);
+
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: "RUNNING",
+          startedAt: expect.objectContaining({ lt: expect.any(Date) }),
+        }),
+      }),
+    );
+    expect(mockUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: { in: [staleRun.id] } }),
+        data: expect.objectContaining({ status: "FAILED" }),
+      }),
+    );
+    expect(result.resetCount).toBe(1);
+    expect(result.runIds).toEqual([staleRun.id]);
+  });
+
+  it("does NOT reset RUNNING runs within the threshold", async () => {
+    mockFindMany.mockResolvedValue([]);
+    mockUpdateMany.mockResolvedValue({ count: 0 });
+
+    const result = await detectAndResetStalePipelineRuns(45);
+
+    expect(mockUpdateMany).not.toHaveBeenCalled();
+    expect(result.resetCount).toBe(0);
+    expect(result.runIds).toEqual([]);
+  });
+
+  it("dryRun returns stale count without calling updateMany", async () => {
+    const staleRun = makeRow({
+      status: "RUNNING",
+      startedAt: new Date(Date.now() - 60 * 60 * 1000),
+    });
+    mockFindMany.mockResolvedValue([staleRun]);
+
+    const result = await detectAndResetStalePipelineRuns(45, true);
+
+    expect(mockUpdateMany).not.toHaveBeenCalled();
+    expect(result.resetCount).toBe(1);
+    expect(result.runIds).toEqual([staleRun.id]);
+  });
+
+  it("uses 45-minute default threshold", async () => {
+    mockFindMany.mockResolvedValue([]);
+
+    await detectAndResetStalePipelineRuns();
+
+    const call = mockFindMany.mock.calls[0][0] as { where: { startedAt: { lt: Date } } };
+    const cutoff = call.where.startedAt.lt;
+    const diffMin = (Date.now() - cutoff.getTime()) / 60_000;
+    expect(diffMin).toBeGreaterThan(44);
+    expect(diffMin).toBeLessThan(46);
   });
 });

@@ -164,6 +164,7 @@ export async function listPipelineRuns(
 export async function markPipelineRunning(
   runId: string,
   jobId: string,
+  startFromStep = 0,
 ): Promise<PipelineRun> {
   const row = await prisma.pipelineRun.update({
     where: { id: runId },
@@ -171,7 +172,7 @@ export async function markPipelineRunning(
       status: "RUNNING",
       jobId,
       startedAt: new Date(),
-      currentStep: 0,
+      currentStep: startFromStep,
     },
   });
   return toRun(row);
@@ -347,4 +348,55 @@ export async function isPipelineAwaitingApproval(runId: string): Promise<boolean
     select: { status: true },
   });
   return run?.status === "AWAITING_APPROVAL";
+}
+
+export async function detectAndResetStalePipelineRuns(
+  staleThresholdMinutes = 45,
+  dryRun = false,
+): Promise<{ resetCount: number; runIds: string[] }> {
+  const cutoff = new Date(Date.now() - staleThresholdMinutes * 60 * 1000);
+
+  const staleRuns = await prisma.pipelineRun.findMany({
+    where: {
+      status: "RUNNING",
+      startedAt: { lt: cutoff },
+    },
+    select: { id: true, startedAt: true, currentStep: true, agentId: true, pipeline: true },
+  });
+
+  const runIds = staleRuns.map((r) => r.id);
+
+  if (dryRun || staleRuns.length === 0) {
+    if (staleRuns.length > 0) {
+      logger.warn("detectAndResetStalePipelineRuns dryRun: stale runs detected", {
+        count: staleRuns.length,
+        runIds,
+        staleThresholdMinutes,
+      });
+    }
+    return { resetCount: staleRuns.length, runIds };
+  }
+
+  await prisma.pipelineRun.updateMany({
+    where: { id: { in: runIds } },
+    data: {
+      status: "FAILED",
+      error: `Pipeline stalled — worker process was killed mid-execution (detected after ${staleThresholdMinutes} min). Check currentStep for progress before interruption. This is typically caused by a Railway container restart or OOM kill, not a code error.`,
+    },
+  });
+
+  for (const run of staleRuns) {
+    const stuckMinutes = run.startedAt
+      ? Math.round((Date.now() - run.startedAt.getTime()) / 60_000)
+      : staleThresholdMinutes;
+    logger.warn("Stale pipeline run reset to FAILED", {
+      runId: run.id,
+      agentId: run.agentId,
+      stuckMinutes,
+      currentStep: run.currentStep,
+      totalSteps: (run.pipeline as string[]).length,
+    });
+  }
+
+  return { resetCount: staleRuns.length, runIds };
 }
