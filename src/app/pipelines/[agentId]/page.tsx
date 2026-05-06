@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use, type FormEvent } from "react";
+import { useState, useMemo, use, type FormEvent } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import {
@@ -118,8 +118,11 @@ function MetricsSummaryCard({
   agentId: string;
   refreshKey: number;
 }) {
+  const [selectedPhase, setSelectedPhase] = useState<string>("all");
+  const phaseParam = selectedPhase !== "all" ? `&phase=${selectedPhase}` : "";
+
   const { data, isLoading } = useSWR<{ success: boolean; data: MetricsData }>(
-    `/api/sdlc/metrics?agentId=${agentId}&_k=${refreshKey}`,
+    `/api/sdlc/metrics?agentId=${agentId}&_k=${refreshKey}${phaseParam}`,
     fetcher,
     { revalidateOnFocus: false },
   );
@@ -128,6 +131,11 @@ function MetricsSummaryCard({
 
   const { pipelineSummary: ps, modelStats } = data.data;
   if (ps.total === 0) return null;
+
+  const phases = useMemo(
+    () => ["all", ...Array.from(new Set(modelStats.map((s) => s.phase)))],
+    [modelStats],
+  );
 
   const successColor =
     ps.successRate >= 0.8 ? "emerald" :
@@ -166,6 +174,25 @@ function MetricsSummaryCard({
           <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">
             Model Performanse (po koraku)
           </p>
+          {phases.length > 2 && (
+            <div className="flex gap-1 mb-2 flex-wrap">
+              {phases.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setSelectedPhase(p)}
+                  className={cn(
+                    "px-2 py-0.5 text-xs rounded border transition-colors",
+                    selectedPhase === p
+                      ? "bg-indigo-600 border-indigo-500 text-white"
+                      : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300",
+                  )}
+                >
+                  {p === "all" ? "Sve faze" : p}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>

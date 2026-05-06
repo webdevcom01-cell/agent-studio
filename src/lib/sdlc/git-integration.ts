@@ -42,15 +42,18 @@ export interface GitIntegrationResult {
 interface RepoInfo {
   owner: string;
   repo: string;
+  provider: "github" | "gitlab";
+  hostname: string;
 }
 
 export function parseRepoInfo(repoUrl: string): RepoInfo | null {
   try {
     const url = new URL(repoUrl.replace(/\.git$/, ""));
-    if (url.hostname !== "github.com") return null;
     const parts = url.pathname.split("/").filter(Boolean);
     if (parts.length < 2) return null;
-    return { owner: parts[0], repo: parts[1] };
+    const provider: "github" | "gitlab" =
+      url.hostname === "github.com" ? "github" : "gitlab";
+    return { owner: parts[0], repo: parts[1], provider, hostname: url.hostname };
   } catch {
     return null;
   }
@@ -211,26 +214,87 @@ export async function createGithubPR(
   return pr.html_url;
 }
 
+export async function createGitlabMR(
+  token: string,
+  hostname: string,
+  owner: string,
+  repo: string,
+  sourceBranch: string,
+  title: string,
+  body: string,
+  targetBranch = "main",
+  draft = false,
+): Promise<string> {
+  const apiBase = `https://${hostname}/api/v4`;
+  const projectPath = encodeURIComponent(`${owner}/${repo}`);
+  const headers = {
+    "PRIVATE-TOKEN": token,
+    "Content-Type": "application/json",
+  };
+
+  // Idempotency: check for existing open MR on this branch
+  const listRes = await fetch(
+    `${apiBase}/projects/${projectPath}/merge_requests?state=opened&source_branch=${encodeURIComponent(sourceBranch)}`,
+    { headers },
+  );
+  if (listRes.ok) {
+    const existing = (await listRes.json()) as Array<{ web_url: string }>;
+    if (existing.length > 0) {
+      return existing[0].web_url;
+    }
+  }
+
+  const createRes = await fetch(
+    `${apiBase}/projects/${projectPath}/merge_requests`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        source_branch: sourceBranch,
+        target_branch: targetBranch,
+        title: draft ? `Draft: ${title}` : title,
+        description: body,
+        draft,
+        remove_source_branch: false,
+      }),
+    },
+  );
+
+  if (!createRes.ok) {
+    const text = await createRes.text();
+    throw new Error(`GitLab MR creation failed: ${createRes.status} ${text}`);
+  }
+
+  const mr = (await createRes.json()) as { web_url: string };
+  return mr.web_url;
+}
+
 export async function integrateWithGit(
   input: GitIntegrationInput,
 ): Promise<GitIntegrationResult> {
   const { repoUrl, workDir, runId, taskDescription } = input;
 
-  const token = process.env.GITHUB_TOKEN ?? process.env.GITHUB_PAT;
-  if (!token) {
-    return { success: false, error: "GITHUB_TOKEN env var not set" };
-  }
-
   const repoInfo = parseRepoInfo(repoUrl);
   if (!repoInfo) {
-    return { success: false, error: `Not a GitHub URL or could not parse: ${repoUrl}` };
+    return { success: false, error: `Unsupported repo URL or could not parse: ${repoUrl}` };
   }
 
   const { owner, repo } = repoInfo;
+
+  const token = repoInfo.provider === "gitlab"
+    ? (process.env.GITLAB_TOKEN ?? process.env.GITLAB_PAT)
+    : (process.env.GITHUB_TOKEN ?? process.env.GITHUB_PAT);
+  if (!token) {
+    const envName = repoInfo.provider === "gitlab" ? "GITLAB_TOKEN" : "GITHUB_TOKEN";
+    return { success: false, error: `${envName} env var not set` };
+  }
+
   const cloneDir = `/tmp/sdlc-git/${runId}`;
 
   try {
-    const authUrl = repoUrl.replace("https://", `https://x-access-token:${token}@`);
+    const authUrl = repoInfo.provider === "gitlab"
+      ? `https://oauth2:${token}@${repoInfo.hostname}/${repoInfo.owner}/${repoInfo.repo}.git`
+      : repoUrl.replace("https://", `https://x-access-token:${token}@`);
 
     if (existsSync(cloneDir)) {
       rmSync(cloneDir, { recursive: true, force: true });
@@ -290,7 +354,9 @@ export async function integrateWithGit(
     const prBody = input.stepOutputs
       ? buildRichPrBody(input, [])
       : `SDLC Agent Run: ${runId}\n\n${taskDescription}`;
-    const prUrl = await createGithubPR(token, owner, repo, branchName, prTitle, prBody, "main", isDraft);
+    const prUrl = repoInfo.provider === "gitlab"
+      ? await createGitlabMR(token, repoInfo.hostname, owner, repo, branchName, prTitle, prBody, "main", isDraft)
+      : await createGithubPR(token, owner, repo, branchName, prTitle, prBody, "main", isDraft);
 
     logger.info("git-integration: PR created", { runId, branchName, prUrl });
 
@@ -330,12 +396,17 @@ export async function cloneSourceRepo(params: {
     return { success: false, error: `Unsupported repo URL format: ${sourceRepoUrl}` };
   }
 
-  const token = process.env.GITHUB_TOKEN ?? process.env.GITHUB_PAT;
+  const token = repoInfo.provider === "gitlab"
+    ? (process.env.GITLAB_TOKEN ?? process.env.GITLAB_PAT)
+    : (process.env.GITHUB_TOKEN ?? process.env.GITHUB_PAT);
   if (!token) {
-    return { success: false, error: "GITHUB_TOKEN or GITHUB_PAT not configured" };
+    const envName = repoInfo.provider === "gitlab" ? "GITLAB_TOKEN" : "GITHUB_TOKEN";
+    return { success: false, error: `${envName} env var not configured` };
   }
 
-  const authUrl = `https://${token}@github.com/${repoInfo.owner}/${repoInfo.repo}.git`;
+  const authUrl = repoInfo.provider === "gitlab"
+    ? `https://oauth2:${token}@${repoInfo.hostname}/${repoInfo.owner}/${repoInfo.repo}.git`
+    : `https://x-access-token:${token}@github.com/${repoInfo.owner}/${repoInfo.repo}.git`;
 
   try {
     await mkdir(targetDir, { recursive: true });

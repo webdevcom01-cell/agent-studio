@@ -27,7 +27,7 @@ vi.mock("@/lib/logger", () => ({ logger: mockLogger }));
 
 global.fetch = mockFetch;
 
-import { parseRepoInfo, createGithubPR, integrateWithGit } from "../git-integration";
+import { parseRepoInfo, createGithubPR, createGitlabMR, integrateWithGit } from "../git-integration";
 
 function makeGitInput(overrides = {}) {
   return {
@@ -47,16 +47,31 @@ beforeEach(() => {
 describe("parseRepoInfo", () => {
   it("parses a valid GitHub HTTPS URL", () => {
     const result = parseRepoInfo("https://github.com/owner/my-repo");
-    expect(result).toEqual({ owner: "owner", repo: "my-repo" });
+    expect(result).toEqual(expect.objectContaining({
+      owner: "owner",
+      repo: "my-repo",
+      provider: "github",
+      hostname: "github.com",
+    }));
   });
 
   it("strips .git suffix", () => {
     const result = parseRepoInfo("https://github.com/owner/my-repo.git");
-    expect(result).toEqual({ owner: "owner", repo: "my-repo" });
+    expect(result).toEqual(expect.objectContaining({
+      owner: "owner",
+      repo: "my-repo",
+      provider: "github",
+    }));
   });
 
-  it("returns null for non-GitHub URL", () => {
-    expect(parseRepoInfo("https://gitlab.com/owner/repo")).toBeNull();
+  it("parses a GitLab URL with provider=gitlab", () => {
+    const result = parseRepoInfo("https://gitlab.com/owner/repo");
+    expect(result).toEqual(expect.objectContaining({
+      owner: "owner",
+      repo: "repo",
+      provider: "gitlab",
+      hostname: "gitlab.com",
+    }));
   });
 
   it("returns null for invalid URL", () => {
@@ -71,13 +86,14 @@ describe("integrateWithGit", () => {
     expect(result.error).toContain("GITHUB_TOKEN");
   });
 
-  it("returns error for non-GitHub URL", async () => {
-    process.env.GITHUB_PAT = "token";
+  it("returns error when GITLAB_TOKEN is not set for GitLab URL", async () => {
+    delete process.env.GITLAB_TOKEN;
+    delete process.env.GITLAB_PAT;
     const result = await integrateWithGit(
       makeGitInput({ repoUrl: "https://gitlab.com/owner/repo" }),
     );
     expect(result.success).toBe(false);
-    expect(result.error).toContain("Not a GitHub URL");
+    expect(result.error).toContain("GITLAB_TOKEN");
   });
 
   it("returns error and does not throw when git clone fails", async () => {
@@ -152,6 +168,28 @@ describe("createGithubPR", () => {
       "token", "owner", "repo", "branch", "title", "body",
     );
     expect(url).toBe("https://github.com/owner/repo/pull/42");
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("createGitlabMR", () => {
+  it("returns existing MR URL if open MR already exists (idempotent)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [{ web_url: "https://gitlab.com/owner/repo/-/merge_requests/7" }],
+    });
+
+    const url = await createGitlabMR(
+      "glpat-token",
+      "gitlab.com",
+      "owner",
+      "repo",
+      "sdlc/abc123-my-feature",
+      "feat: my feature",
+      "body text",
+    );
+
+    expect(url).toBe("https://gitlab.com/owner/repo/-/merge_requests/7");
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });

@@ -233,7 +233,7 @@ export async function markPipelineCompleted(
   // Append git failure notice to finalOutput so it is visible in the UI.
   // Git integration is best-effort — the pipeline COMPLETES even if git fails.
   const outputWithGitStatus = gitError
-    ? `${finalOutput}\n\n---\n\n## ⚠️ Git Integration Failed\n\n${gitError}\n\nThe pipeline completed successfully but no pull request was created. Check your \`GITHUB_TOKEN\` configuration.`
+    ? `${finalOutput}\n\n---\n\n## ⚠️ Git Integration Failed\n\n${gitError}\n\nThe pipeline completed successfully but no pull request was created. Check your \`GITHUB_TOKEN\` (GitHub) or \`GITLAB_TOKEN\` (GitLab) configuration.`
     : finalOutput;
 
   const row = await prisma.pipelineRun.update({

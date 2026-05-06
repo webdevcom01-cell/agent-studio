@@ -586,7 +586,7 @@ export async function runPipeline(
               ? `✅ PR created: ${gitResult.prUrl}`
               : gitResult.branchName
                 ? `✅ Branch pushed: ${gitResult.branchName}`
-                : `⚠️ pr_generation: git integration failed (check GITHUB_TOKEN)`;
+                : `⚠️ pr_generation: git integration failed (check GITHUB_TOKEN or GITLAB_TOKEN)`;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             stepOutput = `⚠️ pr_generation failed: ${msg}`;

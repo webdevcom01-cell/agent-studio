@@ -33,6 +33,7 @@ import { ingestSource } from "@/lib/knowledge/ingest";
 import { searchKnowledgeBase } from "@/lib/knowledge/search";
 import type { SearchResult } from "@/lib/knowledge/search";
 import { logger } from "@/lib/logger";
+import picomatch from "picomatch";
 
 /** File extensions we index */
 const INDEXABLE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".md", ".json"]);
@@ -103,7 +104,7 @@ export async function indexCodebase(
 
   // 3. Collect indexable files
   const ignorePatterns = await loadIgnorePatterns(workingDir);
-  const filePaths = await collectFiles(workingDir, 0, ignorePatterns);
+  const filePaths = await collectFiles(workingDir, 0, ignorePatterns, workingDir);
   logger.info("codebase-rag: files collected for indexing", {
     agentId,
     workingDir,
@@ -327,23 +328,29 @@ async function fetchExistingCodebaseSources(knowledgeBaseId: string) {
  * Returns a Set of names to skip — merged with SKIP_DIRS at collection time.
  * Best-effort: missing file or read error returns empty set silently.
  */
-async function loadIgnorePatterns(workingDir: string): Promise<Set<string>> {
+async function loadIgnorePatterns(workingDir: string): Promise<string[]> {
   const ignorePath = join(workingDir, ".sdlcignore");
-  if (!existsSync(ignorePath)) return new Set();
+  if (!existsSync(ignorePath)) return [];
   try {
     const content = await readFile(ignorePath, "utf-8");
-    const patterns = content
+    return content
       .split("\n")
       .map((line) => line.trim())
       .filter((line) => line.length > 0 && !line.startsWith("#"));
-    return new Set(patterns);
   } catch {
-    return new Set();
+    return [];
   }
 }
 
-async function collectFiles(dir: string, depth = 0, ignorePatterns: Set<string> = new Set()): Promise<string[]> {
+async function collectFiles(
+  dir: string,
+  depth = 0,
+  ignorePatterns: string[] = [],
+  rootDir: string = dir,
+): Promise<string[]> {
   if (depth > 8) return [];
+
+  const isIgnored = ignorePatterns.length > 0 ? picomatch(ignorePatterns) : null;
 
   const files: string[] = [];
   let entries: string[];
@@ -356,18 +363,22 @@ async function collectFiles(dir: string, depth = 0, ignorePatterns: Set<string> 
 
   for (const entry of entries) {
     if (files.length >= MAX_FILES) break;
-    if (SKIP_DIRS.has(entry) || ignorePatterns.has(entry)) continue;
+    // Skip directories: hardcoded list OR glob pattern match
+    if (SKIP_DIRS.has(entry) || (isIgnored && isIgnored(entry))) continue;
 
     const fullPath = join(dir, entry);
     try {
       const info = await stat(fullPath);
       if (info.isDirectory()) {
-        const sub = await collectFiles(fullPath, depth + 1, ignorePatterns);
+        const sub = await collectFiles(fullPath, depth + 1, ignorePatterns, rootDir);
         // Slice to respect the global limit even when a subdirectory alone exceeds it
         const capacity = MAX_FILES - files.length;
         files.push(...sub.slice(0, capacity));
       } else if (info.isFile() && INDEXABLE_EXTS.has(extname(entry))) {
         if (info.size <= MAX_FILE_BYTES) {
+          // File-level glob check (covers *.test.ts, **/*.spec.js, src/generated/*)
+          const relPath = relative(rootDir, fullPath);
+          if (isIgnored && isIgnored(relPath)) continue;
           files.push(fullPath);
         }
       }
