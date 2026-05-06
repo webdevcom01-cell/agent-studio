@@ -17,6 +17,7 @@ import {
   BarChart3,
   Cpu,
   Timer,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -50,12 +51,15 @@ interface PipelineRun {
   error: string | null;
   prUrl: string | null;
   createdAt: string;
+  stepResults: Record<string, string>;
+  approvalFeedback: string | null;
 }
 
 function StatusIcon({ status }: { status: string }) {
   if (status === "COMPLETED") return <CheckCircle2 className="size-4 text-emerald-400" />;
   if (status === "FAILED") return <XCircle className="size-4 text-red-400" />;
   if (status === "RUNNING") return <Loader2 className="size-4 text-blue-400 animate-spin" />;
+  if (status === "AWAITING_APPROVAL") return <AlertCircle className="size-4 text-amber-400" />;
   return <Clock className="size-4 text-zinc-400" />;
 }
 
@@ -74,7 +78,94 @@ function formatMs(ms: number): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
 }
 
-function RunRow({ run, agentId }: { run: PipelineRun; agentId: string }) {
+function ApproveCard({
+  run,
+  agentId,
+  onApproved,
+}: {
+  run: PipelineRun;
+  agentId: string;
+  onApproved: () => void;
+}) {
+  const [feedback, setFeedback] = useState("");
+  const [approving, setApproving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const planningOutputs = run.pipeline
+    .map((stepId, i) => ({ stepId, output: run.stepResults?.[String(i)] ?? "" }))
+    .filter(({ output }) => output.length > 0);
+
+  async function handleApprove() {
+    setApproving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/pipelines/${run.id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback: feedback.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Greška pri odobravanju");
+      onApproved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Nepoznata greška");
+    } finally {
+      setApproving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-4">
+      <h4 className="text-sm font-semibold text-amber-400 flex items-center gap-2">
+        <AlertCircle className="size-4" /> Čeka vaše odobrenje
+      </h4>
+
+      {planningOutputs.length > 0 ? (
+        <div className="space-y-3">
+          {planningOutputs.map(({ stepId, output }) => (
+            <div key={stepId}>
+              <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                {stepId}
+              </p>
+              <pre className="bg-zinc-800/50 rounded-lg p-3 text-xs text-zinc-300 overflow-auto max-h-64 whitespace-pre-wrap leading-relaxed">
+                {output.length > 4000 ? output.slice(0, 4000) + "\n\n[... skraćeno ...]" : output}
+              </pre>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-zinc-500">Nema planiranja outputa za prikaz.</p>
+      )}
+
+      <div>
+        <label className="text-xs text-zinc-400 mb-1 block">
+          Feedback za implementaciju (opciono)
+        </label>
+        <textarea
+          value={feedback}
+          onChange={(e) => setFeedback(e.target.value)}
+          placeholder="npr. Fokusiraj se na TypeScript tipove, koristi Zod za validaciju..."
+          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-200 placeholder:text-zinc-600 resize-none h-20 focus:outline-none focus:border-amber-500/50"
+        />
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-400">{error}</p>
+      )}
+
+      <button
+        onClick={handleApprove}
+        disabled={approving}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-900 text-sm font-semibold transition-colors"
+      >
+        {approving ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+        {approving ? "Odobravanjem..." : "Odobri i nastavi"}
+      </button>
+    </div>
+  );
+}
+
+function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string; onMutate: () => void }) {
   const [open, setOpen] = useState(false);
   const { data, isLoading } = useSWR<{ success: boolean; data: PipelineRun }>(
     open ? `/api/agents/${agentId}/pipelines/${run.id}` : null,
@@ -101,7 +192,8 @@ function RunRow({ run, agentId }: { run: PipelineRun; agentId: string }) {
               "text-xs font-medium",
               run.status === "COMPLETED" ? "text-emerald-400" :
               run.status === "FAILED" ? "text-red-400" :
-              run.status === "RUNNING" ? "text-blue-400" : "text-zinc-400"
+              run.status === "RUNNING" ? "text-blue-400" :
+              run.status === "AWAITING_APPROVAL" ? "text-amber-400" : "text-zinc-400"
             )}>
               {statusLabel(run.status)}
             </span>
@@ -161,6 +253,14 @@ function RunRow({ run, agentId }: { run: PipelineRun; agentId: string }) {
 
           {detail && (
             <>
+              {detail.status === "AWAITING_APPROVAL" && (
+                <ApproveCard
+                  run={detail}
+                  agentId={agentId}
+                  onApproved={() => onMutate()}
+                />
+              )}
+
               {/* Step metrics */}
               {entries.length > 0 && (
                 <div>
@@ -276,7 +376,7 @@ export default function PipelinesPage({
             <p className="text-zinc-600 text-xs">Pokrenite pipeline run via API</p>
           </div>
         ) : (
-          runs.map((run) => <RunRow key={run.id} run={run} agentId={agentId} />)
+          runs.map((run) => <RunRow key={run.id} run={run} agentId={agentId} onMutate={mutate} />)
         )}
       </div>
     </div>

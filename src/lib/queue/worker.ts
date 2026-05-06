@@ -580,6 +580,17 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
 
     if (result.awaitingApproval) {
       await markPipelineAwaitingApproval(pipelineRunId);
+
+      void firePipelineSlackNotification({
+        pipelineRunId,
+        agentId,
+        taskDescription: run.taskDescription,
+        awaitingApproval: true,
+        planningStepsCompleted: result.planningStepsCompleted,
+        durationMs: (result as { durationMs?: number }).durationMs,
+        success: false,
+      });
+
       logger.info("Pipeline paused — awaiting human approval", {
         pipelineRunId, agentId, planningStepsCompleted: result.planningStepsCompleted,
       });
@@ -669,6 +680,8 @@ async function firePipelineSlackNotification(params: {
   prUrl?: string | null;
   gitError?: string | null;
   errorMsg?: string;
+  awaitingApproval?: boolean;
+  planningStepsCompleted?: number;
 }): Promise<void> {
   const webhookUrl =
     process.env.SDLC_SLACK_WEBHOOK_URL ?? process.env.NOTIFICATION_WEBHOOK_URL ?? "";
@@ -680,6 +693,37 @@ async function firePipelineSlackNotification(params: {
   } = params;
 
   const durationSec = durationMs ? `${Math.round(durationMs / 1000)}s` : "—";
+
+  if (params.awaitingApproval) {
+    const planSteps = params.planningStepsCompleted ?? "?";
+    const lines: string[] = [
+      `⏸️ *SDLC Pipeline čeka odobrenje*`,
+      `*Task:* ${taskDescription.slice(0, 200)}`,
+      `*Run ID:* \`${pipelineRunId}\``,
+      `*Agent:* ${agentId}`,
+      `*Planiranje završeno:* ${planSteps} korak(a)`,
+      `*Trajanje planiranja:* ${durationSec}`,
+      ``,
+      `Pregledajte arhitekturalni plan i odobrite run da nastavite sa implementacijom.`,
+      `*Approve:* \`POST /api/agents/${agentId}/pipelines/${pipelineRunId}/approve\``,
+    ];
+    const body = JSON.stringify({ text: lines.join("\n") });
+    try {
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) {
+        logger.warn("Pipeline Slack approval notification failed", { status: res.status, pipelineRunId });
+      }
+    } catch (err) {
+      logger.warn("Pipeline Slack approval notification error", { pipelineRunId, error: err });
+    }
+    return;
+  }
+
   const icon = success ? "✅" : "❌";
   const statusText = success ? "completed" : "failed";
 
