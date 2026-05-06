@@ -39,7 +39,11 @@
       "Bash(pnpm worker *)",
       "Bash(echo \"Worker PID: $!\")",
       "Bash(curl -s -X POST http://localhost:3000/api/mcp/agent-studio -H 'Content-Type: application/json' -H 'Authorization: Bearer as_live_4P9RGBtrHh2o5W9wYJ5GjANhZcmt6iNdTmZnm3YUnPM' -d '{ *)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "mcp__railway__list-variables",
+      "mcp__railway__list-deployments",
+      "Bash(curl -s -w \"\\\\nHTTP_STATUS:%{http_code}\" https://agent-studio-production-c43e.up.railway.app/api/health)",
+      "Bash(curl -s -w \"\\\\nHTTP_STATUS:%{http_code}\" https://agent-studio-production-c43e.up.railway.app/api/ecc/templates)"
     ]
   }
 }

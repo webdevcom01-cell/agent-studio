@@ -29,6 +29,31 @@ interface PipelineListData {
   total: number;
 }
 
+interface MetricsData {
+  modelStats: ModelStatRow[];
+  pipelineSummary: PipelineSummary;
+}
+
+interface ModelStatRow {
+  modelId: string;
+  phase: string;
+  runCount: number;
+  successCount: number;
+  retryCount: number;
+  avgInputTokens: number;
+  avgOutputTokens: number;
+  avgDurationMs: number;
+  successRate: number;
+}
+
+interface PipelineSummary {
+  total: number;
+  completed: number;
+  failed: number;
+  avgDurationMs: number;
+  successRate: number;
+}
+
 interface PipelineRun {
   id: string;
   status: string;
@@ -76,6 +101,142 @@ function statusLabel(status: string): string {
 
 function formatMs(ms: number): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+}
+
+function MetricsSummaryCard({
+  agentId,
+  refreshKey,
+}: {
+  agentId: string;
+  refreshKey: number;
+}) {
+  const { data, isLoading } = useSWR<{ success: boolean; data: MetricsData }>(
+    `/api/sdlc/metrics?agentId=${agentId}&_k=${refreshKey}`,
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+
+  if (isLoading || !data?.success) return null;
+
+  const { pipelineSummary: ps, modelStats } = data.data;
+  if (ps.total === 0) return null;
+
+  const successColor =
+    ps.successRate >= 0.8 ? "emerald" :
+    ps.successRate >= 0.5 ? "amber" : "red";
+
+  function fmtDur(ms: number): string {
+    if (ms <= 0) return "—";
+    if (ms >= 60_000)
+      return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+    return `${Math.round(ms / 1000)}s`;
+  }
+
+  return (
+    <div className="border border-zinc-700 rounded-xl bg-zinc-900/60 p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <BarChart3 className="size-4 text-zinc-400" />
+        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+          Pipeline Statistike
+        </h3>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <StatPill label="Ukupno" value={String(ps.total)} color="zinc" />
+        <StatPill label="Uspešno" value={String(ps.completed)} color="emerald" />
+        <StatPill label="Greška" value={String(ps.failed)} color="red" />
+        <StatPill
+          label="Success rate"
+          value={`${Math.round(ps.successRate * 100)}%`}
+          color={successColor as "emerald" | "amber" | "red"}
+        />
+        <StatPill label="Avg trajanje" value={fmtDur(ps.avgDurationMs)} color="blue" />
+      </div>
+
+      {modelStats.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+            Model Performanse (po koraku)
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  <th className="text-left py-1.5 pr-3 text-zinc-500 font-medium">Model</th>
+                  <th className="text-left py-1.5 pr-3 text-zinc-500 font-medium">Faza</th>
+                  <th className="text-right py-1.5 pr-3 text-zinc-500 font-medium">Koraka</th>
+                  <th className="text-right py-1.5 pr-3 text-zinc-500 font-medium">Uspeh</th>
+                  <th className="text-right py-1.5 pr-3 text-zinc-500 font-medium">Avg/korak</th>
+                  <th className="text-right py-1.5 text-zinc-500 font-medium">Avg tokeni</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50">
+                {modelStats.map((s) => (
+                  <tr key={`${s.modelId}-${s.phase}`} className="hover:bg-zinc-800/20">
+                    <td className="py-1.5 pr-3 text-zinc-300 font-mono truncate max-w-[140px]">
+                      {s.modelId}
+                    </td>
+                    <td className="py-1.5 pr-3 text-zinc-500 capitalize">{s.phase}</td>
+                    <td className="py-1.5 pr-3 text-right text-zinc-400 tabular-nums">
+                      {s.runCount}
+                    </td>
+                    <td
+                      className={cn(
+                        "py-1.5 pr-3 text-right tabular-nums font-medium",
+                        s.successRate >= 0.9
+                          ? "text-emerald-400"
+                          : s.successRate >= 0.7
+                          ? "text-amber-400"
+                          : "text-red-400",
+                      )}
+                    >
+                      {Math.round(s.successRate * 100)}%
+                    </td>
+                    <td className="py-1.5 pr-3 text-right text-zinc-400 tabular-nums">
+                      {s.avgDurationMs >= 1000
+                        ? `${(s.avgDurationMs / 1000).toFixed(1)}s`
+                        : `${s.avgDurationMs}ms`}
+                    </td>
+                    <td className="py-1.5 text-right text-zinc-500 tabular-nums">
+                      {(
+                        ((s.avgInputTokens ?? 0) + (s.avgOutputTokens ?? 0)) /
+                        1000
+                      ).toFixed(1)}
+                      k
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatPill({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color: "zinc" | "emerald" | "red" | "amber" | "blue";
+}) {
+  const colors = {
+    zinc:    "bg-zinc-800/50 text-zinc-300",
+    emerald: "bg-emerald-500/10 text-emerald-400",
+    red:     "bg-red-500/10 text-red-400",
+    amber:   "bg-amber-500/10 text-amber-400",
+    blue:    "bg-blue-500/10 text-blue-400",
+  };
+  return (
+    <div className={cn("rounded-lg px-3 py-2 text-center", colors[color])}>
+      <p className="text-sm font-bold tabular-nums">{value}</p>
+      <p className="text-xs text-zinc-500 mt-0.5">{label}</p>
+    </div>
+  );
 }
 
 function ApproveCard({
@@ -335,6 +496,7 @@ export default function PipelinesPage({
   );
 
   const runs: PipelineRun[] = data?.data?.runs ?? [];
+  const [metricsKey, setMetricsKey] = useState(0);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -353,7 +515,10 @@ export default function PipelinesPage({
               variant="ghost"
               size="icon-sm"
               className="text-zinc-400"
-              onClick={() => mutate()}
+              onClick={() => {
+                mutate();
+                setMetricsKey((k) => k + 1);
+              }}
             >
               <RefreshCw className="size-4" />
             </Button>
@@ -376,7 +541,12 @@ export default function PipelinesPage({
             <p className="text-zinc-600 text-xs">Pokrenite pipeline run via API</p>
           </div>
         ) : (
-          runs.map((run) => <RunRow key={run.id} run={run} agentId={agentId} onMutate={mutate} />)
+          <>
+            {runs.length > 0 && (
+              <MetricsSummaryCard agentId={agentId} refreshKey={metricsKey} />
+            )}
+            {runs.map((run) => <RunRow key={run.id} run={run} agentId={agentId} onMutate={mutate} />)}
+          </>
         )}
       </div>
     </div>

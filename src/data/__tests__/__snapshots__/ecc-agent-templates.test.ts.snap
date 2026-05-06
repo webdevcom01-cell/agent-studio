@@ -118,5 +118,9 @@ exports[`ecc-agent-templates.json > snapshots template IDs and model tiers 1`] =
     "id": "ecc-code-review-pipeline",
     "modelTier": "sonnet",
   },
+  {
+    "id": "ecc-implementer",
+    "modelTier": "sonnet",
+  },
 ]
 `;

@@ -1,4 +1,4 @@
-# Content Repurposer — Evolution Log
+**# Content Repurposer — Evolution Log
 *Path: /agents/content-repurposer/evo-log*
 
 ---
