@@ -280,7 +280,7 @@ export async function runPipeline(
 
   // Load memory and vault context in parallel — both are non-blocking
   const [priorMemory, vaultContext] = await Promise.all([
-    loadRelevantMemory(agentId),
+    loadRelevantMemory(agentId, taskDescription),
     loadVaultContext(taskDescription),
   ]);
 
@@ -427,6 +427,41 @@ export async function runPipeline(
       startFromStep,
       preloadedSteps: stepOutputs.length,
     });
+  }
+
+  // ── Adaptive model routing — batch load stats once, cache for all steps ────
+  // Without this, resolveStepModelAdaptive would fire one DB query per step
+  // (e.g. 8 queries for an 8-step pipeline). One query up front covers all phases.
+  type StatRow = { modelId: string; successCount: number; runCount: number; totalInputTokens: number };
+  let adaptiveStatsCache: Map<string, StatRow[]> | undefined;
+  if (useSmartRouting) {
+    try {
+      const { prisma } = await import("@/lib/prisma");
+      const allStats = await prisma.modelPerformanceStat.findMany({
+        where: { runCount: { gte: 5 } },
+        select: { phase: true, modelId: true, successCount: true, runCount: true, totalInputTokens: true },
+      });
+      adaptiveStatsCache = new Map<string, StatRow[]>();
+      for (const stat of allStats) {
+        const list = adaptiveStatsCache.get(stat.phase) ?? [];
+        list.push(stat);
+        adaptiveStatsCache.set(stat.phase, list);
+      }
+      // Pre-sort each phase list by (successRate desc, avgTokens asc)
+      for (const [, list] of adaptiveStatsCache) {
+        list.sort((a, b) => {
+          const rateA = a.successCount / a.runCount;
+          const rateB = b.successCount / b.runCount;
+          if (rateB !== rateA) return rateB - rateA;
+          return (a.totalInputTokens / a.runCount) - (b.totalInputTokens / b.runCount);
+        });
+      }
+    } catch (cacheErr) {
+      logger.warn("Pipeline: adaptive stats batch load failed, will query per step", {
+        runId,
+        error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr),
+      });
+    }
   }
 
   // ── Main step loop ──────────────────────────────────────────────────────────
@@ -605,7 +640,7 @@ export async function runPipeline(
         : GATE_STEPS.has(stepId) ? "review"
         : "other";
       const stepModelId = useSmartRouting
-        ? await resolveStepModelAdaptive(phase, stepModelOverrides, stepId, resolvedModelId)
+        ? await resolveStepModelAdaptive(phase, stepModelOverrides, stepId, resolvedModelId, adaptiveStatsCache)
         : resolveStepModel(phase, stepModelOverrides, stepId, resolvedModelId, false);
       const model = getModel(stepModelId);
 
@@ -678,7 +713,7 @@ export async function runPipeline(
       // knows exactly what to build before writing a single line of code.
       if (IMPLEMENTATION_STEPS.has(stepId) && architecturePlan) {
         promptSections.push(
-          `\n\n---\n\n# Architecture & Design Plan\n${architecturePlan.slice(0, 3000)}`,
+          `\n\n---\n\n# Architecture & Design Plan\n${architecturePlan.slice(0, 8000)}`,
         );
       }
 
@@ -833,6 +868,34 @@ export async function runPipeline(
             stepInputTokens = fallback.usage.inputTokens ?? 0;
             stepOutputTokens = fallback.usage.outputTokens ?? 0;
           }
+
+          // ── Enforce gate decision — BLOCK halts the pipeline ────────────────
+          // Parse the decision from stepOutput (JSON path) or leave undefined (text fallback).
+          let gateDecision: string | undefined;
+          let gateSummary: string | undefined;
+          try {
+            const parsedGate = JSON.parse(stepOutput) as { decision?: string; summary?: string };
+            gateDecision = parsedGate.decision;
+            gateSummary = parsedGate.summary;
+          } catch {
+            // generateText fallback produced non-JSON — decision not extractable
+          }
+
+          if (gateDecision === "BLOCK") {
+            // Save the gate output BEFORE throwing so the user can read the full review.
+            // Without this, markPipelineFailed only stores the error message, losing
+            // all the reviewer's findings (issues list, CVSS scores, etc.).
+            await onStepComplete(stepIdx, stepOutput);
+
+            logger.warn("Pipeline: gate step blocked pipeline", {
+              runId, stepIdx, stepId, summary: gateSummary,
+            });
+            throw new Error(
+              `Gate step "${stepId}" blocked pipeline execution. ` +
+              `${gateSummary ? `Reason: ${gateSummary}` : "See step results for the full review output."}`,
+            );
+          }
+
           // Gate steps: inject summary into context but NEVER into architecturePlan
         } else {
           // ── Text generation path — planning, test, other steps ──────────────
@@ -885,7 +948,7 @@ export async function runPipeline(
         // Accumulate each planning step's output into a single architecture plan.
         // Each section is labelled so the implementation agent knows which
         // part of the plan came from which specialist.
-        architecturePlan += `\n\n## ${stepId}\n${stepOutput.slice(0, 2000)}`;
+        architecturePlan += `\n\n## ${stepId}\n${stepOutput.slice(0, 4000)}`;
         logger.info("Pipeline: planning step done — architecture plan updated", {
           runId, stepIdx, stepId, planLength: architecturePlan.length,
         });

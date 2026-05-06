@@ -129,7 +129,16 @@ ${input.codebaseContext ? `${input.codebaseContext}\n\n` : ""}# Previous Impleme
 The implementation below failed the tests. Study it carefully to understand what went wrong.
 
 \`\`\`typescript
-${input.previousImplementation.slice(0, 4000)}
+${(() => {
+  const prev = input.previousImplementation;
+  if (prev.length <= 9000) return prev;
+  // Keep first 6000 chars (imports, interfaces, main logic) and last 3000 (often where bugs are)
+  return (
+    prev.slice(0, 6000) +
+    "\n\n// ... [middle section omitted for space — see full implementation in step results] ...\n\n" +
+    prev.slice(-3000)
+  );
+})()}
 \`\`\`
 
 ${errorSection}

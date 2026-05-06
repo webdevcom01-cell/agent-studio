@@ -82,16 +82,49 @@ Categories:
   }
 }
 
-export async function loadRelevantMemory(agentId: string): Promise<string> {
+export async function loadRelevantMemory(agentId: string, taskDescription?: string): Promise<string> {
   try {
-    const records = await prisma.pipelineMemory.findMany({
+    // Load more records than we'll use so we can filter by relevance
+    const allRecords = await prisma.pipelineMemory.findMany({
       where: { agentId },
       orderBy: { createdAt: "desc" },
-      take: MAX_MEMORIES_LOADED,
+      take: 30,
       select: { category: true, content: true },
     });
 
-    if (records.length === 0) return "";
+    if (allRecords.length === 0) return "";
+
+    let records: typeof allRecords;
+
+    if (taskDescription) {
+      // Keyword scoring — rank memories by how many task keywords they contain
+      const keywords = taskDescription
+        .toLowerCase()
+        .split(/\W+/)
+        .filter((w) => w.length > 3);
+
+      if (keywords.length > 0) {
+        const scored = allRecords.map((r) => ({
+          record: r,
+          score: keywords.filter(
+            (kw) => r.content.toLowerCase().includes(kw) || r.category.toLowerCase().includes(kw),
+          ).length,
+        }));
+
+        const relevant = scored
+          .filter((s) => s.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, MAX_MEMORIES_LOADED)
+          .map((s) => s.record);
+
+        // Fallback: if no keyword matches, use most recent entries
+        records = relevant.length > 0 ? relevant : allRecords.slice(0, 5);
+      } else {
+        records = allRecords.slice(0, MAX_MEMORIES_LOADED);
+      }
+    } else {
+      records = allRecords.slice(0, MAX_MEMORIES_LOADED);
+    }
 
     const header = "## Prior Knowledge (from previous runs)";
     let result = header + "\n";

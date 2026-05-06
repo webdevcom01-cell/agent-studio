@@ -41,6 +41,8 @@ export async function POST(
       approvalFeedback: parsed.data.feedback,
       repoUrl: run.repoUrl ?? undefined,
       sourceRepoUrl: run.sourceRepoUrl ?? undefined,
+      modelId: run.modelId ?? undefined,
+      useSmartRouting: run.useSmartRouting ?? false,
     });
 
     logger.info("Pipeline run approved — Phase 2 job enqueued", {

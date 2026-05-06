@@ -124,20 +124,32 @@ const MIN_SUCCESS_RATE = 0.6;
  * table on cold start (< MIN_SAMPLE_SIZE runs) or when DB is unavailable.
  *
  * Explicit per-step overrides always take precedence over both DB and static routing.
+ *
+ * @param statsCache  Optional pre-loaded stats (phase → sorted ModelPerformanceStat[]).
+ *                    When provided, skips the DB query entirely — use this to batch-load
+ *                    stats once per pipeline run instead of once per step.
  */
 export async function resolveStepModelAdaptive(
   phase: StepPhase,
   overrides: Record<string, string>,
   stepId: string,
   defaultModelId: string,
+  statsCache?: Map<string, Array<{ modelId: string; successCount: number; runCount: number; totalInputTokens: number }>>,
 ): Promise<string> {
   if (overrides[stepId]) return overrides[stepId];
 
   try {
-    const { prisma } = await import("@/lib/prisma");
-    const stats = await prisma.modelPerformanceStat.findMany({
-      where: { phase, runCount: { gte: MIN_SAMPLE_SIZE } },
-    });
+    let stats: Array<{ modelId: string; successCount: number; runCount: number; totalInputTokens: number }>;
+
+    if (statsCache) {
+      // Use pre-loaded cache — no DB round-trip
+      stats = statsCache.get(phase) ?? [];
+    } else {
+      const { prisma } = await import("@/lib/prisma");
+      stats = await prisma.modelPerformanceStat.findMany({
+        where: { phase, runCount: { gte: MIN_SAMPLE_SIZE } },
+      });
+    }
 
     const sorted = [...stats].sort((a, b) => {
       const rateA = a.successCount / a.runCount;

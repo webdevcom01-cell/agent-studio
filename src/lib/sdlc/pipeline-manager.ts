@@ -32,6 +32,9 @@ export interface PipelineRun {
   finalOutput: string | null;
   error: string | null;
   approvalFeedback: string | null;
+  modelId: string | null;
+  useSmartRouting: boolean;
+  requireApproval: boolean;
   jobId: string | null;
   agentId: string;
   userId: string | null;
@@ -53,6 +56,9 @@ export interface CreatePipelineRunInput {
   userId?: string;
   repoUrl?: string;
   sourceRepoUrl?: string;
+  modelId?: string;
+  useSmartRouting?: boolean;
+  requireApproval?: boolean;
 }
 
 export interface ListPipelineRunsOptions {
@@ -77,6 +83,9 @@ function toRun(row: {
   finalOutput: string | null;
   error: string | null;
   approvalFeedback?: string | null;
+  modelId?: string | null;
+  useSmartRouting?: boolean;
+  requireApproval?: boolean;
   jobId: string | null;
   agentId: string;
   userId: string | null;
@@ -91,6 +100,9 @@ function toRun(row: {
   return {
     ...row,
     approvalFeedback: row.approvalFeedback ?? null,
+    modelId: row.modelId ?? null,
+    useSmartRouting: row.useSmartRouting ?? false,
+    requireApproval: row.requireApproval ?? false,
     repoUrl: row.repoUrl,
     sourceRepoUrl: row.sourceRepoUrl ?? null,
     prUrl: row.prUrl,
@@ -119,6 +131,9 @@ export async function createPipelineRun(
       repoUrl: input.repoUrl ?? null,
       sourceRepoUrl: input.sourceRepoUrl,
       status: "PENDING",
+      modelId: input.modelId ?? null,
+      useSmartRouting: input.useSmartRouting ?? false,
+      requireApproval: input.requireApproval ?? false,
     },
   });
 

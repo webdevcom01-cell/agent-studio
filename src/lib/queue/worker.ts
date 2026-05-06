@@ -607,23 +607,45 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
     await markPipelineCompleted(pipelineRunId, result.finalOutput, result.prUrl, result.gitError);
     await job.updateProgress(100);
 
-    // Fire-and-forget: persist per-step metrics and aggregate model stats
-    void (async () => {
+    // Await metrics — critical for reporting accuracy.
+    // If this were fire-and-forget and the worker crashed, stepMetrics and
+    // ModelPerformanceStat would be permanently lost for this run.
+    // ~50-100ms overhead is acceptable.
+    try {
       const { recordAllStepMetrics, aggregateRunMetrics } = await import("@/lib/sdlc/metrics-collector");
       await recordAllStepMetrics(pipelineRunId, result.stepMetrics ?? {});
       await aggregateRunMetrics(pipelineRunId);
-    })();
-
-    // Fire-and-forget: extract and persist learnings from this run
-    const stepResultsMap = run.stepResults as Record<string, string>;
-    void (async () => {
-      const { extractAndSaveMemory } = await import("@/lib/sdlc/pipeline-memory");
-      await extractAndSaveMemory(
+    } catch (metricsErr) {
+      logger.warn("Pipeline: step metrics aggregation failed (non-blocking)", {
         pipelineRunId,
-        agentId,
-        run.taskDescription,
-        Object.values(stepResultsMap),
-      );
+        error: metricsErr instanceof Error ? metricsErr.message : String(metricsErr),
+      });
+    }
+
+    // Fire-and-forget: extract and persist learnings from this run.
+    // Re-fetch stepResults from DB so we get the outputs written during this run,
+    // not the stale snapshot loaded before execution started.
+    void (async () => {
+      try {
+        const { prisma } = await import("@/lib/prisma");
+        const freshRun = await prisma.pipelineRun.findUnique({
+          where: { id: pipelineRunId },
+          select: { stepResults: true },
+        });
+        const freshStepResults = (freshRun?.stepResults ?? {}) as Record<string, string>;
+        const { extractAndSaveMemory } = await import("@/lib/sdlc/pipeline-memory");
+        await extractAndSaveMemory(
+          pipelineRunId,
+          agentId,
+          run.taskDescription,
+          Object.values(freshStepResults),
+        );
+      } catch (memErr) {
+        logger.warn("Pipeline: memory extraction failed (non-blocking)", {
+          pipelineRunId,
+          error: memErr instanceof Error ? memErr.message : String(memErr),
+        });
+      }
     })();
 
 
@@ -863,7 +885,7 @@ async function processGovernanceTimeoutJob(job: Job<GovernanceTimeoutJobData>): 
 async function runStartupStaleScan(): Promise<void> {
   try {
     const { detectAndResetStalePipelineRuns } = await import("@/lib/sdlc/pipeline-manager");
-    const result = await detectAndResetStalePipelineRuns(60, /* dryRun */ true);
+    const result = await detectAndResetStalePipelineRuns(60);
     if (result.resetCount > 0) {
       logger.warn(
         "Worker startup: stale pipeline runs detected — use /api/cron/cleanup to reset",

@@ -68,14 +68,8 @@ export async function POST(
       );
     }
 
-    await prisma.pipelineRun.update({
-      where: { id: runId },
-      data: {
-        status: "PENDING",
-        error: null,
-      },
-    });
-
+    // Enqueue FIRST — if this throws, run stays FAILED (correct, user can retry again).
+    // Only update DB status after job is safely in the queue.
     const jobId = await addPipelineRunJob({
       pipelineRunId: runId,
       agentId,
@@ -86,6 +80,15 @@ export async function POST(
       existingStepResults: run.stepResults,
       repoUrl: run.repoUrl ?? undefined,
       sourceRepoUrl: run.sourceRepoUrl ?? undefined,
+    });
+
+    await prisma.pipelineRun.update({
+      where: { id: runId },
+      data: {
+        status: "PENDING",
+        error: null,
+        jobId,
+      },
     });
 
     logger.info("Pipeline run retry enqueued", {

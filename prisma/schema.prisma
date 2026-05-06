@@ -287,6 +287,13 @@ model PipelineRun {
   error           String?
   approvalFeedback    String?           @db.Text
 
+  /// Model override used when creating this run — persisted so approve/retry can preserve the original settings
+  modelId             String?
+  /// Whether smart model routing was active for this run
+  useSmartRouting     Boolean           @default(false)
+  /// Whether human approval was required before the implementation phase
+  requireApproval     Boolean           @default(false)
+
   /// BullMQ job ID for the pipeline runner job
   jobId           String?           @unique
 

@@ -155,6 +155,9 @@ export async function POST(
       userId,
       repoUrl,
       sourceRepoUrl: parsed.data.sourceRepoUrl,
+      modelId,
+      useSmartRouting,
+      requireApproval,
     });
 
     // Step 4: Enqueue the pipeline runner job

@@ -46,11 +46,10 @@ export const CodeGenOutputSchema = z
     .describe(
       "Kebab-case task identifier, max 30 characters, used as workspace dir and git branch suffix (e.g. 'sum-array', 'user-auth-jwt')",
     ),
-  runId: z
-    .string()
-    .describe(
-      "Random 8-character lowercase hex string unique to this run (e.g. 'a3f9e1b7'). Must differ on every invocation.",
-    ),
+  // runId removed — was a redundant field that the orchestrator never used.
+  // The actual pipelineRunId is already known by the caller; having the AI
+  // generate a random hex string wastes tokens and occasionally caused Zod
+  // validation errors when the AI produced a non-hex string.
   })
   .superRefine((data, ctx) => {
     if (data.files.length === 0) {
