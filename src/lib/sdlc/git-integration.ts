@@ -19,7 +19,7 @@ function tryParseJson<T>(str: string): T | null {
 }
 
 const GITHUB_API = "https://api.github.com";
-const GIT_TIMEOUT_MS = 60_000;
+const GIT_TIMEOUT_MS = 120_000;
 export const GENERATED_SUBDIR = "workspace";
 
 export interface GitIntegrationInput {
@@ -53,7 +53,12 @@ export function parseRepoInfo(repoUrl: string): RepoInfo | null {
     if (parts.length < 2) return null;
     const provider: "github" | "gitlab" =
       url.hostname === "github.com" ? "github" : "gitlab";
-    return { owner: parts[0], repo: parts[1], provider, hostname: url.hostname };
+    // Use last two segments to support self-hosted GitLab subpaths:
+    // e.g. company.com/gitlab/owner/repo or git.co/group/sub/owner/repo.git
+    const rawRepo = parts[parts.length - 1];
+    const owner   = parts[parts.length - 2];
+    const repo    = rawRepo.replace(/\.git$/, "");
+    return { owner, repo, provider, hostname: url.hostname };
   } catch {
     return null;
   }
@@ -412,7 +417,7 @@ export async function cloneSourceRepo(params: {
     await mkdir(targetDir, { recursive: true });
 
     // Shallow clone (depth=1) — array args, ne shell string
-    await execFileAsync("git", ["clone", "--depth", "1", authUrl, targetDir]);
+    await execFileAsync("git", ["clone", "--depth", "1", authUrl, targetDir], { timeout: 120_000 });
 
     // OBAVEZNO: brisanje .git da ne bi konfliktovalo kada integrateWithGit
     // kopira workspace/ u klon target repo-a

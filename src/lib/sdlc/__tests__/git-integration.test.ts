@@ -74,8 +74,36 @@ describe("parseRepoInfo", () => {
     }));
   });
 
+  it("strips .git suffix from repo name", () => {
+    const result = parseRepoInfo("https://github.com/owner/repo.git");
+    expect(result).toEqual(expect.objectContaining({ owner: "owner", repo: "repo" }));
+  });
+
+  it("parses self-hosted GitLab with subpath prefix", () => {
+    const result = parseRepoInfo("https://company.com/gitlab/owner/repo");
+    expect(result).toEqual(expect.objectContaining({
+      owner: "owner",
+      repo:  "repo",
+      provider: "gitlab",
+      hostname: "company.com",
+    }));
+  });
+
+  it("parses deeply nested GitLab group path", () => {
+    const result = parseRepoInfo("https://gitlab.company.com/group/subgroup/owner/repo.git");
+    expect(result).toEqual(expect.objectContaining({
+      owner: "owner",
+      repo:  "repo",
+      provider: "gitlab",
+    }));
+  });
+
   it("returns null for invalid URL", () => {
     expect(parseRepoInfo("not-a-url")).toBeNull();
+  });
+
+  it("returns null for URL with fewer than 2 path segments", () => {
+    expect(parseRepoInfo("https://github.com/owner")).toBeNull();
   });
 });
 

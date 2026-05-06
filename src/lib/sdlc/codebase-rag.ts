@@ -347,10 +347,12 @@ async function collectFiles(
   depth = 0,
   ignorePatterns: string[] = [],
   rootDir: string = dir,
+  // Compiled picomatch passed through recursive calls to avoid recompiling per directory
+  isIgnored: ReturnType<typeof picomatch> | null = ignorePatterns.length > 0
+    ? picomatch(ignorePatterns)
+    : null,
 ): Promise<string[]> {
   if (depth > 8) return [];
-
-  const isIgnored = ignorePatterns.length > 0 ? picomatch(ignorePatterns) : null;
 
   const files: string[] = [];
   let entries: string[];
@@ -370,7 +372,7 @@ async function collectFiles(
     try {
       const info = await stat(fullPath);
       if (info.isDirectory()) {
-        const sub = await collectFiles(fullPath, depth + 1, ignorePatterns, rootDir);
+        const sub = await collectFiles(fullPath, depth + 1, ignorePatterns, rootDir, isIgnored);
         // Slice to respect the global limit even when a subdirectory alone exceeds it
         const capacity = MAX_FILES - files.length;
         files.push(...sub.slice(0, capacity));

@@ -44,13 +44,28 @@ export async function recordAllStepMetrics(
 ): Promise<void> {
   if (Object.keys(metrics).length === 0) return;
   try {
+    // Read existing metrics and merge — critical for retry runs that resume
+    // from step N: pre-retry step metrics (0..N-1) must not be overwritten.
+    const existing = await prisma.pipelineRun.findUnique({
+      where: { id: runId },
+      select: { stepMetrics: true },
+    });
+    const existingMap =
+      existing?.stepMetrics &&
+      typeof existing.stepMetrics === "object" &&
+      !Array.isArray(existing.stepMetrics)
+        ? (existing.stepMetrics as Record<string, unknown>)
+        : {};
+    const merged = { ...existingMap, ...metrics };
+
     await prisma.pipelineRun.update({
       where: { id: runId },
-      data: { stepMetrics: metrics as Prisma.InputJsonValue },
+      data: { stepMetrics: merged as Prisma.InputJsonValue },
     });
-    logger.info("metrics-collector: step metrics persisted", {
+    logger.info("metrics-collector: step metrics persisted (merged)", {
       runId,
-      stepCount: Object.keys(metrics).length,
+      newStepCount:   Object.keys(metrics).length,
+      totalStepCount: Object.keys(merged).length,
     });
   } catch (err) {
     logger.warn("metrics-collector: failed to persist step metrics", {
@@ -197,28 +212,39 @@ export interface PipelineSummary {
   total: number;
   completed: number;
   failed: number;
+  cancelled: number;
+  running: number;
   avgDurationMs: number;
   successRate: number;
 }
 
 export async function getPipelineSummary(agentId: string): Promise<PipelineSummary> {
-  const [total, completed, failed] = await Promise.all([
-    prisma.pipelineRun.count({ where: { agentId } }),
-    prisma.pipelineRun.count({ where: { agentId, status: "COMPLETED" } }),
-    prisma.pipelineRun.count({ where: { agentId, status: "FAILED" } }),
+  const [counts, completedRuns] = await Promise.all([
+    // Single groupBy replaces 3+ separate COUNT queries
+    prisma.pipelineRun.groupBy({
+      by: ["status"],
+      where: { agentId },
+      _count: { id: true },
+    }),
+    prisma.pipelineRun.findMany({
+      where: {
+        agentId,
+        status: "COMPLETED",
+        startedAt: { not: null },
+        completedAt: { not: null },
+      },
+      select: { startedAt: true, completedAt: true },
+      take: 100,
+      orderBy: { completedAt: "desc" },
+    }),
   ]);
 
-  const completedRuns = await prisma.pipelineRun.findMany({
-    where: {
-      agentId,
-      status: "COMPLETED",
-      startedAt: { not: null },
-      completedAt: { not: null },
-    },
-    select: { startedAt: true, completedAt: true },
-    take: 100,
-    orderBy: { completedAt: "desc" },
-  });
+  const byStatus = Object.fromEntries(counts.map((c) => [c.status, c._count.id]));
+  const total     = Object.values(byStatus).reduce((a, b) => a + b, 0);
+  const completed = byStatus["COMPLETED"] ?? 0;
+  const failed    = byStatus["FAILED"]    ?? 0;
+  const cancelled = byStatus["CANCELLED"] ?? 0;
+  const running   = (byStatus["RUNNING"] ?? 0) + (byStatus["PENDING"] ?? 0);
 
   const durations = completedRuns
     .map((r) => r.completedAt!.getTime() - r.startedAt!.getTime())
@@ -233,6 +259,8 @@ export async function getPipelineSummary(agentId: string): Promise<PipelineSumma
     total,
     completed,
     failed,
+    cancelled,
+    running,
     avgDurationMs,
     successRate: total > 0 ? completed / total : 0,
   };

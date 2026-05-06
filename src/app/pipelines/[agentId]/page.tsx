@@ -19,6 +19,8 @@ import {
   Timer,
   AlertCircle,
   Plus,
+  Ban,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,6 +60,8 @@ interface PipelineSummary {
   total: number;
   completed: number;
   failed: number;
+  cancelled: number;
+  running: number;
   avgDurationMs: number;
   successRate: number;
 }
@@ -124,7 +128,7 @@ function MetricsSummaryCard({
   const { data, isLoading } = useSWR<{ success: boolean; data: MetricsData }>(
     `/api/sdlc/metrics?agentId=${agentId}&_k=${refreshKey}${phaseParam}`,
     fetcher,
-    { revalidateOnFocus: false },
+    { revalidateOnFocus: false, refreshInterval: 5000 },
   );
 
   // Must be before any early returns — Rules of Hooks
@@ -158,10 +162,13 @@ function MetricsSummaryCard({
         </h3>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-        <StatPill label="Ukupno" value={String(ps.total)} color="zinc" />
-        <StatPill label="Uspešno" value={String(ps.completed)} color="emerald" />
-        <StatPill label="Greška" value={String(ps.failed)} color="red" />
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+        <StatPill label="Ukupno"    value={String(ps.total)}     color="zinc"    />
+        <StatPill label="Uspešno"   value={String(ps.completed)} color="emerald" />
+        <StatPill label="Greška"    value={String(ps.failed)}    color="red"     />
+        {(ps.cancelled ?? 0) > 0 && (
+          <StatPill label="Otkazano" value={String(ps.cancelled)} color="amber" />
+        )}
         <StatPill
           label="Success rate"
           value={`${Math.round(ps.successRate * 100)}%`}
@@ -289,6 +296,10 @@ function RunPipelineDialog({
   const [taskDescription, setTaskDescription] = useState("");
   const [repoUrl, setRepoUrl] = useState("");
   const [sourceRepoUrl, setSourceRepoUrl] = useState("");
+  const [requireApproval, setRequireApproval] = useState(false);
+  const [useSmartRouting, setUseSmartRouting] = useState(false);
+  const [modelId, setModelId] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -303,8 +314,11 @@ function RunPipelineDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           taskDescription: taskDescription.trim(),
-          ...(repoUrl.trim() ? { repoUrl: repoUrl.trim() } : {}),
+          ...(repoUrl.trim()       ? { repoUrl: repoUrl.trim() }             : {}),
           ...(sourceRepoUrl.trim() ? { sourceRepoUrl: sourceRepoUrl.trim() } : {}),
+          ...(requireApproval      ? { requireApproval: true }               : {}),
+          ...(useSmartRouting      ? { useSmartRouting: true }               : {}),
+          ...(modelId.trim()       ? { modelId: modelId.trim() }             : {}),
         }),
       });
       const json = await res.json() as { success: boolean; error?: string };
@@ -315,6 +329,10 @@ function RunPipelineDialog({
       setTaskDescription("");
       setRepoUrl("");
       setSourceRepoUrl("");
+      setRequireApproval(false);
+      setUseSmartRouting(false);
+      setModelId("");
+      setShowAdvanced(false);
       onOpenChange(false);
       onSuccess();
     } catch {
@@ -369,6 +387,48 @@ function RunPipelineDialog({
               placeholder="https://github.com/owner/source-repo"
               className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             />
+          </div>
+          {/* Advanced Options — collapsible */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="text-xs text-zinc-500 hover:text-zinc-300 flex items-center gap-1"
+            >
+              {showAdvanced
+                ? <ChevronDown className="size-3" />
+                : <ChevronRight className="size-3" />}
+              Napredne opcije
+            </button>
+            {showAdvanced && (
+              <div className="mt-2 space-y-2 pl-2 border-l border-zinc-700">
+                <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={requireApproval}
+                    onChange={(e) => setRequireApproval(e.target.checked)}
+                    className="rounded border-zinc-600 bg-zinc-800"
+                  />
+                  Pauziraj za odobrenje (HITL)
+                </label>
+                <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={useSmartRouting}
+                    onChange={(e) => setUseSmartRouting(e.target.checked)}
+                    className="rounded border-zinc-600 bg-zinc-800"
+                  />
+                  Pametni model routing
+                </label>
+                <input
+                  type="text"
+                  value={modelId}
+                  onChange={(e) => setModelId(e.target.value)}
+                  placeholder="Model ID (npr. gpt-4o-mini)"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                />
+              </div>
+            )}
           </div>
           {error && <p className="text-xs text-red-400">{error}</p>}
           <DialogFooter className="pt-1">
@@ -496,10 +556,47 @@ function ApproveCard({
 
 function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string; onMutate: () => void }) {
   const [open, setOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const isActive = run.status === "RUNNING" || run.status === "PENDING";
+
   const { data, isLoading } = useSWR<{ success: boolean; data: PipelineRun }>(
     open ? `/api/agents/${agentId}/pipelines/${run.id}` : null,
-    fetcher
+    fetcher,
+    { refreshInterval: open && isActive ? 2000 : 0 },
   );
+
+  async function handleCancel() {
+    setCancelling(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/pipelines/${run.id}/cancel`, {
+        method: "POST",
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) setActionError(json.error ?? "Greška pri otkazivanju");
+      else onMutate();
+    } catch { setActionError("Greška pri slanju zahteva"); }
+    finally { setCancelling(false); }
+  }
+
+  async function handleRetry() {
+    setRetrying(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/pipelines/${run.id}/retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) setActionError(json.error ?? "Greška pri retry-u");
+      else onMutate();
+    } catch { setActionError("Greška pri slanju zahteva"); }
+    finally { setRetrying(false); }
+  }
   const detail = data?.data;
   const metrics = detail?.stepMetrics ?? {};
   const entries = Object.entries(metrics);
@@ -564,16 +661,45 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
             </a>
           )}
         </div>
-        {open ? (
-          <ChevronDown className="size-4 text-zinc-500 shrink-0 mt-0.5" />
-        ) : (
-          <ChevronRight className="size-4 text-zinc-500 shrink-0 mt-0.5" />
-        )}
+        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {/* Cancel — for RUNNING, PENDING, AWAITING_APPROVAL */}
+          {(run.status === "RUNNING" || run.status === "PENDING" || run.status === "AWAITING_APPROVAL") && (
+            <button
+              onClick={(e) => { e.stopPropagation(); void handleCancel(); }}
+              disabled={cancelling}
+              className="p-1 rounded text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              title="Otkaži run"
+            >
+              {cancelling ? <Loader2 className="size-3 animate-spin" /> : <Ban className="size-3" />}
+            </button>
+          )}
+          {/* Retry — for FAILED only */}
+          {run.status === "FAILED" && (
+            <button
+              onClick={(e) => { e.stopPropagation(); void handleRetry(); }}
+              disabled={retrying}
+              className="p-1 rounded text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+              title="Ponovi run od poslednjeg koraka"
+            >
+              {retrying ? <Loader2 className="size-3 animate-spin" /> : <RotateCcw className="size-3" />}
+            </button>
+          )}
+          {open ? (
+            <ChevronDown className="size-4 text-zinc-500 mt-0.5" />
+          ) : (
+            <ChevronRight className="size-4 text-zinc-500 mt-0.5" />
+          )}
+        </div>
       </button>
 
       {/* Expanded detail */}
       {open && (
         <div className="border-t border-zinc-800 p-4 space-y-4">
+          {actionError && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-2">
+              <p className="text-xs text-red-400">{actionError}</p>
+            </div>
+          )}
           {isLoading && (
             <div className="flex items-center gap-2 text-sm text-zinc-500">
               <Loader2 className="size-4 animate-spin" /> Učitavam detalje...
@@ -660,7 +786,8 @@ export default function PipelinesPage({
   const { agentId } = use(params);
   const { data, isLoading, mutate } = useSWR<{ success: boolean; data: PipelineListData }>(
     `/api/agents/${agentId}/pipelines`,
-    fetcher
+    fetcher,
+    { refreshInterval: 3000, revalidateOnFocus: true },
   );
 
   const runs: PipelineRun[] = data?.data?.runs ?? [];
@@ -732,7 +859,17 @@ export default function PipelinesPage({
             {runs.length > 0 && (
               <MetricsSummaryCard agentId={agentId} refreshKey={metricsKey} />
             )}
-            {runs.map((run) => <RunRow key={run.id} run={run} agentId={agentId} onMutate={mutate} />)}
+            {runs.map((run) => (
+              <RunRow
+                key={run.id}
+                run={run}
+                agentId={agentId}
+                onMutate={() => {
+                  void mutate();
+                  setMetricsKey((k) => k + 1);
+                }}
+              />
+            ))}
           </>
         )}
       </div>

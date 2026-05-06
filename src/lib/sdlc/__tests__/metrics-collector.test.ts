@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // ---------------------------------------------------------------------------
 
 const mockPipelineRunUpdate = vi.hoisted(() => vi.fn());
+const mockPipelineRunGroupBy  = vi.hoisted(() => vi.fn());
 const mockPipelineRunFindUnique = vi.hoisted(() => vi.fn());
 const mockPipelineRunCount = vi.hoisted(() => vi.fn());
 const mockPipelineRunFindMany = vi.hoisted(() => vi.fn());
@@ -19,10 +20,11 @@ const mockLogger = vi.hoisted(() => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     pipelineRun: {
-      update: mockPipelineRunUpdate,
+      update:     mockPipelineRunUpdate,
       findUnique: mockPipelineRunFindUnique,
-      count: mockPipelineRunCount,
-      findMany: mockPipelineRunFindMany,
+      count:      mockPipelineRunCount,
+      findMany:   mockPipelineRunFindMany,
+      groupBy:    mockPipelineRunGroupBy,
     },
     modelPerformanceStat: {
       findMany: mockModelPerfStatFindMany,
@@ -64,6 +66,7 @@ beforeEach(() => {
   mockPipelineRunUpdate.mockResolvedValue({});
   mockPipelineRunFindUnique.mockResolvedValue(null);
   mockPipelineRunCount.mockResolvedValue(0);
+  mockPipelineRunGroupBy.mockResolvedValue([]);
   mockPipelineRunFindMany.mockResolvedValue([]);
   mockModelPerfStatFindMany.mockResolvedValue([]);
   mockModelPerfStatUpsert.mockResolvedValue({});
@@ -74,15 +77,36 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("recordAllStepMetrics", () => {
-  it("calls prisma.pipelineRun.update with correct stepMetrics data", async () => {
+  it("calls prisma.pipelineRun.update with merged stepMetrics data", async () => {
+    // No existing metrics in DB
+    mockPipelineRunFindUnique.mockResolvedValueOnce({ stepMetrics: null });
     const metrics = { 0: makeMetric({ stepId: "codegen" }) };
     await recordAllStepMetrics("run-1", metrics);
 
     expect(mockPipelineRunUpdate).toHaveBeenCalledOnce();
-    expect(mockPipelineRunUpdate).toHaveBeenCalledWith({
-      where: { id: "run-1" },
-      data: { stepMetrics: metrics },
+    const updateArg = mockPipelineRunUpdate.mock.calls[0][0];
+    expect(updateArg.where).toEqual({ id: "run-1" });
+    expect((updateArg.data.stepMetrics as Record<string, unknown>)[0]).toBeDefined();
+  });
+
+  it("merges with existing step metrics on retry (does not overwrite)", async () => {
+    // Steps 0-1 already in DB from original run; step 2 is new (from retry)
+    mockPipelineRunFindUnique.mockResolvedValueOnce({
+      stepMetrics: {
+        "0": makeMetric({ stepId: "planning",        durationMs: 1000 }),
+        "1": makeMetric({ stepId: "implementation",  durationMs: 2000 }),
+      },
     });
+    const newMetrics = { 2: makeMetric({ stepId: "testing", durationMs: 3000 }) };
+    await recordAllStepMetrics("run-retry", newMetrics);
+
+    const updateArg = mockPipelineRunUpdate.mock.calls[0][0];
+    const merged = updateArg.data.stepMetrics as Record<string, unknown>;
+    // All three steps must be present after merge
+    expect(Object.keys(merged)).toHaveLength(3);
+    expect(merged["0"]).toBeDefined();
+    expect(merged["1"]).toBeDefined();
+    expect(merged["2"]).toBeDefined();
   });
 
   it("does not call DB when metrics is an empty object", async () => {
@@ -221,12 +245,32 @@ describe("getModelStats", () => {
 // ---------------------------------------------------------------------------
 
 describe("getPipelineSummary", () => {
-  it("correctly calculates avgDurationMs from completed runs", async () => {
-    mockPipelineRunCount
-      .mockResolvedValueOnce(5)   // total
-      .mockResolvedValueOnce(3)   // completed
-      .mockResolvedValueOnce(1);  // failed
+  function makeGroupByResult(counts: Record<string, number>) {
+    return Object.entries(counts).map(([status, count]) => ({
+      status,
+      _count: { id: count },
+    }));
+  }
 
+  it("correctly maps status counts from groupBy result", async () => {
+    mockPipelineRunGroupBy.mockResolvedValueOnce(
+      makeGroupByResult({ COMPLETED: 3, FAILED: 1, CANCELLED: 1, RUNNING: 0, PENDING: 0 }),
+    );
+    mockPipelineRunFindMany.mockResolvedValueOnce([]);
+
+    const result = await getPipelineSummary("agent-1");
+
+    expect(result.total).toBe(5);
+    expect(result.completed).toBe(3);
+    expect(result.failed).toBe(1);
+    expect(result.cancelled).toBe(1);
+    expect(result.running).toBe(0);
+  });
+
+  it("correctly calculates avgDurationMs from completed runs", async () => {
+    mockPipelineRunGroupBy.mockResolvedValueOnce(
+      makeGroupByResult({ COMPLETED: 2, FAILED: 0 }),
+    );
     const base = new Date("2026-01-01T00:00:00Z");
     mockPipelineRunFindMany.mockResolvedValueOnce([
       { startedAt: new Date(base.getTime()), completedAt: new Date(base.getTime() + 3000) },
@@ -236,18 +280,55 @@ describe("getPipelineSummary", () => {
     const result = await getPipelineSummary("agent-1");
 
     expect(result.avgDurationMs).toBe(4000); // (3000 + 5000) / 2
-    expect(result.total).toBe(5);
-    expect(result.completed).toBe(3);
-    expect(result.failed).toBe(1);
   });
 
-  it("successRate is 0.0 when total=0 (no division by zero)", async () => {
-    mockPipelineRunCount.mockResolvedValue(0);
+  it("successRate = completed / total", async () => {
+    mockPipelineRunGroupBy.mockResolvedValueOnce(
+      makeGroupByResult({ COMPLETED: 3, FAILED: 1, CANCELLED: 1 }),
+    );
+    mockPipelineRunFindMany.mockResolvedValueOnce([]);
+
+    const result = await getPipelineSummary("agent-1");
+
+    expect(result.successRate).toBeCloseTo(3 / 5);
+  });
+
+  it("counts RUNNING + PENDING both as running", async () => {
+    mockPipelineRunGroupBy.mockResolvedValueOnce(
+      makeGroupByResult({ COMPLETED: 2, RUNNING: 1, PENDING: 2 }),
+    );
+    mockPipelineRunFindMany.mockResolvedValueOnce([]);
+
+    const result = await getPipelineSummary("agent-1");
+
+    expect(result.running).toBe(3); // RUNNING(1) + PENDING(2)
+    expect(result.total).toBe(5);
+  });
+
+  it("successRate is 0 and no division by zero when total=0", async () => {
+    mockPipelineRunGroupBy.mockResolvedValueOnce([]);
     mockPipelineRunFindMany.mockResolvedValueOnce([]);
 
     const result = await getPipelineSummary("agent-empty");
 
+    expect(result.total).toBe(0);
     expect(result.successRate).toBe(0);
     expect(result.avgDurationMs).toBe(0);
+    expect(result.cancelled).toBe(0);
+    expect(result.running).toBe(0);
+  });
+
+  it("all runs cancelled — successRate=0, completed=0", async () => {
+    mockPipelineRunGroupBy.mockResolvedValueOnce(
+      makeGroupByResult({ CANCELLED: 5 }),
+    );
+    mockPipelineRunFindMany.mockResolvedValueOnce([]);
+
+    const result = await getPipelineSummary("agent-cancelled");
+
+    expect(result.total).toBe(5);
+    expect(result.completed).toBe(0);
+    expect(result.cancelled).toBe(5);
+    expect(result.successRate).toBe(0);
   });
 });
