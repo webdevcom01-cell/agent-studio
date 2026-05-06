@@ -127,15 +127,16 @@ function MetricsSummaryCard({
     { revalidateOnFocus: false },
   );
 
+  // Must be before any early returns — Rules of Hooks
+  const phases = useMemo(
+    () => ["all", ...Array.from(new Set((data?.data.modelStats ?? []).map((s) => s.phase)))],
+    [data?.data.modelStats],
+  );
+
   if (isLoading || !data?.success) return null;
 
   const { pipelineSummary: ps, modelStats } = data.data;
   if (ps.total === 0) return null;
-
-  const phases = useMemo(
-    () => ["all", ...Array.from(new Set(modelStats.map((s) => s.phase)))],
-    [modelStats],
-  );
 
   const successColor =
     ps.successRate >= 0.8 ? "emerald" :
