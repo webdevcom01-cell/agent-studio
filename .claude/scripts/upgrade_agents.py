@@ -8,8 +8,12 @@ import json, os, sys, time, re, psycopg2
 from openai import OpenAI
 
 # ── Config ──────────────────────────────────────────────────────────────
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "sk-9cc902410b2244d58ef62be83a9d0e62")
-RAILWAY_URL = "postgresql://postgres:pQQzSClgIQIBdBMjXMRbmKDqNCORevFD@tramway.proxy.rlwy.net:54364/railway"
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
+if not DEEPSEEK_API_KEY:
+    raise ValueError("DEEPSEEK_API_KEY environment variable is not set")
+RAILWAY_URL = os.environ.get("RAILWAY_DATABASE_URL")
+if not RAILWAY_URL:
+    raise ValueError("RAILWAY_DATABASE_URL environment variable is not set")
 OUTPUT_FILE = "/tmp/upgraded_agents.json"
 DRY_RUN = "--dry-run" in sys.argv  # Don't push to DB if dry-run
 
