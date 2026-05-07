@@ -177,6 +177,10 @@ File: path/to/file.ts
 export async function runFeedbackIteration(
   input: FeedbackLoopInput,
   systemPrompt: string,
+  /** Optional external abort signal (e.g. pipeline-level cancel).
+   *  When provided, the internal timeout signal and this signal are raced
+   *  via AbortSignal.any() so either one can abort the AI call. */
+  externalSignal?: AbortSignal,
 ): Promise<FeedbackLoopResult> {
   const { getModel } = await import("@/lib/ai");
   const { generateText } = await import("ai");
@@ -190,8 +194,12 @@ export async function runFeedbackIteration(
     failureCount: parseVitestFailures(input.testOutput).length,
   });
 
-  const ac = new AbortController();
-  const timeoutId = setTimeout(() => ac.abort(), FEEDBACK_TIMEOUT_MS);
+  // Combine the internal 5-minute timeout with any external cancel signal.
+  // AbortSignal.any() is available in Node 20.3+ (project uses Node 22).
+  const timeoutSignal = AbortSignal.timeout(FEEDBACK_TIMEOUT_MS);
+  const abortSignal = externalSignal
+    ? AbortSignal.any([timeoutSignal, externalSignal])
+    : timeoutSignal;
 
   try {
     const result = await generateText({
@@ -199,7 +207,7 @@ export async function runFeedbackIteration(
       system: systemPrompt,
       prompt,
       maxOutputTokens: 8192,
-      abortSignal: ac.signal,
+      abortSignal,
     });
 
     const inputTokens = result.usage.inputTokens ?? 0;
@@ -248,7 +256,7 @@ export async function runFeedbackIteration(
       outputTokens: 0,
     };
   } finally {
-    clearTimeout(timeoutId);
+    // No manual cleanup needed — AbortSignal.timeout() is self-managed.
   }
 }
 
