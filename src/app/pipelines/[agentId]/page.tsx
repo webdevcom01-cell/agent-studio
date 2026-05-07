@@ -93,6 +93,9 @@ interface PipelineRun {
   modelId: string | null;
   useSmartRouting: boolean;
   requireApproval: boolean;
+  triggerSource: string | null;
+  triggerBranch: string | null;
+  triggerPrNumber: number | null;
 }
 
 function StatusIcon({ status }: { status: string }) {
@@ -101,6 +104,72 @@ function StatusIcon({ status }: { status: string }) {
   if (status === "RUNNING") return <Loader2 className="size-4 text-blue-400 animate-spin" />;
   if (status === "AWAITING_APPROVAL") return <AlertCircle className="size-4 text-amber-400" />;
   return <Clock className="size-4 text-zinc-400" />;
+}
+
+/** Badge showing how a pipeline run was triggered (GitHub PR, GitLab MR, Manual, API). */
+function TriggerBadge({ run }: { run: Pick<PipelineRun, "triggerSource" | "triggerBranch" | "triggerPrNumber" | "prUrl"> }) {
+  const src = run.triggerSource;
+  if (!src || src === "manual") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+        🎮 Manual
+      </span>
+    );
+  }
+  if (src === "api") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+        ⚙️ API
+      </span>
+    );
+  }
+  if (src === "github") {
+    const label = run.triggerPrNumber ? `PR #${run.triggerPrNumber}` : "GitHub";
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+        🐙{" "}
+        {run.prUrl ? (
+          <a
+            href={run.prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-zinc-200 transition-colors"
+          >
+            {label}
+          </a>
+        ) : (
+          label
+        )}
+        {run.triggerBranch && (
+          <span className="text-zinc-600 font-mono">{run.triggerBranch}</span>
+        )}
+      </span>
+    );
+  }
+  if (src === "gitlab") {
+    const label = run.triggerPrNumber ? `MR !${run.triggerPrNumber}` : "GitLab";
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+        🦊{" "}
+        {run.prUrl ? (
+          <a
+            href={run.prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-zinc-200 transition-colors"
+          >
+            {label}
+          </a>
+        ) : (
+          label
+        )}
+        {run.triggerBranch && (
+          <span className="text-zinc-600 font-mono">{run.triggerBranch}</span>
+        )}
+      </span>
+    );
+  }
+  return null;
 }
 
 function statusLabel(status: string): string {
@@ -635,6 +704,7 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
             <span className="text-xs text-zinc-600">
               {new Date(run.createdAt).toLocaleString("sr-RS")}
             </span>
+            <TriggerBadge run={run} />
           </div>
           {/* Pipeline steps */}
           <div className="flex flex-wrap gap-1 mt-2">

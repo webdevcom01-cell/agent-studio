@@ -41,6 +41,11 @@ export interface PipelineRun {
   repoUrl: string | null;
   sourceRepoUrl: string | null;
   prUrl: string | null;
+  webhookIdempotencyKey: string | null;
+  webhookExecutionId: string | null;
+  triggerSource: string;
+  triggerBranch: string | null;
+  triggerPrNumber: number | null;
   startedAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
@@ -59,6 +64,12 @@ export interface CreatePipelineRunInput {
   modelId?: string;
   useSmartRouting?: boolean;
   requireApproval?: boolean;
+  prUrl?: string;
+  webhookIdempotencyKey?: string;
+  webhookExecutionId?: string;
+  triggerSource?: string;
+  triggerBranch?: string;
+  triggerPrNumber?: number;
 }
 
 export interface ListPipelineRunsOptions {
@@ -92,6 +103,11 @@ function toRun(row: {
   repoUrl: string | null;
   sourceRepoUrl?: string | null;
   prUrl: string | null;
+  webhookIdempotencyKey?: string | null;
+  webhookExecutionId?: string | null;
+  triggerSource?: string;
+  triggerBranch?: string | null;
+  triggerPrNumber?: number | null;
   startedAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
@@ -106,6 +122,11 @@ function toRun(row: {
     repoUrl: row.repoUrl,
     sourceRepoUrl: row.sourceRepoUrl ?? null,
     prUrl: row.prUrl,
+    webhookIdempotencyKey: row.webhookIdempotencyKey ?? null,
+    webhookExecutionId: row.webhookExecutionId ?? null,
+    triggerSource: row.triggerSource ?? "manual",
+    triggerBranch: row.triggerBranch ?? null,
+    triggerPrNumber: row.triggerPrNumber ?? null,
     stepResults:
       row.stepResults && typeof row.stepResults === "object" && !Array.isArray(row.stepResults)
         ? (row.stepResults as Record<string, string>)
@@ -134,6 +155,13 @@ export async function createPipelineRun(
       modelId: input.modelId ?? null,
       useSmartRouting: input.useSmartRouting ?? false,
       requireApproval: input.requireApproval ?? false,
+      prUrl: input.prUrl ?? null,
+      // @ts-ignore — webhook trigger fields added in migration; prisma generate runs at build
+      webhookIdempotencyKey: input.webhookIdempotencyKey ?? null,
+      webhookExecutionId: input.webhookExecutionId ?? null,
+      triggerSource: input.triggerSource ?? "manual",
+      triggerBranch: input.triggerBranch ?? null,
+      triggerPrNumber: input.triggerPrNumber ?? null,
     },
   });
 
@@ -180,6 +208,10 @@ const SELECT_LIST_FIELDS = {
   userId: true,
   repoUrl: true,
   sourceRepoUrl: true,
+  webhookIdempotencyKey: true,
+  triggerSource: true,
+  triggerBranch: true,
+  triggerPrNumber: true,
   startedAt: true,
   completedAt: true,
   createdAt: true,

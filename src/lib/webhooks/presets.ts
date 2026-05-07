@@ -332,9 +332,74 @@ const GITHUB_PR: WebhookPreset = {
   },
 };
 
+
+// ─── GitLab MR (DevSecOps) ─────────────────────────────────────────────────────
+
+/**
+ * GitLab Merge Request preset for the DevSecOps Pipeline.
+ * GitLab uses a different payload structure and plaintext token authentication.
+ * Variable names mirror the GITHUB_PR preset for cross-provider compatibility.
+ */
+const GITLAB_MR: WebhookPreset = {
+  id: "gitlab-mr",
+  name: "GitLab MR (DevSecOps)",
+  icon: "🦊",
+  description: "Merge request events for the autonomous DevSecOps pipeline — extracts MR number, author, URL, and branch info. Uses plaintext X-Gitlab-Token for verification.",
+  bodyMappings: [
+    // GitLab wraps MR data under object_attributes instead of pull_request
+    { jsonPath: "$.object_attributes.action",           variableName: "action",            type: "string" },
+    { jsonPath: "$.object_attributes.iid",              variableName: "pr_number",         type: "number" },
+    { jsonPath: "$.object_attributes.title",            variableName: "pr_title",          type: "string" },
+    { jsonPath: "$.object_attributes.url",              variableName: "pr_url",            type: "string" },
+    { jsonPath: "$.object_attributes.source_branch",    variableName: "head_branch",       type: "string" },
+    { jsonPath: "$.object_attributes.target_branch",    variableName: "base_branch",       type: "string" },
+    { jsonPath: "$.object_attributes.last_commit.id",   variableName: "head_sha",          type: "string" },
+    { jsonPath: "$.object_attributes.draft",            variableName: "is_draft",          type: "boolean" },
+    { jsonPath: "$.object_attributes.description",      variableName: "pr_description",    type: "string" },
+    { jsonPath: "$.user.username",                      variableName: "pr_author",         type: "string" },
+    { jsonPath: "$.project.web_url",                    variableName: "repo_url",          type: "string" },
+    { jsonPath: "$.project.path_with_namespace",        variableName: "repo_full_name",    type: "string" },
+  ],
+  headerMappings: [
+    { headerName: "x-gitlab-event",    variableName: "gitlab_event" },
+    { headerName: "x-gitlab-token",    variableName: "gitlab_token" },
+  ],
+  eventFilters: ["Merge Request Hook"],
+  commonEvents: [
+    "Merge Request Hook",
+    "Push Hook",
+    "Note Hook",
+  ],
+  docs: "https://docs.gitlab.com/ee/user/project/integrations/webhook_events.html#merge-request-events",
+  signatureNote:
+    "GitLab sends the webhook secret as a plaintext token in the X-Gitlab-Token header. " +
+    "Unlike GitHub, GitLab does NOT sign the request body with HMAC. " +
+    "Configure the secret token in your GitLab project → Settings → Webhooks. " +
+    "Select 'Merge requests events' trigger.",
+  samplePayload: {
+    object_kind: "merge_request",
+    user: { username: "john.doe", name: "John Doe" },
+    object_attributes: {
+      iid: 42,
+      title: "feat: add user authentication flow",
+      url: "https://gitlab.com/mygroup/my-project/-/merge_requests/42",
+      source_branch: "feature/auth-flow",
+      target_branch: "main",
+      last_commit: { id: "abc123def456789" },
+      action: "open",
+      draft: false,
+      description: "Implements OAuth2 flow with GitHub and Google providers.",
+    },
+    project: {
+      web_url: "https://gitlab.com/mygroup/my-project",
+      path_with_namespace: "mygroup/my-project",
+    },
+  },
+};
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
-export const WEBHOOK_PRESETS: WebhookPreset[] = [GITHUB, GITHUB_PR, STRIPE, SLACK, GENERIC];
+export const WEBHOOK_PRESETS: WebhookPreset[] = [GITHUB, GITHUB_PR, GITLAB_MR, STRIPE, SLACK, GENERIC];
 
 export function getPreset(id: string): WebhookPreset | undefined {
   return WEBHOOK_PRESETS.find((p) => p.id === id);

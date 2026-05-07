@@ -34,6 +34,10 @@ const ENDPOINT_LIMITS: Record<string, EndpointRateLimit> = {
   // Pipeline — very restrictive (each run is expensive AI compute)
   "pipeline": { maxRequests: 5, windowMs: 60_000 },
 
+  // Pipeline triggered via webhook — higher limit for active repos (machine-to-machine)
+  // Active repos can generate 10+ PR events/min; idempotency key prevents actual duplicate runs.
+  "pipeline:webhook": { maxRequests: 30, windowMs: 60_000 },
+
   // Export — strict (expensive)
   "export": { maxRequests: 1, windowMs: 86_400_000 }, // 1 per day
 

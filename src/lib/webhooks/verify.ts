@@ -152,3 +152,83 @@ export function decryptWebhookSecret(
   if (!isEncrypted) return storedSecret;
   return decrypt(storedSecret);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GitHub + GitLab signature verifiers (Layer 1 — webhook-to-pipeline bridge)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Verifies a GitHub webhook request using HMAC-SHA256.
+ *
+ * GitHub signs the raw body with the webhook secret and sends:
+ *   x-hub-signature-256: sha256=<hex_digest>
+ *
+ * Note: GitHub does NOT send a timestamp header, so no replay protection here.
+ * Idempotency is handled at the application level via webhookIdempotencyKey.
+ *
+ * @param rawBody  - Raw request body string (preserve before JSON parsing)
+ * @param headers  - Request headers object
+ * @param secret   - Webhook signing secret stored in WebhookConfig
+ */
+export function verifyGitHubSignature(
+  rawBody: string,
+  headers: Record<string, string | string[] | undefined>,
+  secret: string
+): WebhookVerifyResult {
+  const sigHeader = getHeader(headers, "x-hub-signature-256");
+
+  if (!sigHeader) {
+    return { valid: false, error: "Missing x-hub-signature-256 header" };
+  }
+
+  // GitHub format: "sha256=<hex_digest>"
+  if (!sigHeader.startsWith("sha256=")) {
+    return { valid: false, error: "x-hub-signature-256 must start with 'sha256='" };
+  }
+
+  const expected =
+    "sha256=" + createHmac("sha256", secret).update(rawBody).digest("hex");
+
+  try {
+    if (timingSafeEqual(Buffer.from(sigHeader), Buffer.from(expected))) {
+      return { valid: true };
+    }
+  } catch {
+    // timingSafeEqual throws when buffers differ in length — treat as mismatch
+  }
+
+  return { valid: false, error: "GitHub signature mismatch" };
+}
+
+/**
+ * Verifies a GitLab webhook request using a plaintext token comparison.
+ *
+ * GitLab does NOT use HMAC — it sends the raw secret as a header:
+ *   X-Gitlab-Token: <plaintext_secret>
+ *
+ * The comparison is timing-safe to prevent timing attacks even on plaintext tokens.
+ * No timestamp header is sent by GitLab, so no replay protection here.
+ *
+ * @param headers  - Request headers object
+ * @param secret   - Webhook signing secret stored in WebhookConfig
+ */
+export function verifyGitLabToken(
+  headers: Record<string, string | string[] | undefined>,
+  secret: string
+): WebhookVerifyResult {
+  const token = getHeader(headers, "x-gitlab-token");
+
+  if (!token) {
+    return { valid: false, error: "Missing X-Gitlab-Token header" };
+  }
+
+  try {
+    if (timingSafeEqual(Buffer.from(token), Buffer.from(secret))) {
+      return { valid: true };
+    }
+  } catch {
+    // timingSafeEqual throws when buffers differ in length — treat as mismatch
+  }
+
+  return { valid: false, error: "GitLab token mismatch" };
+}

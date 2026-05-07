@@ -305,6 +305,23 @@ model PipelineRun {
   sourceRepoUrl   String?
   prUrl           String?
 
+  /// Idempotency key for webhook-triggered runs.
+  /// Format: "{provider}-{owner/repo}-{prNumber}-{headSha}"
+  /// @unique constraint prevents duplicate pipeline runs for the same PR commit.
+  webhookIdempotencyKey  String?  @unique
+
+  /// ID of the WebhookExecution that triggered this run (null = manual trigger).
+  webhookExecutionId     String?
+
+  /// Which system triggered this run: "manual" | "github" | "gitlab" | "api"
+  triggerSource          String   @default("manual")
+
+  /// Branch name from PR payload (e.g. "feature/auth-flow")
+  triggerBranch          String?
+
+  /// PR/MR number (for traceability and GitHub commit status API)
+  triggerPrNumber        Int?
+
   startedAt       DateTime?
   completedAt     DateTime?
   createdAt       DateTime          @default(now())
@@ -313,6 +330,7 @@ model PipelineRun {
   @@index([agentId, status])
   @@index([userId])
   @@index([status, createdAt])
+  @@index([triggerSource])
 }
 
 /// Extracted learnings persisted after each completed pipeline run.
@@ -954,6 +972,16 @@ model WebhookConfig {
   /// When null, falls back to payload-level x-webhook-id header dedup.
   issueKeyTemplate String?
 
+  /// Which signature scheme this webhook uses for inbound verification.
+  /// "standard" = Standard Webhooks spec (default, existing behaviour)
+  /// "github"   = x-hub-signature-256: sha256=<hex>
+  /// "gitlab"   = X-Gitlab-Token: <plaintext>
+  signatureProvider  String  @default("standard")
+
+  /// When true, this webhook config is used for SDLC pipeline triggering
+  /// (routes to pipeline-trigger endpoint, not flow execution endpoint).
+  isPipelineTrigger  Boolean @default(false)
+
   /// Aggregate stats
   triggerCount Int      @default(0)
   failureCount Int      @default(0)
@@ -966,6 +994,7 @@ model WebhookConfig {
 
   @@index([agentId])
   @@index([agentId, enabled])
+  @@index([agentId, isPipelineTrigger])
   @@unique([agentId, nodeId])
 }
 
@@ -1660,4 +1689,63 @@ model PolicyDecision {
   @@index([agentId, status])
   @@index([organizationId, status])
   @@index([status, expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline Templates — reusable bundles that wire ECC agents + webhook config
+// into one-click SDLC pipeline setups (e.g. "GitHub PR Code Review").
+// Built-in templates are seeded at deploy time (isBuiltIn = true).
+// ---------------------------------------------------------------------------
+
+model PipelineTemplate {
+  id           String   @id @default(cuid())
+
+  /// URL-safe unique identifier (e.g. "github-pr-review")
+  slug         String   @unique
+
+  /// Human-readable name shown in the UI
+  name         String
+
+  /// Optional longer description (Markdown supported)
+  description  String?  @db.Text
+
+  /// Category for grouping in UI (e.g. "code-review", "ci-cd", "security")
+  category     String
+
+  /// Emoji or icon identifier for the template card
+  icon         String
+
+  /// Ordered list of ECC agent slugs to include in the pipeline
+  /// e.g. ["project_context", "ecc-code-reviewer"]
+  agentSlugs   Json     @default("[]")
+
+  /// Which webhook preset to use (e.g. "github-pr", "gitlab-mr") — null = no webhook
+  webhookPreset  String?
+
+  /// Default webhook settings applied when deploying this template
+  /// { signatureProvider, isPipelineTrigger, asyncExecution, eventFilters }
+  webhookSettings  Json  @default("{}")
+
+  /// Default pipeline step configuration
+  /// [{ agentId, stepType, config }]
+  pipelineSteps    Json  @default("[]")
+
+  /// Default pipeline run settings
+  /// { taskType, complexity, requireApproval, useSmartRouting }
+  pipelineDefaults Json  @default("{}")
+
+  /// Markdown setup guide shown to users after deploying this template
+  setupGuide   String?  @db.Text
+
+  /// True for Anthropic-provided templates (cannot be deleted by users)
+  isBuiltIn    Boolean  @default(false)
+
+  /// How many times this template has been deployed
+  usageCount   Int      @default(0)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+  @@index([isBuiltIn])
 }

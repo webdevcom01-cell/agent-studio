@@ -39,6 +39,10 @@ const CreateWebhookSchema = z.object({
     .max(20)
     .optional()
     .default([]),
+  /// Which signature scheme GitHub/GitLab/Standard Webhooks uses for this config.
+  signatureProvider: z.enum(["standard", "github", "gitlab"]).optional().default("standard"),
+  /// When true, this webhook triggers SDLC pipeline runs instead of conversational flows.
+  isPipelineTrigger: z.boolean().optional().default(false),
 });
 
 export async function GET(
@@ -121,6 +125,10 @@ export async function POST(
         eventFilters,
         bodyMappings,
         headerMappings,
+        // @ts-ignore — signatureProvider + isPipelineTrigger added in migration
+        signatureProvider: parsed.data.signatureProvider,
+        // @ts-ignore
+        isPipelineTrigger: parsed.data.isPipelineTrigger,
       },
       select: {
         id: true,
@@ -130,6 +138,9 @@ export async function POST(
         eventFilters: true,
         bodyMappings: true,
         headerMappings: true,
+        // @ts-ignore — new fields; prisma generate runs at build
+        signatureProvider: true,
+        isPipelineTrigger: true,
         createdAt: true,
       },
     });
