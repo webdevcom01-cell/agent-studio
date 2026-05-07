@@ -517,45 +517,102 @@ export async function runPipeline(
     let stepOutputTokens = 0;
     const stepStart = Date.now();
 
-    // ── Gate step: delegate to dedicated helper ─────────────────────────────────
+    // ── Gate step: delegate to helper (parallel when consecutive) ──────────────
     // runSingleGateStep() is self-contained and does NOT mutate shared state.
     // Merging (token totals, stepMetricsMap, contextParts, stepOutputs,
     // onStepComplete) is done here in the loop to preserve strict ordering.
     if (GATE_STEPS.has(stepId)) {
-      const gateResult = await runSingleGateStep({
-        stepId, stepIdx,
-        contextParts, contextOffset: CONTEXT_STEP_OFFSET,
-        codebaseReady, taskDescription, resolvedModelId, stepModelOverrides,
-        agentId, userId, runId, useSmartRouting, adaptiveStatsCache,
-        pipelineSpan,
-        abortSignal: AbortSignal.timeout(STEP_TIMEOUT_MS),
-      });
-      totalInputTokens  += gateResult.inputTokens;
-      totalOutputTokens += gateResult.outputTokens;
-      stepMetricsMap[stepIdx] = gateResult.stepMetric;
+      const nextStepId = pipeline[stepIdx + 1];
+      const hasConsecutiveGate = nextStepId !== undefined && GATE_STEPS.has(nextStepId);
 
-      if (gateResult.blocked) {
-        // Save the reviewer output WITHOUT calling onStepComplete — keeps
-        // currentStep at the gate index so retry restarts from the last
-        // implementation step (same semantics as the original sequential path).
-        await saveStepOutput(runId, stepIdx, gateResult.output);
-        logger.warn("Pipeline: gate step blocked pipeline", {
-          runId, stepIdx, stepId, summary: gateResult.blockSummary,
+      if (hasConsecutiveGate) {
+        // ── Parallel path: run both gate steps concurrently ──────────────────
+        const sharedGateParams = {
+          contextParts, contextOffset: CONTEXT_STEP_OFFSET,
+          codebaseReady, taskDescription, resolvedModelId, stepModelOverrides,
+          agentId, userId, runId, useSmartRouting, adaptiveStatsCache,
+          pipelineSpan,
+          abortSignal: AbortSignal.timeout(STEP_TIMEOUT_MS),
+        };
+        const parallelResults = await runParallelGateSteps([
+          { stepId, stepIdx,           ...sharedGateParams },
+          { stepId: nextStepId, stepIdx: stepIdx + 1, ...sharedGateParams },
+        ]);
+
+        // Merge results in pipeline order — stepOutputs.push() order is critical
+        // for buildSummary() and pr_generation which index by position.
+        for (const r of parallelResults) {
+          totalInputTokens  += r.inputTokens;
+          totalOutputTokens += r.outputTokens;
+          stepMetricsMap[r.stepIdx] = r.stepMetric;
+        }
+
+        // BLOCK semantics: if ANY reviewer blocks, save ALL outputs without
+        // calling onStepComplete on any — currentStep stays at the FIRST gate
+        // index so retry restarts from the last implementation step.
+        const blockedResult = parallelResults.find(r => r.blocked);
+        if (blockedResult) {
+          for (const r of parallelResults) {
+            await saveStepOutput(runId, r.stepIdx, r.output);
+          }
+          logger.warn("Pipeline: parallel gate step blocked pipeline", {
+            runId, stepId: blockedResult.stepId, stepIdx: blockedResult.stepIdx,
+            summary: blockedResult.blockSummary,
+          });
+          throw new Error(
+            `Gate step "${blockedResult.stepId}" blocked pipeline execution. ` +
+            `${blockedResult.blockSummary ? `Reason: ${blockedResult.blockSummary}` : "See step results for the full review output."}`,
+          );
+        }
+
+        // Both approved — commit in order
+        for (const r of parallelResults) {
+          contextParts.push(
+            `# Step ${r.stepIdx + 1} output (${r.stepId})\n${r.output.slice(0, CONTEXT_SLICE_PER_STEP)}`,
+          );
+          stepOutputs.push(r.output);
+          await onStepComplete(r.stepIdx, r.output);
+          logger.info("Pipeline step completed", {
+            runId, stepIdx: r.stepIdx, stepId: r.stepId, outputLength: r.output.length,
+          });
+        }
+
+        // Skip the second gate step in the next loop iteration
+        stepIdx++;
+      } else {
+        // ── Sequential path: single gate step ────────────────────────────────
+        const gateResult = await runSingleGateStep({
+          stepId, stepIdx,
+          contextParts, contextOffset: CONTEXT_STEP_OFFSET,
+          codebaseReady, taskDescription, resolvedModelId, stepModelOverrides,
+          agentId, userId, runId, useSmartRouting, adaptiveStatsCache,
+          pipelineSpan,
+          abortSignal: AbortSignal.timeout(STEP_TIMEOUT_MS),
         });
-        throw new Error(
-          `Gate step "${stepId}" blocked pipeline execution. ` +
-          `${gateResult.blockSummary ? `Reason: ${gateResult.blockSummary}` : "See step results for the full review output."}`,
-        );
-      }
+        totalInputTokens  += gateResult.inputTokens;
+        totalOutputTokens += gateResult.outputTokens;
+        stepMetricsMap[stepIdx] = gateResult.stepMetric;
 
-      contextParts.push(
-        `# Step ${stepIdx + 1} output (${stepId})\n${gateResult.output.slice(0, CONTEXT_SLICE_PER_STEP)}`,
-      );
-      stepOutputs.push(gateResult.output);
-      await onStepComplete(stepIdx, gateResult.output);
-      logger.info("Pipeline step completed", {
-        runId, stepIdx, stepId, outputLength: gateResult.output.length,
-      });
+        if (gateResult.blocked) {
+          await saveStepOutput(runId, stepIdx, gateResult.output);
+          logger.warn("Pipeline: gate step blocked pipeline", {
+            runId, stepIdx, stepId, summary: gateResult.blockSummary,
+          });
+          throw new Error(
+            `Gate step "${stepId}" blocked pipeline execution. ` +
+            `${gateResult.blockSummary ? `Reason: ${gateResult.blockSummary}` : "See step results for the full review output."}`,
+          );
+        }
+
+        contextParts.push(
+          `# Step ${stepIdx + 1} output (${stepId})\n${gateResult.output.slice(0, CONTEXT_SLICE_PER_STEP)}`,
+        );
+        stepOutputs.push(gateResult.output);
+        await onStepComplete(stepIdx, gateResult.output);
+        logger.info("Pipeline step completed", {
+          runId, stepIdx, stepId, outputLength: gateResult.output.length,
+        });
+      }
       continue;
     }
 
@@ -897,72 +954,6 @@ export async function runPipeline(
             stepOutputTokens = fallback.usage.outputTokens ?? 0;
             implFiles = null; // signals executeRealTests (markdown parsing path)
           }
-        } else if (GATE_STEPS.has(stepId)) {
-          // ── Gate step path — structured output for reviewers ────────────────
-          const gateSchema = stepId === "ecc-security-reviewer"
-            ? SecurityReviewOutputSchema
-            : CodeReviewOutputSchema;
-          try {
-            const result = await generateObject({
-              model,
-              system: systemPrompt,
-              prompt,
-              schema: gateSchema,
-              maxOutputTokens: 4096,
-              abortSignal: ac.signal,
-              providerOptions: { openai: { strictJsonSchema: false } },
-            });
-            stepOutput = JSON.stringify(result.object, null, 2);
-            stepInputTokens = result.usage.inputTokens ?? 0;
-            stepOutputTokens = result.usage.outputTokens ?? 0;
-          } catch (gateErr) {
-            if (gateErr instanceof Error && gateErr.name === "AbortError") throw gateErr;
-            logger.warn("Pipeline: gate generateObject failed, falling back to generateText", {
-              runId, stepIdx, stepId,
-              error: gateErr instanceof Error ? gateErr.message : String(gateErr),
-            });
-            const fallback = await generateText({
-              model,
-              system: systemPrompt,
-              prompt,
-              maxOutputTokens: 4096,
-              abortSignal: ac.signal,
-            });
-            stepOutput = fallback.text;
-            stepInputTokens = fallback.usage.inputTokens ?? 0;
-            stepOutputTokens = fallback.usage.outputTokens ?? 0;
-          }
-
-          // ── Enforce gate decision — BLOCK halts the pipeline ────────────────
-          // Parse the decision from stepOutput (JSON path) or leave undefined (text fallback).
-          let gateDecision: string | undefined;
-          let gateSummary: string | undefined;
-          try {
-            const parsedGate = JSON.parse(stepOutput) as { decision?: string; summary?: string };
-            gateDecision = parsedGate.decision;
-            gateSummary = parsedGate.summary;
-          } catch {
-            // generateText fallback produced non-JSON — decision not extractable
-          }
-
-          if (gateDecision === "BLOCK") {
-            // Save the reviewer's output WITHOUT advancing currentStep.
-            // If we called onStepComplete here, advancePipelineStep would set
-            // currentStep = gateIdx + 1, making retry skip the gate entirely.
-            // saveStepOutput persists the full report for the UI while leaving
-            // currentStep at gateIdx so retry restarts from the last impl step.
-            await saveStepOutput(runId, stepIdx, stepOutput);
-
-            logger.warn("Pipeline: gate step blocked pipeline", {
-              runId, stepIdx, stepId, summary: gateSummary,
-            });
-            throw new Error(
-              `Gate step "${stepId}" blocked pipeline execution. ` +
-              `${gateSummary ? `Reason: ${gateSummary}` : "See step results for the full review output."}`,
-            );
-          }
-
-          // Gate steps: inject summary into context but NEVER into architecturePlan
         } else {
           // ── Text generation path — planning, test, other steps ──────────────
           const result = await generateText({
@@ -1799,4 +1790,29 @@ async function runSingleGateStep(input: RunSingleGateStepInput): Promise<GateSte
     blocked, blockSummary,
     stepMetric,
   };
+}
+
+
+/**
+ * Run two (or more) gate steps concurrently using Promise.allSettled.
+ *
+ * Results are returned in the same order as the input array so the caller
+ * can merge into stepOutputs[] in pipeline order without any sorting.
+ * If any step throws (e.g. AbortError / network error), that error is
+ * re-thrown after the settled batch so the pipeline fails cleanly.
+ */
+async function runParallelGateSteps(
+  inputs: RunSingleGateStepInput[],
+): Promise<GateStepResult[]> {
+  const settled = await Promise.allSettled(inputs.map(inp => runSingleGateStep(inp)));
+
+  // Surface the first non-BLOCK rejection (AbortError, timeout, etc.)
+  for (const s of settled) {
+    if (s.status === "rejected") {
+      throw s.reason as Error;
+    }
+  }
+
+  // All fulfilled — return in input order
+  return settled.map(s => (s as PromiseFulfilledResult<GateStepResult>).value);
 }
