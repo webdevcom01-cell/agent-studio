@@ -214,6 +214,27 @@ export interface OrchestratorResult {
   gitError?: string;
 }
 
+/** Per-step stats row used by the adaptive model router — hoisted to module
+ *  scope so runSingleGateStep() can reference it without a local re-declaration. */
+type StatRow = { modelId: string; successCount: number; runCount: number; totalInputTokens: number };
+
+/**
+ * Result returned by runSingleGateStep(). Contains everything the caller
+ * needs to merge into shared pipeline state after (parallel) execution.
+ * The helper does NOT mutate stepOutputs, contextParts, or token accumulators —
+ * that is the caller's responsibility.
+ */
+interface GateStepResult {
+  stepId: string;
+  stepIdx: number;
+  output: string;
+  inputTokens: number;
+  outputTokens: number;
+  blocked: boolean;
+  blockSummary?: string;
+  stepMetric: StepMetric;
+}
+
 /**
  * Run a full SDLC pipeline.
  *
@@ -433,7 +454,7 @@ export async function runPipeline(
   // ── Adaptive model routing — batch load stats once, cache for all steps ────
   // Without this, resolveStepModelAdaptive would fire one DB query per step
   // (e.g. 8 queries for an 8-step pipeline). One query up front covers all phases.
-  type StatRow = { modelId: string; successCount: number; runCount: number; totalInputTokens: number };
+  // StatRow is declared at module scope above runPipeline — no local re-declaration needed.
   let adaptiveStatsCache: Map<string, StatRow[]> | undefined;
   if (useSmartRouting) {
     try {
@@ -495,6 +516,48 @@ export async function runPipeline(
     let stepInputTokens = 0;
     let stepOutputTokens = 0;
     const stepStart = Date.now();
+
+    // ── Gate step: delegate to dedicated helper ─────────────────────────────────
+    // runSingleGateStep() is self-contained and does NOT mutate shared state.
+    // Merging (token totals, stepMetricsMap, contextParts, stepOutputs,
+    // onStepComplete) is done here in the loop to preserve strict ordering.
+    if (GATE_STEPS.has(stepId)) {
+      const gateResult = await runSingleGateStep({
+        stepId, stepIdx,
+        contextParts, contextOffset: CONTEXT_STEP_OFFSET,
+        codebaseReady, taskDescription, resolvedModelId, stepModelOverrides,
+        agentId, userId, runId, useSmartRouting, adaptiveStatsCache,
+        pipelineSpan,
+        abortSignal: AbortSignal.timeout(STEP_TIMEOUT_MS),
+      });
+      totalInputTokens  += gateResult.inputTokens;
+      totalOutputTokens += gateResult.outputTokens;
+      stepMetricsMap[stepIdx] = gateResult.stepMetric;
+
+      if (gateResult.blocked) {
+        // Save the reviewer output WITHOUT calling onStepComplete — keeps
+        // currentStep at the gate index so retry restarts from the last
+        // implementation step (same semantics as the original sequential path).
+        await saveStepOutput(runId, stepIdx, gateResult.output);
+        logger.warn("Pipeline: gate step blocked pipeline", {
+          runId, stepIdx, stepId, summary: gateResult.blockSummary,
+        });
+        throw new Error(
+          `Gate step "${stepId}" blocked pipeline execution. ` +
+          `${gateResult.blockSummary ? `Reason: ${gateResult.blockSummary}` : "See step results for the full review output."}`,
+        );
+      }
+
+      contextParts.push(
+        `# Step ${stepIdx + 1} output (${stepId})\n${gateResult.output.slice(0, CONTEXT_SLICE_PER_STEP)}`,
+      );
+      stepOutputs.push(gateResult.output);
+      await onStepComplete(stepIdx, gateResult.output);
+      logger.info("Pipeline step completed", {
+        runId, stepIdx, stepId, outputLength: gateResult.output.length,
+      });
+      continue;
+    }
 
     if (INFRASTRUCTURE_NODES.has(stepId)) {
       if (stepId === "static_analysis") {
@@ -1529,4 +1592,211 @@ function buildSummary(outputs: string[], pipeline: string[]): string {
   });
 
   return `# Pipeline Execution Summary\n\n${sections.join("\n\n---\n\n")}`;
+}
+
+
+// ── Gate step helper ──────────────────────────────────────────────────────────
+
+interface RunSingleGateStepInput {
+  stepId: string;
+  stepIdx: number;
+  /** Read-only snapshot of accumulated context parts at call time. */
+  contextParts: string[];
+  /** Value of CONTEXT_STEP_OFFSET from the enclosing runPipeline call. */
+  contextOffset: number;
+  codebaseReady: boolean;
+  taskDescription: string;
+  resolvedModelId: string;
+  stepModelOverrides: Record<string, string>;
+  agentId: string;
+  userId: string | undefined;
+  runId: string;
+  useSmartRouting: boolean;
+  adaptiveStatsCache: Map<string, StatRow[]> | undefined;
+  /** Parent OTel span — used only to read traceContext for child span creation. */
+  pipelineSpan: import("@/lib/observability/tracer").Span;
+  /** Caller-supplied abort signal (e.g. AbortSignal.timeout(STEP_TIMEOUT_MS)). */
+  abortSignal: AbortSignal;
+}
+
+/**
+ * Execute a single gate step (ecc-code-reviewer / ecc-security-reviewer) in isolation.
+ *
+ * Designed to be called sequentially (Prompt 1) or in parallel via
+ * Promise.allSettled (Prompt 2).  The function is intentionally side-effect-free
+ * with respect to shared orchestrator state: it does NOT mutate stepOutputs,
+ * contextParts, totalInputTokens, or stepMetricsMap — all merging is the caller's
+ * responsibility.
+ *
+ * Non-mutating side effects that ARE performed here: OTel child span, recordTokenUsage,
+ * recordChatLatency, fireSdkLearnHook (all fire-and-forget or scoped to this step).
+ */
+async function runSingleGateStep(input: RunSingleGateStepInput): Promise<GateStepResult> {
+  const {
+    stepId, stepIdx,
+    contextParts, contextOffset,
+    codebaseReady, taskDescription, resolvedModelId, stepModelOverrides,
+    agentId, userId, runId, useSmartRouting, adaptiveStatsCache,
+    pipelineSpan, abortSignal,
+  } = input;
+
+  // Dynamic imports — modules are cached after first load, negligible overhead.
+  const { fireSdkLearnHook } = await import("@/lib/ecc/sdk-learn-hook");
+  const { getAgentSystemPrompt } = await import("./agent-prompts");
+  const { getModel } = await import("@/lib/ai");
+  const { generateText, generateObject } = await import("ai");
+
+  const phase: StepPhase = "review";
+  const stepModelId = useSmartRouting
+    ? await resolveStepModelAdaptive(phase, stepModelOverrides, stepId, resolvedModelId, adaptiveStatsCache)
+    : resolveStepModel(phase, stepModelOverrides, stepId, resolvedModelId, false);
+  const model = getModel(stepModelId);
+
+  const stepSpan = startSpan("sdlc.pipeline.step", {
+    kind: "client",
+    parentContext: pipelineSpan.traceContext,
+    attributes: {
+      "sdlc.step.id": stepId,
+      "sdlc.step.index": stepIdx,
+      "sdlc.step.phase": phase,
+      "gen_ai.request.model": stepModelId,
+    },
+  });
+
+  logger.info("Pipeline: model resolved for step", {
+    runId, stepIdx, stepId, stepModelId, phase,
+    isOverride: !!stepModelOverrides[stepId],
+    isSmartRouted: useSmartRouting && !stepModelOverrides[stepId],
+  });
+
+  const systemPrompt = getAgentSystemPrompt(stepId);
+  const stepStart = Date.now();
+
+  // ── RAG: retrieve code relevant to this gate step ─────────────────────────
+  let codeContext = "";
+  if (codebaseReady) {
+    try {
+      const ragQuery = `${stepId} ${taskDescription.slice(0, 200)}`;
+      const ragResults = await searchCodebase(ragQuery, agentId, RAG_TOP_K_DEFAULT);
+      codeContext = buildCodeContext(ragResults);
+      logger.info("Pipeline: RAG search complete", {
+        runId, stepIdx, stepId,
+        ragTopK: RAG_TOP_K_DEFAULT,
+        resultsReturned: ragResults.length,
+      });
+    } catch (err) {
+      logger.warn("Pipeline: RAG search failed for step", {
+        runId, stepIdx, stepId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // ── Prompt assembly ───────────────────────────────────────────────────────
+  const contextDoc = buildContextDoc(contextParts, contextOffset);
+  const promptSections: string[] = [
+    contextDoc,
+    ...(codeContext ? [`\n\n---\n\n${codeContext}`] : []),
+    `\n\n---\n\n# Instructions for this step (${stepId})`,
+    `Apply your expertise to the task above. Be specific, actionable, and thorough.`,
+    `Reference and build upon any previous step outputs shown in the context above.`,
+  ];
+  const prompt = promptSections.join("\n");
+
+  // ── Structured output — gate steps always prefer generateObject() ─────────
+  const gateSchema = stepId === "ecc-security-reviewer"
+    ? SecurityReviewOutputSchema
+    : CodeReviewOutputSchema;
+
+  let stepOutput: string;
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  try {
+    const result = await generateObject({
+      model,
+      system: systemPrompt,
+      prompt,
+      schema: gateSchema,
+      maxOutputTokens: 4096,
+      abortSignal,
+      providerOptions: { openai: { strictJsonSchema: false } },
+    });
+    stepOutput   = JSON.stringify(result.object, null, 2);
+    inputTokens  = result.usage.inputTokens  ?? 0;
+    outputTokens = result.usage.outputTokens ?? 0;
+  } catch (gateErr) {
+    if (gateErr instanceof Error && gateErr.name === "AbortError") throw gateErr;
+    logger.warn("Pipeline: gate generateObject failed, falling back to generateText", {
+      runId, stepIdx, stepId,
+      error: gateErr instanceof Error ? gateErr.message : String(gateErr),
+    });
+    const fallback = await generateText({
+      model,
+      system: systemPrompt,
+      prompt,
+      maxOutputTokens: 4096,
+      abortSignal,
+    });
+    stepOutput   = fallback.text;
+    inputTokens  = fallback.usage.inputTokens  ?? 0;
+    outputTokens = fallback.usage.outputTokens ?? 0;
+  }
+
+  // ── Gate decision: BLOCK halts the pipeline (handled by caller) ───────────
+  let blocked = false;
+  let blockSummary: string | undefined;
+  try {
+    const parsed = JSON.parse(stepOutput) as { decision?: string; summary?: string };
+    blocked      = parsed.decision === "BLOCK";
+    blockSummary = parsed.summary;
+  } catch {
+    // generateText fallback produced non-JSON — cannot extract decision.
+    // Treat as APPROVE so the pipeline can continue; the full text is stored.
+  }
+
+  const stepDurationMs = Date.now() - stepStart;
+
+  // ── Non-mutating telemetry side effects ───────────────────────────────────
+  recordTokenUsage(agentId, stepModelId, inputTokens, outputTokens);
+  recordChatLatency(agentId, stepModelId, stepDurationMs);
+
+  void fireSdkLearnHook({
+    agentId,
+    userId,
+    task: `[${stepId}] ${taskDescription.slice(0, 500)}`,
+    response: stepOutput.slice(0, 2000),
+    modelId: stepModelId,
+    durationMs: stepDurationMs,
+    inputTokens,
+    outputTokens,
+  });
+
+  const stepMetric: StepMetric = {
+    stepId,
+    phase,
+    modelId: stepModelId,
+    inputTokens,
+    outputTokens,
+    durationMs: stepDurationMs,
+    feedbackAttempts: 0,
+    outcome: "success",
+  };
+
+  stepSpan.setAttributes({
+    "gen_ai.usage.input_tokens":    inputTokens,
+    "gen_ai.usage.output_tokens":   outputTokens,
+    "sdlc.step.duration_ms":        stepDurationMs,
+    "sdlc.step.outcome":            "success",
+    "sdlc.step.feedback_attempts":  0,
+  });
+  stepSpan.end();
+
+  return {
+    stepId, stepIdx,
+    output: stepOutput,
+    inputTokens, outputTokens,
+    blocked, blockSummary,
+    stepMetric,
+  };
 }
