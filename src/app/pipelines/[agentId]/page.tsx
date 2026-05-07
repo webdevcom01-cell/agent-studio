@@ -18,6 +18,7 @@ import {
   Cpu,
   Timer,
   AlertCircle,
+  AlertTriangle,
   Plus,
   Ban,
   RotateCcw,
@@ -87,6 +88,8 @@ interface PipelineRun {
   finalOutput: string | null;
   error: string | null;
   prUrl: string | null;
+  startedAt: string | null;
+  updatedAt: string;
   createdAt: string;
   stepResults: Record<string, string>;
   approvalFeedback: string | null;
@@ -630,7 +633,14 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
   const [open, setOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const STUCK_THRESHOLD_MS = 10 * 60 * 1000; // must match backend PIPELINE_STUCK_THRESHOLD_MS
+  const isStuck =
+    run.status === "RUNNING" &&
+    !!run.updatedAt &&
+    Date.now() - new Date(run.updatedAt).getTime() > STUCK_THRESHOLD_MS;
 
   const isActive =
     run.status === "RUNNING" ||
@@ -672,6 +682,23 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
     } catch { setActionError("Greška pri slanju zahteva"); }
     finally { setRetrying(false); }
   }
+
+  async function handleForceResume() {
+    setResuming(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/pipelines/${run.id}/retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forceResume: true }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) setActionError(json.error ?? "Greška pri nastavku runa");
+      else onMutate();
+    } catch { setActionError("Greška pri slanju zahteva"); }
+    finally { setResuming(false); }
+  }
+
   const detail = data?.data;
   const metrics = detail?.stepMetrics ?? {};
   const entries = Object.entries(metrics);
@@ -698,6 +725,12 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
             )}>
               {statusLabel(run.status)}
             </span>
+            {isStuck && (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-orange-400 border border-orange-500/30 bg-orange-500/10 px-1.5 py-0.5 rounded">
+                <AlertTriangle className="size-3" />
+                Zaglavljen
+              </span>
+            )}
             {run.taskType && (
               <span className="text-xs text-zinc-500 capitalize">{run.taskType.replace(/-/g, " ")}</span>
             )}
@@ -738,8 +771,8 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-          {/* Cancel — for RUNNING, PENDING, AWAITING_APPROVAL */}
-          {(run.status === "RUNNING" || run.status === "PENDING" || run.status === "AWAITING_APPROVAL") && (
+          {/* Cancel — for RUNNING, PENDING, AWAITING_APPROVAL (not stuck) */}
+          {!isStuck && (run.status === "RUNNING" || run.status === "PENDING" || run.status === "AWAITING_APPROVAL") && (
             <button
               onClick={(e) => { e.stopPropagation(); void handleCancel(); }}
               disabled={cancelling}
@@ -747,6 +780,17 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
               title="Otkaži run"
             >
               {cancelling ? <Loader2 className="size-3 animate-spin" /> : <Ban className="size-3" />}
+            </button>
+          )}
+          {/* Nastavi — for stuck RUNNING runs */}
+          {isStuck && (
+            <button
+              onClick={(e) => { e.stopPropagation(); void handleForceResume(); }}
+              disabled={resuming}
+              className="p-1 rounded text-zinc-500 hover:text-orange-400 hover:bg-orange-500/10 transition-colors"
+              title="Nastavi zaglavljen run od poslednjeg koraka"
+            >
+              {resuming ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
             </button>
           )}
           {/* Retry — for FAILED or CANCELLED */}
