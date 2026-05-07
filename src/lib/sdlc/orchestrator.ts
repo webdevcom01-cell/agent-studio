@@ -58,6 +58,16 @@ import {
 } from "./scope-analyzer";
 import { enrichWithSemanticSummaries, buildModuleMapContext } from "./module-map";
 import type { ModuleEntry } from "./module-map";
+
+// ---------------------------------------------------------------------------
+// AI SDK singleton — ensures `import("ai")` is resolved exactly once so that
+// concurrent gate step invocations never race against vitest's mock interceptor.
+// ---------------------------------------------------------------------------
+let _aiSdkPromise: Promise<typeof import("ai")> | null = null;
+function requireAi(): Promise<typeof import("ai")> {
+  if (!_aiSdkPromise) _aiSdkPromise = import("ai");
+  return _aiSdkPromise;
+}
 import { parseSearchReplaceBlocks, applyPatchToWorkspace } from "./patch-applier";
 import { integrateWithGit } from "./git-integration";
 
@@ -224,7 +234,7 @@ type StatRow = { modelId: string; successCount: number; runCount: number; totalI
  * The helper does NOT mutate stepOutputs, contextParts, or token accumulators —
  * that is the caller's responsibility.
  */
-interface GateStepResult {
+export interface GateStepResult {
   stepId: string;
   stepIdx: number;
   output: string;
@@ -1607,7 +1617,7 @@ function buildSummary(outputs: string[], pipeline: string[]): string {
 
 // ── Gate step helper ──────────────────────────────────────────────────────────
 
-interface RunSingleGateStepInput {
+export interface RunSingleGateStepInput {
   stepId: string;
   stepIdx: number;
   /** Read-only snapshot of accumulated context parts at call time. */
@@ -1641,7 +1651,7 @@ interface RunSingleGateStepInput {
  * Non-mutating side effects that ARE performed here: OTel child span, recordTokenUsage,
  * recordChatLatency, fireSdkLearnHook (all fire-and-forget or scoped to this step).
  */
-async function runSingleGateStep(input: RunSingleGateStepInput): Promise<GateStepResult> {
+export async function runSingleGateStep(input: RunSingleGateStepInput): Promise<GateStepResult> {
   const {
     stepId, stepIdx,
     contextParts, contextOffset,
@@ -1654,7 +1664,7 @@ async function runSingleGateStep(input: RunSingleGateStepInput): Promise<GateSte
   const { fireSdkLearnHook } = await import("@/lib/ecc/sdk-learn-hook");
   const { getAgentSystemPrompt } = await import("./agent-prompts");
   const { getModel } = await import("@/lib/ai");
-  const { generateText, generateObject } = await import("ai");
+  const { generateText, generateObject } = await requireAi();
 
   const phase: StepPhase = "review";
   const stepModelId = useSmartRouting
@@ -1820,7 +1830,7 @@ async function runSingleGateStep(input: RunSingleGateStepInput): Promise<GateSte
  * If any step throws (e.g. AbortError / network error), that error is
  * re-thrown after the settled batch so the pipeline fails cleanly.
  */
-async function runParallelGateSteps(
+export async function runParallelGateSteps(
   inputs: RunSingleGateStepInput[],
 ): Promise<GateStepResult[]> {
   const settled = await Promise.allSettled(inputs.map(inp => runSingleGateStep(inp)));
