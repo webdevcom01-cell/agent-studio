@@ -543,6 +543,20 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
     throw new Error(`Pipeline run ${pipelineRunId} not found`);
   }
 
+  // Zombie-job guard: if a stuck RUNNING run was force-reset to FAILED and
+  // re-enqueued, the old BullMQ job may still be alive. When it wakes up,
+  // the run will already be PENDING (set by retry/route.ts) or RUNNING (set
+  // by the new job). Skip silently to avoid corrupting state.
+  if (run.status !== "PENDING") {
+    const { logger: _logger } = await import("@/lib/logger");
+    _logger.warn("processPipelineRunJob: run is not PENDING — skipping (possible zombie job)", {
+      pipelineRunId,
+      status: run.status,
+      jobId: job.id,
+    });
+    return { skipped: true, reason: `status was ${run.status}` };
+  }
+
   // Mark as RUNNING
   await markPipelineRunning(
     pipelineRunId,

@@ -540,3 +540,44 @@ export async function detectAndResetStalePipelineRuns(
 
   return { resetCount: staleRuns.length, runIds };
 }
+
+// ─── Stuck-run utilities ──────────────────────────────────────────────────────
+
+/**
+ * Runs inactive longer than this are considered stuck.
+ * Must be consistent with the UI threshold in page.tsx.
+ */
+export const PIPELINE_STUCK_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+
+/**
+ * Returns true if a RUNNING pipeline run has not written to the DB
+ * in more than PIPELINE_STUCK_THRESHOLD_MS milliseconds.
+ *
+ * Uses `updatedAt` (last Prisma write), NOT `startedAt` (pipeline begin).
+ * `advancePipelineStep` and `saveStepOutput` both trigger Prisma's auto updatedAt,
+ * so this accurately reflects whether the run is making progress.
+ * A pipeline actively working will always have a recent updatedAt even if
+ * startedAt was hours ago.
+ */
+export function isRunStuck(run: { status: string; updatedAt: Date }): boolean {
+  if (run.status !== "RUNNING") return false;
+  return Date.now() - run.updatedAt.getTime() > PIPELINE_STUCK_THRESHOLD_MS;
+}
+
+/**
+ * Force-resets a stuck RUNNING pipeline run to FAILED so it can be re-enqueued
+ * via the retry route with forceResume: true.
+ */
+export async function forceResetStuckRun(runId: string): Promise<void> {
+  await prisma.pipelineRun.update({
+    where: { id: runId },
+    data: {
+      status: "FAILED",
+      error:
+        "Run was stuck (no DB progress detected for over 10 minutes) and was force-reset. " +
+        "The pipeline will resume from the last completed step.",
+      completedAt: new Date(),
+    },
+  });
+  logger.warn("Stuck pipeline run force-reset to FAILED", { runId });
+}

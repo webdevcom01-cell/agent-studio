@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
-import { getPipelineRun } from "@/lib/sdlc/pipeline-manager";
+import {
+  getPipelineRun,
+  isRunStuck,
+  forceResetStuckRun,
+} from "@/lib/sdlc/pipeline-manager";
 import { IMPLEMENTATION_STEPS, GATE_STEPS } from "@/lib/sdlc/orchestrator";
 import { addPipelineRunJob } from "@/lib/queue";
 import { prisma } from "@/lib/prisma";
@@ -10,6 +14,7 @@ import { prisma } from "@/lib/prisma";
 const RetryBodySchema = z.object({
   modelId: z.string().optional(),
   useSmartRouting: z.boolean().default(false),
+  forceResume: z.boolean().default(false),
 });
 
 /**
@@ -24,8 +29,11 @@ const RetryBodySchema = z.object({
  * step before the gate so the full impl → gate cycle reruns (giving the user
  * a chance to fix the code before re-evaluation).
  *
- * Only FAILED or CANCELLED runs can be retried. COMPLETED, RUNNING, and
- * AWAITING_APPROVAL runs return 409.
+ * Accepts FAILED, CANCELLED, or stuck RUNNING runs.
+ * For stuck RUNNING: requires forceResume: true in the request body.
+ * The run is force-reset to FAILED before being re-enqueued.
+ *
+ * COMPLETED and non-stuck RUNNING runs return 409.
  */
 export async function POST(
   req: NextRequest,
@@ -44,7 +52,7 @@ export async function POST(
     );
   }
 
-  const { modelId, useSmartRouting } = parsed.data;
+  const { modelId, useSmartRouting, forceResume } = parsed.data;
 
   try {
     const run = await getPipelineRun(runId);
@@ -63,15 +71,54 @@ export async function POST(
       );
     }
 
-    if (run.status !== "FAILED" && run.status !== "CANCELLED") {
+    // ── Status gate ───────────────────────────────────────────────────────────
+    if (run.status === "RUNNING") {
+      const stuck = isRunStuck(run);
+
+      if (!forceResume) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Run is still active. Use forceResume: true to force-reset a stuck run.",
+          },
+          { status: 409 },
+        );
+      }
+
+      if (!stuck) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Run is RUNNING but not stuck yet (last DB write < 10 min ago). " +
+              "Cannot force-resume an actively progressing run.",
+          },
+          { status: 409 },
+        );
+      }
+
+      // Force-reset stuck RUNNING → FAILED before re-enqueueing.
+      // This must happen BEFORE addPipelineRunJob so any zombie BullMQ job
+      // that wakes up after this point will see status PENDING (set below)
+      // and skip via the zombie guard in worker.ts.
+      await forceResetStuckRun(runId);
+
+      logger.info("Stuck pipeline run force-reset, proceeding to re-enqueue", {
+        runId,
+        agentId,
+        lastUpdatedAt: run.updatedAt,
+      });
+    } else if (run.status !== "FAILED" && run.status !== "CANCELLED") {
       return NextResponse.json(
         {
           success: false,
-          error: `Pipeline run cannot be retried (status: ${run.status}). Only FAILED or CANCELLED runs can be retried.`,
+          error: `Pipeline run cannot be retried (status: ${run.status}). Only FAILED, CANCELLED, or stuck RUNNING runs can be retried.`,
         },
         { status: 409 },
       );
     }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Determine the correct step to restart from.
     // After the saveStepOutput fix, gate BLOCK leaves currentStep = gateIdx.
@@ -144,6 +191,7 @@ export async function POST(
       resumingFromStep: startFromStep,
       totalSteps: run.pipeline.length,
       wasGateBlock: GATE_STEPS.has(failedStepId),
+      wasForceResume: forceResume,
       jobId,
     });
 
