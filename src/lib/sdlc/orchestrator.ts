@@ -126,8 +126,41 @@ const INFRA_PROMPTS: Record<string, string> = {
   pr_generation: "Creating GitHub Pull Request with pipeline summary...",
 };
 
-/** Per-step timeout for AI calls (5 minutes). Prevents hung pipelines. */
-const STEP_TIMEOUT_MS = 5 * 60 * 1000;
+/**
+ * Per-step timeout for AI calls — replaces the old flat STEP_TIMEOUT_MS (5 min).
+ * Timeouts are sized to step category so short infra steps fail fast while
+ * long implementation steps get the headroom they need.
+ *
+ *   infra (lint/type-check/static_analysis) : 2 min
+ *   gate / review steps                     : 3 min
+ *   planning / analysis steps               : 3 min
+ *   test execution steps                    : 5 min
+ *   implementation (code generation)        : 8 min  ← default
+ */
+function getStepTimeoutMs(stepId: string): number {
+  // Infrastructure / static analysis — fast, no LLM call (except pr_generation)
+  if (INFRASTRUCTURE_NODES.has(stepId) && stepId !== "pr_generation") {
+    return 2 * 60 * 1000; // 2 min
+  }
+
+  // Gate / review / approval steps
+  if (GATE_STEPS.has(stepId)) {
+    return 3 * 60 * 1000; // 3 min
+  }
+
+  // Planning / analysis steps
+  if (PLANNING_STEPS.has(stepId)) {
+    return 3 * 60 * 1000; // 3 min
+  }
+
+  // Test execution steps
+  if (TEST_STEPS.has(stepId)) {
+    return 5 * 60 * 1000; // 5 min
+  }
+
+  // Implementation steps (code generation) — need the most time
+  return 8 * 60 * 1000; // 8 min (default)
+}
 
 /** Maximum total context document size in characters. */
 const MAX_CONTEXT_CHARS = 24_000;
@@ -555,7 +588,7 @@ export async function runPipeline(
           codebaseReady, taskDescription, resolvedModelId, stepModelOverrides,
           agentId, userId, runId, useSmartRouting, adaptiveStatsCache,
           pipelineSpan,
-          abortSignal: AbortSignal.any([pipelineAC.signal, AbortSignal.timeout(STEP_TIMEOUT_MS)]),
+          abortSignal: AbortSignal.any([pipelineAC.signal, AbortSignal.timeout(getStepTimeoutMs(stepId))]),
         };
         const parallelResults = await runParallelGateSteps([
           { stepId, stepIdx,           ...sharedGateParams },
@@ -610,7 +643,7 @@ export async function runPipeline(
           codebaseReady, taskDescription, resolvedModelId, stepModelOverrides,
           agentId, userId, runId, useSmartRouting, adaptiveStatsCache,
           pipelineSpan,
-          abortSignal: AbortSignal.any([pipelineAC.signal, AbortSignal.timeout(STEP_TIMEOUT_MS)]),
+          abortSignal: AbortSignal.any([pipelineAC.signal, AbortSignal.timeout(getStepTimeoutMs(stepId))]),
         });
         totalInputTokens  += gateResult.inputTokens;
         totalOutputTokens += gateResult.outputTokens;
@@ -902,7 +935,7 @@ export async function runPipeline(
       // fails (model capability gap), we fall back to generateText() + parseCodeBlocks.
       // Race step timeout against pipeline-level cancel.
       // AbortSignal.any() is available in Node 20.3+ (project uses Node 22).
-      const stepSignal = AbortSignal.any([pipelineAC.signal, AbortSignal.timeout(STEP_TIMEOUT_MS)]);
+      const stepSignal = AbortSignal.any([pipelineAC.signal, AbortSignal.timeout(getStepTimeoutMs(stepId))]);
 
       // Holds structured ParsedFile[] when generateObject succeeds — passed directly to
       // executeRealTestsFromFiles to avoid round-tripping through markdown.
@@ -996,7 +1029,7 @@ export async function runPipeline(
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           throw new Error(
-            `Pipeline step ${stepIdx} (${stepId}) timed out after ${STEP_TIMEOUT_MS / 1000}s`,
+            `Pipeline step ${stepIdx} (${stepId}) timed out after ${getStepTimeoutMs(stepId) / 1000}s`,
           );
         }
         throw err;
@@ -1296,7 +1329,7 @@ export async function runPipeline(
           ].join("\n");
 
           const testModel = getModel(stepModelId);
-          const testSignal = AbortSignal.any([pipelineAC.signal, AbortSignal.timeout(STEP_TIMEOUT_MS)]);
+          const testSignal = AbortSignal.any([pipelineAC.signal, AbortSignal.timeout(getStepTimeoutMs(stepId))]);
 
           try {
             const testResult = await generateText({
@@ -1635,7 +1668,7 @@ export interface RunSingleGateStepInput {
   adaptiveStatsCache: Map<string, StatRow[]> | undefined;
   /** Parent OTel span — used only to read traceContext for child span creation. */
   pipelineSpan: import("@/lib/observability/tracer").Span;
-  /** Caller-supplied abort signal (e.g. AbortSignal.timeout(STEP_TIMEOUT_MS)). */
+  /** Caller-supplied abort signal (e.g. AbortSignal.timeout(getStepTimeoutMs(stepId))). */
   abortSignal: AbortSignal;
 }
 
