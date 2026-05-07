@@ -51,6 +51,8 @@ import {
   isPipelineCancelled,
   detectAndResetStalePipelineRuns,
   saveStepOutput,
+  isRunStuck,
+  PIPELINE_STUCK_THRESHOLD_MS,
 } from "../pipeline-manager";
 
 // ---------------------------------------------------------------------------
@@ -590,5 +592,45 @@ describe("saveStepOutput", () => {
       "3": "gate reviewer report",
     });
     expect(updateCall.data).not.toHaveProperty("currentStep");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isRunStuck (Faza 3 — 3.1 stuck detection)
+// ---------------------------------------------------------------------------
+
+describe("isRunStuck", () => {
+  it("returns false for non-RUNNING status", () => {
+    const run = { status: "FAILED", updatedAt: new Date(0) };
+    expect(isRunStuck(run)).toBe(false);
+  });
+
+  it("returns false for PENDING status even with stale updatedAt", () => {
+    const staleTime = new Date(Date.now() - 11 * 60 * 1000);
+    const run = { status: "PENDING", updatedAt: staleTime };
+    expect(isRunStuck(run)).toBe(false);
+  });
+
+  it("returns false for RUNNING run updated recently", () => {
+    const run = { status: "RUNNING", updatedAt: new Date() };
+    expect(isRunStuck(run)).toBe(false);
+  });
+
+  it("returns true for RUNNING run with stale updatedAt (11 min ago)", () => {
+    const staleTime = new Date(Date.now() - 11 * 60 * 1000);
+    const run = { status: "RUNNING", updatedAt: staleTime };
+    expect(isRunStuck(run)).toBe(true);
+  });
+
+  it("returns false exactly at threshold (1 second before threshold)", () => {
+    const atThreshold = new Date(Date.now() - PIPELINE_STUCK_THRESHOLD_MS + 1000);
+    const run = { status: "RUNNING", updatedAt: atThreshold };
+    expect(isRunStuck(run)).toBe(false);
+  });
+
+  it("returns true just past threshold (1 second after)", () => {
+    const justPast = new Date(Date.now() - PIPELINE_STUCK_THRESHOLD_MS - 1000);
+    const run = { status: "RUNNING", updatedAt: justPast };
+    expect(isRunStuck(run)).toBe(true);
   });
 });

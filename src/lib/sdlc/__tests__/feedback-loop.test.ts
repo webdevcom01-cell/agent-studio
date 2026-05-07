@@ -18,12 +18,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockGenerateText = vi.hoisted(() => vi.fn());
 const mockGetModel = vi.hoisted(() => vi.fn());
+const mockStartSpan = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/ai", () => ({ getModel: mockGetModel }));
 vi.mock("ai", () => ({ generateText: mockGenerateText }));
 vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+vi.mock("@/lib/observability/tracer", () => ({ startSpan: mockStartSpan }));
 
 // ---------------------------------------------------------------------------
 // Imports — after mocks
@@ -61,6 +63,8 @@ function makeInput(overrides: Partial<FeedbackLoopInput> = {}): FeedbackLoopInpu
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetModel.mockReturnValue(FAKE_MODEL);
+  // Default: startSpan returns a span with an end() spy
+  mockStartSpan.mockReturnValue({ end: vi.fn(), traceContext: {} });
 });
 
 // ---------------------------------------------------------------------------
@@ -313,5 +317,127 @@ describe("buildFeedbackPrompt", () => {
     const prompt = buildFeedbackPrompt(makeInput({ codebaseContext: "" }));
     // Should not have the "## Relevant code" section at all
     expect(prompt).not.toContain("## Relevant code");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runFeedbackIteration — externalSignal (Faza 2 Prompt 3A)
+// ---------------------------------------------------------------------------
+
+describe("runFeedbackIteration — externalSignal propagation", () => {
+  it("succeeds normally when no externalSignal is provided (backward compat)", async () => {
+    mockGenerateText.mockResolvedValue({
+      text: "fixed code",
+      usage: { inputTokens: 100, outputTokens: 50 },
+    });
+
+    const result = await runFeedbackIteration(makeInput(), "system");
+
+    expect(result.success).toBe(true);
+    expect(mockGenerateText).toHaveBeenCalledOnce();
+  });
+
+  it("passes abortSignal to generateText when externalSignal provided", async () => {
+    mockGenerateText.mockResolvedValue({
+      text: "fixed",
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+
+    const controller = new AbortController();
+    await runFeedbackIteration(makeInput(), "system", controller.signal);
+
+    expect(mockGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({ abortSignal: expect.anything() }),
+    );
+  });
+
+  it("returns success=false when externalSignal is already aborted", async () => {
+    // Pre-abort the signal before calling
+    const controller = new AbortController();
+    controller.abort();
+
+    // generateText should reject with AbortError when the signal is already aborted
+    const abortErr = new Error("aborted");
+    abortErr.name = "AbortError";
+    mockGenerateText.mockRejectedValue(abortErr);
+
+    const result = await runFeedbackIteration(makeInput(), "system", controller.signal);
+
+    expect(result.success).toBe(false);
+    expect(result.inputTokens).toBe(0);
+    expect(result.outputTokens).toBe(0);
+  });
+
+  it("keeps original implementation text when aborted", async () => {
+    const abortErr = new Error("aborted");
+    abortErr.name = "AbortError";
+    mockGenerateText.mockRejectedValue(abortErr);
+
+    const controller = new AbortController();
+    const input = makeInput({ previousImplementation: "ORIGINAL_IMPL" });
+    const result = await runFeedbackIteration(input, "system", controller.signal);
+
+    expect(result.revisedImplementation).toBe("ORIGINAL_IMPL");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runFeedbackIteration — feedbackSpan tracing (Faza 3 Prompt 4)
+// ---------------------------------------------------------------------------
+
+describe("runFeedbackIteration — feedbackSpan tracing", () => {
+  it("closes feedbackSpan in happy path", async () => {
+    const mockEnd = vi.fn();
+    mockStartSpan.mockReturnValueOnce({ end: mockEnd, traceContext: {} });
+    mockGenerateText.mockResolvedValueOnce({
+      text: "fixed implementation",
+      usage: { inputTokens: 100, outputTokens: 50 },
+    });
+
+    const result = await runFeedbackIteration(makeInput(), "system prompt");
+
+    expect(result.success).toBe(true);
+    expect(mockEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes feedbackSpan even when generateText throws a provider error", async () => {
+    const mockEnd = vi.fn();
+    mockStartSpan.mockReturnValueOnce({ end: mockEnd, traceContext: {} });
+    mockGenerateText.mockRejectedValueOnce(new Error("provider unavailable"));
+
+    const result = await runFeedbackIteration(makeInput(), "system prompt");
+
+    expect(result.success).toBe(false);
+    expect(mockEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes feedbackSpan when generateText is aborted", async () => {
+    const mockEnd = vi.fn();
+    mockStartSpan.mockReturnValueOnce({ end: mockEnd, traceContext: {} });
+    const abortErr = new Error("aborted");
+    abortErr.name = "AbortError";
+    mockGenerateText.mockRejectedValueOnce(abortErr);
+
+    const result = await runFeedbackIteration(makeInput(), "system prompt");
+
+    expect(result.success).toBe(false);
+    expect(mockEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes parentTraceContext to startSpan as parentContext", async () => {
+    mockGenerateText.mockResolvedValueOnce({
+      text: "ok",
+      usage: { inputTokens: 10, outputTokens: 10 },
+    });
+    const parentCtx = { traceId: "trace-abc-123", spanId: "span-def-456" };
+    await runFeedbackIteration(
+      makeInput({ parentTraceContext: parentCtx }),
+      "system",
+    );
+
+    expect(mockStartSpan).toHaveBeenCalledWith(
+      "sdlc.feedback_iteration",
+      expect.objectContaining({ parentContext: parentCtx }),
+    );
   });
 });
