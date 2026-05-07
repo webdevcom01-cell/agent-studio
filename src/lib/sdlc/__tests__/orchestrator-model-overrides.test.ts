@@ -267,6 +267,8 @@ describe("stepModelOverrides", () => {
     expect(mockRunFeedbackIteration).toHaveBeenCalledWith(
       expect.objectContaining({ modelId: "claude-sonnet-4-6" }),
       expect.any(String),
+      // externalSignal (AbortSignal) added in Prompt 3A — optional 3rd param
+      expect.anything(),
     );
   });
 
