@@ -180,3 +180,66 @@ describe("processRunnerHandler", () => {
     );
   });
 });
+
+// ─── vitestSourceFileGuard (via processRunnerHandler integration) ──────────────
+
+describe("vitest source-file guard", () => {
+  const mockExistsSync = vi.fn();
+
+  beforeEach(() => {
+    mockRunVerificationCommands.mockReset();
+    mockRunVerificationCommands.mockResolvedValue({
+      allPassed: true,
+      output: "",
+      results: [{ command: "", passed: true, output: "", durationMs: 100 }],
+    });
+    mockExistsSync.mockReset();
+  });
+
+  it("does not touch args that are already test files", async () => {
+    vi.doMock("fs", () => ({ existsSync: () => false, symlinkSync: vi.fn() }));
+
+    const ctx = makeContext();
+    const node = makeNode({
+      command: "vitest",
+      args: ["run", "src/lib/foo/__tests__/bar.test.ts"],
+    });
+
+    await processRunnerHandler(node as never, ctx);
+
+    // Command forwarded to runVerificationCommands must keep the test path unchanged
+    const [commands] = mockRunVerificationCommands.mock.calls[0] as [string[]];
+    expect(commands[0]).toContain("bar.test.ts");
+    expect(commands[0]).not.toMatch(/bar\.ts(?!\.)/);
+  });
+
+  it("does not remap args for non-vitest commands", async () => {
+    const ctx = makeContext();
+    const node = makeNode({
+      command: "tsc",
+      args: ["--noEmit", "src/lib/foo/bar.ts"],
+    });
+
+    await processRunnerHandler(node as never, ctx);
+
+    const [commands] = mockRunVerificationCommands.mock.calls[0] as [string[]];
+    // tsc receives the source file as-is
+    expect(commands[0]).toContain("src/lib/foo/bar.ts");
+  });
+
+  it("passes flag args through unchanged for vitest", async () => {
+    const ctx = makeContext();
+    const node = makeNode({
+      command: "vitest",
+      args: ["run", "--reporter=verbose", "--config", "./vitest.config.ts"],
+    });
+
+    await processRunnerHandler(node as never, ctx);
+
+    const [commands] = mockRunVerificationCommands.mock.calls[0] as [string[]];
+    // All flag args must survive unchanged
+    expect(commands[0]).toContain("--reporter=verbose");
+    expect(commands[0]).toContain("--config");
+    expect(commands[0]).toContain("./vitest.config.ts");
+  });
+});

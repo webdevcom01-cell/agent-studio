@@ -1,5 +1,5 @@
 import { existsSync, symlinkSync } from "fs";
-import { join } from "path";
+import { join, dirname, basename } from "path";
 import type { NodeHandler } from "../types";
 import { runVerificationCommands } from "../verification-commands";
 import { resolveTemplate } from "../template";
@@ -58,6 +58,65 @@ function resolveArgPaths(args: string[]): { resolved: string[]; anyRemapped: boo
   });
   return { resolved, anyRemapped };
 }
+/**
+ * Vitest source-file guard.
+ *
+ * Detects the common mistake of passing a source file (e.g. pipeline-manager.ts)
+ * to vitest instead of its test file (pipeline-manager.test.ts).
+ * When such an arg is found, we try candidate test-file paths in order:
+ *   1. __tests__/<basename>.test.ts  (co-location convention used by SDLC)
+ *   2. <same-dir>/<basename>.test.ts (flat convention)
+ * Both the original location and /tmp/sdlc fallback are checked.
+ *
+ * Returns the (possibly remapped) args array.
+ */
+function vitestSourceFileGuard(
+  command: string,
+  args: string[],
+  nodeId: string,
+): string[] {
+  // Only runs for vitest commands
+  if (!/^(npx\s+)?vitest\b/i.test(command.trim())) return args;
+
+  return args.map((arg) => {
+    // Skip flags and non-TS/JS file args
+    if (arg.startsWith("-") || !arg.match(/\.(ts|tsx|js|jsx|mts|mjs)$/i)) return arg;
+    // Already a test file — nothing to do
+    if (arg.match(/\.(test|spec)\.(ts|tsx|js|jsx|mts|mjs)$/i)) return arg;
+    if (arg.includes("__tests__")) return arg;
+
+    // Source file detected — build candidate test paths
+    const dir = dirname(arg);
+    const base = basename(arg).replace(/\.(ts|tsx|js|jsx|mts|mjs)$/i, "");
+    const candidates = [
+      join(dir, "__tests__", `${base}.test.ts`),   // src/lib/foo/__tests__/bar.test.ts
+      join(dir, `${base}.test.ts`),                  // src/lib/foo/bar.test.ts
+      join(dir, "__tests__", `${base}.spec.ts`),
+      join(dir, `${base}.spec.ts`),
+    ];
+
+    for (const candidate of candidates) {
+      if (existsSync(candidate) || existsSync(join(SDLC_TMP, candidate))) {
+        logger.warn("process-runner: vitest source-file guard — remapped to test file", {
+          nodeId,
+          original: arg,
+          remapped: candidate,
+        });
+        return candidate;
+      }
+    }
+
+    // No test file found — warn loudly but don't block (test will fail with a clear message)
+    logger.warn("process-runner: vitest source-file guard — source file passed but no matching test file found", {
+      nodeId,
+      arg,
+      candidatesTried: candidates,
+    });
+    return arg;
+  });
+}
+
+
 
 export const processRunnerHandler: NodeHandler = async (node, context) => {
   // Resolve templates in command and args array
@@ -76,6 +135,9 @@ export const processRunnerHandler: NodeHandler = async (node, context) => {
   const templateResolvedArgs = rawArgs.map((arg) => resolveTemplate(arg, context.variables));
   // Remap relative file paths to /tmp/sdlc when the original location is unwritable
   const { resolved: resolvedArgs, anyRemapped } = resolveArgPaths(templateResolvedArgs);
+  // Guard: if this is a vitest command and a source file was passed instead of a test
+  // file, auto-remap to the corresponding *.test.ts so the run never silently fails.
+  const guardedArgs = vitestSourceFileGuard(resolvedCommand, resolvedArgs, node.id as string);
 
   // When any arg was remapped to /tmp/sdlc, run the command from /tmp/sdlc so
   // vitest can find the test files and relative imports resolve correctly.
@@ -90,8 +152,8 @@ export const processRunnerHandler: NodeHandler = async (node, context) => {
   }
 
   // Build the full command string (runVerificationCommands splits by whitespace internally)
-  const fullCommand = resolvedArgs.length > 0
-    ? `${resolvedCommand} ${resolvedArgs.join(" ")}`
+  const fullCommand = guardedArgs.length > 0
+    ? `${resolvedCommand} ${guardedArgs.join(" ")}`
     : resolvedCommand;
 
   const displayCommand = fullCommand;
