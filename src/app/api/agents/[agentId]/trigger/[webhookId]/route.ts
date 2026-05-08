@@ -31,6 +31,7 @@ import { applySecurityHeaders } from "@/lib/api/security-headers";
 import { logger } from "@/lib/logger";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { executeWebhookTrigger } from "@/lib/webhooks/execute";
+import { prisma } from "@/lib/prisma";
 
 // Allow longer execution for flows with AI steps or MCP tool calls
 export const maxDuration = 180;
@@ -43,6 +44,27 @@ export async function POST(
   const pathname = request.nextUrl.pathname;
 
   try {
+    // ── Guard: reject pipeline-trigger webhooks — they use a dedicated route ─────
+    // @ts-ignore — isPipelineTrigger added in Layer 1 migration
+    const config = await (prisma as any).webhookConfig.findFirst({
+      where: { id: webhookId, agentId },
+      select: { isPipelineTrigger: true, enabled: true },
+    }) as { isPipelineTrigger: boolean; enabled: boolean } | null;
+
+    if (config?.isPipelineTrigger) {
+      const pipelineUrl = `/api/agents/${agentId}/pipelines/webhook-trigger/${webhookId}`;
+      const response = NextResponse.json(
+        {
+          success: false,
+          error: "This webhook is configured as a pipeline trigger. Use the pipeline-specific endpoint.",
+          correctUrl: pipelineUrl,
+        },
+        { status: 400 }
+      );
+      applySecurityHeaders(response, request.nextUrl.pathname);
+      return response;
+    }
+
     // ── Read raw body (MUST happen before any parsing — signature verification needs raw bytes)
     const rawBody = await request.text();
 

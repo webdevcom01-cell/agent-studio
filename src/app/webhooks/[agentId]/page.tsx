@@ -71,6 +71,10 @@ interface WebhookSummary {
   createdAt: string;
   updatedAt: string;
   _count: { executions: number };
+  /** True when this webhook triggers SDLC pipeline runs instead of agent flows */
+  isPipelineTrigger?: boolean;
+  /** Signature verification provider: "standard" | "github" | "gitlab" */
+  signatureProvider?: string;
 }
 
 interface WebhookDetail extends WebhookSummary {
@@ -747,7 +751,11 @@ function TestPanel({
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; status: number; body: string } | null>(null);
 
-  const triggerUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/api/agents/${agentId}/trigger/${webhook.id}`;
+  const triggerUrl = typeof window !== "undefined"
+    ? webhook.isPipelineTrigger
+      ? `${window.location.origin}/api/agents/${agentId}/pipelines/webhook-trigger/${webhook.id}`
+      : `${window.location.origin}/api/agents/${agentId}/trigger/${webhook.id}`
+    : "";
 
   async function sendTest() {
     setSending(true);
@@ -1199,7 +1207,11 @@ function WebhookDetailPanel({
     );
   }
 
-  const triggerUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/api/agents/${agentId}/trigger/${detail.id}`;
+  const triggerUrl = typeof window !== "undefined"
+    ? detail.isPipelineTrigger
+      ? `${window.location.origin}/api/agents/${agentId}/pipelines/webhook-trigger/${detail.id}`
+      : `${window.location.origin}/api/agents/${agentId}/trigger/${detail.id}`
+    : "";
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">

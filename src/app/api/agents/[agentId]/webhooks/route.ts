@@ -72,6 +72,10 @@ export async function GET(
         createdAt: true,
         updatedAt: true,
         // Secret intentionally omitted — revealed only in detail endpoint
+        // @ts-ignore — signatureProvider + isPipelineTrigger added in Layer 1 migration
+        signatureProvider: true,
+        // @ts-ignore
+        isPipelineTrigger: true,
         _count: { select: { executions: true } },
       },
     });
