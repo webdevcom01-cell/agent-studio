@@ -192,7 +192,22 @@ export function hasTestFailures(vitestOutput: string): boolean {
   if (parseVitestFailures(vitestOutput).length > 0) return true;
   // Runtime errors that prevent tests from running at all
   if (parseRuntimeErrors(vitestOutput).length > 0) return true;
+  // No test files were generated at all
+  if (hasNoTestFiles(vitestOutput)) return true;
   return false;
+}
+
+/**
+ * Detects when the implementer wrote source files but forgot to generate
+ * any test files. The code-extractor emits a sentinel line in this case.
+ */
+export function hasNoTestFiles(output: string): boolean {
+  return (
+    output.includes("NO TEST FILES GENERATED") ||
+    output.includes("No test files found") ||
+    output.includes("no test files") ||
+    /no tests? files? (found|generated|written)/i.test(output)
+  );
 }
 
 // ─── ESLint JSON output parser ────────────────────────────────────────────────

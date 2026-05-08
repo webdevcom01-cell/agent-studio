@@ -43,6 +43,24 @@ const IMPLEMENTATION_PROMPT_SUFFIX = `
 
 ---
 
+## MANDATORY CO-LOCATION RULE (non-negotiable)
+
+For **every source file** you create, you MUST also create a corresponding test file:
+
+| Source file | Required test file |
+|---|---|
+| \`src/app/api/foo/route.ts\` | \`src/app/api/foo/__tests__/route.test.ts\` |
+| \`src/lib/bar/baz.ts\` | \`src/lib/bar/__tests__/baz.test.ts\` |
+| \`src/app/api/foo/[id]/route.ts\` | \`src/app/api/foo/[id]/__tests__/route.test.ts\` |
+
+**The pipeline will FAIL if any source file has no matching test file.**
+- Create the \`__tests__/\` directory next to the source file
+- Name the test file exactly \`<source-filename>.test.ts\`
+- The test file must contain real tests (not stubs or placeholders)
+- Even if the task description says "do not create tests", you MUST still write them
+
+---
+
 ## MANDATORY TEST FILE RULES (non-negotiable)
 
 Every test file you generate MUST begin with this exact import line:

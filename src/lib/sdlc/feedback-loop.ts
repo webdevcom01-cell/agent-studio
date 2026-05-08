@@ -35,6 +35,7 @@ import {
   formatErrorsForFeedback,
   formatRuntimeErrorsForFeedback,
   hasTestFailures,
+  hasNoTestFiles,
 } from "@/lib/sdlc/error-parser";
 
 export const MAX_RETRIES = 3;
@@ -83,7 +84,44 @@ export function buildFeedbackPrompt(input: FeedbackLoopInput): string {
   const vitestFailures = parseVitestFailures(input.testOutput);
   const runtimeErrors = parseRuntimeErrors(input.testOutput);
 
-  // Build structured error section: prefer parsed details, fall back to raw output
+  // ── Special case: no test files at all ─────────────────────────────────
+  // If the implementer forgot to write *.test.ts files, skip the generic
+  // error analysis and return a laser-focused correction prompt instead.
+  if (hasNoTestFiles(input.testOutput)) {
+    const sourceFiles = input.previousImplementation
+      .match(/\/\/ FILE: ([^\n]+\.ts)/g)
+      ?.filter((f) => !f.includes(".test.") && !f.includes("__tests__"))
+      .map((f) => f.replace("// FILE: ", ""))
+      .join(", ") ?? "(source files listed in previous implementation)";
+
+    return [
+      "# Task",
+      input.taskDescription,
+      "",
+      "# Architecture Plan",
+      input.architecturePlan.slice(0, 1500),
+      "",
+      "# CRITICAL FAILURE: No Test Files Were Generated",
+      "The previous implementation produced source files but **zero test files**.",
+      "The pipeline hard-fails when no *.test.ts files are present.",
+      "",
+      `Source file(s) missing tests: ${sourceFiles}`,
+      "",
+      "## What You Must Do Now",
+      "Re-output ALL files below, adding a `__tests__/<filename>.test.ts` next to every source file.",
+      "Rule: `src/app/api/foo/route.ts` → `src/app/api/foo/__tests__/route.test.ts`",
+      "",
+      "Each test file MUST:",
+      "1. Start with: `import { describe, it, expect, vi } from 'vitest';`",
+      "2. Mock `@/lib/prisma` and `@/lib/api/auth-guard` via `vi.mock()`",
+      "3. Cover: happy path, 401 unauthorized, 404 not found, 500 server error",
+      "",
+      "# Previous Implementation (add test files to this)",
+      input.previousImplementation.slice(0, 8000),
+    ].join("\n");
+  }
+
+    // Build structured error section: prefer parsed details, fall back to raw output
   const structuredErrors = formatErrorsForFeedback(tscErrors, vitestFailures);
   const runtimeSection = formatRuntimeErrorsForFeedback(runtimeErrors);
 

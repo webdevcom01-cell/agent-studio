@@ -435,7 +435,27 @@ export async function executeRealTestsFromFiles(
   );
 
   let testRunOutput = "";
-  let testsPassed = true;
+  // Default: FAIL if no test files generated — implementation is incomplete.
+  // A passing pipeline requires at least one *.test.ts alongside every source file.
+  let testsPassed = testFiles.length > 0;
+
+  if (testFiles.length === 0) {
+    const sourceOnlyPaths = writtenPaths.map((p) => relative(genDir, p)).join(", ");
+    testRunOutput = [
+      "❌ NO TEST FILES GENERATED",
+      "",
+      "The implementer wrote source files but zero test files (*.test.ts / *.spec.ts / __tests__/*.ts).",
+      "This is a mandatory pipeline failure — every implementation MUST include tests.",
+      "",
+      "Source files written (no tests): " + sourceOnlyPaths,
+      "",
+      "Fix: add a __tests__/[filename].test.ts file next to each source file.",
+    ].join("\n");
+    logger.warn("code-extractor: no test files generated — marking testsPassed=false", {
+      agentId,
+      sourceFiles: sourceOnlyPaths,
+    });
+  }
 
   if (testFiles.length > 0) {
     const { results } = await runVerificationCommands(
@@ -660,7 +680,27 @@ export async function runWorkspaceTests(
 
   // ── Test runner ─────────────────────────────────────────────────────────
   let testRunOutput = "";
-  let testsPassed = true;
+  // Default: FAIL if no test files generated — implementation is incomplete.
+  // A passing pipeline requires at least one *.test.ts alongside every source file.
+  let testsPassed = testFiles.length > 0;
+
+  if (testFiles.length === 0) {
+    const sourceOnlyPaths = allFiles.map((p) => relative(genDir, p)).join(", ");
+    testRunOutput = [
+      "❌ NO TEST FILES GENERATED",
+      "",
+      "The implementer wrote source files but zero test files (*.test.ts / *.spec.ts / __tests__/*.ts).",
+      "This is a mandatory pipeline failure — every implementation MUST include tests.",
+      "",
+      "Source files written (no tests): " + sourceOnlyPaths,
+      "",
+      "Fix: add a __tests__/[filename].test.ts file next to each source file.",
+    ].join("\n");
+    logger.warn("code-extractor: no test files generated — marking testsPassed=false", {
+      agentId,
+      sourceFiles: sourceOnlyPaths,
+    });
+  }
 
   if (testFiles.length > 0) {
     try {
