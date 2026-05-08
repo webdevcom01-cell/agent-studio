@@ -39,7 +39,7 @@ const AUTO_CONFIDENCE_INITIAL = 0.05;
 const MAX_EXAMPLE_IDS = 10;
 
 /** Haiku is used for the extraction call — speed > power for background tasks */
-const EXTRACT_MODEL = "claude-haiku-4-5-20251001";
+const EXTRACT_MODEL = "gpt-4.1-mini"; // OpenAI equivalent of Haiku — fast, cheap, no Anthropic key required
 
 // ---------------------------------------------------------------------------
 // Public interface

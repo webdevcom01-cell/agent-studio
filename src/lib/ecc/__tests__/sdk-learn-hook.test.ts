@@ -64,7 +64,7 @@ beforeEach(() => {
 
   // Default: ECC globally disabled
   mockIsECCEnabled.mockReturnValue(false);
-  mockGetModel.mockReturnValue({ modelId: "claude-haiku-4-5-20251001" });
+  mockGetModel.mockReturnValue({ modelId: "gpt-4.1-mini" });
 
   // Default: AgentExecution created successfully
   mockPrisma.agentExecution.create.mockResolvedValue({ id: EXEC_ID });
@@ -263,7 +263,7 @@ describe("Pattern extraction and Instinct creation", () => {
 
   it("uses Haiku model for extraction (speed over power)", async () => {
     await fireSdkLearnHook(record());
-    expect(mockGetModel).toHaveBeenCalledWith("claude-haiku-4-5-20251001");
+    expect(mockGetModel).toHaveBeenCalledWith("gpt-4.1-mini");
   });
 
   it("records metrics after creating a new Instinct", async () => {
