@@ -84,6 +84,8 @@ function vitestSourceFileGuard(
     // Already a test file — nothing to do
     if (arg.match(/\.(test|spec)\.(ts|tsx|js|jsx|mts|mjs)$/i)) return arg;
     if (arg.includes("__tests__")) return arg;
+    // Skip config/setup files — these are valid vitest args and must not be remapped
+    if (/\.(config|setup|fixture)\.(ts|tsx|js|jsx|mts|mjs)$/i.test(arg)) return arg;
 
     // Source file detected — build candidate test paths
     const dir = dirname(arg);
@@ -95,9 +97,10 @@ function vitestSourceFileGuard(
       join(dir, `${base}.spec.ts`),
     ];
 
+    // First: fast-path — if the test file exists at the standard location, use it.
     for (const candidate of candidates) {
       if (existsSync(candidate) || existsSync(join(SDLC_TMP, candidate))) {
-        logger.warn("process-runner: vitest source-file guard — remapped to test file", {
+        logger.warn("process-runner: vitest source-file guard — remapped to existing test file", {
           nodeId,
           original: arg,
           remapped: candidate,
@@ -106,13 +109,21 @@ function vitestSourceFileGuard(
       }
     }
 
-    // No test file found — warn loudly but don't block (test will fail with a clear message)
-    logger.warn("process-runner: vitest source-file guard — source file passed but no matching test file found", {
+    // Slow-path: the test file was not found at /app or /tmp/sdlc, but it was likely
+    // written by file-writer into a run-specific tmp dir (e.g. /tmp/sdlc-slug-runId/).
+    // existsSync cannot verify this because we don't have the resolved cwd here.
+    // UNCONDITIONALLY remap to the co-location convention (SDLC mandatory rule):
+    //   <dir>/__tests__/<base>.test.ts
+    // The test runner uses the resolved workingDir as its cwd, so relative paths will
+    // be resolved against the tmp workspace where file-writer actually wrote the files.
+    const preferredCandidate = candidates[0]; // __tests__/<base>.test.ts — SDLC convention
+    logger.warn("process-runner: vitest source-file guard — source file remapped unconditionally (file-writer tmp workspace)", {
       nodeId,
-      arg,
-      candidatesTried: candidates,
+      original: arg,
+      remapped: preferredCandidate,
+      note: "existsSync could not verify path because file lives in run-specific tmp dir",
     });
-    return arg;
+    return preferredCandidate;
   });
 }
 
