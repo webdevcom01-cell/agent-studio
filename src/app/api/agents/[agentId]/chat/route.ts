@@ -95,7 +95,11 @@ export async function POST(
     typeof body.conversationId === "string" ? body.conversationId : undefined;
   const isStreaming = body.stream === true;
   const asyncFlagEnabled = await isFeatureEnabled("async-execution");
-  const isAsync = body.async === true || (body.async === undefined && asyncFlagEnabled);
+  // Streaming requests bypass the async BullMQ queue.
+  // createJobEventStream emits SSE format (data: {...}\n\n) which parseChunk cannot parse
+  // (it expects plain NDJSON lines). The synchronous executeFlowStreaming path is the only
+  // one that produces NDJSON chunks the client's useStreamingChat hook understands.
+  const isAsync = !isStreaming && (body.async === true || (body.async === undefined && asyncFlagEnabled));
   // Eval compare: optional flow version override (only used for head-to-head eval runs)
   const evalFlowVersionId =
     typeof body.flowVersionId === "string" && body.flowVersionId.length > 0
