@@ -138,7 +138,7 @@ export async function executeFlow(
     context.variables["last_message"] = userMessage;
   }
 
-  await prepareContextForExecution(context, userMessage, { streaming: false });
+  await prepareContextForExecution(context, userMessage ?? null, { streaming: false });
 
   const flowStartMs = Date.now();
 

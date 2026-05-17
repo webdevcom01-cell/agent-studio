@@ -107,7 +107,7 @@ export function executeFlowStreaming(
           context.variables["last_message"] = userMessage;
         }
 
-        await prepareContextForExecution(context, userMessage, { streaming: true });
+        await prepareContextForExecution(context, userMessage ?? null, { streaming: true });
 
         let waitingForInput = false;
 
