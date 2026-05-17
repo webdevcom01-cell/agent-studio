@@ -72,9 +72,7 @@ export async function GET(
         createdAt: true,
         updatedAt: true,
         // Secret intentionally omitted — revealed only in detail endpoint
-        // @ts-ignore — signatureProvider + isPipelineTrigger added in Layer 1 migration
         signatureProvider: true,
-        // @ts-ignore
         isPipelineTrigger: true,
         _count: { select: { executions: true } },
       },
@@ -129,9 +127,7 @@ export async function POST(
         eventFilters,
         bodyMappings,
         headerMappings,
-        // @ts-ignore — signatureProvider + isPipelineTrigger added in migration
         signatureProvider: parsed.data.signatureProvider,
-        // @ts-ignore
         isPipelineTrigger: parsed.data.isPipelineTrigger,
       },
       select: {
@@ -142,7 +138,6 @@ export async function POST(
         eventFilters: true,
         bodyMappings: true,
         headerMappings: true,
-        // @ts-ignore — new fields; prisma generate runs at build
         signatureProvider: true,
         isPipelineTrigger: true,
         createdAt: true,
