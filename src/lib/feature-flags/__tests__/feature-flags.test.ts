@@ -36,7 +36,7 @@ describe("isFeatureEnabled", () => {
   });
 
   it("uses Redis override when present", async () => {
-    vi.mocked(cacheGet).mockResolvedValueOnce(JSON.stringify({ enabled: true }));
+    vi.mocked(cacheGet).mockResolvedValueOnce(JSON.stringify({ enabled: true, rolloutPercent: 100 }));
 
     const result = await isFeatureEnabled("async-execution");
     expect(result).toBe(true);

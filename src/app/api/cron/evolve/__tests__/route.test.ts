@@ -73,7 +73,7 @@ const MOCK_INSTINCT = {
 describe("POST /api/cron/evolve", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetEnv.mockReturnValue({ CRON_SECRET: undefined }); // no secret = skip auth check
+    vi.unstubAllEnvs(); // no secret = skip auth check
     mockIsECCEnabled.mockReturnValue(true);
     mockAgentFindMany.mockResolvedValue([{ id: "agent-1", name: "Test Agent" }]);
     mockEvolveAgentInstincts.mockResolvedValue({
@@ -87,28 +87,28 @@ describe("POST /api/cron/evolve", () => {
 
   describe("Auth", () => {
     it("returns 401 when CRON_SECRET set and authorization header missing", async () => {
-      mockGetEnv.mockReturnValue({ CRON_SECRET: "secret-abc" });
+      vi.stubEnv("CRON_SECRET", "secret-abc");
 
       const res = await POST(makeReq()); // no Bearer token
       expect(res.status).toBe(401);
     });
 
     it("returns 401 when CRON_SECRET set and wrong secret provided", async () => {
-      mockGetEnv.mockReturnValue({ CRON_SECRET: "secret-abc" });
+      vi.stubEnv("CRON_SECRET", "secret-abc");
 
       const res = await POST(makeReq("wrong-secret"));
       expect(res.status).toBe(401);
     });
 
     it("passes when correct secret provided", async () => {
-      mockGetEnv.mockReturnValue({ CRON_SECRET: "secret-abc" });
+      vi.stubEnv("CRON_SECRET", "secret-abc");
 
       const res = await POST(makeReq("secret-abc"));
       expect(res.status).toBe(200);
     });
 
     it("passes when no CRON_SECRET is configured", async () => {
-      mockGetEnv.mockReturnValue({ CRON_SECRET: undefined });
+      vi.unstubAllEnvs();
       const res = await POST(makeReq());
       expect(res.status).toBe(200);
     });
