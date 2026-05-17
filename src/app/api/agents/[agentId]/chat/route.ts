@@ -10,7 +10,7 @@ import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { auth } from "@/lib/auth";
-import { addFlowJob, getJobStatus } from "@/lib/queue";
+import { addFlowJob } from "@/lib/queue";
 import { createJobEventStream } from "@/lib/queue/events";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { checkBudget } from "@/lib/budget/cost-tracker";

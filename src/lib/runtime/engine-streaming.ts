@@ -8,7 +8,7 @@ import {
 } from "./types";
 import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
-import { findNextNode, findStartNode, SELF_ROUTING_NODES, resolveNextNodeId } from "./engine";
+import { findStartNode, resolveNextNodeId } from "./engine";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { shouldCompact, compactContext } from "./context-compaction";
 import { createHooksFromFlowContent, emitHook } from "./hooks";

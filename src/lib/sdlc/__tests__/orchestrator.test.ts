@@ -827,7 +827,7 @@ describe("runPipeline — IMPLEMENTATION_STEPS use generateObject", () => {
 
     const callArg = mockGenerateObject.mock.calls[0][0];
     expect(callArg).toHaveProperty("schema");
-    expect(callArg.maxOutputTokens).toBe(8192);
+    expect(callArg.maxOutputTokens).toBe(32000);
   });
 
   it("calls executeRealTestsFromFiles (not executeRealTests) when generateObject succeeds", async () => {

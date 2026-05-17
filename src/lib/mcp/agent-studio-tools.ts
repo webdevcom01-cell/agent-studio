@@ -12,7 +12,6 @@
  *   kb:read       → search_knowledge_base
  */
 
-import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { hybridSearch } from "@/lib/knowledge/search";

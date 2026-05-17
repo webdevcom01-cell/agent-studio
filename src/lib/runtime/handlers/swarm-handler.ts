@@ -266,7 +266,7 @@ export const swarmHandler: NodeHandler = async (node, context) => {
         runWorker(i, queue, systemPrompt, model, taskContext, deadline, messages),
     );
 
-    const workerResults = await Promise.allSettled(workerPromises);
+    await Promise.allSettled(workerPromises);
 
     // Collect stats
     const completed = queue.filter((t) => t.status === "done").length;

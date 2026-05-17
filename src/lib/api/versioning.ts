@@ -8,7 +8,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { logger } from "@/lib/logger";
 
 const CURRENT_VERSION = "v1";
 const SUPPORTED_VERSIONS = new Set(["v1"]);

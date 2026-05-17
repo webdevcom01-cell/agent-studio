@@ -1,5 +1,4 @@
 import type { NodeHandler } from "../types";
-import { resolveTemplate } from "../template";
 import { detectPII, redactPII, type PIIMatch } from "@/lib/safety/pii-detector";
 import { detectInjection } from "@/lib/safety/injection-detector";
 import { moderateContent } from "@/lib/safety/content-moderator";

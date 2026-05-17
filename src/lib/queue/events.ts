@@ -6,9 +6,8 @@
  *   return new Response(stream, { headers: { "Content-Type": "text/event-stream" } });
  */
 
-import { type Job, QueueEvents } from "bullmq";
+import { QueueEvents } from "bullmq";
 import { getQueue } from "./index";
-import { logger } from "@/lib/logger";
 
 export interface JobEvent {
   type: "progress" | "completed" | "failed" | "active";

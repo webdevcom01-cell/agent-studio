@@ -169,7 +169,7 @@ describe("runFeedbackIteration — core behavior", () => {
     await runFeedbackIteration(makeInput(), "system");
 
     expect(mockGenerateText).toHaveBeenCalledWith(
-      expect.objectContaining({ maxOutputTokens: 8192 }),
+      expect.objectContaining({ maxOutputTokens: 16000 }),
     );
   });
 

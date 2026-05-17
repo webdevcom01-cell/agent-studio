@@ -5687,7 +5687,7 @@ function GuardrailsProperties({ data, update, variables = [] }: SubPanelProps) {
 
 // ── Code Interpreter ──────────────────────────────────────────────────────
 
-function CodeInterpreterProperties({ data, update, variables = [] }: SubPanelProps) {
+function CodeInterpreterProperties({ data, update, variables: _variables = [] }: SubPanelProps) {
   return (
     <>
       <div className="space-y-2">
