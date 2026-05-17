@@ -10,7 +10,7 @@ import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { getKBAnalytics } from "@/lib/knowledge/analytics";
+import { getKBAnalytics } from "@/lib/knowledge";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;

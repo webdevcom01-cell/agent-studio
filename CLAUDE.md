@@ -253,3 +253,30 @@ Short: `NodeType` union → `NODE_TYPES` array → handler → register → node
 - Always check `ECC_ENABLED` env var or per-agent `eccEnabled` before using ECC features
 - Async ingestion ONLY — never in startup path (Railway healthcheck = 120s)
 - Internal MCP URL: `process.env.ECC_MCP_URL`, path: `/mcp`; push metrics (OTLP), not pull
+
+---
+
+## Agent skills
+
+Engineering skills configured for this repo (mattpocock/skills):
+
+- **Domain docs**: [`CONTEXT.md`](./CONTEXT.md) — canonical vocabulary; use these terms in issue titles, test names, refactor proposals
+- **ADRs**: [`docs/adr/`](./docs/adr/) — architectural decisions; read before touching the relevant area
+- **Issue tracker**: [`docs/agents/issue-tracker.md`](./docs/agents/issue-tracker.md) — GitHub Issues (`webdevcom01-cell/agent-studio`)
+- **Triage labels**: [`docs/agents/triage-labels.md`](./docs/agents/triage-labels.md)
+- **Domain config**: [`docs/agents/domain.md`](./docs/agents/domain.md)
+
+### Skill quick-reference
+
+| Skill | When to use |
+|-------|-------------|
+| `/grill-with-docs` | Before any new feature — stress-test the plan, build shared language |
+| `/to-prd` | Convert aligned plan → PRD published to GitHub Issues |
+| `/to-issues` | Break PRD → vertical slice tickets (AFK-ready) |
+| `/tdd` | Implement a slice with red-green-refactor |
+| `/diagnose` | Hard bug or performance regression |
+| `/improve-codebase-architecture` | Find deep module opportunities |
+| `/zoom-out` | Get a map of unfamiliar code area |
+| `/prototype` | Throwaway code to answer a design question |
+| `/triage` | Process incoming GitHub Issues |
+| `/grill-me` | Stress-test a plan before writing any code |

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ingestSource } from "@/lib/knowledge/ingest";
+import { ingestSource } from "@/lib/knowledge";
 import { addKBIngestJob } from "@/lib/queue";
 import { logger } from "@/lib/logger";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";

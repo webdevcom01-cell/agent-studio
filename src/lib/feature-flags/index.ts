@@ -88,8 +88,15 @@ export async function isFeatureEnabled(
 
   // Check Redis override (set via admin API)
   const redisOverride = await getRedisOverride(flagKey);
-  if (redisOverride?.enabled !== undefined) {
-    return redisOverride.enabled;
+  if (redisOverride !== null) {
+    const overrideEnabled = redisOverride.enabled ?? flag.enabled;
+    if (!overrideEnabled) return false;
+    const overridePct = redisOverride.rolloutPercent ?? flag.rolloutPercent;
+    if (overridePct >= 100) return true;
+    if (overridePct <= 0) return false;
+    const seed = context?.userId ?? context?.orgId ?? "anonymous";
+    const hash = simpleHash(seed + flagKey);
+    return (hash % 100) < overridePct;
   }
 
   // Default: check enabled + percentage rollout

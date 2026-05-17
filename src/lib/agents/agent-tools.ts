@@ -224,6 +224,65 @@ export async function getAgentToolsForAgent(
       });
     }
 
+    // ── call_agents_parallel — run multiple agents simultaneously ───────────
+    // Accepts up to MAX_PARALLEL_AGENTS agent calls and executes them with
+    // Promise.allSettled so a single failure doesn't abort the others.
+    const MAX_PARALLEL_AGENTS = 10;
+    const agentByToolName = new Map(
+      agents.map((a) => [sanitizeToolName(a.name, a.id), a])
+    );
+
+    const parallelInputSchema = z.object({
+      calls: z
+        .array(
+          z.object({
+            agentName: z
+              .string()
+              .describe("Tool name of the agent to call (snake_case, same as its individual tool name)"),
+            input: z
+              .string()
+              .describe("Task or instruction to send to this agent"),
+          })
+        )
+        .min(2)
+        .max(MAX_PARALLEL_AGENTS)
+        .describe("List of agent calls to execute simultaneously"),
+    });
+
+    tools["call_agents_parallel"] = dynamicTool({
+      description:
+        "Call multiple agents simultaneously and wait for all to finish. " +
+        "Use when two or more tasks are fully independent — this reduces total pipeline time significantly. " +
+        "Each call receives the same context isolation as an individual agent call. " +
+        `Maximum ${MAX_PARALLEL_AGENTS} agents per invocation.`,
+      inputSchema: zodSchema(parallelInputSchema),
+      execute: async (args: unknown) => {
+        const { calls } = args as z.infer<typeof parallelInputSchema>;
+        const capturedCtx = ctx;
+
+        const results = await Promise.allSettled(
+          calls.map(({ agentName, input }) => {
+            const agent = agentByToolName.get(agentName);
+            if (!agent) {
+              return Promise.resolve(`[Agent "${agentName}" not found — check the tool name]`);
+            }
+            const cache = cachedResults[agentName] ?? null;
+            return executeAgentTool(agent, input, capturedCtx, cache);
+          })
+        );
+
+        return results
+          .map((r, i) => {
+            const label = calls[i]?.agentName ?? `agent_${i}`;
+            return r.status === "fulfilled"
+              ? `### ${label}\n${r.value}`
+              : `### ${label}\n[Failed: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}]`;
+          })
+          .join("\n\n");
+      },
+    });
+    // ────────────────────────────────────────────────────────────────────────
+
     logger.info("Agent tools loaded", {
       callerAgentId,
       agentToolCount: Object.keys(tools).length,

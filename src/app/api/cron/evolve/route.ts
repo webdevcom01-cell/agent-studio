@@ -15,28 +15,19 @@ import { generateText } from "ai";
 import { getModel } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { getEnv } from "@/lib/env";
 import {
   evolveAgentInstincts,
   requestInstinctPromotion,
   decayStaleInstincts,
 } from "@/lib/ecc/instinct-engine";
 import { isECCEnabled } from "@/lib/ecc";
+import { requireCronSecret } from "@/lib/api/auth-guard";
 
 export const maxDuration = 300;
 
-function verifyCronSecret(req: NextRequest): boolean {
-  const env = getEnv();
-  const cronSecret = env.CRON_SECRET;
-  if (!cronSecret) return true;
-  const authHeader = req.headers.get("authorization") ?? "";
-  return authHeader === `Bearer ${cronSecret}`;
-}
-
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (!verifyCronSecret(req)) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireCronSecret(req);
+  if (authError) return authError;
 
   if (!isECCEnabled()) {
     return NextResponse.json({ success: true, data: { skipped: true, reason: "ECC disabled" } });

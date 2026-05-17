@@ -3,12 +3,10 @@ import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-import { writeAuditLog } from "@/lib/safety/audit-logger";
-import { shouldCompact, compactContext } from "./context-compaction";
-import { createHooksFromFlowContent, emitHook } from "./hooks";
+import { emitHook } from "./hooks";
 import { emitSessionEvent } from "./session-events";
-import { injectHotMemoryIntoContext } from "@/lib/memory/hot-cold-tier";
-import { injectGoalContextIntoContext } from "@/lib/goals/goal-context";
+import { writeAuditLog } from "@/lib/safety/audit-logger";
+import { prepareContextForExecution } from "./execution-prelude";
 import type { FlowNode } from "@/types";
 
 /**
@@ -140,48 +138,9 @@ export async function executeFlow(
     context.variables["last_message"] = userMessage;
   }
 
-  const MAX_HISTORY = 100;
-  // Smart compaction: summarize context before truncating so the AI retains
-  // key facts, decisions, and state from earlier in the conversation.
-  // The summary is stored in context.variables['__context_summary'] which
-  // ai-response handlers inject into the system prompt.
-  if (shouldCompact(context)) {
-    await compactContext(context);
-  }
-  if (context.messageHistory.length > MAX_HISTORY) {
-    context.messageHistory = context.messageHistory.slice(-MAX_HISTORY);
-  }
-
-  // Initialize lifecycle hooks from flow config (zero overhead when unconfigured)
-  if (!context.hooks) {
-    const registry = createHooksFromFlowContent(context.flowContent);
-    if (registry) context.hooks = registry;
-  }
-
-  // Inject hot memory into context (fire-and-forget, never blocks flow)
-  await injectHotMemoryIntoContext(context);
-
-  // Inject goal alignment context (F4) — non-fatal, sets __goal_prompt variable
-  await injectGoalContextIntoContext(context);
-
-  // Audit: flow execution start
-  writeAuditLog({
-    userId: context.userId,
-    action: "FLOW_EXECUTION_START",
-    resourceType: "Agent",
-    resourceId: context.agentId,
-    after: { conversationId: context.conversationId, hasUserMessage: !!userMessage },
-  }).catch(() => {});
-
-  emitHook(context, "onFlowStart", {
-    meta: { hasUserMessage: !!userMessage, streaming: false },
-  });
+  await prepareContextForExecution(context, userMessage ?? null, { streaming: false });
 
   const flowStartMs = Date.now();
-
-  emitSessionEvent(context, "session.started", {
-    meta: { hasUserMessage: !!userMessage, streaming: false },
-  });
 
   while (context.currentNodeId && iterations < MAX_ITERATIONS) {
     iterations++;

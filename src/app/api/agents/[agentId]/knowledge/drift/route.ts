@@ -10,7 +10,7 @@ import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { detectEmbeddingDrift } from "@/lib/knowledge/embedding-drift";
+import { detectEmbeddingDrift } from "@/lib/knowledge";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;

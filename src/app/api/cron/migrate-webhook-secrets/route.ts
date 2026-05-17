@@ -10,28 +10,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { getEnv } from "@/lib/env";
 import { isEncryptionConfigured } from "@/lib/crypto";
 import { encryptWebhookSecret } from "@/lib/webhooks/verify";
+import { requireCronSecret } from "@/lib/api/auth-guard";
 
 const BATCH_SIZE = 50;
 
-function verifyCronSecret(req: NextRequest): boolean {
-  const env = getEnv();
-  const cronSecret = env.CRON_SECRET;
-  if (!cronSecret) return true;
-
-  const authHeader = req.headers.get("authorization") ?? "";
-  return authHeader === `Bearer ${cronSecret}`;
-}
-
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (!verifyCronSecret(req)) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
-    );
-  }
+  const authError = requireCronSecret(req);
+  if (authError) return authError;
 
   if (!isEncryptionConfigured()) {
     return NextResponse.json(

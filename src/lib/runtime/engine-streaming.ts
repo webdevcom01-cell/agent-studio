@@ -9,12 +9,10 @@ import {
 import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
 import { findStartNode, resolveNextNodeId } from "./engine";
-import { writeAuditLog } from "@/lib/safety/audit-logger";
-import { shouldCompact, compactContext } from "./context-compaction";
-import { createHooksFromFlowContent, emitHook } from "./hooks";
+import { emitHook } from "./hooks";
 import { emitSessionEvent } from "./session-events";
-import { injectHotMemoryIntoContext } from "@/lib/memory/hot-cold-tier";
-import { injectGoalContextIntoContext } from "@/lib/goals/goal-context";
+import { writeAuditLog } from "@/lib/safety/audit-logger";
+import { prepareContextForExecution } from "./execution-prelude";
 import { createStreamWriter } from "./stream-protocol";
 import { aiResponseStreamingHandler } from "./handlers/ai-response-streaming-handler";
 import { claudeAgentSdkStreamingHandler } from "./handlers/claude-agent-sdk-streaming-handler";
@@ -29,7 +27,6 @@ import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
 const MAX_ITERATIONS = 50;
-const MAX_HISTORY = 100;
 const MAX_NODE_VISITS = 5;
 
 export function executeFlowStreaming(
@@ -110,43 +107,9 @@ export function executeFlowStreaming(
           context.variables["last_message"] = userMessage;
         }
 
-        // Smart compaction before truncation (see context-compaction.ts)
-        if (shouldCompact(context)) {
-          await compactContext(context);
-        }
-        if (context.messageHistory.length > MAX_HISTORY) {
-          context.messageHistory = context.messageHistory.slice(-MAX_HISTORY);
-        }
+        await prepareContextForExecution(context, userMessage ?? null, { streaming: true });
 
         let waitingForInput = false;
-
-        // Initialize lifecycle hooks from flow config (zero overhead when unconfigured)
-        if (!context.hooks) {
-          const registry = createHooksFromFlowContent(context.flowContent);
-          if (registry) context.hooks = registry;
-        }
-
-        // Inject hot memory into context (fire-and-forget, never blocks flow)
-        await injectHotMemoryIntoContext(context);
-
-        // Inject goal alignment context (F4)
-        await injectGoalContextIntoContext(context);
-
-        writeAuditLog({
-          userId: context.userId,
-          action: "FLOW_EXECUTION_START",
-          resourceType: "Agent",
-          resourceId: context.agentId,
-          after: { conversationId: context.conversationId, streaming: true },
-        }).catch(() => {});
-
-        emitHook(context, "onFlowStart", {
-          meta: { hasUserMessage: !!userMessage, streaming: true },
-        });
-
-        emitSessionEvent(context, "session.started", {
-          meta: { hasUserMessage: !!userMessage, streaming: true },
-        });
 
         while (context.currentNodeId && iterations < MAX_ITERATIONS && !aborted) {
           iterations++;

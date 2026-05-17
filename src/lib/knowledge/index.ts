@@ -15,7 +15,7 @@ export {
 export type { ChunkingStrategy, ChunkMetadata } from "./chunker";
 export { generateEmbedding, generateEmbeddings } from "./embeddings";
 export { computeContentHash, findDuplicateChunks, deduplicateChunks } from "./deduplication";
-export { searchKnowledgeBase, hybridSearch, reciprocalRankFusion } from "./search";
+export { searchKnowledgeBase, hybridSearch, reciprocalRankFusion, computeDynamicTopK, expandChunksWithContext } from "./search";
 export type { SearchResult, HybridSearchOptions } from "./search";
 export { rerankResults } from "./reranker";
 export { ingestSource, deleteSourceChunks } from "./ingest";
@@ -56,5 +56,10 @@ export {
   updateChunkRetrievalStats,
   getSourcesDueForReingestion,
   triggerReingestion,
+  resetStuckSources,
 } from "./maintenance";
 export type { DeadChunkReport } from "./maintenance";
+export { injectRAGContext } from "./rag-inject";
+export type { RAGInjectionResult, RAGInjectionOptions } from "./rag-inject";
+export { reformulateWithHistory } from "./query-reformulation";
+export type { ChatMessage } from "./query-reformulation";

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { getEnv } from "@/lib/env";
 import { runScheduledFlow } from "@/lib/scheduler/execution-engine";
 import type { ScheduleRunResult } from "@/lib/scheduler/execution-engine";
+import { requireCronSecret } from "@/lib/api/auth-guard";
 
 /**
  * POST /api/cron/trigger-scheduled-flows
@@ -26,43 +26,13 @@ export const maxDuration = 300;
 // Maximum schedules processed per cron invocation — prevents overlong runs
 const MAX_SCHEDULES_PER_RUN = 100;
 
-// ─── Auth guard ───────────────────────────────────────────────────────────────
-
-function isCronAuthorized(request: NextRequest): boolean {
-  const env = getEnv();
-  const secret = env.CRON_SECRET;
-
-  // Dev mode: skip auth when secret is not configured
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      logger.warn("CRON_SECRET not set in production — cron endpoint is unprotected");
-    }
-    return true;
-  }
-
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader) return false;
-
-  // Vercel sets: Authorization: Bearer <CRON_SECRET>
-  const [scheme, token] = authHeader.split(" ");
-  return scheme === "Bearer" && token === secret;
-}
-
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const invocationTime = new Date();
 
-  // ── Auth ────────────────────────────────────────────────────────────────
-  if (!isCronAuthorized(request)) {
-    logger.warn("Cron endpoint: unauthorized request", {
-      ip: request.headers.get("x-forwarded-for") ?? "unknown",
-    });
-    return NextResponse.json(
-      { success: false, error: "Unauthorized" },
-      { status: 401 },
-    );
-  }
+  const authError = requireCronSecret(request);
+  if (authError) return authError;
 
   logger.info("Cron: scanning for due schedules", {
     invocationTime: invocationTime.toISOString(),
