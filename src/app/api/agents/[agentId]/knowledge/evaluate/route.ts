@@ -14,9 +14,9 @@ import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { hybridSearch } from "@/lib/knowledge/search";
-import { extractCitations, formatCitationsForUI } from "@/lib/knowledge/citations";
-import { evaluateRAGAS } from "@/lib/knowledge/ragas";
+import { hybridSearch } from "@/lib/knowledge";
+import { extractCitations, formatCitationsForUI } from "@/lib/knowledge";
+import { evaluateRAGAS } from "@/lib/knowledge";
 
 export const maxDuration = 120;
 

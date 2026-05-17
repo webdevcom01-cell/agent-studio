@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
-import { generateEmbeddings } from "@/lib/knowledge/embeddings";
-import { chunkText, estimateTokens } from "@/lib/knowledge/chunker";
+import { generateEmbeddings, chunkText, estimateTokens } from "@/lib/knowledge";
 import { logger } from "@/lib/logger";
 import type { ParsedSkill, SkillIngestResult } from "./types";
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { parseSource } from "@/lib/knowledge/parsers";
-import { ingestSource } from "@/lib/knowledge/ingest";
+import { parseSource } from "@/lib/knowledge";
+import { ingestSource } from "@/lib/knowledge";
 import { addKBIngestJob } from "@/lib/queue";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";

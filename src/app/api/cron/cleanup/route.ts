@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { VersionService } from "@/lib/versioning/version-service";
-import { resetStuckSources } from "@/lib/knowledge/maintenance";
+import { resetStuckSources } from "@/lib/knowledge";
 import { recordMetric } from "@/lib/observability/metrics";
 import { requireCronSecret } from "@/lib/api/auth-guard";
 

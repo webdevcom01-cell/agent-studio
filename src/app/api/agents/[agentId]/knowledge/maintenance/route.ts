@@ -15,7 +15,7 @@ import {
   cleanupDeadChunks,
   getSourcesDueForReingestion,
   triggerReingestion,
-} from "@/lib/knowledge/maintenance";
+} from "@/lib/knowledge";
 
 const ActionSchema = z.object({
   action: z.enum(["cleanup_dead", "trigger_reingestion"]),

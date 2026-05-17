@@ -3,7 +3,7 @@ import { resolveTemplate } from "../template";
 import {
   generateEmbedding,
   generateEmbeddings,
-} from "@/lib/knowledge/embeddings";
+} from "@/lib/knowledge";
 
 const DEFAULT_OUTPUT_VARIABLE = "embedding_result";
 

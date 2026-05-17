@@ -29,9 +29,8 @@ import { join, extname, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { ingestSource } from "@/lib/knowledge/ingest";
-import { searchKnowledgeBase } from "@/lib/knowledge/search";
-import type { SearchResult } from "@/lib/knowledge/search";
+import { ingestSource, searchKnowledgeBase } from "@/lib/knowledge";
+import type { SearchResult } from "@/lib/knowledge";
 import { logger } from "@/lib/logger";
 import picomatch from "picomatch";
 

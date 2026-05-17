@@ -1,7 +1,7 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { cacheGet, cacheSet } from "@/lib/redis";
-import { generateEmbedding } from "@/lib/knowledge/embeddings";
+import { generateEmbedding } from "@/lib/knowledge";
 
 const DEFAULT_TTL_SECONDS = 300;
 const DEFAULT_OUTPUT_VARIABLE = "cache_result";

@@ -19,13 +19,9 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
-import { generateEmbedding } from "@/lib/knowledge/embeddings";
+import { generateEmbedding, acquireEmbeddingSemaphore, releaseEmbeddingSemaphore } from "@/lib/knowledge";
 import { cosineSimilarity } from "@/lib/evals/semantic";
 import { cacheGet, cacheSet, getRedis } from "@/lib/redis";
-import {
-  acquireEmbeddingSemaphore,
-  releaseEmbeddingSemaphore,
-} from "@/lib/knowledge/embedding-cache";
 import { isECCEnabled } from "@/lib/ecc/feature-flag";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

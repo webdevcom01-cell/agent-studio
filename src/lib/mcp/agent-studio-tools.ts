@@ -15,7 +15,7 @@
 import type { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { hybridSearch } from "@/lib/knowledge/search";
+import { hybridSearch } from "@/lib/knowledge";
 import { createTask, markFailed } from "@/lib/managed-tasks/manager";
 import { addMcpFlowJob } from "@/lib/queue";
 

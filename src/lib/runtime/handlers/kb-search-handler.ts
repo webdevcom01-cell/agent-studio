@@ -1,7 +1,7 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { prisma } from "@/lib/prisma";
-import { hybridSearch, computeDynamicTopK, expandChunksWithContext } from "@/lib/knowledge/search";
+import { hybridSearch, computeDynamicTopK, expandChunksWithContext } from "@/lib/knowledge";
 import { trackKBSearch } from "@/lib/analytics";
 import { logger } from "@/lib/logger";
 
