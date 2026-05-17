@@ -58,10 +58,13 @@ export async function register(): Promise<void> {
       serviceName,
       transport: "OTLP/HTTP (custom push)",
     });
+  } else if (process.env.NODE_ENV === "production") {
+    logger.error(
+      "OTEL_EXPORTER_OTLP_ENDPOINT is not set — metrics and traces will not be exported. Set this in Railway environment variables.",
+      { hint: "Set OTEL_EXPORTER_OTLP_ENDPOINT to enable OTLP push to Grafana Cloud / Honeycomb / Datadog" },
+    );
   } else {
-    logger.warn("OpenTelemetry not configured — spans and metrics will be logged only. Set OTEL_EXPORTER_OTLP_ENDPOINT for production observability.", {
-      hint: "Set OTEL_EXPORTER_OTLP_ENDPOINT to enable OTLP push to Grafana Cloud",
-    });
+    logger.warn("OpenTelemetry not configured — metrics logged only (dev mode).");
   }
 
   // ── Graceful shutdown: flush pending metrics on process exit ───────────────

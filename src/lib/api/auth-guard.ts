@@ -223,6 +223,35 @@ export async function requireAdmin(
   return authResult;
 }
 
+// ── requireCronSecret ────────────────────────────────────────────────────────
+// Returns null on success, NextResponse on failure.
+// In production, CRON_SECRET must be set and matched.
+// In development, allows all requests when CRON_SECRET is unset.
+
+export function requireCronSecret(req: NextRequest): NextResponse | null {
+  const secret = process.env.CRON_SECRET;
+
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        { success: false, error: "Cron endpoint is disabled: CRON_SECRET not configured" },
+        { status: 503 },
+      );
+    }
+    return null;
+  }
+
+  const authHeader = req.headers.get("authorization");
+  if (authHeader !== `Bearer ${secret}`) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  }
+
+  return null;
+}
+
 // ── Type guard ───────────────────────────────────────────────────────────────
 
 export function isAuthError(

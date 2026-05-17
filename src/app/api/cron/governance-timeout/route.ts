@@ -1,30 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
-import { getEnv } from "@/lib/env";
 import { addGovernanceTimeoutJob } from "@/lib/queue";
+import { requireCronSecret } from "@/lib/api/auth-guard";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-function isCronAuthorized(request: NextRequest): boolean {
-  const env = getEnv();
-  const secret = env.CRON_SECRET;
-
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      logger.warn("CRON_SECRET not set in production — governance-timeout endpoint is unprotected");
-    }
-    return true;
-  }
-
-  const authHeader = request.headers.get("authorization");
-  return authHeader === `Bearer ${secret}`;
-}
-
 export async function GET(request: NextRequest): Promise<Response> {
-  if (!isCronAuthorized(request)) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  }
+  const authError = requireCronSecret(request);
+  if (authError) return authError;
 
   try {
     const jobId = await addGovernanceTimeoutJob();

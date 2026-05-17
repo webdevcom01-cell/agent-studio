@@ -15,31 +15,18 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
-import { getEnv } from "@/lib/env";
 import { VersionService } from "@/lib/versioning/version-service";
 import { resetStuckSources } from "@/lib/knowledge/maintenance";
 import { recordMetric } from "@/lib/observability/metrics";
+import { requireCronSecret } from "@/lib/api/auth-guard";
 
 const DEFAULT_RETENTION_DAYS = 90;
 const DEFAULT_STUCK_MINUTES = 10;
 const DEFAULT_STALE_RUN_MINUTES = 45;
 
-function verifyCronSecret(req: NextRequest): boolean {
-  const env = getEnv();
-  const cronSecret = env.CRON_SECRET;
-  if (!cronSecret) return true;
-
-  const authHeader = req.headers.get("authorization") ?? "";
-  return authHeader === `Bearer ${cronSecret}`;
-}
-
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (!verifyCronSecret(req)) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
-    );
-  }
+  const authError = requireCronSecret(req);
+  if (authError) return authError;
 
   try {
     const { searchParams } = new URL(req.url);

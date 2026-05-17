@@ -9,29 +9,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { getEnv } from "@/lib/env";
 import { encrypt, isEncryptionConfigured } from "@/lib/crypto";
+import { requireCronSecret } from "@/lib/api/auth-guard";
 
 const BATCH_SIZE = 50;
 const KEY_NAME = "OAUTH_ENCRYPTION_KEY" as const;
 const TOKEN_FIELDS = ["access_token", "refresh_token", "id_token"] as const;
 
-function verifyCronSecret(req: NextRequest): boolean {
-  const env = getEnv();
-  const cronSecret = env.CRON_SECRET;
-  if (!cronSecret) return true;
-
-  const authHeader = req.headers.get("authorization") ?? "";
-  return authHeader === `Bearer ${cronSecret}`;
-}
-
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (!verifyCronSecret(req)) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
-    );
-  }
+  const authError = requireCronSecret(req);
+  if (authError) return authError;
 
   if (!isEncryptionConfigured(KEY_NAME)) {
     return NextResponse.json(
