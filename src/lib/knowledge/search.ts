@@ -198,24 +198,31 @@ export async function searchKnowledgeBase(
   // ($1 syntax is rejected with "syntax error at or near $1").
   // efSearch is always 40 | 60 | 100 — a computed integer, never user input — so
   // Prisma.raw() injection is safe here.
-  await prisma.$executeRaw(Prisma.sql`SET LOCAL hnsw.ef_search = ${Prisma.raw(String(efSearch))}`);
-
+  //
+  // $transaction wrapper: SET LOCAL only persists for the lifetime of the
+  // current transaction. Without $transaction, Prisma's pool may run the
+  // SET LOCAL on one connection and the SELECT on another — the ef_search
+  // tuning would silently revert to the server default. Pin both on the
+  // same connection by wrapping in a single transaction.
   const searchStart = performance.now();
-  const results = await prisma.$queryRaw<VectorSearchRow[]>(
-    Prisma.sql`
-      SELECT
-        c."id", c."content",
-        1 - (c."embedding" <=> ${vectorStr}::vector) as similarity,
-        c."sourceId", s."name" as "sourceName", s."type" as "sourceType", c."metadata"
-      FROM "KBChunk" c
-      INNER JOIN "KBSource" s ON c."sourceId" = s."id"
-      WHERE s."knowledgeBaseId" = ${knowledgeBaseId}
-        AND s."status" = 'READY'
-        AND c."embedding" IS NOT NULL
-      ORDER BY c."embedding" <=> ${vectorStr}::vector
-      LIMIT ${topK}
-    `
-  );
+  const results = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SET LOCAL hnsw.ef_search = ${Prisma.raw(String(efSearch))}`);
+    return tx.$queryRaw<VectorSearchRow[]>(
+      Prisma.sql`
+        SELECT
+          c."id", c."content",
+          1 - (c."embedding" <=> ${vectorStr}::vector) as similarity,
+          c."sourceId", s."name" as "sourceName", s."type" as "sourceType", c."metadata"
+        FROM "KBChunk" c
+        INNER JOIN "KBSource" s ON c."sourceId" = s."id"
+        WHERE s."knowledgeBaseId" = ${knowledgeBaseId}
+          AND s."status" = 'READY'
+          AND c."embedding" IS NOT NULL
+        ORDER BY c."embedding" <=> ${vectorStr}::vector
+        LIMIT ${topK}
+      `
+    );
+  });
   const searchDurationMs = performance.now() - searchStart;
   recordMetric("kb.search.vector_query_ms", searchDurationMs, "ms", {
     knowledgeBaseId,

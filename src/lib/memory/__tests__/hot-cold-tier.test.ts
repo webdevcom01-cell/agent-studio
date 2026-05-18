@@ -1,15 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock prisma before importing module
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    agentMemory: {
-      findMany: vi.fn(),
-    },
+vi.mock("@/lib/prisma", () => {
+  // Tx mock — receives the same shape we expect Prisma's TransactionClient
+  // to expose for the SET LOCAL + raw query pair in getColdMemories.
+  const tx = {
     $executeRawUnsafe: vi.fn(),
     $queryRawUnsafe: vi.fn(),
-  },
-}));
+  };
+  return {
+    prisma: {
+      agentMemory: {
+        findMany: vi.fn(),
+      },
+      // Legacy $executeRawUnsafe / $queryRawUnsafe references on the outer
+      // client are kept so tests that assert on them keep working. The new
+      // $transaction route is used by getColdMemories under the hot-cold-tier
+      // patch (Phase 0e) — the tx mock is what callbacks actually receive.
+      $executeRawUnsafe: tx.$executeRawUnsafe,
+      $queryRawUnsafe: tx.$queryRawUnsafe,
+      $transaction: vi.fn(async (fn: (tx: typeof tx_) => Promise<unknown>) =>
+        fn(tx as never),
+      ),
+      _tx: tx,
+    },
+  };
+});
+
+// Helper alias for the tx callback signature above
+type tx_ = { $executeRawUnsafe: typeof vi.fn; $queryRawUnsafe: typeof vi.fn };
 
 vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -35,8 +54,14 @@ import {
 import type { RuntimeContext } from "@/lib/runtime/types";
 
 const mockFindMany = prisma.agentMemory.findMany as ReturnType<typeof vi.fn>;
+// For getColdMemories: the patched (Phase 0e) implementation runs
+// SET LOCAL and the raw SELECT inside prisma.$transaction(...), so they're
+// invoked on the TX client, not the outer prisma. The mock above wires
+// the tx's $executeRawUnsafe/$queryRawUnsafe to be the same fn references
+// exposed on the outer prisma, so these aliases assert on either path.
 const mockQueryRaw = prisma.$queryRawUnsafe as ReturnType<typeof vi.fn>;
 const mockExecRaw = prisma.$executeRawUnsafe as ReturnType<typeof vi.fn>;
+const mockTransaction = (prisma as unknown as { $transaction: ReturnType<typeof vi.fn> }).$transaction;
 
 function makeMemory(overrides: Record<string, unknown> = {}) {
   return {
