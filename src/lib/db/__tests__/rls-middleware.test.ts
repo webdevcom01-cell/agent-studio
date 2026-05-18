@@ -2,11 +2,36 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { withOrgContext, registerRLSMiddleware } from "../rls-middleware";
 import type { OrgIdResolver } from "../rls-middleware";
 
-// Minimal mock that satisfies PrismaClient usage in rls-middleware
-function makeMockClient() {
+// ---------------------------------------------------------------------------
+// Mock surface
+// ---------------------------------------------------------------------------
+//
+// withOrgContext now wraps `fn` in `client.$transaction(async (tx) => …)`,
+// so the mock client must expose `$transaction` and pass back a `tx` object
+// that mimics the relevant subset of Prisma.TransactionClient (`$executeRaw`,
+// `$queryRaw`). The mock $transaction invokes the user callback with that tx
+// and returns its result — matching Prisma's interactive-transaction shape.
+
+function makeMockTx() {
   return {
+    $executeRaw: vi.fn().mockResolvedValue(0),
+    $queryRaw: vi.fn().mockResolvedValue([]),
+  };
+}
+
+type MockTx = ReturnType<typeof makeMockTx>;
+
+function makeMockClient(tx: MockTx = makeMockTx()) {
+  return {
+    // Mock $transaction simulates Prisma's interactive transaction:
+    // call the user callback with `tx`, return whatever the callback returns.
+    $transaction: vi.fn(async (fn: (tx: MockTx) => Promise<unknown>) => fn(tx)),
+    // $executeRawUnsafe + $use are kept on the outer client for the
+    // legacy registerRLSMiddleware tests below — they must NOT be used
+    // by the new withOrgContext path.
     $executeRawUnsafe: vi.fn().mockResolvedValue(0),
     $use: vi.fn(),
+    _tx: tx,
   };
 }
 
@@ -17,24 +42,26 @@ beforeEach(() => {
 });
 
 describe("withOrgContext", () => {
-  it("calls set_config with the correct orgId before the callback", async () => {
+  it("opens a $transaction with the documented options", async () => {
     const client = makeMockClient();
-    const fn = vi.fn().mockResolvedValue([]);
 
-    await withOrgContext(client as never, "org-123", fn);
+    await withOrgContext(client as never, "org-123", async () => "ok");
 
-    expect(client.$executeRawUnsafe).toHaveBeenCalledOnce();
-    expect(client.$executeRawUnsafe).toHaveBeenCalledWith(
-      `SELECT set_config('app.current_org_id', $1, true)`,
-      "org-123",
-    );
+    expect(client.$transaction).toHaveBeenCalledOnce();
+    // Second arg is the options bag — verify isolation level + bounds.
+    const [, opts] = client.$transaction.mock.calls[0];
+    expect(opts).toMatchObject({
+      isolationLevel: "ReadCommitted",
+      maxWait: 5000,
+      timeout: 30000,
+    });
   });
 
-  it("calls set_config before the callback, not after", async () => {
+  it("calls set_config on the tx (not the outer client) before the callback", async () => {
     const client = makeMockClient();
     const callOrder: string[] = [];
 
-    client.$executeRawUnsafe.mockImplementation(async () => {
+    client._tx.$executeRaw.mockImplementation(async () => {
       callOrder.push("set_config");
       return 0;
     });
@@ -46,7 +73,39 @@ describe("withOrgContext", () => {
 
     await withOrgContext(client as never, "org-abc", fn);
 
+    // Order is: set_config inside the tx, then user callback.
     expect(callOrder).toEqual(["set_config", "callback"]);
+
+    // The legacy outer-client path must NOT be used by the new implementation.
+    expect(client.$executeRawUnsafe).not.toHaveBeenCalled();
+
+    // set_config used the tx, with the orgId interpolated via tagged template.
+    expect(client._tx.$executeRaw).toHaveBeenCalledOnce();
+    const firstArg = client._tx.$executeRaw.mock.calls[0][0];
+    // Tagged template gives Prisma a TemplateStringsArray; verify the static
+    // fragments contain the right SQL skeleton.
+    expect(Array.isArray(firstArg)).toBe(true);
+    expect((firstArg as readonly string[]).join("")).toContain(
+      "SELECT set_config('app.current_org_id'",
+    );
+    // The interpolated value (orgId) is passed as the second tagged-template arg.
+    expect(client._tx.$executeRaw.mock.calls[0][1]).toBe("org-abc");
+  });
+
+  it("passes the tx (NOT the outer client) into the callback", async () => {
+    const client = makeMockClient();
+    let receivedClient: unknown = null;
+
+    await withOrgContext(client as never, "org-123", async (db) => {
+      receivedClient = db;
+    });
+
+    // This is the regression guard against the pre-fix pool-leak bug:
+    // the callback must run against the transaction client, never the outer
+    // pooled client. If anyone refactors back to `return fn(client)`, this
+    // assertion fails immediately.
+    expect(receivedClient).toBe(client._tx);
+    expect(receivedClient).not.toBe(client);
   });
 
   it("returns the value from the callback", async () => {
@@ -62,17 +121,6 @@ describe("withOrgContext", () => {
     expect(result).toBe(expected);
   });
 
-  it("passes the client instance into the callback", async () => {
-    const client = makeMockClient();
-    let receivedClient: unknown = null;
-
-    await withOrgContext(client as never, "org-123", async (db) => {
-      receivedClient = db;
-    });
-
-    expect(receivedClient).toBe(client);
-  });
-
   it("propagates errors thrown inside the callback", async () => {
     const client = makeMockClient();
     const boom = new Error("DB exploded");
@@ -82,6 +130,32 @@ describe("withOrgContext", () => {
         throw boom;
       }),
     ).rejects.toThrow("DB exploded");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Integration coverage gap — see PLAN-V2 §4.1 test plan
+  // ---------------------------------------------------------------------------
+  //
+  // The unit tests above verify the SHAPE of the fix (set_config runs inside
+  // $transaction, callback receives the tx, options are correct). They CANNOT
+  // verify the underlying bug — that the session variable survives across
+  // multiple queries on the same pooled connection — because the bug only
+  // manifests against a real Postgres connection pool.
+  //
+  // TODO(rls-phase-1): wire this against the real DB harness once Phase 1
+  // brings up an integration test infra (see skill-rls-rollout-PLAN-V2.md
+  // §12.4 cross-tenant test pseudocode).
+  it.skip("integration: session variable persists within transaction across queries (real Postgres)", async () => {
+    // Pseudo-code for when the harness exists:
+    //   await withOrgContext(realPrisma, "test-org-123", async (tx) => {
+    //     const before = await tx.$queryRaw<{ val: string }[]>`
+    //       SELECT current_setting('app.current_org_id', true) AS val`;
+    //     expect(before[0].val).toBe("test-org-123");
+    //     await tx.agent.findMany();
+    //     const after = await tx.$queryRaw<{ val: string }[]>`
+    //       SELECT current_setting('app.current_org_id', true) AS val`;
+    //     expect(after[0].val).toBe("test-org-123");
+    //   });
   });
 });
 
