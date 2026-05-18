@@ -9,7 +9,6 @@ import {
   Send,
   Bot,
   Square,
-  MessageSquare,
   Plus,
   PanelLeftClose,
   PanelLeftOpen,

@@ -14,8 +14,7 @@ import { logger } from "@/lib/logger";
 
 export async function GET(): Promise<NextResponse> {
   try {
-    // @ts-ignore — PipelineTemplate added in migration; prisma generate runs at build
-    const templates = await (prisma as any).pipelineTemplate.findMany({
+    const templates = await prisma.pipelineTemplate.findMany({
       select: {
         id: true,
         slug: true,

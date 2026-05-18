@@ -72,8 +72,7 @@ export async function POST(
 
   try {
     // ── 1. Load WebhookConfig ─────────────────────────────────────────────────
-    // @ts-ignore — signatureProvider + isPipelineTrigger added in migration; prisma generate runs at build
-    const config = await (prisma as any).webhookConfig.findFirst({
+    const config = await prisma.webhookConfig.findFirst({
       where: { id: webhookId, agentId },
       select: {
         id: true,
@@ -197,8 +196,7 @@ export async function POST(
     // ── 9. Idempotency check (DB-level, race condition safe) ──────────────────
     const idempotencyKey = buildIdempotencyKey(ctx);
 
-    // @ts-ignore — webhookIdempotencyKey added in migration; prisma generate runs at build
-    const existing = await (prisma as any).pipelineRun.findUnique({
+    const existing = await prisma.pipelineRun.findUnique({
       where: { webhookIdempotencyKey: idempotencyKey },
       select: { id: true, status: true },
     });

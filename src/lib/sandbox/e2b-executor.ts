@@ -78,7 +78,7 @@ function collectFilesFromDir(dir: string, base = dir): ParsedFile[] {
 
 export async function executeInE2BSandbox(
   files: ParsedFile[],
-  workDir: string,
+  _workDir: string,
   agentId: string,
 ): Promise<WorkspaceExecResult> {
   const apiKey = process.env.E2B_API_KEY;

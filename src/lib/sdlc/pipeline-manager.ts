@@ -156,7 +156,6 @@ export async function createPipelineRun(
       useSmartRouting: input.useSmartRouting ?? false,
       requireApproval: input.requireApproval ?? false,
       prUrl: input.prUrl ?? null,
-      // @ts-ignore — webhook trigger fields added in migration; prisma generate runs at build
       webhookIdempotencyKey: input.webhookIdempotencyKey ?? null,
       webhookExecutionId: input.webhookExecutionId ?? null,
       triggerSource: input.triggerSource ?? "manual",

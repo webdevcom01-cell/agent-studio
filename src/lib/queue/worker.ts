@@ -398,7 +398,6 @@ async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<u
       throw err;
     }
 
-    const durationMs = Date.now() - startedAt;
     await markFailed(taskId, errorMsg);
 
     if (task.callbackUrl) {
@@ -424,7 +423,6 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
 
   const { prisma } = await import("@/lib/prisma");
   const { executeFlow } = await import("@/lib/runtime/engine");
-  const { parseFlowContent } = await import("@/lib/validators/flow-content");
   const { loadContext } = await import("@/lib/runtime/context");
   const { markRunning, markCompleted, markFailed, markAbandoned } = await import("@/lib/managed-tasks/manager");
   const { logger: log } = await import("@/lib/logger");

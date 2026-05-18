@@ -25,7 +25,6 @@ import {
 } from "@/lib/a2a/circuit-breaker";
 import { checkRateLimit } from "@/lib/a2a/rate-limiter";
 import { parseFlowContent } from "@/lib/validators/flow-content";
-import { Prisma } from "@/generated/prisma";
 import { traceAgentCall, childContext } from "@/lib/observability/tracer";
 import type { TraceContext } from "@/lib/observability/types";
 

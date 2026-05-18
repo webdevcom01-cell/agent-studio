@@ -45,8 +45,7 @@ export async function POST(
 
   try {
     // ── Guard: reject pipeline-trigger webhooks — they use a dedicated route ─────
-    // @ts-ignore — isPipelineTrigger added in Layer 1 migration
-    const config = await (prisma as any).webhookConfig.findFirst({
+    const config = await prisma.webhookConfig.findFirst({
       where: { id: webhookId, agentId },
       select: { isPipelineTrigger: true, enabled: true },
     }) as { isPipelineTrigger: boolean; enabled: boolean } | null;

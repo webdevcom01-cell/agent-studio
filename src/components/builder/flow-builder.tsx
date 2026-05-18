@@ -103,7 +103,6 @@ import { Input } from "@/components/ui/input";
 import { AgentMCPSelector } from "@/components/mcp/agent-mcp-selector";
 import type { FlowContent, FlowNode } from "@/types";
 import type { NodeTypes as ReactFlowNodeTypes } from "@xyflow/react";
-import { cn } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 
 interface FlowBuilderProps {

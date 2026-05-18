@@ -8,7 +8,7 @@
  * Session TTL: 24 hours (matches JWT maxAge).
  */
 
-import { cacheGet, cacheSet, cacheDel, getRedis } from "@/lib/redis";
+import { cacheGet, cacheSet, cacheDel } from "@/lib/redis";
 import { logger } from "@/lib/logger";
 
 const MAX_SESSIONS = 5;

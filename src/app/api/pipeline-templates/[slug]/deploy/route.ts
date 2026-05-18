@@ -69,8 +69,7 @@ export async function POST(
   if (isAuthError(authResult)) return authResult;
 
   // ── Load template ─────────────────────────────────────────────────────────
-  // @ts-ignore — PipelineTemplate added in migration; prisma generate runs at build
-  const template = await (prisma as any).pipelineTemplate.findUnique({
+  const template = await prisma.pipelineTemplate.findUnique({
     where: { slug },
   });
 
@@ -107,7 +106,6 @@ export async function POST(
       description: template.description ?? undefined,
       secret: encrypted,
       secretEncrypted: isEncrypted,
-      // @ts-ignore — signatureProvider + isPipelineTrigger added in migration
       signatureProvider,
       isPipelineTrigger: true,
       asyncExecution,
@@ -121,8 +119,7 @@ export async function POST(
   });
 
   // Increment usage counter
-  // @ts-ignore
-  await (prisma as any).pipelineTemplate.update({
+  await prisma.pipelineTemplate.update({
     where: { slug },
     data: { usageCount: { increment: 1 } },
   });

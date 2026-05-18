@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
-import { getPipelineRun, approvePipelineRun } from "@/lib/sdlc/pipeline-manager";
+import { approvePipelineRun } from "@/lib/sdlc/pipeline-manager";
 import { addPipelineRunJob } from "@/lib/queue";
 
 const ApproveBodySchema = z.object({
