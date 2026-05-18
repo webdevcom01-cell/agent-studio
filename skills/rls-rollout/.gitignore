@@ -1,0 +1,11 @@
+# Generated artifacts from skill execution — do not commit
+reference/preflight-report.json
+reference/model-classifications.json
+reference/existing-rls-state.tsv
+reference/existing-policies.tsv
+reference/composite-indexes.tsv
+reference/raw-sql-sites.txt
+reference/cross-tenant-routes-actual.md
+reference/STEP1-summary.md
+reference/migration-plan-phase*.md
+reference/runbook-phase*-production.md
