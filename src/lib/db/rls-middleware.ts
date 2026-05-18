@@ -12,7 +12,7 @@
  * the DATABASE_URL role has BYPASSRLS on the DB level.
  */
 
-import { PrismaClient } from "@/generated/prisma";
+import { PrismaClient, Prisma } from "@/generated/prisma";
 
 export type OrgIdResolver = () => string | null;
 
@@ -32,9 +32,10 @@ interface PrismaClientWithLegacyMiddleware extends PrismaClient {
 /**
  * Registers an RLS middleware hook on a PrismaClient.
  *
- * NOTE: Prisma v6 removed $use(). This function only takes effect when the
- * client exposes $use (e.g. in tests with a mock client). For production,
- * use withOrgContext() per-request instead.
+ * @deprecated Prisma v6 removed $use(). This function only takes effect when
+ * the client exposes $use (e.g. in tests with a mock client). For production,
+ * use withOrgContext() per-request instead. Kept for backwards-compatible test
+ * coverage; will be removed once dependent tests migrate.
  */
 export function registerRLSMiddleware(
   client: PrismaClient,
@@ -56,20 +57,35 @@ export function registerRLSMiddleware(
 /**
  * Execute Prisma operations with a specific org context.
  *
- * Sets `app.current_org_id` for the current DB session before running `fn`,
- * enabling RLS policies to automatically filter rows to that org.
+ * Wraps `fn` in a `$transaction` and sets `app.current_org_id` inside that
+ * transaction before executing the callback. RLS policies on tenant tables
+ * read this session variable to filter rows to the caller's org.
+ *
+ * WHY $transaction: without it, `set_config` and the subsequent queries may
+ * land on different connections from the pool, causing the session variable
+ * to evaporate. $transaction pins a single connection for the duration of
+ * `fn`, so the session variable is guaranteed to persist across queries.
+ *
+ * Use `tx` (the transaction client passed to `fn`) for all queries inside
+ * the callback — using the outer `client` will bypass the org context.
  *
  * @example
- * const agents = await withOrgContext(prisma, orgId, (db) => db.agent.findMany())
+ * const agents = await withOrgContext(prisma, orgId, (tx) => tx.agent.findMany())
  */
 export async function withOrgContext<T>(
   client: PrismaClient,
   orgId: string,
-  fn: (client: PrismaClient) => Promise<T>,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  await client.$executeRawUnsafe(
-    `SELECT set_config('app.current_org_id', $1, true)`,
-    orgId,
+  return client.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_org_id', ${orgId}, true)`;
+      return fn(tx);
+    },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+      maxWait: 5000,
+      timeout: 30000,
+    },
   );
-  return fn(client);
 }
