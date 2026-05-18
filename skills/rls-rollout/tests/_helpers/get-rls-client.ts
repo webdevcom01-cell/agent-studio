@@ -8,7 +8,7 @@
  * set the session variables. Otherwise queries will return empty.
  */
 
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma } from "@/generated/prisma";
 
 export type TenantContext = {
   organizationId: string;
@@ -80,7 +80,7 @@ export async function withRLSContext<T>(
   ctx: TenantContext,
   fn: (tx: Prisma.TransactionClient) => Promise<T>
 ): Promise<T> {
-  return client.$transaction(async (tx) => {
+  return client.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw`SELECT set_config('app.current_org_id', ${ctx.organizationId}, true)`;
     await tx.$executeRaw`SELECT set_config('app.current_user_id', ${ctx.userId}, true)`;
     return fn(tx);
@@ -95,7 +95,7 @@ export async function debugRLSContext(
   client: PrismaClient,
   ctx: TenantContext
 ): Promise<{ orgId: string; userId: string }> {
-  return withRLSContext(client, ctx, async (tx) => {
+  return withRLSContext(client, ctx, async (tx: Prisma.TransactionClient) => {
     const orgResult = await tx.$queryRaw<{ val: string }[]>`
       SELECT current_setting('app.current_org_id', true) AS val
     `;
