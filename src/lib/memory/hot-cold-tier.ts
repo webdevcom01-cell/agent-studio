@@ -110,32 +110,38 @@ export async function getColdMemories(
 
     const vectorStr = `[${embedding.join(",")}]`;
 
-    await prisma.$executeRawUnsafe("SET LOCAL hnsw.ef_search = 40");
-
-    const results = await prisma.$queryRawUnsafe<
-      Array<{
-        id: string;
-        key: string;
-        value: unknown;
-        category: string;
-        importance: number;
-        accessCount: number;
-        accessedAt: Date;
-        createdAt: Date;
-        similarity: number;
-      }>
-    >(
-      `SELECT id, key, value, category, importance, "accessCount", "accessedAt", "createdAt",
-              1 - (embedding <=> $1::vector) as similarity
-       FROM "AgentMemory"
-       WHERE "agentId" = $2
-         AND embedding IS NOT NULL
-       ORDER BY embedding <=> $1::vector
-       LIMIT $3`,
-      vectorStr,
-      agentId,
-      topK,
-    );
+    // $transaction wrapper: SET LOCAL only persists for the lifetime of the
+    // current transaction. Without $transaction, Prisma's pool may run the
+    // SET LOCAL on one connection and the SELECT on another — the ef_search
+    // tuning would silently revert to the server default. Pin both on the
+    // same connection by wrapping in a single transaction.
+    const results = await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SET LOCAL hnsw.ef_search = 40");
+      return tx.$queryRawUnsafe<
+        Array<{
+          id: string;
+          key: string;
+          value: unknown;
+          category: string;
+          importance: number;
+          accessCount: number;
+          accessedAt: Date;
+          createdAt: Date;
+          similarity: number;
+        }>
+      >(
+        `SELECT id, key, value, category, importance, "accessCount", "accessedAt", "createdAt",
+                1 - (embedding <=> $1::vector) as similarity
+         FROM "AgentMemory"
+         WHERE "agentId" = $2
+           AND embedding IS NOT NULL
+         ORDER BY embedding <=> $1::vector
+         LIMIT $3`,
+        vectorStr,
+        agentId,
+        topK,
+      );
+    });
 
     return results.filter((r) => r.similarity > 0.3);
   } catch (error) {

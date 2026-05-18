@@ -164,31 +164,37 @@ export const memoryReadHandler: NodeHandler = async (node, context) => {
 
         const vectorStr = `[${embedding.join(",")}]`;
 
-        // Set HNSW ef_search for memory lookups (short lookups, speed-optimized)
-        await prisma.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = 40`);
-
-        // Cosine similarity search (accelerated by HNSW index)
-        const memories = await prisma.$queryRawUnsafe<
-          Array<{
-            id: string;
-            key: string;
-            value: unknown;
-            category: string;
-            importance: number;
-            similarity: number;
-          }>
-        >(
-          `SELECT id, key, value, category, importance,
-                  1 - (embedding <=> $1::vector) as similarity
-           FROM "AgentMemory"
-           WHERE "agentId" = $2
-             AND embedding IS NOT NULL
-           ORDER BY embedding <=> $1::vector
-           LIMIT $3`,
-          vectorStr,
-          context.agentId,
-          topK
-        );
+        // Set HNSW ef_search for memory lookups (short lookups, speed-optimized).
+        // $transaction wrapper: SET LOCAL only persists for the lifetime of the
+        // current transaction. Without $transaction, Prisma's pool may run the
+        // SET LOCAL on one connection and the SELECT on another — the ef_search
+        // tuning would silently revert to the server default. Pin both on the
+        // same connection by wrapping in a single transaction.
+        const memories = await prisma.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = 40`);
+          // Cosine similarity search (accelerated by HNSW index)
+          return tx.$queryRawUnsafe<
+            Array<{
+              id: string;
+              key: string;
+              value: unknown;
+              category: string;
+              importance: number;
+              similarity: number;
+            }>
+          >(
+            `SELECT id, key, value, category, importance,
+                    1 - (embedding <=> $1::vector) as similarity
+             FROM "AgentMemory"
+             WHERE "agentId" = $2
+               AND embedding IS NOT NULL
+             ORDER BY embedding <=> $1::vector
+             LIMIT $3`,
+            vectorStr,
+            context.agentId,
+            topK
+          );
+        });
 
         // Update access tracking
         if (memories.length > 0) {
