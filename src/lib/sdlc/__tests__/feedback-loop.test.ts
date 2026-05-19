@@ -160,7 +160,7 @@ describe("runFeedbackIteration — core behavior", () => {
     );
   });
 
-  it("passes maxOutputTokens: 8192 to generateText", async () => {
+  it("passes maxOutputTokens: 16000 to generateText", async () => {
     mockGenerateText.mockResolvedValue({
       text: "fixed",
       usage: { inputTokens: 10, outputTokens: 5 },

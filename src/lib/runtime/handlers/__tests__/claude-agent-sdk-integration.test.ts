@@ -56,6 +56,7 @@ vi.mock("@/lib/observability/tracer", () => ({ traceGenAI: mockTraceGenAI }));
 vi.mock("@/lib/observability/metrics",() => ({
   recordChatLatency: mockRecordChatLatency,
   recordTokenUsage:  mockRecordTokenUsage,
+  recordMetric: vi.fn(),
 }));
 vi.mock("@/lib/logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },

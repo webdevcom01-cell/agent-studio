@@ -44,6 +44,7 @@ vi.mock("@/lib/observability/tracer", () => ({
 vi.mock("@/lib/observability/metrics", () => ({
   recordChatLatency: mockRecordChatLatency,
   recordTokenUsage: mockRecordTokenUsage,
+  recordMetric: vi.fn(),
 }));
 
 vi.mock("@/lib/logger", () => ({

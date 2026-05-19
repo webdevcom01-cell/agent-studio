@@ -91,7 +91,7 @@ export async function isFeatureEnabled(
   if (redisOverride !== null) {
     const overrideEnabled = redisOverride.enabled ?? flag.enabled;
     if (!overrideEnabled) return false;
-    const overridePct = redisOverride.rolloutPercent ?? flag.rolloutPercent;
+    const overridePct = redisOverride.rolloutPercent ?? (overrideEnabled ? 100 : 0);
     if (overridePct >= 100) return true;
     if (overridePct <= 0) return false;
     const seed = context?.userId ?? context?.orgId ?? "anonymous";
