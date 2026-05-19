@@ -94,10 +94,9 @@ describe("getAgentToolsForAgent", () => {
 
     const tools = await getAgentToolsForAgent("agent-1", makeCtx());
 
-    expect(Object.keys(tools)).toHaveLength(3);
+    expect(Object.keys(tools)).toHaveLength(2);
     expect(Object.keys(tools)).toContain("agent_research_assistant");
     expect(Object.keys(tools)).toContain("agent_content_writer");
-    expect(Object.keys(tools)).toContain("call_agents_parallel");
   });
 
   it("returns empty when depth is at max (10)", async () => {
@@ -304,10 +303,7 @@ describe("agent tool execution", () => {
 
     const tools = await getAgentToolsForAgent("agent-1", makeCtx({ userId: null }));
 
-    // 1 individual agent tool + call_agents_parallel
-    expect(Object.keys(tools)).toHaveLength(2);
-    expect(Object.keys(tools)).toContain("agent_research_assistant");
-    expect(Object.keys(tools)).toContain("call_agents_parallel");
+    expect(Object.keys(tools)).toHaveLength(1);
   });
 });
 
@@ -466,75 +462,5 @@ describe("getTimeoutForAgent", () => {
   });
   it("first-match wins — fast before slow", () => {
     expect(getTimeoutForAgent({ name: "Quick Architect", expectedDurationSeconds: null })).toBe(45);
-  });
-});
-
-describe("call_agents_parallel tool", () => {
-  beforeEach(() => {
-    mockPrisma.agent.findMany.mockResolvedValue(mockAgents);
-    mockPrisma.agent.findFirst.mockImplementation(({ where }: { where: { id: string } }) => {
-      const agent = mockAgents.find((a) => a.id === where.id);
-      return Promise.resolve(agent ? { ...agent, flow: { content: { nodes: [], edges: [] } } } : null);
-    });
-    mockExecuteFlow.mockResolvedValue({
-      messages: [{ role: "assistant", content: "Done" }],
-    });
-  });
-
-  it("includes call_agents_parallel in returned tools", async () => {
-    const tools = await getAgentToolsForAgent("agent-orchestrator", makeCtx());
-    expect(tools).toHaveProperty("call_agents_parallel");
-  });
-
-  it("executes multiple agents in parallel and returns combined output", async () => {
-    mockExecuteFlow.mockResolvedValue({
-      messages: [{ role: "assistant", content: "Agent completed" }],
-    });
-
-    const tools = await getAgentToolsForAgent("agent-orchestrator", makeCtx());
-    const result = await (tools["call_agents_parallel"] as { execute: (args: unknown) => Promise<string> }).execute({
-      calls: [
-        { agentName: "agent_research_assistant", input: "Find info about AI" },
-        { agentName: "agent_content_writer", input: "Write a summary" },
-      ],
-    });
-
-    expect(result).toContain("agent_research_assistant");
-    expect(result).toContain("agent_content_writer");
-    expect(result).toContain("Agent completed");
-  });
-
-  it("returns error section for unknown agent name without failing others", async () => {
-    mockExecuteFlow.mockResolvedValueOnce({ messages: [{ role: "assistant", content: "Research done" }] });
-
-    const tools = await getAgentToolsForAgent("agent-orchestrator", makeCtx());
-    const result = await (tools["call_agents_parallel"] as { execute: (args: unknown) => Promise<string> }).execute({
-      calls: [
-        { agentName: "agent_research_assistant", input: "Find info" },
-        { agentName: "nonexistent_agent", input: "Do something" },
-      ],
-    });
-
-    expect(result).toContain("Research done");
-    expect(result).toContain("nonexistent_agent");
-    expect(result).toContain("not found");
-  });
-
-  it("handles individual agent failure without aborting others", async () => {
-    mockExecuteFlow.mockRejectedValue(new Error("Sub-agent crashed"));
-
-    const tools = await getAgentToolsForAgent("agent-orchestrator", makeCtx());
-    const result = await (tools["call_agents_parallel"] as { execute: (args: unknown) => Promise<string> }).execute({
-      calls: [
-        { agentName: "agent_research_assistant", input: "Find info" },
-        { agentName: "agent_content_writer", input: "Write it" },
-      ],
-    });
-
-    // Both agents appear — Promise.allSettled doesn't abort on first failure
-    expect(result).toContain("agent_research_assistant");
-    expect(result).toContain("agent_content_writer");
-    // Both report failure (lowercase "failed" from the error handler in agent-tools.ts)
-    expect(result.toLowerCase()).toContain("failed");
   });
 });
