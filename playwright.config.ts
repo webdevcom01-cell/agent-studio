@@ -68,17 +68,15 @@ export default defineConfig({
     },
   ],
 
-  /* Start Next.js dev server before tests */
+  /* Start Next.js server before tests.
+   * CI: `.next` is restored from the Build job artifact (see ci.yml),
+   * so we only need `pnpm start`. Local: `pnpm dev` for hot reload. */
   webServer: {
-    command: process.env.CI ? "pnpm build && pnpm start" : "pnpm dev",
+    command: process.env.CI ? "pnpm start" : "pnpm dev",
     port: 3000,
     reuseExistingServer: !process.env.CI,
-    // CI: `pnpm build && pnpm start` requires the full Next.js build cycle
-    // (Next.js compile takes 5-15 minutes on the CI runner depending on
-    // cache state). 120s was too short and caused E2E to time out before
-    // the server could come up. 25 minutes gives slack for slow builds.
-    // Locally `pnpm dev` boots in seconds, so the original 2-minute cap
-    // is preserved.
-    timeout: process.env.CI ? 1_500_000 : 120_000,
+    // CI no longer rebuilds in webServer (artifact-restored .next),
+    // so `pnpm start` boots in seconds. Keep the local 2-minute cap.
+    timeout: 120_000,
   },
 });
