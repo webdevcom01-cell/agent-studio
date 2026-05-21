@@ -1,6 +1,7 @@
 # dependencies
 node_modules
 .pnpm-store
+package-lock.json
 
 # next.js
 .next
@@ -111,6 +112,11 @@ test-*.ts
 deploy-fixes.sh
 fix-flow-nodes.sql
 fix-models.cjs
+phase0b-grants.sh
+
+# Codex/external AI agent workspaces (may contain API keys)
+.codex/
+.agents/
 
 # Scratch evaluation/audit files
 DOCUMENTATION-AUDIT-PROMPT.md
