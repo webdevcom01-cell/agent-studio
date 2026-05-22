@@ -227,6 +227,9 @@ jobs:
       - name: Generate Prisma client
         run: pnpm db:generate
 
+      - name: Create railway database alias
+        run: psql postgresql://postgres:postgres@localhost:5432/postgres -c "CREATE DATABASE railway;"
+
       - name: Run Prisma migrations
         run: pnpm prisma migrate deploy
 
