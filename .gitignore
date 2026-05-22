@@ -133,3 +133,6 @@ pr-guardian-phase1.patch
 .claude/scheduled_tasks.lock
 *.canvas
 *.base
+
+# Local utility scripts (contain secrets, keep out of repo)
+rotate-postgres-password.sh
