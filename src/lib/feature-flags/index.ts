@@ -30,6 +30,13 @@ interface FlagOverride {
 // ── Default flag definitions ─────────────────────────────────────────────────
 
 const DEFAULT_FLAGS: Record<string, FeatureFlag> = {
+  "rls-enforcement": {
+    key: "rls-enforcement",
+    enabled: false,
+    rolloutPercent: 0,
+    description:
+      "Enforce PostgreSQL Row-Level Security policies on app_user connections",
+  },
   "async-execution": {
     key: "async-execution",
     enabled: false,
@@ -97,6 +104,15 @@ export async function isFeatureEnabled(
     const seed = context?.userId ?? context?.orgId ?? "anonymous";
     const hash = simpleHash(seed + flagKey);
     return (hash % 100) < overridePct;
+  }
+
+  // Env var runtime override for rls-enforcement — evaluated at call time so
+  // CI/prod can flip enforcement without a code deploy.
+  if (
+    flagKey === "rls-enforcement" &&
+    process.env.RLS_ENFORCEMENT_ENABLED === "true"
+  ) {
+    return true;
   }
 
   // Default: check enabled + percentage rollout

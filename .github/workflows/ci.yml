@@ -192,6 +192,7 @@ jobs:
       AUTH_GOOGLE_SECRET: ci-google-secret
       DATABASE_URL_APP_USER: postgresql://app_user:app_user_pw@localhost:5432/agent_studio_test
       DATABASE_URL_ADMIN_USER: postgresql://admin_user:admin_user_pw@localhost:5432/agent_studio_test
+      RLS_ENFORCEMENT_ENABLED: "true"
       CI: "true"
 
     steps:

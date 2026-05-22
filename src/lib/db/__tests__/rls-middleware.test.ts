@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("@/lib/feature-flags", () => ({
+  isFeatureEnabled: vi.fn().mockResolvedValue(true),
+}));
+
+import { isFeatureEnabled } from "@/lib/feature-flags";
 import { withOrgContext, registerRLSMiddleware } from "../rls-middleware";
 import type { OrgIdResolver } from "../rls-middleware";
 
@@ -39,6 +45,7 @@ type MockClient = ReturnType<typeof makeMockClient>;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(isFeatureEnabled).mockResolvedValue(true);
 });
 
 describe("withOrgContext", () => {
@@ -156,6 +163,45 @@ describe("withOrgContext", () => {
     //       SELECT current_setting('app.current_org_id', true) AS val`;
     //     expect(after[0].val).toBe("test-org-123");
     //   });
+  });
+});
+
+describe("withOrgContext — rls-enforcement flag off (bypass path)", () => {
+  beforeEach(() => {
+    vi.mocked(isFeatureEnabled).mockResolvedValue(false);
+  });
+
+  it("does not open a $transaction when flag is off", async () => {
+    const client = makeMockClient();
+    await withOrgContext(client as never, "org-123", async () => "ok");
+    expect(client.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("passes the outer client directly to the callback", async () => {
+    const client = makeMockClient();
+    let received: unknown = null;
+
+    await withOrgContext(client as never, "org-123", async (db) => {
+      received = db;
+    });
+
+    expect(received).toBe(client);
+  });
+
+  it("returns the callback value without enforcement", async () => {
+    const client = makeMockClient();
+    const result = await withOrgContext(
+      client as never,
+      "org-123",
+      async () => "bypass-result",
+    );
+    expect(result).toBe("bypass-result");
+  });
+
+  it("does not call set_config when flag is off", async () => {
+    const client = makeMockClient();
+    await withOrgContext(client as never, "org-123", async () => undefined);
+    expect(client._tx.$executeRaw).not.toHaveBeenCalled();
   });
 });
 
