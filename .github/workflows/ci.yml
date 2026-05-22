@@ -233,6 +233,9 @@ jobs:
       - name: Run Prisma migrations
         run: pnpm prisma migrate deploy
 
+      - name: Sync remaining schema drift
+        run: pnpm prisma db push --accept-data-loss
+
       - name: Generate E2E session token
         run: |
           TOKEN=$(pnpm tsx e2e/scripts/generate-ci-session.ts)
