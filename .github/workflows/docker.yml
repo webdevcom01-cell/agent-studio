@@ -1,10 +1,7 @@
 name: Docker Build & Push
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -14,7 +11,10 @@ jobs:
   build:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Raised from 30 -> 45 min. Phase 0a docker build clocked 30m 29s and was
+    # cancelled — see docs/rls-tech-debt.md item #1. Combined with dropping the
+    # linux/arm64 QEMU leg below, this gives comfortable headroom.
+    timeout-minutes: 45
 
     permissions:
       contents: read
@@ -24,6 +24,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+      # QEMU is no longer required since we build a single native platform,
+      # but keeping the action available in case we re-add arm64 on a separate
+      # release-only workflow later. It's a no-op on amd64-only builds.
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
@@ -53,7 +56,12 @@ jobs:
           context: .
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          platforms: linux/amd64,linux/arm64
+          # Dropped linux/arm64. Railway (the only current production target)
+          # runs amd64. arm64 was being cross-compiled via QEMU emulation and
+          # consumed ~50% of build wall-clock for zero consumers. If arm64
+          # support is needed later (Apple Silicon dev, AWS Graviton), add
+          # a separate release-arm64.yml that runs on tagged releases only.
+          platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: true
