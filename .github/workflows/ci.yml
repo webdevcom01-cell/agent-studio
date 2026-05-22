@@ -190,6 +190,8 @@ jobs:
       AUTH_GITHUB_SECRET: ci-github-secret
       AUTH_GOOGLE_ID: ci-google-id
       AUTH_GOOGLE_SECRET: ci-google-secret
+      DATABASE_URL_APP_USER: postgresql://app_user:app_user_pw@localhost:5432/agent_studio_test
+      DATABASE_URL_ADMIN_USER: postgresql://admin_user:admin_user_pw@localhost:5432/agent_studio_test
       CI: "true"
 
     steps:
@@ -225,8 +227,14 @@ jobs:
       - name: Generate Prisma client
         run: pnpm db:generate
 
-      - name: Setup database
-        run: pnpm db:push
+      - name: Create railway database alias
+        run: psql postgresql://postgres:postgres@localhost:5432/postgres -c "CREATE DATABASE railway;"
+
+      - name: Run Prisma migrations
+        run: pnpm prisma migrate deploy
+
+      - name: Sync remaining schema drift
+        run: pnpm prisma db push --accept-data-loss
 
       - name: Generate E2E session token
         run: |
