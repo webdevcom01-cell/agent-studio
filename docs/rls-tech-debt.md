@@ -13,58 +13,6 @@ history of decisions is preserved.
 
 ## Open
 
-### 1. CI Docker Build & Push hits 30-minute timeout
-
-**Severity**: Medium
-**Surfaced in**: PR #97 (Phase 0a merge)
-**Resolve before**: Phase 0b (when Docker build must be reliable as a
-gate for migration-bearing PRs)
-
-**Symptom**
-
-`.github/workflows/docker.yml` has `timeout-minutes: 30`. On the Phase
-0a PR, the job ran 30m 29s and was cancelled by GitHub Actions during
-the post-build `Collecting build traces` step. The Next.js compile
-inside the container completed successfully in **15.3 minutes**, then
-the remaining 14.7 minutes were consumed by static page generation
-(70/70 pages) plus `Collecting build traces`, leaving no slack.
-
-**Evidence**
-
-```
-#29 1234  ✓ Compiled successfully in 15.3min
-#29 1242  ✓ Generating static pages (70/70)
-#29 1245  Finalizing page optimization ...
-#29 1246  Collecting build traces ...
-[...]
-Error: The operation was canceled.
-```
-
-**Why this matters**
-
-Docker Build & Push is currently **not** a required check on PRs into
-`main`, so the timeout did not block Phase 0a. Once RLS migrations and
-multi-role DB configuration land in Phase 0b+, we need Docker build
-to be a trustworthy verification path. A flaky timeout in the gate is
-a credibility problem before it is a correctness problem.
-
-**Proposed fixes (pick one)**
-
-- **Raise the cap to 45 minutes** in `.github/workflows/docker.yml`.
-  Cheapest fix. Adds slack without touching the build pipeline. May
-  mask a slowly-growing real problem.
-- **Move Docker build off the PR pipeline** to push-on-main only.
-  Eliminates the per-PR cost entirely but loses the PR-level
-  verification that the Dockerfile + lockfile still build cleanly.
-- **Reduce Next.js compile time** with `--turbopack` build, partial
-  prerendering review, or splitting the build into prod vs preview.
-  Highest engineering cost but addresses the underlying trend.
-
-**Recommendation**: Raise to 45m as a Phase 0a follow-up. Investigate
-compile-time optimization in a separate, non-blocking workstream.
-
----
-
 ### 2. `MCP pool shutdown triggered` log noise during SSG
 
 **Severity**: Low (noise, not error) — but worth resolving before
@@ -243,6 +191,30 @@ Phase 1.
 ---
 
 ## Resolved
+
+### 1. Docker Build & Push timeout (2026-05-21)
+
+**Resolution**: `.github/workflows/docker.yml` updated in two ways to fix
+the 30-minute timeout that was causing Railway 'CI check suite failed' and
+blocking deploys of PR #107, #108, and #111.
+
+1. **Raised `timeout-minutes` from 30 → 45.** Gives slack above the Phase
+   0a observed 30m 29s wall-clock.
+2. **Dropped `linux/arm64` from the build platforms matrix.** arm64 was
+   being cross-compiled via QEMU emulation, consuming roughly half of the
+   build wall-clock for zero current consumers (Railway runs amd64; k8s
+   overlays reference placeholder `ghcr.io/org/...` images and `example.com`
+   hosts, i.e. not actually deployed).
+
+Combined effect: Docker build should now complete in ~15–18 minutes with
+20+ minutes of headroom against the timeout. If arm64 is needed later
+(Apple Silicon dev, AWS Graviton), add a separate `release-arm64.yml`
+that runs only on tagged releases, not every PR.
+
+**Related**: Surfaced as a deploy blocker once tech-debt item #3 (Wait
+for CI) was enabled on 2026-05-20.
+
+---
 
 ### 3. Railway "Wait for CI" toggle enabled (2026-05-20)
 

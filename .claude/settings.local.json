@@ -43,7 +43,8 @@
       "mcp__railway__list-variables",
       "mcp__railway__list-deployments",
       "Bash(curl -s -w \"\\\\nHTTP_STATUS:%{http_code}\" https://agent-studio-production-c43e.up.railway.app/api/health)",
-      "Bash(curl -s -w \"\\\\nHTTP_STATUS:%{http_code}\" https://agent-studio-production-c43e.up.railway.app/api/ecc/templates)"
+      "Bash(curl -s -w \"\\\\nHTTP_STATUS:%{http_code}\" https://agent-studio-production-c43e.up.railway.app/api/ecc/templates)",
+      "Bash(git *)"
     ]
   }
 }
