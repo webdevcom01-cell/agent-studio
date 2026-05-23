@@ -1,5 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const mockWithTenant = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/api/tenant-context", () => ({
+  withTenant: mockWithTenant,
+}));
+
+vi.mock("@/lib/scheduler/sync", () => ({
+  syncSchedulesFromFlow: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/webhooks/sync", () => ({
+  syncWebhooksFromFlow: vi.fn().mockResolvedValue(undefined),
+}));
+
 const mockPrisma = vi.hoisted(() => ({
   flowVersion: {
     findFirst: vi.fn(),
@@ -199,13 +213,13 @@ describe("VersionService.deployVersion", () => {
       agentId: "a1",
       flowVersionId: "v2",
     });
-    mockPrisma.$transaction.mockImplementation(
+    mockWithTenant.mockImplementation(
       async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma)
     );
 
     const result = await VersionService.deployVersion("a1", "v2", "user1", "Go live");
 
-    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(mockWithTenant).toHaveBeenCalledTimes(1);
     expect(mockPrisma.flowVersion.updateMany).toHaveBeenCalled();
     expect(mockPrisma.flowDeployment.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -243,7 +257,7 @@ describe("VersionService.deployVersion — transaction failure", () => {
       },
     };
 
-    mockPrisma.$transaction.mockImplementation(
+    mockWithTenant.mockImplementation(
       async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock)
     );
 
@@ -275,7 +289,7 @@ describe("VersionService.deployVersion — transaction failure", () => {
       flowDeployment: { create: vi.fn() },
     };
 
-    mockPrisma.$transaction.mockImplementation(
+    mockWithTenant.mockImplementation(
       async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock)
     );
 

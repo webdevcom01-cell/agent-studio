@@ -9,6 +9,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Prisma mock
 // ---------------------------------------------------------------------------
 
+const mockWithTenant = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/api/tenant-context", () => ({
+  withTenant: mockWithTenant,
+}));
+
 const mockCreate = vi.fn();
 const mockFindUnique = vi.fn();
 const mockFindMany = vi.fn();
@@ -84,8 +90,7 @@ function makeRow(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // $transaction executes the callback with a proxy that delegates to the same mocks
-  mockTransaction.mockImplementation(async (fn: (tx: Record<string, Record<string, unknown>>) => Promise<unknown>) => {
+  mockWithTenant.mockImplementation(async (fn: (tx: Record<string, Record<string, unknown>>) => Promise<unknown>) => {
     return fn({
       pipelineRun: {
         findUnique: mockFindUnique,
@@ -247,8 +252,8 @@ describe("advancePipelineStep", () => {
 
     const result = await advancePipelineStep("run-1", 0, "planner output");
 
-    // Must use $transaction for atomicity
-    expect(mockTransaction).toHaveBeenCalledTimes(1);
+    // Must use withTenant for atomicity
+    expect(mockWithTenant).toHaveBeenCalledTimes(1);
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -272,7 +277,7 @@ describe("advancePipelineStep", () => {
 
     await advancePipelineStep("run-1", 1, "second step output");
 
-    expect(mockTransaction).toHaveBeenCalledTimes(1);
+    expect(mockWithTenant).toHaveBeenCalledTimes(1);
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -510,8 +515,7 @@ describe("saveStepOutput", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("saves step output without advancing currentStep", async () => {
-    // Simulate the $transaction executing the callback
-    mockTransaction.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
+    mockWithTenant.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
       const tx = {
         pipelineRun: {
           findUnique: mockFindUnique,

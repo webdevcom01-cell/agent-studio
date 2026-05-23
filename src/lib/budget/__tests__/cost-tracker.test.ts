@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockFindUnique, mockTransaction, mockBudgetAlertCreate } = vi.hoisted(() => ({
+const { mockFindUnique, mockTransaction, mockBudgetAlertCreate, mockWithTenant } = vi.hoisted(() => ({
   mockFindUnique: vi.fn(),
   mockTransaction: vi.fn(),
   mockBudgetAlertCreate: vi.fn(),
+  mockWithTenant: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -13,6 +14,10 @@ vi.mock("@/lib/prisma", () => ({
     budgetAlert: { create: mockBudgetAlertCreate },
     $transaction: mockTransaction,
   },
+}));
+
+vi.mock("@/lib/api/tenant-context", () => ({
+  withTenant: mockWithTenant,
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -34,6 +39,13 @@ import { checkBudget, recordCost } from "../cost-tracker";
 beforeEach(() => {
   vi.clearAllMocks();
   mockTransaction.mockResolvedValue([]);
+  mockWithTenant.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+    const tx = {
+      costEvent: { create: vi.fn().mockResolvedValue({}) },
+      agentBudget: { update: vi.fn().mockResolvedValue({}) },
+    };
+    return fn(tx);
+  });
 });
 
 describe("checkBudget", () => {
@@ -101,7 +113,7 @@ describe("recordCost", () => {
 
     await recordCost({ agentId: "agent-1", costUsd: 0.05, modelId: "deepseek-chat" });
 
-    expect(mockTransaction).toHaveBeenCalledOnce();
+    expect(mockWithTenant).toHaveBeenCalledOnce();
   });
 
   it("does not throw when no budget record exists", async () => {
@@ -111,7 +123,7 @@ describe("recordCost", () => {
       recordCost({ agentId: "agent-1", costUsd: 0.05, modelId: "deepseek-chat" }),
     ).resolves.not.toThrow();
 
-    expect(mockTransaction).not.toHaveBeenCalled();
+    expect(mockWithTenant).not.toHaveBeenCalled();
   });
 
   it("does not throw when DB transaction fails", async () => {
@@ -122,7 +134,7 @@ describe("recordCost", () => {
       alertThreshold: 0.8,
       currentSpendUsd: 0,
     });
-    mockTransaction.mockRejectedValue(new Error("Deadlock"));
+    mockWithTenant.mockRejectedValue(new Error("Deadlock"));
 
     await expect(
       recordCost({ agentId: "agent-1", costUsd: 0.05, modelId: "deepseek-chat" }),
