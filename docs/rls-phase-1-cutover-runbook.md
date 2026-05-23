@@ -59,7 +59,7 @@ Store the backup in **two** places before proceeding:
 | Railway dashboard backup | Dashboard → Postgres → Backups → Create backup (manual trigger) |
 | Local secure storage | `mv "$BACKUP_FILE" ~/backups/agent-studio/` (git-ignored directory) |
 
-> If an S3 bucket is available: `aws s3 cp "$BACKUP_FILE" s3://<bucket>/rls-backups/`
+> Note: This project currently does not have a dedicated S3 backup bucket. The Railway dashboard backup + local copy in `~/backups/agent-studio/` is sufficient for the single-developer workflow. If a dedicated bucket is added later, document the path here.
 
 **Retention**: Keep backups for **30 days minimum** after Phase 1 completes. Label clearly: `rls-phase1-pre-<table>-<date>.dump`.
 
