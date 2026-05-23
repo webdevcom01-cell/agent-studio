@@ -180,16 +180,16 @@ All API routes: `{ success: true, data: T }` or `{ success: false, error: string
 
 ## RLS Rollout Status
 
-- **Live:** 0a (withOrgContext $transaction), 0a.5 (HAL-8 hotfix), 0a.6 (Sentry 42501), 0b (DB roles), 0e (hnsw in tx), 0a.7 (CI fix — PR #114 merged 2026-05-22), 0f (feature flag — PR #115 merged 2026-05-23), 0c (JWT currentOrgId + ALS — PR #118 merged 2026-05-23)
-- **Not started:** 0d (personal org backfill migration), 0b.5 (raw helper refactor — blocked on 0d)
-- **Partial:** 0d (NULL agents blocked by hotfix; backfill migration pending)
+- **Live:** 0a (withOrgContext $transaction), 0a.5 (HAL-8 hotfix), 0a.6 (Sentry 42501), 0b (DB roles), 0e (hnsw in tx), 0a.7 (CI fix — PR #114 merged 2026-05-22), 0f (feature flag — PR #115 merged 2026-05-23), 0c (JWT currentOrgId + ALS — PR #118 merged 2026-05-23), 0d (personal org backfill — PR #119 merged 2026-05-23)
+- **Not started:** 0b.5 (raw helper refactor — unblocked, ready to start)
 - **Status checker skill:** `skills/rls-status-checker/`
 - **Master plan:** `skill-rls-rollout-PLAN-V2.md`
 - **Execution order (Phase 0 remaining):**
   1. ~~`0a.7` — CI fix~~ ✅ live (PR #114)
   2. ~~`0f`~~ ✅ live (PR #115)
-  3. ~~`0c`~~ ✅ live (PR #118) + `0d` — start 0d next
-  4. `0b.5` — last; blocked on 0d (no NULL agents)
+  3. ~~`0c`~~ ✅ live (PR #118)
+  4. ~~`0d`~~ ✅ live (PR #119)
+  5. `0b.5` — last; unblocked, ready to start
 - **Feature flag system:** `src/lib/feature-flags/index.ts` — `DEFAULT_FLAGS` map; `RLS_ENFORCEMENT_ENABLED` is now live (default `false`, CI forces `true`)
 
 ### async-execution Feature Flag

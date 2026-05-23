@@ -165,8 +165,7 @@ data-leak bug (NULL-org agents are visible cross-tenant).
 
 **Blocking:** Yes — NULL agents will bypass RLS policies (no org context to match).
 
-**Status:** 🟡 partially addressed (HAL-8 hotfix Phase 0a.5 prevents exposure;
-full backfill migration not yet applied)
+**Status:** ✅ live (PR #119 merged 2026-05-23, commit 5a1a0a9)
 
 ---
 

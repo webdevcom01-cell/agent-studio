@@ -297,6 +297,16 @@ See full context in Open section item #3 above.
 
 ---
 
+### 4. HAL-8 hardcoded backfill superseded by Phase 0d (2026-05-23)
+
+HAL-8 hardcoded backfill superseded by Phase 0d general migration (PR #119).
+Verified clean: `grep -rn 'cmpersonal00org0000000001' src/` returns 0 results.
+The hardcoded DO block in `20260521000000_hal8_null_exploit_hotfix` Step 1 is
+now a permanent no-op on any database that has run Phase 0d. No code changes
+required — the migration file is immutable.
+
+---
+
 ## References
 
 - `skill-rls-rollout-PLAN-V2.md` — the rollout plan that surfaced
