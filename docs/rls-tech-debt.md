@@ -251,6 +251,15 @@ Phase 1.
   `restartPolicyType = "ON_FAILURE"` for app restarts within a
   deploy, but no automatic rollback to previous deploy on sustained
   healthcheck failure. Consider before Phase 2.
+- **Phase 0a.5 HAL-8 hotfix may be removable post-0d** — The HAL-8
+  hotfix (`20260521000000_hal8_null_exploit_hotfix`) Step 1 DO block
+  contains a hardcoded prod-user backfill (user ID `cmmwaactt0000n80kazwd1c54`)
+  that is superseded by the general Phase 0d migration. The migration
+  file is immutable so no change is needed there; the debt is code-level:
+  verify during Phase 1 prep that no code path references the hardcoded
+  org ID `cmpersonal00org0000000001` — if found, replace with a dynamic
+  org lookup. The RLS policies added in Steps 3–5 of the 0a.5 migration
+  are permanent and must stay.
 
 ---
 
