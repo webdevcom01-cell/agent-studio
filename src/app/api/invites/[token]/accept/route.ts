@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { auditOrgMemberAdd } from "@/lib/security/audit";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 
 interface RouteParams {
   params: Promise<{ token: string }>;
@@ -57,20 +58,22 @@ export async function POST(
       );
     }
 
-    // Create membership + mark invitation accepted in a transaction
-    await prisma.$transaction([
-      prisma.organizationMember.create({
+    // Create membership + mark invitation accepted in a transaction.
+    // withOrgContext sets app.current_org_id so RLS policies on OrganizationMember
+    // and Invitation allow the INSERT/UPDATE for the destination org.
+    await withOrgContext(prisma, invitation.organizationId, async (tx) => {
+      await tx.organizationMember.create({
         data: {
           userId: authResult.userId,
           organizationId: invitation.organizationId,
           role: invitation.role,
         },
-      }),
-      prisma.invitation.update({
+      });
+      await tx.invitation.update({
         where: { id: invitation.id },
         data: { acceptedAt: new Date() },
-      }),
-    ]);
+      });
+    });
 
     logger.info("Invitation accepted", {
       userId: authResult.userId,

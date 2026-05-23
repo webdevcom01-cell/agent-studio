@@ -10,6 +10,7 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email/client";
 import { logger } from "@/lib/logger";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 
 const GRACE_PERIOD_DAYS = 30;
 
@@ -100,9 +101,9 @@ export async function executeHardDelete(userId: string): Promise<{
   });
   counts.cliGenerations = cliDeleted.count;
 
-  const orgMembers = await prisma.organizationMember.deleteMany({
-    where: { userId },
-  });
+  const orgMembers = await withAdminBypass((db) =>
+    db.organizationMember.deleteMany({ where: { userId } }),
+  );
   counts.orgMemberships = orgMembers.count;
 
   // Delete audit logs for this user

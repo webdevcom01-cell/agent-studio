@@ -2,6 +2,7 @@ import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { callMCPTool } from "@/lib/mcp/client";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { auditMCPToolCall, writeAuditLog } from "@/lib/security/audit";
 import { checkSkillAccess, enforceSkillAccess, RBACError } from "@/lib/security/rbac";
@@ -106,15 +107,19 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
     });
 
     if (agentOrg?.organizationId) {
-      const membership = await prisma.organizationMember.findUnique({
-        where: {
-          userId_organizationId: {
-            userId: context.userId,
-            organizationId: agentOrg.organizationId,
+      const orgId = agentOrg.organizationId;
+      const ctxUserId = context.userId;
+      const membership = await withAdminBypass((db) =>
+        db.organizationMember.findUnique({
+          where: {
+            userId_organizationId: {
+              userId: ctxUserId,
+              organizationId: orgId,
+            },
           },
-        },
-        select: { role: true },
-      });
+          select: { role: true },
+        }),
+      );
 
       if (!membership) {
         logger.warn("MCP tool org RBAC denial", {
