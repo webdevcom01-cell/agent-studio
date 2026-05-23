@@ -4,6 +4,7 @@ import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 
 interface RouteParams {
   params: Promise<{ agentId: string }>;
@@ -56,7 +57,9 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   const { departmentId } = parsed.data;
 
   try {
-    const dept = await prisma.department.findUnique({ where: { id: departmentId }, select: { id: true } });
+    const dept = await withAdminBypass((db) =>
+      db.department.findUnique({ where: { id: departmentId }, select: { id: true } })
+    );
     if (!dept) return NextResponse.json({ success: false, error: "Department not found" }, { status: 404 });
 
     const updated = await prisma.agent.update({
