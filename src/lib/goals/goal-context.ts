@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { getAgentAncestors } from "@/lib/org-chart/hierarchy";
 import type { CompanyMission } from "@/generated/prisma";
 import type { RuntimeContext } from "@/lib/runtime/types";
@@ -75,7 +76,9 @@ export async function getAgentGoals(agentId: string): Promise<AgentGoalItem[]> {
 }
 
 export async function getMissionForOrg(organizationId: string): Promise<CompanyMission | null> {
-  return prisma.companyMission.findUnique({ where: { organizationId } });
+  return withOrgContext(prisma, organizationId, (tx) =>
+    tx.companyMission.findUnique({ where: { organizationId } })
+  );
 }
 
 export async function buildGoalPrompt(agentId: string): Promise<string> {
