@@ -164,6 +164,7 @@ export async function POST(
         conversationId: context.conversationId,
         userMessage: message,
         userId: session?.user?.id,
+        orgId: session?.user?.currentOrgId ?? undefined,
         streaming: isStreaming,
         priority: "chat",
       });

@@ -16,18 +16,32 @@ import { Worker, type Job } from "bullmq";
 import { logger } from "@/lib/logger";
 import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData, WebhookExecuteJobData, ManagedTaskRunJobData, McpFlowRunJobData, PipelineRunJobData, BudgetMonthlyResetJobData, HeartbeatRunJobData, GovernanceTimeoutJobData } from "./index";
 import type { TaskInput } from "@/lib/managed-tasks/manager";
+import { runWithOrgId } from "@/lib/context/org-context";
 
 const QUEUE_NAME = "agent-studio";
 const CONCURRENCY = 5;
 
+function extractJobOrgId(data: JobData): string | null {
+  if ("orgId" in data && typeof data.orgId === "string") return data.orgId;
+  if ("organizationId" in data && typeof data.organizationId === "string") return data.organizationId;
+  return null;
+}
+
 async function processJob(job: Job<JobData>): Promise<unknown> {
   const data = job.data;
+  const orgId = extractJobOrgId(data);
 
   logger.info("Processing job", {
     jobId: job.id,
     type: data.type,
     attempt: job.attemptsMade + 1,
   });
+
+  return runWithOrgId(orgId, () => dispatchJob(job));
+}
+
+async function dispatchJob(job: Job<JobData>): Promise<unknown> {
+  const data = job.data;
 
   switch (data.type) {
     case "flow.execute":

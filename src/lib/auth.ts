@@ -167,9 +167,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (userId && (user || trigger === "update")) {
         const dbUser = await prisma.user.findUnique({
           where: { id: userId },
-          select: { onboardingCompletedAt: true },
+          select: {
+            onboardingCompletedAt: true,
+            orgMemberships: {
+              select: { organizationId: true },
+              orderBy: { joinedAt: "asc" },
+              take: 1,
+            },
+          },
         });
         token.onboardingCompleted = !!dbUser?.onboardingCompletedAt;
+        token.currentOrgId = dbUser?.orgMemberships[0]?.organizationId ?? null;
       }
       return token;
     },
@@ -177,6 +185,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user && token.id) {
         session.user.id = token.id as string;
         session.user.onboardingCompleted = (token.onboardingCompleted as boolean | undefined) ?? false;
+        session.user.currentOrgId = (token.currentOrgId as string | null | undefined) ?? null;
       }
       return session;
     },
