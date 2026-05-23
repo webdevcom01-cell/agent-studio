@@ -124,26 +124,33 @@ against trustworthy E2E coverage)
 
 **Symptom**
 
-10 E2E tests fail with assertion errors (`expect(received).toBe(expected)`)
-or page-level timeouts (`page.waitForResponse: Timeout 10000ms`).
-Failing specs include:
+Known failing specs (all root cause: auth redirect in CI env — session
+not established before test assertions run):
 
-- `e2e/tests/api/agents-api.spec.ts` — POST and GET /api/agents
-- `e2e/tests/agent-import-export.spec.ts` — import flows
+- `e2e/tests/dashboard.spec.ts` — 2 failures
+- `e2e/tests/api/agents-api.spec.ts` — 2 failures
+- `e2e/tests/eval-generation.spec.ts` — 5 failures
+- `e2e/tests/agent-import-export.spec.ts` — 2 failures
 
 These failures are **pre-existing**, not introduced by Phase 0a, 0e,
-or 0b work. They were masked until now because:
+0b, 0a.7, or 0f work. They were masked until now because:
 
 1. E2E only runs on push to main (skipped on PRs without `e2e` label)
 2. Railway's "Wait for CI" was off until 2026-05-20, so deploys
    went through despite red CI
 
-**Temporary mitigation in PR <this-PR>**
+**Temporary mitigation in PR #105**
 
 `continue-on-error: true` added to the E2E job in `ci.yml` so the
 workflow as a whole reports green and Railway deploys proceed. The
 E2E job still runs and surfaces failures as annotations — failures
 remain visible, just not blocking.
+
+The `ci.yml` comment currently names only `agents-api.spec.ts` and
+`agent-import-export.spec.ts`. **TODO**: update that comment to list
+all four failing specs (`dashboard.spec.ts`, `agents-api.spec.ts`,
+`eval-generation.spec.ts`, `agent-import-export.spec.ts`) so the
+comment stays accurate for future readers.
 
 **Proposed permanent fix**
 
@@ -156,7 +163,7 @@ A dedicated debugging workstream:
    without test update)
 3. Fix one PR per failing spec, with the `e2e` label so the spec
    runs on PR
-4. After all 10 errors are addressed, **revert
+4. After all 11 errors are addressed, **revert
    `continue-on-error: true`** in a small follow-up PR
 
 **Hard deadline**: 2026-06-03 (14 days from this item's creation).
@@ -169,6 +176,63 @@ indefinitely is enterprise technical debt.
 tracked deadline. It is **not acceptable as permanent state** —
 auditors and compliance reviews will flag it. The deadline is the
 discipline mechanism. Honor it.
+
+---
+
+### 5. Phase 0a.7b — Schema drift: CI uses `db push` instead of migrations
+
+**Severity**: Medium (CI paper-over; real schema gap could mask migration bugs)
+**Surfaced in**: Phase 0a.7 CI fix work (PR #114, 2026-05-22)
+**Resolve before**: Phase 1 (RLS policy enforcement) — policy migrations
+must be tested against a schema that exactly matches production
+
+**Symptom**
+
+The CI `e2e` job currently runs `prisma migrate deploy` (correctly), but
+this fails silently against the test database because 17 tables and ~15
+columns present in the live Railway schema are missing from the migration
+history. The Phase 0a.7 fix added a fallback `prisma db push --accept-data-loss`
+step after the failed migration to create those structures directly.
+
+This is a **CI-only paper-over**. The test database is not schema-accurate
+relative to production, meaning:
+
+1. Integration tests that touch the 17 missing tables run against a
+   schema that was never validated by a migration.
+2. Any new migration that alters one of those tables may fail in CI
+   even though it would succeed in production (or vice versa).
+3. `--accept-data-loss` in CI silently drops columns on re-runs,
+   potentially hiding data-shape regressions.
+
+**Root cause**
+
+Schema drift accumulated while the project used `prisma db push` for
+rapid iteration instead of `prisma migrate dev`. The migration history
+does not reflect all of the structural changes that were pushed directly.
+
+**Proposed fix**
+
+Generate a reconciliation migration that captures the full delta between
+the current `prisma/migrations/` history and the production schema:
+
+```bash
+# On a clean DB matching production schema:
+pnpm prisma migrate diff \
+  --from-migrations prisma/migrations \
+  --to-schema-datamodel prisma/schema.prisma \
+  --script > prisma/migrations/YYYYMMDD_schema_reconciliation/migration.sql
+pnpm prisma migrate resolve --applied YYYYMMDD_schema_reconciliation
+```
+
+Then remove the `prisma db push --accept-data-loss` fallback from
+`ci.yml` and verify CI goes green using migrations only.
+
+**Estimated scope**: 1–2 days. Requires a Railway DB dump for accurate
+diff; the 17 missing tables must be inventoried first.
+
+**Recommendation**: Schedule as a standalone PR before Phase 0c, so
+Phase 0c's JWT/AsyncLocalStorage migration is tested against a
+schema-accurate CI database.
 
 ---
 

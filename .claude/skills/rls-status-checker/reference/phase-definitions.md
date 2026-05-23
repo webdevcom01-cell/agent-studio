@@ -88,7 +88,8 @@ before enforcement is fully enabled.
 **Blocking:** Yes — without this, RLS integration tests in CI will fail or
 be skipped silently, giving false confidence before Phase 1.
 
-**Status:** ❌ not started
+**Status:** ✅ live
+**PR:** #114 — merged 2026-05-22
 
 ---
 
@@ -204,4 +205,5 @@ enforcement active.
 **Blocking:** Yes — this is the kill switch. Must be in place before Phase 1
 enforcement is enabled in production.
 
-**Status:** ❌ not started
+**Status:** ✅ live
+**PR:** #115 — merged 2026-05-23
