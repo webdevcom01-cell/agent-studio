@@ -14,6 +14,7 @@
 
 import { PrismaClient, Prisma } from "@/generated/prisma";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { getCurrentOrgId } from "@/lib/context/org-context";
 
 export type OrgIdResolver = () => string | null;
 
@@ -75,13 +76,14 @@ export function registerRLSMiddleware(
  */
 export async function withOrgContext<T>(
   client: PrismaClient,
-  orgId: string,
+  orgId: string | null | undefined,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
+  const resolvedOrgId = orgId ?? getCurrentOrgId();
   const enforcementEnabled = await isFeatureEnabled("rls-enforcement");
 
-  if (!enforcementEnabled) {
-    // Flag off: skip the transaction + set_config entirely.
+  if (!enforcementEnabled || !resolvedOrgId) {
+    // Flag off or no org in context: skip the transaction + set_config entirely.
     // PrismaClient is a superset of TransactionClient (all query methods present);
     // the cast is safe — callers only use model-query methods inside fn.
     return fn(client as unknown as Prisma.TransactionClient);
@@ -89,7 +91,7 @@ export async function withOrgContext<T>(
 
   return client.$transaction(
     async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.current_org_id', ${orgId}, true)`;
+      await tx.$executeRaw`SELECT set_config('app.current_org_id', ${resolvedOrgId}, true)`;
       return fn(tx);
     },
     {

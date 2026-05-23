@@ -4,7 +4,12 @@ vi.mock("@/lib/feature-flags", () => ({
   isFeatureEnabled: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock("@/lib/context/org-context", () => ({
+  getCurrentOrgId: vi.fn().mockReturnValue(null),
+}));
+
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { getCurrentOrgId } from "@/lib/context/org-context";
 import { withOrgContext, registerRLSMiddleware } from "../rls-middleware";
 import type { OrgIdResolver } from "../rls-middleware";
 
@@ -137,6 +142,33 @@ describe("withOrgContext", () => {
         throw boom;
       }),
     ).rejects.toThrow("DB exploded");
+  });
+
+  it("reads orgId from ALS when explicit orgId is undefined", async () => {
+    vi.mocked(getCurrentOrgId).mockReturnValue("als-org-456");
+    const client = makeMockClient();
+
+    await withOrgContext(client as never, undefined, async () => undefined);
+
+    expect(client._tx.$executeRaw.mock.calls[0][1]).toBe("als-org-456");
+  });
+
+  it("reads orgId from ALS when explicit orgId is null", async () => {
+    vi.mocked(getCurrentOrgId).mockReturnValue("als-org-789");
+    const client = makeMockClient();
+
+    await withOrgContext(client as never, null, async () => undefined);
+
+    expect(client._tx.$executeRaw.mock.calls[0][1]).toBe("als-org-789");
+  });
+
+  it("skips transaction when both explicit orgId and ALS orgId are null", async () => {
+    vi.mocked(getCurrentOrgId).mockReturnValue(null);
+    const client = makeMockClient();
+
+    await withOrgContext(client as never, null, async () => undefined);
+
+    expect(client.$transaction).not.toHaveBeenCalled();
   });
 
   // ---------------------------------------------------------------------------
