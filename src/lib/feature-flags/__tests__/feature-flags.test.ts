@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("@/lib/redis", () => ({
   cacheGet: vi.fn().mockResolvedValue(null),
@@ -73,6 +73,47 @@ describe("getAllFlags", () => {
       expect(typeof flag.rolloutPercent).toBe("number");
       expect(flag.description).toBeTruthy();
     }
+  });
+});
+
+describe("rls-enforcement flag", () => {
+  const originalEnv = process.env.RLS_ENFORCEMENT_ENABLED;
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.RLS_ENFORCEMENT_ENABLED;
+    } else {
+      process.env.RLS_ENFORCEMENT_ENABLED = originalEnv;
+    }
+  });
+
+  it("is off by default", async () => {
+    delete process.env.RLS_ENFORCEMENT_ENABLED;
+    expect(await isFeatureEnabled("rls-enforcement")).toBe(false);
+  });
+
+  it("turns on when RLS_ENFORCEMENT_ENABLED=true", async () => {
+    process.env.RLS_ENFORCEMENT_ENABLED = "true";
+    expect(await isFeatureEnabled("rls-enforcement")).toBe(true);
+  });
+
+  it("stays off when RLS_ENFORCEMENT_ENABLED=false", async () => {
+    process.env.RLS_ENFORCEMENT_ENABLED = "false";
+    expect(await isFeatureEnabled("rls-enforcement")).toBe(false);
+  });
+
+  it("stays off when RLS_ENFORCEMENT_ENABLED is unset", async () => {
+    delete process.env.RLS_ENFORCEMENT_ENABLED;
+    expect(await isFeatureEnabled("rls-enforcement")).toBe(false);
+  });
+
+  it("Redis override still wins over env var", async () => {
+    process.env.RLS_ENFORCEMENT_ENABLED = "true";
+    // No orgId context → org check skipped → only one cacheGet call (Redis override).
+    vi.mocked(cacheGet).mockResolvedValueOnce(
+      JSON.stringify({ enabled: false, rolloutPercent: 0 }),
+    );
+    expect(await isFeatureEnabled("rls-enforcement")).toBe(false);
   });
 });
 

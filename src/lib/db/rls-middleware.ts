@@ -13,6 +13,7 @@
  */
 
 import { PrismaClient, Prisma } from "@/generated/prisma";
+import { isFeatureEnabled } from "@/lib/feature-flags";
 
 export type OrgIdResolver = () => string | null;
 
@@ -77,6 +78,15 @@ export async function withOrgContext<T>(
   orgId: string,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
+  const enforcementEnabled = await isFeatureEnabled("rls-enforcement");
+
+  if (!enforcementEnabled) {
+    // Flag off: skip the transaction + set_config entirely.
+    // PrismaClient is a superset of TransactionClient (all query methods present);
+    // the cast is safe — callers only use model-query methods inside fn.
+    return fn(client as unknown as Prisma.TransactionClient);
+  }
+
   return client.$transaction(
     async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_org_id', ${orgId}, true)`;
