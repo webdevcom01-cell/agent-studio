@@ -17,6 +17,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { validateApiKey } from "@/lib/api/api-key";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 
 const cuidSchema = z.string().cuid();
 
@@ -118,15 +119,17 @@ export async function requireAgentOwner(
 
   // Case 2: agent owned by an organization of which this user is a member
   if (agent.organizationId) {
-    const membership = await prisma.organizationMember.findUnique({
-      where: {
-        userId_organizationId: {
-          userId,
-          organizationId: agent.organizationId,
+    const membership = await withAdminBypass((db) =>
+      db.organizationMember.findUnique({
+        where: {
+          userId_organizationId: {
+            userId,
+            organizationId: agent.organizationId as string,
+          },
         },
-      },
-      select: { role: true },
-    });
+        select: { role: true },
+      }),
+    );
 
     if (membership) {
       return { ...authResult, agentId };
@@ -150,15 +153,17 @@ export async function requireOrgMember(
   const authResult = await requireAuth(req);
   if (authResult instanceof NextResponse) return authResult;
 
-  const member = await prisma.organizationMember.findUnique({
-    where: {
-      userId_organizationId: {
-        userId: authResult.userId,
-        organizationId: orgId,
+  const member = await withAdminBypass((db) =>
+    db.organizationMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: authResult.userId,
+          organizationId: orgId,
+        },
       },
-    },
-    select: { role: true },
-  });
+      select: { role: true },
+    }),
+  );
 
   if (!member) return forbidden();
 
