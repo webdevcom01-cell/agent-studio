@@ -1,0 +1,86 @@
+-- =========================================================================
+-- RLS helper functions
+-- =========================================================================
+-- One-time setup. Run before enabling RLS on any table.
+-- These functions are called by policies across all tables.
+--
+-- Functions defined:
+--   current_org_id()   — returns app.current_org_id session variable
+--   current_user_id()  — returns app.current_user_id session variable
+--   is_org_member()    — returns true if current user is in the given org
+--
+-- Why functions instead of inline current_setting() calls:
+--   - Centralized null/empty handling (current_setting returns '' not NULL on miss)
+--   - Easier to mock in integration tests
+--   - Single change point if session variable names ever change
+
+-- =========================================================================
+-- current_org_id() — safe accessor for the tenant org ID
+-- =========================================================================
+
+CREATE OR REPLACE FUNCTION current_org_id()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT NULLIF(current_setting('app.current_org_id', true), '');
+$$;
+
+COMMENT ON FUNCTION current_org_id() IS
+  'Returns the current tenant org ID from the session variable set by withOrgContext(). '
+  'Returns NULL if not set (which will cause all RLS policies to return false — deny by default).';
+
+-- =========================================================================
+-- current_user_id() — safe accessor for the current user ID
+-- =========================================================================
+
+CREATE OR REPLACE FUNCTION current_user_id()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT NULLIF(current_setting('app.current_user_id', true), '');
+$$;
+
+COMMENT ON FUNCTION current_user_id() IS
+  'Returns the current user ID from the session variable. '
+  'Returns NULL if not set. Used by USER_OWNED policies.';
+
+-- =========================================================================
+-- is_org_member(org_id) — verify membership (for future policy extensions)
+-- =========================================================================
+
+CREATE OR REPLACE FUNCTION is_org_member(org_id TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM "OrganizationMember"
+    WHERE "organizationId" = org_id
+      AND "userId" = current_user_id()
+  );
+$$;
+
+COMMENT ON FUNCTION is_org_member(TEXT) IS
+  'Returns true if the current user (from current_user_id()) is a member of org_id. '
+  'Used as an additional guard for sensitive operations. NOT currently used in base '
+  'TENANT_DIRECT policies (which rely on app.current_org_id alone).';
+
+-- =========================================================================
+-- Verification
+-- =========================================================================
+-- SELECT current_org_id();          -- Should return NULL when no context set
+-- SELECT current_user_id();         -- Should return NULL when no context set
+-- SELECT set_config('app.current_org_id', 'test-org', true);
+-- SELECT current_org_id();          -- Should return 'test-org'
+-- SELECT set_config('app.current_org_id', '', true);
+-- SELECT current_org_id();          -- Should return NULL (NULLIF handles empty string)
+
+-- =========================================================================
+-- Rollback
+-- =========================================================================
+-- DROP FUNCTION IF EXISTS is_org_member(TEXT);
+-- DROP FUNCTION IF EXISTS current_user_id();
+-- DROP FUNCTION IF EXISTS current_org_id();

@@ -1,0 +1,62 @@
+-- =========================================================================
+-- USER_OWNED policy template
+-- =========================================================================
+-- Use for: ApiKey, MCPServer, GoogleOAuthToken, CLIGeneration
+-- (NextAuth's Account + Session also fit but managed by NextAuth itself)
+--
+-- These rows are scoped to a user, not an organization. RLS uses
+-- `app.current_user_id` session variable instead of `app.current_org_id`.
+--
+-- Placeholders:
+--   {{TABLE_NAME}}    — PascalCase model name (e.g., "ApiKey")
+--   {{table_lower}}   — lowercase form
+
+-- 1. Composite index on userId
+CREATE INDEX IF NOT EXISTS "{{TABLE_NAME}}_userId_id_idx"
+  ON "{{TABLE_NAME}}" ("userId", "id");
+
+-- 2. Enable RLS
+ALTER TABLE "{{TABLE_NAME}}" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "{{TABLE_NAME}}" FORCE ROW LEVEL SECURITY;
+
+-- 3. Grants
+GRANT SELECT, INSERT, UPDATE, DELETE ON "{{TABLE_NAME}}" TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON "{{TABLE_NAME}}" TO admin_user;
+
+-- 4. Policies
+CREATE POLICY {{table_lower}}_select ON "{{TABLE_NAME}}"
+  FOR SELECT TO app_user
+  USING ("userId" = current_setting('app.current_user_id', true));
+
+CREATE POLICY {{table_lower}}_insert ON "{{TABLE_NAME}}"
+  FOR INSERT TO app_user
+  WITH CHECK ("userId" = current_setting('app.current_user_id', true));
+
+CREATE POLICY {{table_lower}}_update ON "{{TABLE_NAME}}"
+  FOR UPDATE TO app_user
+  USING ("userId" = current_setting('app.current_user_id', true))
+  WITH CHECK ("userId" = current_setting('app.current_user_id', true));
+
+CREATE POLICY {{table_lower}}_delete ON "{{TABLE_NAME}}"
+  FOR DELETE TO app_user
+  USING ("userId" = current_setting('app.current_user_id', true));
+
+-- =========================================================================
+-- Note on NextAuth Account + Session tables
+-- =========================================================================
+-- These are managed by NextAuth. RLS-enabling them may cause sign-in failures
+-- if NextAuth doesn't set the session var when reading them. Recommend:
+--   - Use admin_user role for NextAuth queries (already does this via Prisma adapter)
+--   - OR exempt Account/Session from RLS (leave as GLOBAL)
+--
+-- Decision: keep Account + Session as GLOBAL (not in this template's scope).
+
+-- =========================================================================
+-- Rollback
+-- =========================================================================
+-- DROP POLICY IF EXISTS {{table_lower}}_select ON "{{TABLE_NAME}}";
+-- DROP POLICY IF EXISTS {{table_lower}}_insert ON "{{TABLE_NAME}}";
+-- DROP POLICY IF EXISTS {{table_lower}}_update ON "{{TABLE_NAME}}";
+-- DROP POLICY IF EXISTS {{table_lower}}_delete ON "{{TABLE_NAME}}";
+-- ALTER TABLE "{{TABLE_NAME}}" DISABLE ROW LEVEL SECURITY;
+-- DROP INDEX IF EXISTS "{{TABLE_NAME}}_userId_id_idx";

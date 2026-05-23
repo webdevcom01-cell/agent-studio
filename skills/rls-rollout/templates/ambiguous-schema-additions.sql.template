@@ -1,0 +1,70 @@
+-- =========================================================================
+-- AMBIGUOUS model schema additions template
+-- =========================================================================
+-- Use for: AuditLog (and any model requiring schema change before RLS)
+--
+-- AMBIGUOUS models lack an organizationId column and cannot have a
+-- sensible RLS policy without one. This template adds organizationId,
+-- backfills from a related table, and prepares for the TENANT_DIRECT
+-- template to be applied in the same or a subsequent migration.
+--
+-- Apply this BEFORE the TENANT_DIRECT template for the same table.
+--
+-- Placeholders:
+--   {{TABLE_NAME}}       — PascalCase model name (e.g., "AuditLog")
+--   {{table_lower}}      — lowercase form (e.g., "auditlog")
+--   {{BACKFILL_SUBQUERY}} — SQL subquery to resolve organizationId from existing data
+--                           (e.g., SELECT "organizationId" FROM "User" WHERE "id" = "userId")
+--   {{FK_FOR_BACKFILL}}  — existing FK used for backfill join (e.g., "userId")
+--   {{JOIN_TABLE}}       — table to join against (e.g., "User")
+--   {{JOIN_ON}}          — join condition (e.g., "u.id = t.userId")
+
+-- Step 1: Add organizationId column (nullable first, NOT NULL after backfill)
+ALTER TABLE "{{TABLE_NAME}}"
+  ADD COLUMN IF NOT EXISTS "organizationId" TEXT;
+
+-- Step 2: Create index on new column (before backfill for parallel index build option)
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "{{TABLE_NAME}}_organizationId_idx"
+  ON "{{TABLE_NAME}}" ("organizationId");
+
+-- Step 3: Backfill from related table
+UPDATE "{{TABLE_NAME}}" t
+SET "organizationId" = (
+  SELECT om."organizationId"
+  FROM "OrganizationMember" om
+  WHERE om."userId" = t."{{FK_FOR_BACKFILL}}"
+  ORDER BY om."createdAt" ASC
+  LIMIT 1
+)
+WHERE t."organizationId" IS NULL;
+
+-- Step 4: Verify backfill completeness (0 nulls required before making NOT NULL)
+DO $$
+DECLARE
+  null_count INT;
+BEGIN
+  SELECT COUNT(*) INTO null_count
+  FROM "{{TABLE_NAME}}"
+  WHERE "organizationId" IS NULL;
+
+  IF null_count > 0 THEN
+    RAISE EXCEPTION
+      'Backfill incomplete: % rows in {{TABLE_NAME}} still have NULL organizationId',
+      null_count;
+  END IF;
+END
+$$;
+
+-- Step 5: Make NOT NULL (safe now that backfill is verified)
+ALTER TABLE "{{TABLE_NAME}}"
+  ALTER COLUMN "organizationId" SET NOT NULL;
+
+-- =========================================================================
+-- After this migration, apply tenant-direct.sql.template for {{TABLE_NAME}}
+-- =========================================================================
+
+-- =========================================================================
+-- Rollback
+-- =========================================================================
+-- DROP INDEX CONCURRENTLY IF EXISTS "{{TABLE_NAME}}_organizationId_idx";
+-- ALTER TABLE "{{TABLE_NAME}}" DROP COLUMN IF EXISTS "organizationId";
