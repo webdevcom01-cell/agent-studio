@@ -4,6 +4,7 @@ import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { auditOrgMemberAdd } from "@/lib/security/audit";
 import { withOrgContext } from "@/lib/db/rls-middleware";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 
 interface RouteParams {
   params: Promise<{ token: string }>;
@@ -19,10 +20,12 @@ export async function POST(
   const { token } = await params;
 
   try {
-    const invitation = await prisma.invitation.findUnique({
-      where: { token },
-      include: { organization: { select: { name: true } } },
-    });
+    const invitation = await withAdminBypass((db) =>
+      db.invitation.findUnique({
+        where: { token },
+        include: { organization: { select: { name: true } } },
+      }),
+    );
 
     if (!invitation) {
       return NextResponse.json(

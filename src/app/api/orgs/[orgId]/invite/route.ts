@@ -6,6 +6,8 @@ import { sendEmail } from "@/lib/email/client";
 import { randomBytes } from "node:crypto";
 import { logger } from "@/lib/logger";
 import { auditOrgInviteSend } from "@/lib/security/audit";
+import { withAdminBypass } from "@/lib/api/tenant-context";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 
 interface RouteParams {
   params: Promise<{ orgId: string }>;
@@ -44,14 +46,16 @@ export async function POST(
     });
 
     if (existingUser) {
-      const existingMember = await prisma.organizationMember.findUnique({
-        where: {
-          userId_organizationId: {
-            userId: existingUser.id,
-            organizationId: orgId,
+      const existingMember = await withAdminBypass((db) =>
+        db.organizationMember.findUnique({
+          where: {
+            userId_organizationId: {
+              userId: existingUser.id,
+              organizationId: orgId,
+            },
           },
-        },
-      });
+        }),
+      );
 
       if (existingMember) {
         return NextResponse.json(
@@ -69,15 +73,17 @@ export async function POST(
       select: { name: true },
     });
 
-    const invitation = await prisma.invitation.create({
-      data: {
-        email,
-        organizationId: orgId,
-        role: role as "ADMIN" | "MEMBER" | "VIEWER",
-        token,
-        expiresAt,
-      },
-    });
+    const invitation = await withOrgContext(prisma, orgId, async (tx) =>
+      tx.invitation.create({
+        data: {
+          email,
+          organizationId: orgId,
+          role: role as "ADMIN" | "MEMBER" | "VIEWER",
+          token,
+          expiresAt,
+        },
+      }),
+    );
 
     await sendEmail({
       to: email,
