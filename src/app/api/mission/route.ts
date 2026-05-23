@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 const UpsertMissionSchema = z.object({
@@ -23,7 +24,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const mission = await prisma.companyMission.findUnique({ where: { organizationId: orgId } });
+    const mission = await withOrgContext(prisma, orgId, (tx) =>
+      tx.companyMission.findUnique({ where: { organizationId: orgId } })
+    );
     return NextResponse.json({ success: true, data: mission });
   } catch (error) {
     logger.error("GET /api/mission error", { orgId, error });
@@ -58,11 +61,13 @@ async function upsertMission(request: NextRequest): Promise<NextResponse> {
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const mission = await prisma.companyMission.upsert({
-      where: { organizationId },
-      update: { statement, vision: vision ?? null, values: values ?? [] },
-      create: { organizationId, statement, vision: vision ?? null, values: values ?? [] },
-    });
+    const mission = await withOrgContext(prisma, organizationId, (tx) =>
+      tx.companyMission.upsert({
+        where: { organizationId },
+        update: { statement, vision: vision ?? null, values: values ?? [] },
+        create: { organizationId, statement, vision: vision ?? null, values: values ?? [] },
+      })
+    );
 
     return NextResponse.json({ success: true, data: mission }, { status: 200 });
   } catch (error) {
