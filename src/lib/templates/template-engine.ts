@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 export interface TemplatePayload {
@@ -277,15 +278,17 @@ export async function importTemplate(
   }
 
   for (const goal of payload.goals) {
-    const created = await prisma.goal.create({
-      data: {
-        organizationId,
-        title: goal.title,
-        description: goal.description,
-        successMetric: goal.successMetric,
-        priority: goal.priority,
-      },
-    });
+    const created = await withOrgContext(prisma, organizationId, (tx) =>
+      tx.goal.create({
+        data: {
+          organizationId,
+          title: goal.title,
+          description: goal.description,
+          successMetric: goal.successMetric,
+          priority: goal.priority,
+        },
+      })
+    );
     await prisma.agentGoalLink.create({
       data: { agentId: agent.id, goalId: created.id, role: "CONTRIBUTOR" },
     });

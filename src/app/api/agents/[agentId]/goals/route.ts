@@ -4,6 +4,7 @@ import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { getAgentGoals } from "@/lib/goals/goal-context";
 
 interface RouteParams {
@@ -61,7 +62,9 @@ export async function POST(
   const { goalId, role = "CONTRIBUTOR" } = parsed.data;
 
   try {
-    const goal = await prisma.goal.findUnique({ where: { id: goalId }, select: { id: true } });
+    const goal = await withAdminBypass((db) =>
+      db.goal.findUnique({ where: { id: goalId }, select: { id: true } })
+    );
     if (!goal) {
       return NextResponse.json({ success: false, error: "Goal not found" }, { status: 404 });
     }
