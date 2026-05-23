@@ -148,7 +148,7 @@ in production.
 **Blocking:** Yes — without this, `withOrgContext` has no org ID to set for
 server-side requests; must be complete before Phase 1.
 
-**Status:** ❌ not started
+**Status:** ✅ live (PR #118 merged 2026-05-23, commit 8de264f)
 
 ---
 
