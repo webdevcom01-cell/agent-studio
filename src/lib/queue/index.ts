@@ -25,6 +25,7 @@ export interface FlowExecuteJobData {
   conversationId: string;
   userMessage?: string;
   userId?: string;
+  orgId?: string;
   streaming: boolean;
   priority: "chat" | "pipeline" | "eval";
 }
@@ -75,6 +76,7 @@ export interface ManagedTaskRunJobData {
   taskId: string;
   agentId: string;
   userId?: string;
+  orgId?: string;
 }
 
 /** MCP — Async flow execution triggered via MCP trigger_agent tool */
@@ -83,6 +85,7 @@ export interface McpFlowRunJobData {
   taskId: string;
   agentId: string;
   userId: string;
+  orgId?: string;
   message: string;
   variables: Record<string, unknown>;
   /** When set, resumes an existing paused conversation (e.g. after a human_approval node). */
@@ -95,6 +98,7 @@ export interface PipelineRunJobData {
   pipelineRunId: string;
   agentId: string;
   userId?: string;
+  orgId?: string;
   /** Optional model override (defaults to claude-sonnet-4-6 in the orchestrator) */
   modelId?: string;
   /**
