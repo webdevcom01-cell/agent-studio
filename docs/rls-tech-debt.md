@@ -311,7 +311,7 @@ required — the migration file is immutable.
 
 **Resolution**: Migration `20260525000000_schema_drift_sync` generated via
 `prisma migrate diff --from-url <migrations-only-local-db> --to-schema-datamodel`
-and landed in PR #122. The CI `db push --accept-data-loss` bridge is removed.
+and landed in PR #125. The CI `db push --accept-data-loss` bridge is removed.
 
 Verified:
 - All 17 migrations apply cleanly to a fresh DB (`prisma migrate deploy`)
