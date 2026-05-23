@@ -15,6 +15,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { executeFlow } from "@/lib/runtime/engine";
 import { parseFlowContent } from "@/lib/validators/flow-content";
@@ -286,28 +287,30 @@ async function finalise(
     !succeeded && newFailureCount >= (schedule.maxRetries ?? 3);
 
   try {
-    await prisma.$transaction([
-      // Update the execution record
-      prisma.scheduledExecution.update({
-        where: { id: executionId },
-        data: {
-          status,
-          completedAt,
-          durationMs,
-          ...(errorMessage ? { tokenUsage: { error: errorMessage } as object } : {}),
-        },
-      }),
-      // Update the schedule record
-      prisma.flowSchedule.update({
-        where: { id: schedule.id },
-        data: {
-          lastRunAt: completedAt,
-          nextRunAt,
-          failureCount: newFailureCount,
-          ...(shouldDisable && { enabled: false }),
-        },
-      }),
-    ]);
+    await withAdminBypass((db) =>
+      db.$transaction([
+        // Update the execution record
+        db.scheduledExecution.update({
+          where: { id: executionId },
+          data: {
+            status,
+            completedAt,
+            durationMs,
+            ...(errorMessage ? { tokenUsage: { error: errorMessage } as object } : {}),
+          },
+        }),
+        // Update the schedule record
+        db.flowSchedule.update({
+          where: { id: schedule.id },
+          data: {
+            lastRunAt: completedAt,
+            nextRunAt,
+            failureCount: newFailureCount,
+            ...(shouldDisable && { enabled: false }),
+          },
+        }),
+      ])
+    );
 
     // Fire-and-forget failure notifications
     if (!succeeded) {

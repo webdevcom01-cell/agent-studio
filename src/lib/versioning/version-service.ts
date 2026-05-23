@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { PrismaClient } from "@/generated/prisma";
 import { generateChangesSummary, computeFlowDiff } from "./diff-engine";
 import type { FlowContent } from "@/types";
@@ -133,7 +134,7 @@ export class VersionService {
 
     const content = parseFlowContent(version.content);
 
-    return prisma.$transaction(async (tx) => {
+    return withTenant(async (tx) => {
       await tx.flowVersion.updateMany({
         where: {
           flowId: version.flowId,

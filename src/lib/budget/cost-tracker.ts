@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { Prisma } from "@/generated/prisma";
 
@@ -58,15 +59,15 @@ export async function recordCost(params: RecordCostParams): Promise<void> {
 
     const costDecimal = new Prisma.Decimal(costUsd.toFixed(4));
 
-    await prisma.$transaction([
-      prisma.costEvent.create({
+    await withTenant(async (tx) => {
+      await tx.costEvent.create({
         data: { budgetId: budget.id, agentId, costUsd: costDecimal, modelId, inputTokens, outputTokens, source },
-      }),
-      prisma.agentBudget.update({
+      });
+      await tx.agentBudget.update({
         where: { id: budget.id },
         data: { currentSpendUsd: { increment: costDecimal } },
-      }),
-    ]);
+      });
+    });
 
     void checkAndFireAlerts(budget, agentId, Number(budget.currentSpendUsd) + costUsd);
   } catch (error) {
