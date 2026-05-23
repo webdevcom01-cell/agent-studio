@@ -180,9 +180,15 @@ All API routes: `{ success: true, data: T }` or `{ success: false, error: string
 
 ## RLS Rollout Status
 
-- **Live:** 0a (withOrgContext $transaction), 0a.5 (HAL-8 hotfix), 0a.6 (Sentry 42501), 0b (DB roles), 0e (hnsw in tx), 0a.7 (CI fix — PR #114 merged 2026-05-22), 0f (feature flag — PR #115 merged 2026-05-23), 0c (JWT currentOrgId + ALS — PR #118 merged 2026-05-23), 0d (personal org backfill — PR #119 merged 2026-05-23), 0b.5 (raw $transaction refactor — PR #121 merged 2026-05-23)
-- **Phase 0 COMPLETE** — all 10 sub-phases live; Phase 1 (full RLS enforcement) is next
+- **Live (Phase 0 — 10/10 sub-phases):** 0a (withOrgContext $transaction), 0a.5 (HAL-8 hotfix), 0a.6 (Sentry 42501), 0b (DB roles), 0e (hnsw in tx), 0a.7 (CI fix — PR #114), 0f (feature flag — PR #115), 0c (JWT currentOrgId + ALS — PR #118), 0d (personal org backfill — PR #119), 0b.5 (raw $transaction refactor — PR #121)
+- **Live (Phase 1 prep):** 0a.7b (schema drift reconciliation — PR #125 merged 2026-05-23), cutover runbook (PR #126 merged 2026-05-23 — see docs/rls-phase-1-cutover-runbook.md)
+- **Phase 0 COMPLETE** — all 10 sub-phases live; Phase 1 prep 2/3 done
+- **Phase 1 prep status:**
+  - ✅ Task 1: Phase 0a.7b schema drift (PR #125)
+  - ✅ Task 3: Production cutover runbook (PR #126 — docs/rls-phase-1-cutover-runbook.md)
+  - ❌ Task 2: skills/rls-rollout/ scaffold (LAST prep task before Phase 1 begins)
 - **Status checker skill:** `skills/rls-status-checker/`
+- **Cutover runbook:** `docs/rls-phase-1-cutover-runbook.md` (read before any Phase 1 migration)
 - **Master plan:** `skill-rls-rollout-PLAN-V2.md`
 - **Execution order (Phase 0 — ALL DONE):**
   1. ~~`0a.7` — CI fix~~ ✅ live (PR #114)
@@ -190,6 +196,10 @@ All API routes: `{ success: true, data: T }` or `{ success: false, error: string
   3. ~~`0c`~~ ✅ live (PR #118)
   4. ~~`0d`~~ ✅ live (PR #119)
   5. ~~`0b.5`~~ ✅ live (PR #121)
+- **Phase 1 prep order:**
+  1. ~~`0a.7b` — schema drift~~ ✅ done (PR #125)
+  2. ~~Cutover runbook~~ ✅ done (PR #126)
+  3. `skills/rls-rollout/` scaffold — NEXT
 - **Feature flag system:** `src/lib/feature-flags/index.ts` — `DEFAULT_FLAGS` map; `RLS_ENFORCEMENT_ENABLED` is now live (default `false`, CI forces `true`)
 
 ### async-execution Feature Flag
