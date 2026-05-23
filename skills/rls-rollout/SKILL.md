@@ -1,6 +1,6 @@
 ---
 name: rls-rollout
-version: 1.0.0
+version: 1.1.0
 description: >
   Audits, plans, and orchestrates a phased Postgres Row-Level Security (RLS)
   rollout for the agent-studio multi-tenant database (61 Prisma models).
@@ -27,6 +27,35 @@ allowed-tools:
 This skill is the operator's companion for rolling out Postgres Row-Level
 Security across the agent-studio schema. It runs in 6 gated STEPs. **Each STEP
 requires explicit human confirmation before the next.**
+
+## Script naming convention
+
+Two naming conventions coexist in `scripts/`. Both are intentional — do not remove either set.
+
+| Convention | Files | When to use |
+|-----------|-------|------------|
+| Legacy (v1.0.0) | `audit.sh`, `generate-migration.ts`, `verify-staging.sh`, `rollback.sh`, `ci-fix.sh` | Full-featured implementations. Use these for STEP 0–4 execution. |
+| Step-prefixed (v1.1.0) | `step1-inventory.ts`, `step2-classify.ts`, `step4-isolation-tests.ts`, `step5-runbook.ts` | Added in v1.1.0. Fill gaps not covered by legacy scripts. |
+
+**Mapping to master plan §9 STEPs:**
+
+| STEP | Master plan §9 name | Script to run |
+|------|---------------------|---------------|
+| STEP 0 | Pre-flight | `audit.sh --preflight` |
+| STEP 1 | Audit & inventory | `audit.sh --inventory` (produces JSON) + `step1-inventory.ts` (fixes depth-aware parsing) |
+| STEP 2 | Plan generation | `generate-migration.ts --plan` |
+| STEP 3 | Migration draft | `generate-migration.ts --draft` |
+| STEP 4 | Staging verification | `verify-staging.sh --phase=N` (runs tests) + `step4-isolation-tests.ts` (generates stubs) |
+| STEP 5 | Production runbook | `step5-runbook.ts --phase=N` |
+
+`audit.sh` covers both STEP 0 and STEP 1 because it was built before the step-prefix convention was adopted.
+
+## Template extension convention
+
+Templates use two extensions — both are valid:
+
+- **`.sql.template`** — policy templates for TENANT_DIRECT, TENANT_INDIRECT, USER_OWNED, AMBIGUOUS, and helper functions. These are the primary policy templates you fill with `{{PLACEHOLDER}}` values.
+- **`.sql.tpl`** — supplementary templates (`composite-index.sql.tpl`, `policy-admin-bypass.sql.tpl`) with no `.sql.template` equivalent. Keep `.tpl` extension.
 
 ## STEP 0 — Pre-flight check (read-only)
 
@@ -99,13 +128,15 @@ bash skills/rls-rollout/scripts/audit.sh --inventory
 
 ### Tenancy classifications used
 
-| Classification | Count (expected) | Strategy |
-|----------------|------------------|----------|
-| `TENANT_DIRECT` | 14 | Direct `organizationId = current_setting(...)` policy |
-| `TENANT_INDIRECT` | 35 | Subquery via parent table |
-| `USER_OWNED` | 5 | `userId` based policy |
-| `GLOBAL` | 5 | No RLS (User, VerificationToken, Skill, Organization, PipelineTemplate) |
-| `AMBIGUOUS` | 2-3 | Requires schema change before RLS (AuditLog, ModelPerformanceStat, optionally Template) |
+Counts reflect schema analysis as of PR #125 (schema drift sync). See `reference/model-classifications.md` for the full list.
+
+| Classification | Count | Strategy |
+|----------------|-------|----------|
+| `TENANT_DIRECT` | 13 | Direct `organizationId = current_setting(...)` policy |
+| `TENANT_INDIRECT` | 36 | EXISTS subquery via FK chain → Agent → organizationId |
+| `USER_OWNED` | 4 | `userId = current_setting('app.current_user_id', true)` |
+| `GLOBAL` | 7 | No RLS (User, VerificationToken, Skill, Organization, PipelineTemplate, Account, Session) |
+| `AMBIGUOUS` | 1 | Requires schema change before RLS (AuditLog only) |
 
 ### Success criteria
 
@@ -127,10 +158,10 @@ pnpm tsx skills/rls-rollout/scripts/generate-migration.ts \
 
 | Phase | Classification | Models | Risk |
 |-------|---------------|--------|------|
-| 1 | TENANT_DIRECT | 14 | Low |
-| 2 | TENANT_INDIRECT | 35 | Medium |
-| 3 | USER_OWNED | 5 | Low |
-| 4 | AMBIGUOUS | 2-3 | High (schema changes) |
+| 1 | TENANT_DIRECT | 13 | Low |
+| 2 | TENANT_INDIRECT | 36 | Medium |
+| 3 | USER_OWNED | 4 | Low |
+| 4 | AMBIGUOUS | 1 | High (schema change required for AuditLog) |
 
 ### Plan document structure
 
@@ -320,23 +351,74 @@ production is on fire.
 
 ## File reference
 
+### Scripts
+
+| Path | Convention | Purpose |
+|------|-----------|---------|
+| `scripts/audit.sh` | legacy | STEP 0 (preflight, 14 checks) + STEP 1 (inventory → JSON/TSV) |
+| `scripts/generate-migration.ts` | legacy | STEP 2 (`--plan`) + STEP 3 (`--draft`); reads `model-classifications.json` |
+| `scripts/verify-staging.sh` | legacy | STEP 4 driver — runs all staging test suites |
+| `scripts/rollback.sh` | legacy | Emergency rollback (Layer 2 `--disable-tables`, Layer 4 `--nuclear`) |
+| `scripts/ci-fix.sh` | legacy | Patches `.github/workflows/ci.yml` to add `migrate deploy` |
+| `scripts/step1-inventory.ts` | step-prefix | Depth-aware schema parser; fixes `@default("{}")` bug in legacy classifier |
+| `scripts/step2-classify.ts` | step-prefix | Verifies classification counts against known-good reference |
+| `scripts/step4-isolation-tests.ts` | step-prefix | Generates per-table cross-tenant isolation test stubs (`.skip`) |
+| `scripts/step5-runbook.ts` | step-prefix | Generates per-table production runbook with 4-layer rollback SQL |
+
+### Templates
+
+| Path | Extension | Purpose |
+|------|-----------|---------|
+| `templates/tenant-direct.sql.template` | `.sql.template` | TENANT_DIRECT policy (direct organizationId) |
+| `templates/tenant-direct-public.sql.template` | `.sql.template` | TENANT_DIRECT with `isPublic` (Agent, Template) |
+| `templates/tenant-indirect.sql.template` | `.sql.template` | TENANT_INDIRECT via FK chain |
+| `templates/user-owned.sql.template` | `.sql.template` | USER_OWNED (userId-scoped) |
+| `templates/ambiguous-schema-additions.sql.template` | `.sql.template` | Phase 4 — adds organizationId column + backfill |
+| `templates/helper-functions.sql.template` | `.sql.template` | One-time setup: `current_org_id()`, `current_user_id()` SQL functions |
+| `templates/composite-index.sql.tpl` | `.sql.tpl` | Reusable index template (CONCURRENTLY note included) |
+| `templates/policy-admin-bypass.sql.tpl` | `.sql.tpl` | Reference: BYPASSRLS verification queries |
+
+### Tests
+
+| Path | When to run |
+|------|------------|
+| `tests/step0.test.ts` | Static checks (no DB) — before Phase 1 |
+| `tests/step1.test.ts` | After `step1-inventory.ts --dry-run` |
+| `tests/step2.test.ts` | After `step2-classify.ts` |
+| `tests/step3.test.ts` | CI — validates template files exist + SQL content (no DB) |
+| `tests/step4.test.ts` | After applying migration to staging |
+| `tests/step5.test.ts` | After `step5-runbook.ts` |
+| `tests/cross-tenant.test.ts` | Staging + production — cross-tenant isolation |
+| `tests/public-routes.test.ts` | Staging + production — anonymous traffic |
+| `tests/admin-routes.test.ts` | Staging + production — admin bypass |
+| `tests/gdpr-export.test.ts` | Staging + production — GDPR export |
+| `tests/performance.test.ts` | Staging — p95 regression check |
+| `tests/lockout-recovery.test.ts` | Staging — flag toggle recovery |
+| `tests/worker-tenant-context.test.ts` | Staging — BullMQ context |
+| `tests/_helpers/get-rls-client.ts` | Test helper — RLS client factory |
+
+### Reference
+
 | Path | Purpose |
 |------|---------|
-| `scripts/audit.sh` | STEP 0 + STEP 1 driver |
-| `scripts/generate-migration.ts` | STEP 2 + STEP 3 |
-| `scripts/verify-staging.sh` | STEP 4 driver |
-| `scripts/rollback.sh` | Emergency rollback |
-| `scripts/ci-fix.sh` | Patches `.github/workflows/ci.yml` to add migrate deploy |
-| `templates/*.sql.tpl` | SQL policy + index templates |
-| `tests/*.test.ts` | Verification test suites |
-| `tests/_helpers/get-rls-client.ts` | Test client factory with role selection |
-| `reference/model-classifications.json` | Generated by STEP 1 |
+| `reference/model-classifications.md` | Complete 61-model list with phase, FK chain, notes |
+| `reference/model-classifications.json` | Machine-readable; generated by `audit.sh --inventory` |
+| `reference/policy-patterns.md` | Decision tree: which template for each classification |
+| `reference/rollout-playbook.md` | Quick-reference map of all scripts, docs, env vars |
+| `reference/cross-tenant-routes.md` | Catalog of public/admin/GDPR routes requiring special handling |
 | `reference/decision-log.md` | Append-only log of rollout decisions |
-| `reference/cross-tenant-routes.md` | Catalog of routes requiring special handling |
+| `reference/preflight-report.json` | Generated by STEP 0 preflight |
 
 ---
 
 ## Skill version history
+
+- **1.1.0** (2026-05-23) — Merged v2 scaffolding. Added step-prefixed scripts
+  (`step1`–`step5`), `.sql.template` policy templates, `step0`–`step5` test stubs,
+  and three reference docs (`model-classifications.md`, `policy-patterns.md`,
+  `rollout-playbook.md`). Corrected model counts to match post-PR #125 schema
+  (13 TENANT_DIRECT, 36 TENANT_INDIRECT, 4 USER_OWNED, 7 GLOBAL, 1 AMBIGUOUS).
+  Dropped 7 duplicate files (3 scripts, 4 `.sql.tpl` policy templates).
 
 - **1.0.0** (2026-05-18) — Initial release. Incorporates findings from forensic
   analysis: three-role architecture, public/anonymous endpoint handling,
