@@ -18,7 +18,7 @@
 
 import { generateObject } from "ai";
 import { getModel } from "@/lib/ai";
-import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { buildGeneratorPrompt } from "./generator-prompts";
 import { GeneratedEvalSuiteSchema } from "./generator-schemas";
@@ -138,7 +138,7 @@ export async function generateEvalSuite(
   });
 
   // 3. Persist suite + test cases in a transaction
-  const suite = await prisma.$transaction(async (tx) => {
+  const suite = await withTenant(async (tx) => {
     const newSuite = await tx.evalSuite.create({
       data: {
         agentId,
