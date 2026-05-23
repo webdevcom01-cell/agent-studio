@@ -4,6 +4,7 @@ import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 
 const CreateDepartmentSchema = z.object({
   organizationId: z.string().cuid(),
@@ -23,13 +24,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const departments = await prisma.department.findMany({
-      where: { organizationId: orgId },
-      orderBy: { createdAt: "asc" },
-      include: {
-        _count: { select: { agents: true, children: true } },
-      },
-    });
+    const departments = await withOrgContext(prisma, orgId, (tx) =>
+      tx.department.findMany({
+        where: { organizationId: orgId },
+        orderBy: { createdAt: "asc" },
+        include: {
+          _count: { select: { agents: true, children: true } },
+        },
+      })
+    );
 
     return NextResponse.json({ success: true, data: departments });
   } catch (error) {
@@ -58,15 +61,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     if (parentId) {
-      const parent = await prisma.department.findUnique({ where: { id: parentId }, select: { organizationId: true } });
+      const parent = await withOrgContext(prisma, organizationId, (tx) =>
+        tx.department.findUnique({ where: { id: parentId }, select: { organizationId: true } })
+      );
       if (!parent || parent.organizationId !== organizationId) {
         return NextResponse.json({ success: false, error: "Parent department not found in this org" }, { status: 422 });
       }
     }
 
-    const department = await prisma.department.create({
-      data: { name, description, organizationId, parentId: parentId ?? null },
-    });
+    const department = await withOrgContext(prisma, organizationId, (tx) =>
+      tx.department.create({
+        data: { name, description, organizationId, parentId: parentId ?? null },
+      })
+    );
 
     return NextResponse.json({ success: true, data: department }, { status: 201 });
   } catch (error) {

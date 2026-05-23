@@ -4,6 +4,8 @@ import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { withOrgContext } from "@/lib/db/rls-middleware";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 
 interface RouteParams {
   params: Promise<{ departmentId: string }>;
@@ -16,10 +18,12 @@ const UpdateDepartmentSchema = z.object({
 });
 
 async function loadDepartment(departmentId: string) {
-  return prisma.department.findUnique({
-    where: { id: departmentId },
-    select: { id: true, organizationId: true, name: true, description: true, parentId: true, createdAt: true, updatedAt: true },
-  });
+  return withAdminBypass((db) =>
+    db.department.findUnique({
+      where: { id: departmentId },
+      select: { id: true, organizationId: true, name: true, description: true, parentId: true, createdAt: true, updatedAt: true },
+    })
+  );
 }
 
 export async function GET(
@@ -35,13 +39,15 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const full = await prisma.department.findUnique({
-      where: { id: departmentId },
-      include: {
-        children: { select: { id: true, name: true, description: true } },
-        agents: { select: { id: true, name: true, model: true } },
-      },
-    });
+    const full = await withOrgContext(prisma, dept.organizationId, (tx) =>
+      tx.department.findUnique({
+        where: { id: departmentId },
+        include: {
+          children: { select: { id: true, name: true, description: true } },
+          agents: { select: { id: true, name: true, model: true } },
+        },
+      })
+    );
 
     return NextResponse.json({ success: true, data: full });
   } catch (error) {
@@ -81,20 +87,24 @@ export async function PATCH(
       if (parentId === departmentId) {
         return NextResponse.json({ success: false, error: "Department cannot be its own parent" }, { status: 422 });
       }
-      const parent = await prisma.department.findUnique({ where: { id: parentId }, select: { organizationId: true } });
+      const parent = await withOrgContext(prisma, dept.organizationId, (tx) =>
+        tx.department.findUnique({ where: { id: parentId }, select: { organizationId: true } })
+      );
       if (!parent || parent.organizationId !== dept.organizationId) {
         return NextResponse.json({ success: false, error: "Parent department not found in this org" }, { status: 422 });
       }
     }
 
-    const updated = await prisma.department.update({
-      where: { id: departmentId },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(description !== undefined && { description }),
-        ...(parentId !== undefined && { parentId }),
-      },
-    });
+    const updated = await withOrgContext(prisma, dept.organizationId, (tx) =>
+      tx.department.update({
+        where: { id: departmentId },
+        data: {
+          ...(name !== undefined && { name }),
+          ...(description !== undefined && { description }),
+          ...(parentId !== undefined && { parentId }),
+        },
+      })
+    );
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
@@ -124,7 +134,9 @@ export async function DELETE(
       );
     }
 
-    await prisma.department.delete({ where: { id: departmentId } });
+    await withOrgContext(prisma, dept.organizationId, (tx) =>
+      tx.department.delete({ where: { id: departmentId } })
+    );
 
     return NextResponse.json({ success: true, data: null });
   } catch (error) {
