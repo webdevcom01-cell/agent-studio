@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import type { PipelineRunStatus, Prisma } from "@/generated/prisma";
 
@@ -279,7 +280,7 @@ export async function advancePipelineStep(
   stepOutput: string,
 ): Promise<PipelineRun> {
   // Atomic read-modify-write inside a transaction to prevent race conditions
-  const row = await prisma.$transaction(async (tx) => {
+  const row = await withTenant(async (tx) => {
     const current = await tx.pipelineRun.findUnique({
       where: { id: runId },
       select: { stepResults: true },
@@ -328,7 +329,7 @@ export async function saveStepOutput(
   stepIndex: number,
   stepOutput: string,
 ): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+  await withTenant(async (tx) => {
     const current = await tx.pipelineRun.findUnique({
       where: { id: runId },
       select: { stepResults: true },
