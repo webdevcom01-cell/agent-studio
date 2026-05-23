@@ -307,6 +307,24 @@ required — the migration file is immutable.
 
 ---
 
+### 5. Phase 0a.7b schema drift reconciliation (2026-05-23)
+
+**Resolution**: Migration `20260525000000_schema_drift_sync` generated via
+`prisma migrate diff --from-url <migrations-only-local-db> --to-schema-datamodel`
+and landed in PR #125. The CI `db push --accept-data-loss` bridge is removed.
+
+Verified:
+- All 17 migrations apply cleanly to a fresh DB (`prisma migrate deploy`)
+- Zero residual drift (`prisma migrate diff` returns `-- This is an empty migration.`)
+- `grep -n "db push" .github/workflows/ci.yml` returns 0 results
+
+Drift captured: 18 new tables (Paperclip F1–F5, BullMQ managed tasks,
+SDK sessions, webhook dead-letter), 14 new columns across 6 existing tables,
+2 new enums, 1 enum value, 3 column constraint changes. All guarded with
+`IF NOT EXISTS` / `DO $$ BEGIN … END $$` blocks for idempotency.
+
+---
+
 ## References
 
 - `skill-rls-rollout-PLAN-V2.md` — the rollout plan that surfaced
