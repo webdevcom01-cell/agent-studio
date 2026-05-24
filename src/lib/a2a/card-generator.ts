@@ -1,4 +1,7 @@
+// prismaRead role = DATABASE_READ_URL connection (fallback: DATABASE_URL); BYPASSRLS assumed — see tech-debt #6.
+// post-#12: AgentCard.isPublic is always false (upsert never sets it); agentCard include via prismaRead returns null (no org ctx) — callers handle null gracefully.
 import { prisma, prismaRead } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 
 export interface A2ASkill {
   id: string;
@@ -197,15 +200,17 @@ export async function upsertAgentCard(
 ): Promise<void> {
   const card = await generateAgentCard(agentId, userId, baseUrl);
 
-  await prisma.agentCard.upsert({
-    where: { agentId },
-    create: {
-      agentId,
-      skills: JSON.parse(JSON.stringify(card.skills)),
-      isPublic: false,
-    },
-    update: {
-      skills: JSON.parse(JSON.stringify(card.skills)),
-    },
-  });
+  await withAdminBypass((db) =>
+    db.agentCard.upsert({
+      where: { agentId },
+      create: {
+        agentId,
+        skills: JSON.parse(JSON.stringify(card.skills)),
+        isPublic: false,
+      },
+      update: {
+        skills: JSON.parse(JSON.stringify(card.skills)),
+      },
+    })
+  );
 }
