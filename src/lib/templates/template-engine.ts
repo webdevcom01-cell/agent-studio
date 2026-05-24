@@ -121,18 +121,20 @@ export async function exportTemplate(
   agentId: string,
   organizationId: string,
 ): Promise<{ payload: TemplatePayload; checksum: string }> {
-  const agent = await prisma.agent.findUnique({
-    where: { id: agentId },
-    include: {
-      flow: true,
-      mcpServers: { include: { mcpServer: true } },
-      heartbeatConfig: true,
-      goalLinks: {
-        where: { goal: { status: "ACTIVE" } },
-        include: { goal: true },
+  const agent = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.agent.findUnique({
+      where: { id: agentId },
+      include: {
+        flow: true,
+        mcpServers: { include: { mcpServer: true } },
+        heartbeatConfig: true,
+        goalLinks: {
+          where: { goal: { status: "ACTIVE" } },
+          include: { goal: true },
+        },
       },
-    },
-  });
+    })
+  );
 
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
@@ -265,16 +267,18 @@ export async function importTemplate(
   }
 
   if (payload.heartbeatConfig) {
-    await prisma.heartbeatConfig.create({
-      data: {
-        agentId: agent.id,
-        organizationId,
-        cronExpression: payload.heartbeatConfig.cronExpression,
-        timezone: payload.heartbeatConfig.timezone,
-        systemPrompt: payload.heartbeatConfig.systemPrompt,
-        maxContextItems: payload.heartbeatConfig.maxContextItems,
-      },
-    });
+    await withOrgContext(prisma, organizationId, (tx) =>
+      tx.heartbeatConfig.create({
+        data: {
+          agentId: agent.id,
+          organizationId,
+          cronExpression: payload.heartbeatConfig!.cronExpression,
+          timezone: payload.heartbeatConfig!.timezone,
+          systemPrompt: payload.heartbeatConfig!.systemPrompt,
+          maxContextItems: payload.heartbeatConfig!.maxContextItems,
+        },
+      })
+    );
   }
 
   for (const goal of payload.goals) {

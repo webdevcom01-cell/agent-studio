@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { validateCronExpression, validateTimezone } from "@/lib/scheduler/cron-validator";
 import { scheduleHeartbeat, unscheduleHeartbeat } from "@/lib/heartbeat/heartbeat-scheduler";
@@ -30,10 +31,15 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const config = await prisma.heartbeatConfig.findUnique({
-      where: { agentId },
-      include: { _count: { select: { runs: true } } },
-    });
+    const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { organizationId: true } });
+    const orgId = agent?.organizationId ?? null;
+
+    const config = await withOrgContext(prisma, orgId, (tx) =>
+      tx.heartbeatConfig.findUnique({
+        where: { agentId },
+        include: { _count: { select: { runs: true } } },
+      })
+    );
 
     return NextResponse.json({ success: true, data: config });
   } catch (error) {
@@ -76,19 +82,21 @@ export async function POST(
   }
 
   try {
-    const config = await prisma.heartbeatConfig.upsert({
-      where: { agentId },
-      update: {
-        cronExpression,
-        timezone,
-        ...(systemPrompt !== undefined && { systemPrompt }),
-        ...(maxContextItems !== undefined && { maxContextItems }),
-        enabled,
-      },
-      create: { agentId, organizationId, cronExpression, timezone, systemPrompt, maxContextItems: maxContextItems ?? 50, enabled },
-    });
+    const config = await withOrgContext(prisma, organizationId, (tx) =>
+      tx.heartbeatConfig.upsert({
+        where: { agentId },
+        update: {
+          cronExpression,
+          timezone,
+          ...(systemPrompt !== undefined && { systemPrompt }),
+          ...(maxContextItems !== undefined && { maxContextItems }),
+          enabled,
+        },
+        create: { agentId, organizationId, cronExpression, timezone, systemPrompt, maxContextItems: maxContextItems ?? 50, enabled },
+      })
+    );
 
-    await scheduleHeartbeat(config.id);
+    await scheduleHeartbeat(config.id, organizationId);
 
     return NextResponse.json({ success: true, data: config }, { status: 201 });
   } catch (error) {
@@ -107,13 +115,18 @@ export async function DELETE(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const config = await prisma.heartbeatConfig.findUnique({ where: { agentId }, select: { id: true } });
+    const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { organizationId: true } });
+    const orgId = agent?.organizationId ?? null;
+
+    const config = await withOrgContext(prisma, orgId, (tx) =>
+      tx.heartbeatConfig.findUnique({ where: { agentId }, select: { id: true } })
+    );
 
     if (!config) {
       return NextResponse.json({ success: false, error: "Heartbeat config not found" }, { status: 404 });
     }
 
-    await unscheduleHeartbeat(config.id);
+    await unscheduleHeartbeat(config.id, orgId);
 
     return NextResponse.json({ success: true, data: null });
   } catch (error) {
