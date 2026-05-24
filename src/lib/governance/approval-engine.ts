@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { Prisma } from "@/generated/prisma";
 import type { ApprovalPolicy, PolicyDecision } from "@/generated/prisma";
@@ -30,16 +31,19 @@ export interface ProcessTimeoutsResult {
 export async function checkPolicies(
   agentId: string,
   action: string,
+  organizationId?: string | null,
 ): Promise<PolicyCheckResult> {
   try {
-    const policy = await prisma.approvalPolicy.findFirst({
-      where: {
-        agentId,
-        isActive: true,
-        actionPattern: { in: [action, "*"] },
-      },
-      orderBy: { actionPattern: "asc" }, // exact match (non-"*") sorts before "*"
-    });
+    const policy = await withOrgContext(prisma, organizationId ?? null, (tx) =>
+      tx.approvalPolicy.findFirst({
+        where: {
+          agentId,
+          isActive: true,
+          actionPattern: { in: [action, "*"] },
+        },
+        orderBy: { actionPattern: "asc" }, // exact match (non-"*") sorts before "*"
+      })
+    );
 
     return { requiresApproval: policy !== null, policy };
   } catch (error) {
@@ -68,7 +72,9 @@ export async function requestApproval(
     return { decision: existing, alreadyPending: true };
   }
 
-  const policy = await prisma.approvalPolicy.findUnique({ where: { id: policyId } });
+  const policy = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.approvalPolicy.findUnique({ where: { id: policyId } })
+  );
   if (!policy) {
     throw new Error(`ApprovalPolicy ${policyId} not found`);
   }
@@ -129,6 +135,10 @@ export async function resolveDecision(
 /**
  * Finds all PENDING decisions whose expiresAt is in the past and resolves them
  * according to each policy's timeoutApprove flag.
+ *
+ * Cross-org cron — deliberately uses no withOrgContext. Relies on the
+ * DATABASE_URL connection having BYPASSRLS (Phase 0b) so the ApprovalPolicy
+ * include resolves across all tenants.
  */
 export async function processTimeouts(): Promise<ProcessTimeoutsResult> {
   const expired = await prisma.policyDecision.findMany({
