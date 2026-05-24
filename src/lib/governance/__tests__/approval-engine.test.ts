@@ -180,7 +180,7 @@ describe("resolveDecision", () => {
     const resolved = makeDecision({ status: "APPROVED", resolvedBy: "user-1", resolvedAt: new Date() });
     mockDecisionUpdate.mockResolvedValue(resolved);
 
-    const result = await resolveDecision("decision-1", "APPROVED", "user-1", "Looks good");
+    const result = await resolveDecision("decision-1", "APPROVED", "user-1", "org-1", "Looks good");
 
     expect(result.decision.status).toBe("APPROVED");
     expect(mockDecisionUpdate).toHaveBeenCalledWith(
@@ -194,7 +194,7 @@ describe("resolveDecision", () => {
   it("throws when decision is already resolved", async () => {
     mockDecisionFindUnique.mockResolvedValue(makeDecision({ status: "APPROVED" }));
 
-    await expect(resolveDecision("decision-1", "REJECTED", "user-1")).rejects.toThrow(
+    await expect(resolveDecision("decision-1", "REJECTED", "user-1", "org-1")).rejects.toThrow(
       "PolicyDecision decision-1 is already APPROVED",
     );
   });
@@ -202,7 +202,7 @@ describe("resolveDecision", () => {
   it("throws when decision not found", async () => {
     mockDecisionFindUnique.mockResolvedValue(null);
 
-    await expect(resolveDecision("nonexistent", "APPROVED", "user-1")).rejects.toThrow(
+    await expect(resolveDecision("nonexistent", "APPROVED", "user-1", "org-1")).rejects.toThrow(
       "PolicyDecision nonexistent not found",
     );
   });
@@ -271,7 +271,7 @@ describe("waitForDecision", () => {
     const resolved = makeDecision({ status: "APPROVED" });
     mockDecisionFindUnique.mockResolvedValue(resolved);
 
-    const result = await waitForDecision("decision-1", 5000, 10);
+    const result = await waitForDecision("decision-1", null, 5000, 10);
 
     expect(result.status).toBe("APPROVED");
     expect(mockDecisionFindUnique).toHaveBeenCalledTimes(1);
@@ -282,7 +282,7 @@ describe("waitForDecision", () => {
     const resolved = makeDecision({ status: "REJECTED" });
     mockDecisionFindUnique.mockResolvedValueOnce(pending).mockResolvedValueOnce(resolved);
 
-    const result = await waitForDecision("decision-1", 5000, 1);
+    const result = await waitForDecision("decision-1", null, 5000, 1);
 
     expect(result.status).toBe("REJECTED");
     expect(mockDecisionFindUnique).toHaveBeenCalledTimes(2);
@@ -291,12 +291,12 @@ describe("waitForDecision", () => {
   it("throws when max wait time exceeded", async () => {
     mockDecisionFindUnique.mockResolvedValue(makeDecision({ status: "PENDING" }));
 
-    await expect(waitForDecision("decision-1", 50, 10)).rejects.toThrow("waitForDecision timed out");
+    await expect(waitForDecision("decision-1", null, 50, 10)).rejects.toThrow("waitForDecision timed out");
   });
 
   it("throws when decision not found", async () => {
     mockDecisionFindUnique.mockResolvedValue(null);
 
-    await expect(waitForDecision("decision-1", 5000, 10)).rejects.toThrow("PolicyDecision decision-1 not found");
+    await expect(waitForDecision("decision-1", null, 5000, 10)).rejects.toThrow("PolicyDecision decision-1 not found");
   });
 });

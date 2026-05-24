@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 interface RouteParams {
@@ -13,14 +14,19 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
   const authResult = await requireAgentOwner(agentId, request);
   if (isAuthError(authResult)) return authResult;
 
+  const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { organizationId: true } });
+  const orgId = agent?.organizationId ?? null;
+
   try {
-    const decisions = await prisma.policyDecision.findMany({
-      where: { agentId, status: "PENDING" },
-      orderBy: { createdAt: "asc" },
-      include: {
-        policy: { select: { id: true, name: true, actionPattern: true, approverIds: true, timeoutSeconds: true } },
-      },
-    });
+    const decisions = await withOrgContext(prisma, orgId, (tx) =>
+      tx.policyDecision.findMany({
+        where: { agentId, status: "PENDING" },
+        orderBy: { createdAt: "asc" },
+        include: {
+          policy: { select: { id: true, name: true, actionPattern: true, approverIds: true, timeoutSeconds: true } },
+        },
+      })
+    );
     return NextResponse.json({ success: true, data: decisions });
   } catch (error) {
     logger.error("GET /api/agents/[agentId]/pending-approvals error", { agentId, error });

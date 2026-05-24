@@ -64,9 +64,11 @@ export async function requestApproval(
   action: string,
   context?: Record<string, unknown>,
 ): Promise<RequestApprovalResult> {
-  const existing = await prisma.policyDecision.findFirst({
-    where: { policyId, agentId, action, status: "PENDING" },
-  });
+  const existing = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.policyDecision.findFirst({
+      where: { policyId, agentId, action, status: "PENDING" },
+    })
+  );
 
   if (existing) {
     return { decision: existing, alreadyPending: true };
@@ -84,17 +86,19 @@ export async function requestApproval(
       ? new Date(Date.now() + policy.timeoutSeconds * 1000)
       : null;
 
-  const decision = await prisma.policyDecision.create({
-    data: {
-      policyId,
-      agentId,
-      organizationId,
-      action,
-      context: context !== undefined ? (context as Prisma.InputJsonValue) : Prisma.JsonNull,
-      status: "PENDING",
-      expiresAt,
-    },
-  });
+  const decision = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.policyDecision.create({
+      data: {
+        policyId,
+        agentId,
+        organizationId,
+        action,
+        context: context !== undefined ? (context as Prisma.InputJsonValue) : Prisma.JsonNull,
+        status: "PENDING",
+        expiresAt,
+      },
+    })
+  );
 
   logger.info("Approval requested", { decisionId: decision.id, agentId, action, policyId });
 
@@ -109,23 +113,28 @@ export async function resolveDecision(
   decisionId: string,
   resolution: "APPROVED" | "REJECTED",
   resolvedBy: string,
+  organizationId: string,
   resolverNote?: string,
 ): Promise<ResolveDecisionResult> {
-  const existing = await prisma.policyDecision.findUnique({ where: { id: decisionId } });
+  const existing = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.policyDecision.findUnique({ where: { id: decisionId } })
+  );
   if (!existing) throw new Error(`PolicyDecision ${decisionId} not found`);
   if (existing.status !== "PENDING") {
     throw new Error(`PolicyDecision ${decisionId} is already ${existing.status}`);
   }
 
-  const decision = await prisma.policyDecision.update({
-    where: { id: decisionId },
-    data: {
-      status: resolution,
-      resolvedBy,
-      resolvedAt: new Date(),
-      resolverNote: resolverNote ?? null,
-    },
-  });
+  const decision = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.policyDecision.update({
+      where: { id: decisionId },
+      data: {
+        status: resolution,
+        resolvedBy,
+        resolvedAt: new Date(),
+        resolverNote: resolverNote ?? null,
+      },
+    })
+  );
 
   logger.info("Decision resolved", { decisionId, resolution, resolvedBy });
 
@@ -137,8 +146,9 @@ export async function resolveDecision(
  * according to each policy's timeoutApprove flag.
  *
  * Cross-org cron — deliberately uses no withOrgContext. Relies on the
- * DATABASE_URL connection having BYPASSRLS (Phase 0b) so the ApprovalPolicy
- * include resolves across all tenants.
+ * DATABASE_URL connection having BYPASSRLS (Phase 0b) so both the
+ * PolicyDecision findMany and ApprovalPolicy include resolve across all tenants.
+ * See tech-debt #6 for pre-flag-flip verification steps.
  */
 export async function processTimeouts(): Promise<ProcessTimeoutsResult> {
   const expired = await prisma.policyDecision.findMany({
@@ -176,13 +186,16 @@ export async function processTimeouts(): Promise<ProcessTimeoutsResult> {
  */
 export async function waitForDecision(
   decisionId: string,
+  organizationId: string | null = null,
   maxWaitMs = 300_000,
   pollIntervalMs = 3_000,
 ): Promise<PolicyDecision> {
   const deadline = Date.now() + maxWaitMs;
 
   while (Date.now() < deadline) {
-    const decision = await prisma.policyDecision.findUnique({ where: { id: decisionId } });
+    const decision = await withOrgContext(prisma, organizationId, (tx) =>
+      tx.policyDecision.findUnique({ where: { id: decisionId } })
+    );
     if (!decision) throw new Error(`PolicyDecision ${decisionId} not found`);
     if (decision.status !== "PENDING") return decision;
 

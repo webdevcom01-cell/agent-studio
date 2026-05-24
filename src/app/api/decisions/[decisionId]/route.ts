@@ -3,6 +3,8 @@ import { z } from "zod";
 import { requireOrgMember, requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { resolveDecision } from "@/lib/governance/approval-engine";
 
@@ -16,10 +18,12 @@ const ResolveDecisionSchema = z.object({
 });
 
 async function loadDecision(decisionId: string) {
-  return prisma.policyDecision.findUnique({
-    where: { id: decisionId },
-    select: { id: true, organizationId: true, status: true },
-  });
+  return withAdminBypass((db) =>
+    db.policyDecision.findUnique({
+      where: { id: decisionId },
+      select: { id: true, organizationId: true, status: true },
+    })
+  );
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
@@ -32,10 +36,12 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const full = await prisma.policyDecision.findUnique({
-      where: { id: decisionId },
-      include: { policy: { select: { id: true, name: true, actionPattern: true, approverIds: true } } },
-    });
+    const full = await withOrgContext(prisma, decision.organizationId, (tx) =>
+      tx.policyDecision.findUnique({
+        where: { id: decisionId },
+        include: { policy: { select: { id: true, name: true, actionPattern: true, approverIds: true } } },
+      })
+    );
     return NextResponse.json({ success: true, data: full });
   } catch (error) {
     logger.error("GET /api/decisions/[decisionId] error", { decisionId, error });
@@ -79,6 +85,7 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       decisionId,
       parsed.data.resolution,
       userAuthResult.userId,
+      decision.organizationId,
       parsed.data.resolverNote,
     );
     return NextResponse.json({ success: true, data: resolved });
@@ -105,10 +112,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
       );
     }
 
-    const cancelled = await prisma.policyDecision.update({
-      where: { id: decisionId },
-      data: { status: "CANCELLED", resolvedAt: new Date() },
-    });
+    const cancelled = await withOrgContext(prisma, decision.organizationId, (tx) =>
+      tx.policyDecision.update({
+        where: { id: decisionId },
+        data: { status: "CANCELLED", resolvedAt: new Date() },
+      })
+    );
     return NextResponse.json({ success: true, data: cancelled });
   } catch (error) {
     logger.error("DELETE /api/decisions/[decisionId] error", { decisionId, error });
