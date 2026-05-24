@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 interface RouteParams {
@@ -11,10 +12,12 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
   const { policyId } = await params;
   const status = request.nextUrl.searchParams.get("status") ?? undefined;
 
-  const policy = await prisma.approvalPolicy.findUnique({
-    where: { id: policyId },
-    select: { id: true, organizationId: true },
-  });
+  const policy = await withAdminBypass((db) =>
+    db.approvalPolicy.findUnique({
+      where: { id: policyId },
+      select: { id: true, organizationId: true },
+    })
+  );
   if (!policy) return NextResponse.json({ success: false, error: "Policy not found" }, { status: 404 });
 
   const authResult = await requireOrgMember(policy.organizationId, request);

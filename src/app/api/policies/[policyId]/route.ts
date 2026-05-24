@@ -3,6 +3,8 @@ import { z } from "zod";
 import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 interface RouteParams {
@@ -19,10 +21,12 @@ const UpdatePolicySchema = z.object({
 });
 
 async function loadPolicy(policyId: string) {
-  return prisma.approvalPolicy.findUnique({
-    where: { id: policyId },
-    select: { id: true, organizationId: true },
-  });
+  return withAdminBypass((db) =>
+    db.approvalPolicy.findUnique({
+      where: { id: policyId },
+      select: { id: true, organizationId: true },
+    })
+  );
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
@@ -35,10 +39,12 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const full = await prisma.approvalPolicy.findUnique({
-      where: { id: policyId },
-      include: { _count: { select: { decisions: true } } },
-    });
+    const full = await withOrgContext(prisma, policy.organizationId, (tx) =>
+      tx.approvalPolicy.findUnique({
+        where: { id: policyId },
+        include: { _count: { select: { decisions: true } } },
+      })
+    );
     return NextResponse.json({ success: true, data: full });
   } catch (error) {
     logger.error("GET /api/policies/[policyId] error", { policyId, error });
@@ -68,17 +74,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
   }
 
   try {
-    const updated = await prisma.approvalPolicy.update({
-      where: { id: policyId },
-      data: {
-        ...(parsed.data.name !== undefined && { name: parsed.data.name }),
-        ...(parsed.data.actionPattern !== undefined && { actionPattern: parsed.data.actionPattern }),
-        ...(parsed.data.approverIds !== undefined && { approverIds: parsed.data.approverIds }),
-        ...(parsed.data.timeoutSeconds !== undefined && { timeoutSeconds: parsed.data.timeoutSeconds }),
-        ...(parsed.data.timeoutApprove !== undefined && { timeoutApprove: parsed.data.timeoutApprove }),
-        ...(parsed.data.isActive !== undefined && { isActive: parsed.data.isActive }),
-      },
-    });
+    const updated = await withOrgContext(prisma, policy.organizationId, (tx) =>
+      tx.approvalPolicy.update({
+        where: { id: policyId },
+        data: {
+          ...(parsed.data.name !== undefined && { name: parsed.data.name }),
+          ...(parsed.data.actionPattern !== undefined && { actionPattern: parsed.data.actionPattern }),
+          ...(parsed.data.approverIds !== undefined && { approverIds: parsed.data.approverIds }),
+          ...(parsed.data.timeoutSeconds !== undefined && { timeoutSeconds: parsed.data.timeoutSeconds }),
+          ...(parsed.data.timeoutApprove !== undefined && { timeoutApprove: parsed.data.timeoutApprove }),
+          ...(parsed.data.isActive !== undefined && { isActive: parsed.data.isActive }),
+        },
+      })
+    );
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     logger.error("PATCH /api/policies/[policyId] error", { policyId, error });
@@ -104,7 +112,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
       );
     }
 
-    await prisma.approvalPolicy.delete({ where: { id: policyId } });
+    await withOrgContext(prisma, policy.organizationId, (tx) =>
+      tx.approvalPolicy.delete({ where: { id: policyId } })
+    );
     return NextResponse.json({ success: true, data: null });
   } catch (error) {
     logger.error("DELETE /api/policies/[policyId] error", { policyId, error });

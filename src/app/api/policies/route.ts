@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 const CreatePolicySchema = z.object({
@@ -27,14 +28,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const policies = await prisma.approvalPolicy.findMany({
-      where: {
-        organizationId: orgId,
-        ...(agentId && { agentId }),
-      },
-      orderBy: { createdAt: "desc" },
-      include: { _count: { select: { decisions: true } } },
-    });
+    const policies = await withOrgContext(prisma, orgId, (tx) =>
+      tx.approvalPolicy.findMany({
+        where: {
+          organizationId: orgId,
+          ...(agentId && { agentId }),
+        },
+        orderBy: { createdAt: "desc" },
+        include: { _count: { select: { decisions: true } } },
+      })
+    );
 
     return NextResponse.json({ success: true, data: policies });
   } catch (error) {
@@ -67,17 +70,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ success: false, error: "Agent not found" }, { status: 404 });
     }
 
-    const policy = await prisma.approvalPolicy.create({
-      data: {
-        agentId,
-        organizationId,
-        name,
-        actionPattern,
-        approverIds,
-        timeoutSeconds: timeoutSeconds ?? null,
-        timeoutApprove: timeoutApprove ?? false,
-      },
-    });
+    const policy = await withOrgContext(prisma, organizationId, (tx) =>
+      tx.approvalPolicy.create({
+        data: {
+          agentId,
+          organizationId,
+          name,
+          actionPattern,
+          approverIds,
+          timeoutSeconds: timeoutSeconds ?? null,
+          timeoutApprove: timeoutApprove ?? false,
+        },
+      })
+    );
 
     return NextResponse.json({ success: true, data: policy }, { status: 201 });
   } catch (error) {
