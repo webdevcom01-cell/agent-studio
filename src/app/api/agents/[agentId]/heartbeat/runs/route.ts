@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 interface RouteParams {
@@ -21,20 +22,25 @@ export async function GET(
   const cursor = request.nextUrl.searchParams.get("cursor") ?? undefined;
 
   try {
-    const runs = await prisma.heartbeatRun.findMany({
-      where: { agentId },
-      orderBy: { startedAt: "desc" },
-      take: PAGE_SIZE + 1,
-      ...(cursor && { cursor: { id: cursor }, skip: 1 }),
-      select: {
-        id: true,
-        status: true,
-        startedAt: true,
-        completedAt: true,
-        durationMs: true,
-        error: true,
-      },
-    });
+    const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { organizationId: true } });
+    const orgId = agent?.organizationId ?? null;
+
+    const runs = await withOrgContext(prisma, orgId, (tx) =>
+      tx.heartbeatRun.findMany({
+        where: { agentId },
+        orderBy: { startedAt: "desc" },
+        take: PAGE_SIZE + 1,
+        ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+        select: {
+          id: true,
+          status: true,
+          startedAt: true,
+          completedAt: true,
+          durationMs: true,
+          error: true,
+        },
+      })
+    );
 
     const hasMore = runs.length > PAGE_SIZE;
     const page = hasMore ? runs.slice(0, PAGE_SIZE) : runs;

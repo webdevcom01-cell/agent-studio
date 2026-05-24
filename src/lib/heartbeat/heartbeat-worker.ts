@@ -19,10 +19,12 @@ export async function processHeartbeatRunJob(job: Job<HeartbeatJobData>): Promis
   const { executeFlow } = await import("@/lib/runtime/engine");
   const { processContextForRun } = await import("@/lib/heartbeat/context-manager");
 
-  const run = await prisma.heartbeatRun.create({
-    data: { agentId, configId, organizationId, status: "RUNNING", startedAt: new Date() },
-    select: { id: true },
-  });
+  const run = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.heartbeatRun.create({
+      data: { agentId, configId, organizationId, status: "RUNNING", startedAt: new Date() },
+      select: { id: true },
+    })
+  );
 
   await job.updateProgress(10);
 
@@ -35,10 +37,12 @@ export async function processHeartbeatRunJob(job: Job<HeartbeatJobData>): Promis
   );
 
   if (!config) {
-    await prisma.heartbeatRun.update({
-      where: { id: run.id },
-      data: { status: "FAILED", completedAt: new Date(), error: "HeartbeatConfig not found" },
-    });
+    await withOrgContext(prisma, organizationId, (tx) =>
+      tx.heartbeatRun.update({
+        where: { id: run.id },
+        data: { status: "FAILED", completedAt: new Date(), error: "HeartbeatConfig not found" },
+      })
+    );
     throw new Error(`HeartbeatConfig ${configId} not found`);
   }
 
@@ -79,16 +83,18 @@ export async function processHeartbeatRunJob(job: Job<HeartbeatJobData>): Promis
       saveContext(context),
     ]);
 
-    await prisma.heartbeatRun.update({
-      where: { id: run.id },
-      data: {
-        status: "COMPLETED",
-        completedAt: new Date(),
-        durationMs,
-        contextSnapshot: contextSnapshot as Prisma.InputJsonValue,
-        output: { messages: outputMessages } as Prisma.InputJsonValue,
-      },
-    });
+    await withOrgContext(prisma, organizationId, (tx) =>
+      tx.heartbeatRun.update({
+        where: { id: run.id },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+          durationMs,
+          contextSnapshot: contextSnapshot as Prisma.InputJsonValue,
+          output: { messages: outputMessages } as Prisma.InputJsonValue,
+        },
+      })
+    );
 
     await job.updateProgress(100);
 
@@ -99,10 +105,12 @@ export async function processHeartbeatRunJob(job: Job<HeartbeatJobData>): Promis
     const error = err instanceof Error ? err.message : String(err);
     const durationMs = Date.now() - startTime;
 
-    await prisma.heartbeatRun.update({
-      where: { id: run.id },
-      data: { status: "FAILED", completedAt: new Date(), durationMs, error },
-    }).catch(() => {/* non-critical */});
+    await withOrgContext(prisma, organizationId, (tx) =>
+      tx.heartbeatRun.update({
+        where: { id: run.id },
+        data: { status: "FAILED", completedAt: new Date(), durationMs, error },
+      })
+    ).catch(() => {/* non-critical */});
 
     logger.error("Heartbeat run failed", { jobId: job.id, agentId, configId, error: err });
     throw err;
