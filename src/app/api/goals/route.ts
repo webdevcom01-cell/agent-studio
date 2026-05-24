@@ -4,6 +4,7 @@ import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 
 const CreateGoalSchema = z.object({
   organizationId: z.string().cuid(),
@@ -29,17 +30,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const goals = await prisma.goal.findMany({
-      where: {
-        organizationId: orgId,
-        ...(status && { status }),
-        ...(parentGoalId !== undefined && { parentGoalId: parentGoalId || null }),
-      },
-      orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
-      include: {
-        _count: { select: { childGoals: true, agentLinks: true } },
-      },
-    });
+    const goals = await withOrgContext(prisma, orgId, (tx) =>
+      tx.goal.findMany({
+        where: {
+          organizationId: orgId,
+          ...(status && { status }),
+          ...(parentGoalId !== undefined && { parentGoalId: parentGoalId || null }),
+        },
+        orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+        include: {
+          _count: { select: { childGoals: true, agentLinks: true } },
+        },
+      })
+    );
 
     return NextResponse.json({ success: true, data: goals });
   } catch (error) {
@@ -67,18 +70,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const goal = await prisma.goal.create({
-      data: {
-        organizationId,
-        title,
-        description,
-        successMetric,
-        targetDate: targetDate ? new Date(targetDate) : null,
-        parentGoalId: parentGoalId ?? null,
-        priority: priority ?? 50,
-        missionId: missionId ?? null,
-      },
-    });
+    const goal = await withOrgContext(prisma, organizationId, (tx) =>
+      tx.goal.create({
+        data: {
+          organizationId,
+          title,
+          description,
+          successMetric,
+          targetDate: targetDate ? new Date(targetDate) : null,
+          parentGoalId: parentGoalId ?? null,
+          priority: priority ?? 50,
+          missionId: missionId ?? null,
+        },
+      })
+    );
 
     return NextResponse.json({ success: true, data: goal }, { status: 201 });
   } catch (error) {

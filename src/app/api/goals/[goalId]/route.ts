@@ -4,6 +4,8 @@ import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { withOrgContext } from "@/lib/db/rls-middleware";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 
 interface RouteParams {
   params: Promise<{ goalId: string }>;
@@ -19,10 +21,12 @@ const UpdateGoalSchema = z.object({
 });
 
 async function loadGoal(goalId: string) {
-  return prisma.goal.findUnique({
-    where: { id: goalId },
-    select: { id: true, organizationId: true },
-  });
+  return withAdminBypass((db) =>
+    db.goal.findUnique({
+      where: { id: goalId },
+      select: { id: true, organizationId: true },
+    })
+  );
 }
 
 export async function GET(
@@ -38,16 +42,18 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const full = await prisma.goal.findUnique({
-      where: { id: goalId },
-      include: {
-        childGoals: { select: { id: true, title: true, status: true, priority: true } },
-        agentLinks: {
-          include: { agent: { select: { id: true, name: true } } },
+    const full = await withOrgContext(prisma, goal.organizationId, (tx) =>
+      tx.goal.findUnique({
+        where: { id: goalId },
+        include: {
+          childGoals: { select: { id: true, title: true, status: true, priority: true } },
+          agentLinks: {
+            include: { agent: { select: { id: true, name: true } } },
+          },
+          mission: { select: { id: true, statement: true } },
         },
-        mission: { select: { id: true, statement: true } },
-      },
-    });
+      })
+    );
 
     return NextResponse.json({ success: true, data: full });
   } catch (error) {
@@ -81,17 +87,19 @@ export async function PATCH(
   }
 
   try {
-    const updated = await prisma.goal.update({
-      where: { id: goalId },
-      data: {
-        ...(parsed.data.title !== undefined && { title: parsed.data.title }),
-        ...(parsed.data.description !== undefined && { description: parsed.data.description }),
-        ...(parsed.data.successMetric !== undefined && { successMetric: parsed.data.successMetric }),
-        ...(parsed.data.targetDate !== undefined && { targetDate: parsed.data.targetDate ? new Date(parsed.data.targetDate) : null }),
-        ...(parsed.data.status !== undefined && { status: parsed.data.status }),
-        ...(parsed.data.priority !== undefined && { priority: parsed.data.priority }),
-      },
-    });
+    const updated = await withOrgContext(prisma, goal.organizationId, (tx) =>
+      tx.goal.update({
+        where: { id: goalId },
+        data: {
+          ...(parsed.data.title !== undefined && { title: parsed.data.title }),
+          ...(parsed.data.description !== undefined && { description: parsed.data.description }),
+          ...(parsed.data.successMetric !== undefined && { successMetric: parsed.data.successMetric }),
+          ...(parsed.data.targetDate !== undefined && { targetDate: parsed.data.targetDate ? new Date(parsed.data.targetDate) : null }),
+          ...(parsed.data.status !== undefined && { status: parsed.data.status }),
+          ...(parsed.data.priority !== undefined && { priority: parsed.data.priority }),
+        },
+      })
+    );
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
@@ -113,7 +121,9 @@ export async function DELETE(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const childCount = await prisma.goal.count({ where: { parentGoalId: goalId } });
+    const childCount = await withOrgContext(prisma, goal.organizationId, (tx) =>
+      tx.goal.count({ where: { parentGoalId: goalId } })
+    );
     if (childCount > 0) {
       return NextResponse.json(
         { success: false, error: `Cannot delete goal with ${childCount} child goal(s). Remove children first.` },
@@ -121,7 +131,9 @@ export async function DELETE(
       );
     }
 
-    await prisma.goal.delete({ where: { id: goalId } });
+    await withOrgContext(prisma, goal.organizationId, (tx) =>
+      tx.goal.delete({ where: { id: goalId } })
+    );
     return NextResponse.json({ success: true, data: null });
   } catch (error) {
     logger.error("DELETE /api/goals/[goalId] error", { goalId, error });
