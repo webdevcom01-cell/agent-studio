@@ -145,7 +145,7 @@ Apply in this exact sequence. Each row = one migration PR.
 | 9 | `HeartbeatRun` | TENANT_DIRECT | no | Append-only; low risk after HeartbeatConfig/Context pass |
 | 10 | `ApprovalPolicy` | TENANT_DIRECT | no | Board governance; `ADMIN_USER_IDS` bypass path must work |
 | 11 | `PolicyDecision` | TENANT_DIRECT | no | FK to ApprovalPolicy; apply immediately after #10 |
-| 12 | `AgentCard` | TENANT_INDIRECT (EXISTS via Agent) | **yes** | No `organizationId` column; policy uses EXISTS subquery against `Agent.id` (UNIQUE → single-row PK lookup). First `isPublic` table; see ADR-0001 |
+| 12 | `AgentCard` | TENANT_DIRECT | **yes** | First `isPublic` table; validates public-read policy works |
 | 13 | `Template` | TENANT_DIRECT | **yes** | Marketplace reads; confirm `isPublic=true` rows visible cross-org |
 | 14 | `Agent` | TENANT_DIRECT | **yes** | Highest traffic; applied last after all simpler tables are stable |
 
@@ -207,11 +207,7 @@ INSERT INTO "{TABLE}" (..., "organizationId") VALUES (..., 'smoke-org-b');
 ROLLBACK;
 ```
 
-### 3.3 `isPublic` pattern (Agent, Template)
-
-> **Note — AgentCard:** AgentCard uses TENANT_INDIRECT (EXISTS subquery against `Agent.id`),
-> not a direct `organizationId` column. Its `isPublic` smoke test differs: query by `agentId`
-> rather than `organizationId`. See ADR-0001 and the AgentCard-specific queries below.
+### 3.3 `isPublic` pattern (Agent, AgentCard, Template)
 
 ```sql
 -- Setup: one public row in org B (as admin_user)
@@ -466,18 +462,13 @@ OR
 error.value:*insufficient_privilege*
 ```
 
-### A.4 Tables at a glance
+### A.4 14 TENANT_DIRECT tables at a glance
 
 ```
-TENANT_DIRECT (13 tables):
 OrganizationMember  Invitation        CompanyMission    Department
 Goal                AgentPermission   HeartbeatConfig   HeartbeatContext
-HeartbeatRun        ApprovalPolicy    PolicyDecision
+HeartbeatRun        ApprovalPolicy    PolicyDecision    AgentCard*
 Template*           Agent*
 
-TENANT_INDIRECT (1 table):
-AgentCard†          (EXISTS subquery via Agent.id — see ADR-0001)
-
-* isPublic tables — require extended SELECT policy (§8.2 of PLAN-V2)
-† No organizationId column; public read via isPublic = true OR EXISTS(Agent)
+* isPublic tables — require extended policy (§8.2 of PLAN-V2)
 ```
