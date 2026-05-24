@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { getContext, setContext } from "@/lib/heartbeat/context-manager";
 
@@ -27,7 +28,10 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const context = await getContext(agentId);
+    const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { organizationId: true } });
+    const orgId = agent?.organizationId ?? null;
+
+    const context = await getContext(agentId, orgId);
     return NextResponse.json({ success: true, data: context });
   } catch (error) {
     logger.error("GET /api/agents/[agentId]/heartbeat/context error", { agentId, error });
@@ -77,7 +81,12 @@ export async function DELETE(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const result = await prisma.heartbeatContext.deleteMany({ where: { agentId } });
+    const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { organizationId: true } });
+    const orgId = agent?.organizationId ?? null;
+
+    const result = await withOrgContext(prisma, orgId, (tx) =>
+      tx.heartbeatContext.deleteMany({ where: { agentId } })
+    );
     return NextResponse.json({ success: true, data: { deletedCount: result.count } });
   } catch (error) {
     logger.error("DELETE /api/agents/[agentId]/heartbeat/context error", { agentId, error });

@@ -17,7 +17,7 @@ export async function processHeartbeatRunJob(job: Job<HeartbeatJobData>): Promis
   const { prisma } = await import("@/lib/prisma");
   const { loadContext, saveContext, saveMessages } = await import("@/lib/runtime/context");
   const { executeFlow } = await import("@/lib/runtime/engine");
-  const { pruneContext, getContext, buildContextPrompt } = await import("@/lib/heartbeat/context-manager");
+  const { processContextForRun } = await import("@/lib/heartbeat/context-manager");
 
   const run = await prisma.heartbeatRun.create({
     data: { agentId, configId, organizationId, status: "RUNNING", startedAt: new Date() },
@@ -47,10 +47,9 @@ export async function processHeartbeatRunJob(job: Job<HeartbeatJobData>): Promis
   try {
     await registerSession(agentId, run.id, "heartbeat-worker", "internal");
 
-    await pruneContext(agentId);
-
-    const contextSnapshot = await getContext(agentId);
-    const contextPrompt = await buildContextPrompt(agentId);
+    // Single transaction: prune expired + read active + build prompt.
+    // Avoids 3 separate withOrgContext calls on this high-frequency path.
+    const { snapshot: contextSnapshot, prompt: contextPrompt } = await processContextForRun(agentId, organizationId);
 
     await job.updateProgress(20);
 
