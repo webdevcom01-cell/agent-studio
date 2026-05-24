@@ -2,6 +2,7 @@ import type { Job } from "bullmq";
 import { logger } from "@/lib/logger";
 import type { Prisma } from "@/generated/prisma";
 import { registerSession, removeSession } from "@/lib/session/session-tracker";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 
 export interface HeartbeatJobData {
   type: "heartbeat.run";
@@ -25,10 +26,13 @@ export async function processHeartbeatRunJob(job: Job<HeartbeatJobData>): Promis
 
   await job.updateProgress(10);
 
-  const config = await prisma.heartbeatConfig.findUnique({
-    where: { id: configId },
-    select: { systemPrompt: true },
-  });
+  // ALS is empty in BullMQ workers; organizationId must come from job.data explicitly.
+  const config = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.heartbeatConfig.findUnique({
+      where: { id: configId },
+      select: { systemPrompt: true },
+    })
+  );
 
   if (!config) {
     await prisma.heartbeatRun.update({

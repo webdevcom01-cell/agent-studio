@@ -1,13 +1,16 @@
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { computeNextRunAt } from "@/lib/scheduler/cron-validator";
 import type { ScheduleType } from "@/generated/prisma";
 
-export async function scheduleHeartbeat(configId: string): Promise<void> {
-  const config = await prisma.heartbeatConfig.findUnique({
-    where: { id: configId },
-    select: { id: true, agentId: true, cronExpression: true, timezone: true, enabled: true, flowScheduleId: true },
-  });
+export async function scheduleHeartbeat(configId: string, organizationId: string | null): Promise<void> {
+  const config = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.heartbeatConfig.findUnique({
+      where: { id: configId },
+      select: { id: true, agentId: true, cronExpression: true, timezone: true, enabled: true, flowScheduleId: true },
+    })
+  );
 
   if (!config) throw new Error(`HeartbeatConfig ${configId} not found`);
 
@@ -35,20 +38,24 @@ export async function scheduleHeartbeat(configId: string): Promise<void> {
       },
     });
 
-    await prisma.heartbeatConfig.update({
-      where: { id: configId },
-      data: { flowScheduleId: schedule.id },
-    });
+    await withOrgContext(prisma, organizationId, (tx) =>
+      tx.heartbeatConfig.update({
+        where: { id: configId },
+        data: { flowScheduleId: schedule.id },
+      })
+    );
 
     logger.info("Heartbeat FlowSchedule created", { configId, flowScheduleId: schedule.id });
   }
 }
 
-export async function unscheduleHeartbeat(configId: string): Promise<void> {
-  const config = await prisma.heartbeatConfig.findUnique({
-    where: { id: configId },
-    select: { flowScheduleId: true },
-  });
+export async function unscheduleHeartbeat(configId: string, organizationId: string | null): Promise<void> {
+  const config = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.heartbeatConfig.findUnique({
+      where: { id: configId },
+      select: { flowScheduleId: true },
+    })
+  );
 
   if (!config) return;
 
@@ -59,10 +66,12 @@ export async function unscheduleHeartbeat(configId: string): Promise<void> {
     });
   }
 
-  await prisma.heartbeatConfig.update({
-    where: { id: configId },
-    data: { enabled: false },
-  });
+  await withOrgContext(prisma, organizationId, (tx) =>
+    tx.heartbeatConfig.update({
+      where: { id: configId },
+      data: { enabled: false },
+    })
+  );
 
   logger.info("Heartbeat unscheduled", { configId });
 }
