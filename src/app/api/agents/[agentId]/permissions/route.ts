@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { grantPermission } from "@/lib/org-chart/hierarchy";
 
@@ -28,13 +29,21 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const grants = await prisma.agentPermissionGrant.findMany({
-      where: { granteeAgentId: agentId },
-      orderBy: { createdAt: "desc" },
-      include: {
-        grantor: { select: { id: true, name: true } },
-      },
+    const agent = await prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { organizationId: true },
     });
+    const orgId = agent?.organizationId ?? null;
+
+    const grants = await withOrgContext(prisma, orgId, (tx) =>
+      tx.agentPermissionGrant.findMany({
+        where: { granteeAgentId: agentId },
+        orderBy: { createdAt: "desc" },
+        include: {
+          grantor: { select: { id: true, name: true } },
+        },
+      })
+    );
 
     return NextResponse.json({ success: true, data: grants });
   } catch (error) {

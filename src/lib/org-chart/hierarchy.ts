@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import type { AgentPermissionGrant } from "@/generated/prisma";
 
 export async function getAgentAncestors(agentId: string, maxDepth = 10): Promise<string[]> {
@@ -55,18 +57,20 @@ export async function checkA2APermission(
     ? { OR: [{ scope: null as string | null }, { scope }] }
     : { scope: null as string | null };
 
-  const grant = await prisma.agentPermissionGrant.findFirst({
-    where: {
-      granteeAgentId: agentId,
-      grantorAgentId: { in: ancestors },
-      permission,
-      AND: [
-        scopeCondition,
-        { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
-      ],
-    },
-    select: { grantorAgentId: true },
-  });
+  const grant = await withAdminBypass((db) =>
+    db.agentPermissionGrant.findFirst({
+      where: {
+        granteeAgentId: agentId,
+        grantorAgentId: { in: ancestors },
+        permission,
+        AND: [
+          scopeCondition,
+          { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+        ],
+      },
+      select: { grantorAgentId: true },
+    })
+  );
 
   if (grant) return { allowed: true, grantedBy: grant.grantorAgentId };
   return { allowed: false };
@@ -86,14 +90,16 @@ export async function grantPermission(
     throw new Error("Grantor must be an ancestor of grantee to delegate permissions");
   }
 
-  return prisma.agentPermissionGrant.create({
-    data: {
-      grantorAgentId,
-      granteeAgentId,
-      organizationId,
-      permission,
-      scope: scope ?? null,
-      expiresAt: expiresAt ?? null,
-    },
-  });
+  return withOrgContext(prisma, organizationId, (tx) =>
+    tx.agentPermissionGrant.create({
+      data: {
+        grantorAgentId,
+        granteeAgentId,
+        organizationId,
+        permission,
+        scope: scope ?? null,
+        expiresAt: expiresAt ?? null,
+      },
+    })
+  );
 }
