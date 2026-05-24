@@ -104,7 +104,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const pendingCount = await prisma.policyDecision.count({ where: { policyId, status: "PENDING" } });
+    const pendingCount = await withOrgContext(prisma, policy.organizationId, (tx) =>
+      tx.policyDecision.count({ where: { policyId, status: "PENDING" } })
+    );
     if (pendingCount > 0) {
       return NextResponse.json(
         { success: false, error: `Cannot delete policy with ${pendingCount} pending decision(s).` },

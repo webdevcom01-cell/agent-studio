@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
@@ -24,13 +25,15 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const decisions = await prisma.policyDecision.findMany({
-      where: {
-        policyId,
-        ...(status && { status }),
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const decisions = await withOrgContext(prisma, policy.organizationId, (tx) =>
+      tx.policyDecision.findMany({
+        where: {
+          policyId,
+          ...(status && { status }),
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    );
     return NextResponse.json({ success: true, data: decisions });
   } catch (error) {
     logger.error("GET /api/policies/[policyId]/decisions error", { policyId, error });
