@@ -48,10 +48,11 @@ export async function trySaveCrPayload(
   }
   if (!isCrPayload(candidate)) return;
 
+  const reviewBatchId = `review_${new Date().toISOString()}`;
   const tc = candidate.trend_context ?? {};
 
   await prisma.somaReviewBatch.upsert({
-    where: { reviewBatchId: candidate.review_batch_id },
+    where: { reviewBatchId },
     update: {
       trendTitle: tc.title ?? "Untitled",
       sourceUrl: tc.source_url ?? "",
@@ -74,7 +75,7 @@ export async function trySaveCrPayload(
       },
     },
     create: {
-      reviewBatchId: candidate.review_batch_id,
+      reviewBatchId,
       trendTitle: tc.title ?? "Untitled",
       sourceUrl: tc.source_url ?? "",
       dateObserved: tc.date_observed ?? new Date().toISOString().slice(0, 10),
