@@ -19,7 +19,7 @@ export async function POST(
   { params }: RouteParams
 ): Promise<NextResponse> {
   try {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request, "flows:execute");
     if (isAuthError(authResult)) return authResult;
 
     const { agentId } = await params;

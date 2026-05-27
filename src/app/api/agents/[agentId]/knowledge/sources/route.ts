@@ -4,7 +4,7 @@ import { ingestSource } from "@/lib/knowledge";
 import { addKBIngestJob } from "@/lib/queue";
 import { logger } from "@/lib/logger";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
-import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
+import { requireAgentOwner, isAuthError, checkScope } from "@/lib/api/auth-guard";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { auditKBSourceAdd } from "@/lib/security/audit";
 
@@ -23,6 +23,8 @@ export async function GET(
     const { agentId } = await params;
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
+    const scopeError = checkScope(authResult, "kb:read");
+    if (scopeError) return scopeError;
 
     const searchParams = request.nextUrl.searchParams;
     const page = Math.max(1, Number(searchParams.get("page")) || 1);
@@ -79,6 +81,8 @@ export async function POST(
     const { agentId } = await params;
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
+    const scopeError = checkScope(authResult, "kb:write");
+    if (scopeError) return scopeError;
 
     const rateResult = checkRateLimit(`kb-source:${authResult.userId}`, 10);
     if (!rateResult.allowed) {

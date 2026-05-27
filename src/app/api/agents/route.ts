@@ -16,7 +16,7 @@ const createAgentSchema = z.object({
 });
 
 export async function GET(): Promise<NextResponse> {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(undefined, "agents:read");
   if (isAuthError(authResult)) return authResult;
 
   const agents = await prisma.agent.findMany({
@@ -38,7 +38,7 @@ const WRITE_RATE_LIMIT = 10;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const authResult = await requireAuth();
+    const authResult = await requireAuth(request, "agents:write");
     if (isAuthError(authResult)) return authResult;
 
     const rateResult = checkRateLimit(`create-agent:${authResult.userId}`, WRITE_RATE_LIMIT);

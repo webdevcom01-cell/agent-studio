@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
+import { requireAgentOwner, isAuthError, checkScope } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { CreateEvalSuiteSchema } from "@/lib/evals/schemas";
 
@@ -23,6 +23,8 @@ export async function GET(
     const { agentId } = await params;
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
+    const scopeError = checkScope(authResult, "evals:read");
+    if (scopeError) return scopeError;
 
     const suites = await prisma.evalSuite.findMany({
       where: { agentId },
@@ -80,6 +82,8 @@ export async function POST(
     const { agentId } = await params;
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
+    const scopeError = checkScope(authResult, "evals:run");
+    if (scopeError) return scopeError;
 
     // Enforce per-agent suite limit
     const existingCount = await prisma.evalSuite.count({ where: { agentId } });

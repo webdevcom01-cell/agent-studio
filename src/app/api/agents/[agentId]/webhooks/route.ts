@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
+import { requireAgentOwner, isAuthError, checkScope } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { applySecurityHeaders } from "@/lib/api/security-headers";
@@ -52,6 +52,8 @@ export async function GET(
   const { agentId } = await params;
   const authResult = await requireAgentOwner(agentId);
   if (isAuthError(authResult)) return authResult;
+  const scopeError = checkScope(authResult, "webhooks:read");
+  if (scopeError) return scopeError;
 
   try {
     const webhooks = await prisma.webhookConfig.findMany({
@@ -99,6 +101,8 @@ export async function POST(
   const { agentId } = await params;
   const authResult = await requireAgentOwner(agentId);
   if (isAuthError(authResult)) return authResult;
+  const scopeError = checkScope(authResult, "agents:write");
+  if (scopeError) return scopeError;
 
   try {
     const raw = await parseBodyWithLimit(request);

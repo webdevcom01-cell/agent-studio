@@ -57,6 +57,7 @@ scripts/*
 !scripts/create-vulnerable-demo/**
 !scripts/pre-push-check.sh
 !scripts/migrate-to-orgs.mjs
+!scripts/encrypt-webhook-secrets.mjs
 !scripts/enable-ecc-sdlc.ts
 !scripts/setup-gitmcp.ts
 !scripts/sync-vault.ts

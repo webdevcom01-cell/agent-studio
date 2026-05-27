@@ -16,7 +16,7 @@ import { headers as nextHeaders } from "next/headers";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { validateApiKey } from "@/lib/api/api-key";
+import { validateApiKey, hasScope, type ApiKeyScope } from "@/lib/api/api-key";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 
 const cuidSchema = z.string().cuid();
@@ -57,9 +57,13 @@ function agentNotFound(): NextResponse {
 // ── Core: requireAuth ────────────────────────────────────────────────────────
 // Accepts an optional NextRequest to check the x-api-key header.
 // Falls back to session cookie when no API key provided.
+//
+// Pass requiredScope to enforce API key scope. Scope check is skipped for
+// session auth and for API keys created without explicit scopes (full access).
 
 export async function requireAuth(
   req?: NextRequest,
+  requiredScope?: ApiKeyScope,
 ): Promise<AuthResult | NextResponse> {
   // 1️⃣  Try API key from x-api-key header.
   //     Prefer the explicitly passed NextRequest; fall back to Next.js
@@ -71,20 +75,40 @@ export async function requireAuth(
     if (!keyResult) {
       return unauthorized("Invalid or expired API key");
     }
-    return {
+    const authResult: AuthResult = {
       userId: keyResult.userId,
       apiKeyId: keyResult.apiKeyId,
       scopes: keyResult.scopes,
     };
+    if (requiredScope && keyResult.scopes.length > 0) {
+      if (!hasScope(keyResult.scopes, requiredScope)) {
+        return forbidden(`API key missing required scope: ${requiredScope}`);
+      }
+    }
+    return authResult;
   }
 
-  // 2️⃣  Fall back to session cookie
+  // 2️⃣  Fall back to session cookie (no scope restrictions)
   const session = await auth();
   if (!session?.user?.id) {
     return unauthorized();
   }
 
   return { userId: session.user.id, apiKeyId: null, scopes: [] };
+}
+
+// ── checkScope ───────────────────────────────────────────────────────────────
+// Use after requireAgentOwner/requireOrgMember when per-method scope differs.
+// Returns a 403 NextResponse if the API key lacks the scope, null if OK.
+
+export function checkScope(
+  authResult: AuthResult,
+  required: ApiKeyScope,
+): NextResponse | null {
+  if (authResult.apiKeyId === null) return null;
+  if (authResult.scopes.length === 0) return null;
+  if (hasScope(authResult.scopes, required)) return null;
+  return forbidden(`API key missing required scope: ${required}`);
 }
 
 // ── requireAgentOwner ────────────────────────────────────────────────────────
@@ -201,8 +225,8 @@ export async function requireOrgOwner(
 // ── requireAdmin ─────────────────────────────────────────────────────────────
 // Requires authentication AND that the userId appears in the ADMIN_USER_IDS
 // environment variable (comma-separated list).
-// When ADMIN_USER_IDS is not configured, any authenticated user is allowed
-// (dev-friendly fallback — tighten in production by setting the env var).
+// In production, ADMIN_USER_IDS must be set — returns 503 if missing.
+// In development, falls back to allowing all authenticated users.
 
 export async function requireAdmin(
   req?: NextRequest,
@@ -212,7 +236,12 @@ export async function requireAdmin(
 
   const rawIds = process.env.ADMIN_USER_IDS;
   if (!rawIds) {
-    // Not configured → allow all authenticated users (dev mode)
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        { success: false, error: "Admin access not configured" },
+        { status: 503 },
+      );
+    }
     return authResult;
   }
 

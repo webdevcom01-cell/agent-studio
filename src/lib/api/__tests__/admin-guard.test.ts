@@ -10,7 +10,10 @@ const mockValidateApiKey = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/auth", () => ({ auth: mockAuth }));
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
-vi.mock("@/lib/api/api-key", () => ({ validateApiKey: mockValidateApiKey }));
+vi.mock("@/lib/api/api-key", () => ({
+  validateApiKey: mockValidateApiKey,
+  hasScope: vi.fn().mockReturnValue(true),
+}));
 // next/headers is used by requireAuth when no req is passed
 vi.mock("next/headers", () => ({
   headers: vi.fn().mockResolvedValue({ get: () => null }),
@@ -28,9 +31,8 @@ afterEach(() => {
 });
 
 describe("requireAdmin()", () => {
-  it("allows any authenticated user when ADMIN_USER_IDS is not configured", async () => {
+  it("allows any authenticated user when ADMIN_USER_IDS is not configured (dev mode)", async () => {
     mockAuth.mockResolvedValue({ user: { id: "user-123" } });
-    // ADMIN_USER_IDS is unset (deleted in beforeEach)
 
     const result = await requireAdmin();
 
@@ -38,6 +40,20 @@ describe("requireAdmin()", () => {
     if (!isAuthError(result)) {
       expect(result.userId).toBe("user-123");
     }
+  });
+
+  it("returns 503 when ADMIN_USER_IDS is not configured in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    mockAuth.mockResolvedValue({ user: { id: "user-123" } });
+
+    const result = await requireAdmin();
+
+    expect(result).toBeInstanceOf(NextResponse);
+    if (result instanceof NextResponse) {
+      expect(result.status).toBe(503);
+    }
+
+    vi.unstubAllEnvs();
   });
 
   it("allows access when userId is in ADMIN_USER_IDS list", async () => {

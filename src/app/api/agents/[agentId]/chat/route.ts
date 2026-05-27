@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { checkRateLimit, checkRateLimitAsync } from "@/lib/rate-limit";
 import { parseBodyWithLimit, BodyTooLargeError } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
-import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
+import { requireAgentOwner, isAuthError, checkScope } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { auth } from "@/lib/auth";
 import { addFlowJob } from "@/lib/queue";
@@ -142,6 +142,8 @@ export async function POST(
   if (isDebug || evalFlowVersionId || evalModelOverride) {
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
+    const scopeError = checkScope(authResult, "flows:execute");
+    if (scopeError) return scopeError;
   }
 
   // ── Budget check (F1) ────────────────────────────────────────────────

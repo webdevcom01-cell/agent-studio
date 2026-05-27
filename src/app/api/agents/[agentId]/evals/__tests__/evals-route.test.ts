@@ -43,6 +43,7 @@ vi.mock("@/lib/logger", () => ({
 vi.mock("@/lib/api/auth-guard", () => ({
   requireAgentOwner: vi.fn().mockResolvedValue({ userId: "user-1", agentId: "agent-1" }),
   isAuthError: vi.fn().mockReturnValue(false),
+  checkScope: vi.fn().mockReturnValue(null),
 }));
 vi.mock("@/lib/evals/runner", () => ({
   runEvalSuite: vi.fn(),
