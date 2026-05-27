@@ -22,6 +22,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  CheckSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +54,7 @@ const NAV_SECTIONS: NavSection[] = [
       { icon: Zap, label: "Skills", href: "/skills" },
       { icon: Brain, label: "Learning", href: "/ecc" },
       { icon: Webhook, label: "Webhooks", href: "/webhooks" },
+      { icon: CheckSquare, label: "Review Queue", href: "/soma/review-queue" },
     ],
   },
   {

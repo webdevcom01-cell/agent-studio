@@ -33,6 +33,7 @@ model User {
   googleOAuthTokens GoogleOAuthToken[]
   orgMemberships   OrganizationMember[]
   apiKeys          ApiKey[]
+  somaReviewBatches SomaReviewBatch[]
 }
 
 // ---------------------------------------------------------------------------
@@ -1748,4 +1749,59 @@ model PipelineTemplate {
 
   @@index([category])
   @@index([isBuiltIn])
+}
+
+model SomaReviewBatch {
+  id            String          @id @default(cuid())
+  reviewBatchId String          @unique
+  trendTitle    String
+  sourceUrl     String
+  dateObserved  String
+  isEvergreen   Boolean         @default(false)
+  angleUsed     String          @db.Text
+  status        SomaBatchStatus @default(PENDING)
+  userId        String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  posts         SomaReviewPost[]
+  user          User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum SomaBatchStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model SomaReviewPost {
+  id            String         @id @default(cuid())
+  batchId       String
+  batch         SomaReviewBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  platform      String
+  hookText      String         @db.Text
+  patternId     String
+  fullPost      Json
+  charCount     Int            @default(0)
+  hashtags      String[]       @default([])
+  status        SomaPostStatus @default(PENDING)
+  editedContent Json?
+  reviewNote    String?        @db.Text
+  reviewedAt    DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([batchId])
+  @@index([batchId, platform])
+}
+
+enum SomaPostStatus {
+  PENDING
+  APPROVED
+  EDITED
+  REJECTED
 }
