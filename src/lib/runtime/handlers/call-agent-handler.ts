@@ -880,6 +880,7 @@ async function executeSubAgent(params: SubAgentParams): Promise<SubAgentResult> 
     _a2aDepth: depth,
     _a2aCallStack: callStack,
     _a2aTraceId: traceId,
+    _userId: callerUserId ?? undefined,
   };
 
   const runFlow =
@@ -954,5 +955,9 @@ function generateSpanId(): string {
 function getOwnerUserId(
   context: RuntimeContextWithDepth
 ): string | null {
-  return (context._userId as string | undefined) ?? null;
+  return (
+    (context._userId as string | undefined) ??
+    (context as unknown as { userId?: string | null }).userId ??
+    null
+  );
 }
