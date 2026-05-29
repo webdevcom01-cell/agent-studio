@@ -162,3 +162,8 @@ tok-b-revidiran.md
 
 # MCP konfiguracija sa tajnama
 .mcp.json
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
