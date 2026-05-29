@@ -28,7 +28,6 @@ function isCrPayload(value: unknown): value is CrPayload {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
   return (
-    typeof v.review_batch_id === "string" &&
     Array.isArray(v.posts) &&
     (v.posts as unknown[]).length > 0
   );
