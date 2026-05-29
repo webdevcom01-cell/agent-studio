@@ -1,10 +1,17 @@
 import { prisma } from "@/lib/prisma";
 
+type LinkedInPost = string;
+type XPost = string;
+type YouTubePost = { title: string; description: string; tags?: string[] };
+type InstagramPost = { caption: string; hashtags?: string[]; alt_text?: string };
+type TikTokPost = { overlay: string; voice_over?: string; hashtags?: string[] };
+type FullPost = LinkedInPost | XPost | YouTubePost | InstagramPost | TikTokPost;
+
 interface CrPost {
   platform: string;
   hook_text: string;
   pattern_id: string;
-  full_post: unknown;
+  full_post: FullPost;
   char_count?: number;
   hashtags?: string[];
 }
@@ -65,7 +72,9 @@ export async function trySaveCrPayload(
           platform: p.platform,
           hookText: p.hook_text,
           patternId: p.pattern_id,
-          fullPost: p.full_post as object,
+          fullPost: typeof p.full_post === "string"
+            ? { text: p.full_post }
+            : p.full_post,
           charCount: p.char_count ?? 0,
           hashtags: p.hashtags ?? [],
           status: "PENDING",
