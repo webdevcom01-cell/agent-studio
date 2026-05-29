@@ -20,7 +20,7 @@ TI (Trend Intelligence) → HW (Hook Writer) → CR (Content Repurposer)
 | Agent | Agent ID | KB ID |
 |-------|----------|-------|
 | Trend Intelligence (TI) | `c1777723587797ch65fqcudn` | `c1777724361613zkacaonj60` |
-| Hook Writer (HW) | `c17777235878091qa78qw27c` | `c17777243623082bxh7e2crn` |
+| Hook Writer (HW) | `cmp832hkithbhj9suiqgmjqpw` | `c17777243623082bxh7e2crn` |
 | Content Repurposer (CR) | `c1777723587821zymz38ug0j` | `c1777724362990ottwffcep9` |
 | Score Analyzer (SA) | `cmp7gtng100hdpc01cqr5d2hy` | `cmp7gtng100hfpc010xztikpd` |
 

@@ -2,7 +2,6 @@ import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { validateNamedSchema } from "@/lib/mcp/schema-validator";
 import { prisma } from "@/lib/prisma";
-import { trySaveCrPayload } from "@/lib/soma/cr-payload";
 import { logger } from "@/lib/logger";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import {
@@ -421,8 +420,6 @@ async function executeCallAttempt(
     recordSuccess(context.agentId, calleeId);
 
     const durationMs = Date.now() - startTime;
-
-    trySaveCrPayload(output, userId).catch(() => {});
 
     writeAuditLog({
       userId: getOwnerUserId(context as RuntimeContextWithDepth) ?? undefined,
