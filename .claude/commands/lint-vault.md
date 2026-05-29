@@ -1,10 +1,10 @@
 ---
-description: Lint SOMA vault — pokreće deterministički scripts/lint-vault.mjs pa daje prioritizovan savet
+description: Lint SOMA vault — pokreni deterministički scripts/lint-vault.mjs i prenesi izlaz VERBATIM, pa dodaj savet
 ---
 
-Pokreni deterministički vault linter i protumači rezultat. NIŠTA ne menjaj, ne briši.
+PRAVILO: brojanje radi ISKLJUČIVO skript. Ti NE preračunavaš, NE re-bucket-uješ, NE izmišljaš nijedan broj ili fajl.
 
-1. Pokreni u shell-u: `node scripts/lint-vault.mjs`
-   (read-only; skenira ../agent-studio-vault, preskače skills/, ignoriše code blokove). Ako padne, prijavi grešku i STANI.
-2. Prikaži tabelu iz izveštaja koji je skript vratio.
-3. Dodaj kratak prioritizovan savet prema system/vault-standard.md: šta je visoka vrednost, šta je buka (npr. single-use tagovi koji su zapravo legitimni, ili stvari u skills/ koje su izuzete §0), šta srediti prvo. Ne predlaži bulk izmene — folder po folder.
+1. Pokreni: `node scripts/lint-vault.mjs`
+2. Prenesi stdout skripta **DOSLOVNO** (cela tabela + sekcije), bez ijedne izmene brojeva ili liste fajlova. Ako želiš, stavi ga u code blok.
+3. TEK ISPOD, u zasebnoj sekciji "## Savet", dodaj prioritizaciju i tumačenje prema system/vault-standard.md — ali ne navodi nijedan novi broj/fajl koji nije u izlazu skripta.
+4. Ako skript padne, prijavi grešku i STANI. NIŠTA ne menjaj u vault-u.
