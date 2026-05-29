@@ -12,7 +12,7 @@ const VAULT = args.find(a => !a.startsWith('--')) || '/Users/buda007/Desktop/age
 
 const REQUIRED = ['type', 'created', 'tags'];
 // Kanonski type-ovi (§1A knowledge + §1B operativni). Lint flaguje sve van ovog skupa.
-const VALID_TYPES = ['concept','resource','insight','decision','project-log','question','evo-log','instincts','agent-card','design-spec','audit','system','glossary','handoff','analysis'];
+const VALID_TYPES = ['concept','resource','insight','decision','project-log','question','evo-log','instincts','agent-card','design-spec','audit','system','glossary','handoff','analysis','build-guide'];
 const LEGACY_DATE = ['date', 'updated', 'audit_date'];
 const TAG_SYNONYMS = { agents: 'agent', skills: 'skill', ti: 'trend-intelligence', hw: 'hook-writer' };
 const EXPECTED_DUP = new Set(['evo-log.md','instincts.md','agent-card.md','DESIGN_SPEC.md','format-templates.md','winners-log.md']);
