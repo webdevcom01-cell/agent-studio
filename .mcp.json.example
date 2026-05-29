@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "obsidian": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "obsidian-mcp-server@latest"],
+      "env": {
+        "OBSIDIAN_API_KEY": "<your-obsidian-local-rest-api-key>"
+      }
+    }
+  }
+}

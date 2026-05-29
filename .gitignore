@@ -138,3 +138,27 @@ pr-guardian-phase1.patch
 # Local utility scripts (contain secrets, keep out of repo)
 rotate-postgres-password.sh
 .claude/scheduled_tasks.lock
+
+# Agent-architect skill workspace (development artifacts, not for repo)
+agent-architect/
+agent-architect-v0.2-install.sh
+
+# SOMA pipeline development docs and prompt files (private working files)
+*-prompt.md
+*-sinteza.md
+docs/forensic/
+anthropic-klaster-A-E-sinteza.md
+soma-pass1-5-sinteza.md
+hybrid-consolidation-prompt.md
+opcija-a-corrected.md
+opcija-c-enhanced.md
+soma-call-agent-forensic-prompt.md
+sprint1-fixes-prompt.md
+sprint2-fixes-prompt.md
+sprint2.5-quality-gate-hardening.md
+stage1-review-prompt.md
+tok-b-platform-code-pr.md
+tok-b-revidiran.md
+
+# MCP konfiguracija sa tajnama
+.mcp.json
