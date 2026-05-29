@@ -76,7 +76,7 @@ even if the agent scored it below 17 — your judgment overrides the score thres
 | Agent | ID |
 |-------|----|
 | Trend Intelligence | c1777723587797ch65fqcudn |
-| Hook Writer | c17777235878091qa78qw27c |
+| Hook Writer | cmp832hkithbhj9suiqgmjqpw |
 | Content Repurposer | c1777723587821zymz38ug0j |
 
 ---

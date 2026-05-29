@@ -8,7 +8,7 @@
 | Agent | ID | Model | Nodes |
 |-------|----|-------|-------|
 | Trend Intelligence | c1777723587797ch65fqcudn | gpt-4.1-mini | kb_search → web_search → ai_response → call_agent(HW) |
-| Hook Writer | c17777235878091qa78qw27c | gpt-4.1-mini | kb_search → ai_response → call_agent(CR) |
+| Hook Writer | cmp832hkithbhj9suiqgmjqpw | gpt-4.1-mini | kb_search → ai_response → call_agent(CR) |
 | Content Repurposer | c1777723587821zymz38ug0j | gpt-4.1-mini | kb_search → ai_response |
 
 ---
