@@ -11,6 +11,8 @@ const asJson = args.includes('--json');
 const VAULT = args.find(a => !a.startsWith('--')) || '/Users/buda007/Desktop/agent-studio-vault';
 
 const REQUIRED = ['type', 'created', 'tags'];
+// Kanonski type-ovi (§1A knowledge + §1B operativni). Lint flaguje sve van ovog skupa.
+const VALID_TYPES = ['concept','resource','insight','decision','project-log','question','evo-log','instincts','agent-card','design-spec','audit','system','glossary','handoff','analysis'];
 const LEGACY_DATE = ['date', 'updated', 'audit_date'];
 const TAG_SYNONYMS = { agents: 'agent', skills: 'skill', ti: 'trend-intelligence', hw: 'hook-writer' };
 const EXPECTED_DUP = new Set(['evo-log.md','instincts.md','agent-card.md','DESIGN_SPEC.md','format-templates.md','winners-log.md']);
@@ -85,13 +87,14 @@ for (const n of notes) for (const l of n.links) referenced.add(l.toLowerCase());
 const tagFreq = {};
 for (const n of notes) for (const t of n.tags) tagFreq[t] = (tagFreq[t] || 0) + 1;
 
-const F = { noFrontmatter: [], missingRequired: [], legacyDate: [], tagSynonym: [], tagSprawl: [], orphans: [], brokenLinks: [], staleDrafts: [], duplicates: [] };
+const F = { noFrontmatter: [], missingRequired: [], invalidType: [], legacyDate: [], tagSynonym: [], tagSprawl: [], orphans: [], brokenLinks: [], staleDrafts: [], duplicates: [] };
 const now = Date.now();
 for (const n of notes) {
   if (!n.fm) { F.noFrontmatter.push(n.path); }
   else {
     const missing = REQUIRED.filter(k => !(k in n.fm) || (k === 'tags' && Array.isArray(n.fm[k]) && n.fm[k].length === 0));
     if (missing.length) F.missingRequired.push(`${n.path} (nedostaje: ${missing.join(', ')})`);
+    if (n.fm.type && !VALID_TYPES.includes(n.fm.type)) F.invalidType.push(`${n.path} (type: ${n.fm.type})`);
     const legacy = LEGACY_DATE.filter(k => k in n.fm);
     if (legacy.length) F.legacyDate.push(`${n.path} (${legacy.join(', ')})`);
   }
@@ -109,7 +112,7 @@ for (const [name, paths] of Object.entries(byBase)) if (paths.length > 1 && !EXP
 if (asJson) { console.log(JSON.stringify({ vault: VAULT, scanned: notes.length, findings: F }, null, 2)); process.exit(0); }
 
 const summary = [
-  ['Bez frontmatter-a', F.noFrontmatter], ['Nedostaju obavezna polja', F.missingRequired],
+  ['Bez frontmatter-a', F.noFrontmatter], ['Nedostaju obavezna polja', F.missingRequired], ['Nevazeci type (van enum-a)', F.invalidType],
   ['Legacy date polja', F.legacyDate], ['Tag sinonimi', F.tagSynonym], ['Tagovi s 1 upotrebom', F.tagSprawl],
   ['Sirocad / prazne', F.orphans], ['Broken wikilinks', F.brokenLinks], ['Stale draftovi (>14d)', F.staleDrafts], ['Duplikati', F.duplicates],
 ];
