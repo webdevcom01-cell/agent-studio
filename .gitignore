@@ -167,3 +167,9 @@ tok-b-revidiran.md
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Obsidian vault artefakti (kanonski vault je sibling: ../agent-studio-vault)
+/soma-vault/
+/.obsidian/
+*.canvas
+*.base
