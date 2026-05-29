@@ -50,30 +50,8 @@ export async function trySaveCrPayload(
   const reviewBatchId = `review_${new Date().toISOString()}`;
   const tc = candidate.trend_context ?? {};
 
-  await prisma.somaReviewBatch.upsert({
-    where: { reviewBatchId },
-    update: {
-      trendTitle: tc.title ?? "Untitled",
-      sourceUrl: tc.source_url ?? "",
-      dateObserved: tc.date_observed ?? new Date().toISOString().slice(0, 10),
-      isEvergreen: tc.is_evergreen ?? false,
-      angleUsed: typeof candidate.angle_used === "string" ? candidate.angle_used : "",
-      status: "PENDING",
-      ...(userId ? { userId } : {}),
-      posts: {
-        deleteMany: {},
-        create: (candidate.posts as CrPost[]).map((p) => ({
-          platform: p.platform,
-          hookText: p.hook_text,
-          patternId: p.pattern_id,
-          fullPost: p.full_post as object,
-          charCount: p.char_count ?? 0,
-          hashtags: p.hashtags ?? [],
-          status: "PENDING",
-        })),
-      },
-    },
-    create: {
+  await prisma.somaReviewBatch.create({
+    data: {
       reviewBatchId,
       trendTitle: tc.title ?? "Untitled",
       sourceUrl: tc.source_url ?? "",
