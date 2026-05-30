@@ -26,6 +26,7 @@ function walk(dir, acc = []) {
       if (relative(VAULT, full).split('/')[0] === 'skills') continue; // §0
       walk(full, acc);
     } else if (extname(e.name) === '.md') {
+      if (relative(VAULT, full) === 'README.md') continue; // §0 izuzetak (vault front-door)
       acc.push(full);
     }
   }
