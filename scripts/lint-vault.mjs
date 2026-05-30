@@ -105,7 +105,7 @@ for (const n of notes) {
   for (const l of n.links) { const k = l.toLowerCase(); if (!nameSet.has(k) && !pathSet.has(k)) F.brokenLinks.push(`${n.path}: [[${l}]]`); }
   if (n.name.endsWith('.draft.md')) { const d = (now - n.mtime.getTime()) / 86400000; if (d > STALE_DAYS) F.staleDrafts.push(`${n.path} (${Math.floor(d)} dana)`); }
 }
-for (const [t, c] of Object.entries(tagFreq)) if (c === 1) F.tagSprawl.push(t);
+for (const [t, c] of Object.entries(tagFreq)) if (c === 1 && !VALID_TYPES.includes(t)) F.tagSprawl.push(t); // type-imena nisu sprawl (§3 traži tip u tagovima)
 const byBase = {};
 for (const n of notes) (byBase[n.name] ||= []).push(n.path);
 for (const [name, paths] of Object.entries(byBase)) if (paths.length > 1 && !EXPECTED_DUP.has(name)) F.duplicates.push(`${name}: ${paths.join(', ')}`);
