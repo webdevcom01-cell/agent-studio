@@ -1790,6 +1790,7 @@ model SomaReviewPost {
   hashtags      String[]       @default([])
   status        SomaPostStatus @default(PENDING)
   editedContent Json?
+  qualityFlags  Json?
   reviewNote    String?        @db.Text
   reviewedAt    DateTime?
   createdAt     DateTime       @default(now())

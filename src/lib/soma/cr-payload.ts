@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma";
 
 type LinkedInPost = string;
 type XPost = string;
@@ -7,6 +8,12 @@ type InstagramPost = { caption: string; hashtags?: string[]; alt_text?: string }
 type TikTokPost = { overlay: string; voice_over?: string; hashtags?: string[] };
 type FullPost = LinkedInPost | XPost | YouTubePost | InstagramPost | TikTokPost;
 
+interface QualityFlag {
+  rule: string;
+  detail?: string;
+  severity?: string;
+}
+
 interface CrPost {
   platform: string;
   hook_text: string;
@@ -14,6 +21,7 @@ interface CrPost {
   full_post: FullPost;
   char_count?: number;
   hashtags?: string[];
+  quality_flags?: QualityFlag[];
 }
 
 interface CrTrendContext {
@@ -77,6 +85,7 @@ export async function trySaveCrPayload(
             : p.full_post,
           charCount: p.char_count ?? 0,
           hashtags: p.hashtags ?? [],
+          qualityFlags: (Array.isArray(p.quality_flags) ? p.quality_flags : []) as unknown as Prisma.InputJsonValue,
           status: "PENDING",
         })),
       },

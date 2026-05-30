@@ -22,6 +22,12 @@ import { cn } from "@/lib/utils";
 type PostStatus = "PENDING" | "APPROVED" | "EDITED" | "REJECTED";
 type BatchStatus = "PENDING" | "IN_REVIEW" | "APPROVED" | "REJECTED";
 
+interface QualityFlag {
+  rule: string;
+  detail?: string;
+  severity?: string;
+}
+
 interface ReviewPost {
   id: string;
   platform: string;
@@ -33,6 +39,7 @@ interface ReviewPost {
   status: PostStatus;
   editedContent: unknown;
   reviewNote: string | null;
+  qualityFlags?: QualityFlag[];
 }
 
 interface ReviewBatch {
@@ -219,6 +226,15 @@ function PostCard({
               </span>
               <CardTitle className="text-sm">{post.platform}</CardTitle>
               <Badge variant="outline" className="text-[10px]">{post.patternId}</Badge>
+              {Array.isArray(post.qualityFlags) && post.qualityFlags.length > 0 && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] border-yellow-500 text-yellow-600 dark:text-yellow-400"
+                  title={post.qualityFlags.map((f) => `${f.rule}: ${f.detail ?? ""}`).join("\n")}
+                >
+                  ⚠ {post.qualityFlags.length}
+                </Badge>
+              )}
             </div>
             <Badge
               className={cn("text-[10px] border-0", POST_STATUS_STYLES[post.status])}
