@@ -174,3 +174,4 @@ __pycache__/
 *.canvas
 *.base
 !scripts/lint-vault.mjs
+!scripts/project-health.mjs
