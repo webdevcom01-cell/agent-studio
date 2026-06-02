@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { getValidAccessToken } from "@/lib/google-workspace/token";
 import {
   GOOGLE_WORKSPACE_TOOLS,
@@ -9,15 +10,17 @@ import { logger } from "@/lib/logger";
 export const runtime = "nodejs";
 
 // ---------------------------------------------------------------------------
-// MCP JSON-RPC 2.0 types
+// MCP JSON-RPC 2.0 schema + types
 // ---------------------------------------------------------------------------
 
-interface JsonRpcRequest {
-  jsonrpc: "2.0";
-  id: string | number | null;
-  method: string;
-  params?: Record<string, unknown>;
-}
+const McpRequestSchema = z.object({
+  jsonrpc: z.string(),
+  id: z.union([z.string(), z.number(), z.null()]).default(null),
+  method: z.string(),
+  params: z.record(z.unknown()).optional(),
+});
+
+type McpRequest = z.infer<typeof McpRequestSchema>;
 
 interface JsonRpcResponse {
   jsonrpc: "2.0";
@@ -49,9 +52,14 @@ export async function POST(
 ): Promise<NextResponse> {
   const { tokenId } = await params;
 
-  let body: JsonRpcRequest;
+  let body: McpRequest;
   try {
-    body = (await request.json()) as JsonRpcRequest;
+    const raw = await request.json();
+    const parsed = McpRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      return jsonRpcError(null, -32600, "Invalid Request");
+    }
+    body = parsed.data;
   } catch {
     return jsonRpcError(null, -32700, "Parse error");
   }
@@ -78,11 +86,12 @@ export async function POST(
         return jsonRpcResult(id, { tools: GOOGLE_WORKSPACE_TOOLS });
 
       case "tools/call": {
-        const toolName = rpcParams?.name as string | undefined;
-        const toolArgs = (rpcParams?.arguments ?? {}) as Record<
-          string,
-          unknown
-        >;
+        const toolName = typeof rpcParams?.name === "string" ? rpcParams.name : undefined;
+        const rawArgs = rpcParams?.arguments;
+        const toolArgs: Record<string, unknown> =
+          rawArgs !== null && typeof rawArgs === "object" && !Array.isArray(rawArgs)
+            ? (rawArgs as Record<string, unknown>)
+            : {};
 
         if (!toolName) {
           return jsonRpcError(id, -32602, "Missing tool name");

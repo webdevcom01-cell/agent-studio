@@ -59,7 +59,10 @@ describe("POST /api/agents/[agentId]/a2a", () => {
   it("returns 401 if not authenticated", async () => {
     mockAuth.mockResolvedValue(null);
 
-    const res = await POST(makeRequest({ method: "tasks/send" }), makeParams());
+    const res = await POST(
+      makeRequest({ jsonrpc: "2.0", method: "tasks/send", id: null }),
+      makeParams(),
+    );
     const data = await res.json();
 
     expect(res.status).toBe(401);
