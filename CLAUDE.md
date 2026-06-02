@@ -304,3 +304,23 @@ Engineering skills configured for this repo (mattpocock/skills):
 | `/prototype` | Throwaway code to answer a design question |
 | `/triage` | Process incoming GitHub Issues |
 | `/grill-me` | Stress-test a plan before writing any code |
+
+---
+
+## Working Rules (learned)
+
+### Build
+- `pnpm build` traje 3-5 min i NEMA progress indikator — TIŠINA NIJE KVAR.
+- NIKAD ne prekidaj build (Ctrl+C, pkill, kill). Pusti ga da završi.
+- Uspešan build: "Compiled with warnings in ~50s", 192 rute, 2 bezopasna
+  3rd-party warninga (e2b, next-auth/jose) — to je normalno.
+
+### Node
+- Zahteva se Node 22 (LTS). Node 25 NIJE podržan i pravi probleme sa build-om.
+- Provera: `node -v` mora biti v22.x pre build-a.
+
+### Git workflow
+- Commit ODMAH čim typecheck + testovi prođu. NE čekaj build pre commita.
+- Pre bilo kog rada proveri: `pwd` (mora /Users/buda007/Desktop/agent-studio)
+  i `git branch --show-current`.
+- Postoji zbunjujući prazan folder ~/agent-studio koji NIJE projekat.
