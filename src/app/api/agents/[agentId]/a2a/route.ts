@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { generateId } from "@/lib/utils";
@@ -19,17 +20,25 @@ interface RouteParams {
   params: Promise<{ agentId: string }>;
 }
 
-interface JsonRpcRequest {
-  jsonrpc: string;
-  method: string;
-  id: string | number | null;
-  params?: {
-    taskId?: string;
-    message?: {
-      parts?: { type: string; text?: string }[];
-    };
-  };
-}
+const A2ARequestSchema = z.object({
+  jsonrpc: z.string(),
+  id: z.union([z.string(), z.number(), z.null()]).default(null),
+  method: z.string(),
+  params: z
+    .object({
+      taskId: z.string().optional(),
+      message: z
+        .object({
+          parts: z
+            .array(z.object({ type: z.string(), text: z.string().optional() }))
+            .optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+});
+
+type A2ARequest = z.infer<typeof A2ARequestSchema>;
 
 function jsonRpcError(
   id: string | number | null,
@@ -54,7 +63,18 @@ export async function POST(
     }
 
     const { agentId } = await params;
-    const body = (await req.json()) as JsonRpcRequest;
+
+    let rawBody: unknown;
+    try {
+      rawBody = await req.json();
+    } catch {
+      return jsonRpcError(null, -32700, "Parse error: invalid JSON", 400);
+    }
+    const parsedBody = A2ARequestSchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      return jsonRpcError(null, -32600, "Invalid Request", 400);
+    }
+    const body: A2ARequest = parsedBody.data;
 
     if (body.method !== "tasks/send") {
       return jsonRpcError(

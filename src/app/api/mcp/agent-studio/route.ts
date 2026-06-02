@@ -15,6 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { validateApiKey, hasScope } from "@/lib/api/api-key";
 import { logger } from "@/lib/logger";
 import {
@@ -25,15 +26,17 @@ import {
 export const runtime = "nodejs";
 
 // ---------------------------------------------------------------------------
-// JSON-RPC 2.0 types
+// JSON-RPC 2.0 schema + types
 // ---------------------------------------------------------------------------
 
-interface JsonRpcRequest {
-  jsonrpc: "2.0";
-  id: string | number | null;
-  method: string;
-  params?: Record<string, unknown>;
-}
+const McpRequestSchema = z.object({
+  jsonrpc: z.string(),
+  id: z.union([z.string(), z.number(), z.null()]).default(null),
+  method: z.string(),
+  params: z.record(z.unknown()).optional(),
+});
+
+type McpRequest = z.infer<typeof McpRequestSchema>;
 
 interface JsonRpcResponse {
   jsonrpc: "2.0";
@@ -74,10 +77,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return jsonRpcError(null, -32001, "Invalid or expired API key.");
   }
 
-  // ── 2. Parse request ───────────────────────────────────────────────────────
-  let body: JsonRpcRequest;
+  // ── 2. Parse + validate request ───────────────────────────────────────────
+  let body: McpRequest;
   try {
-    body = (await request.json()) as JsonRpcRequest;
+    const raw = await request.json();
+    const parsed = McpRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      return jsonRpcError(null, -32600, "Invalid Request");
+    }
+    body = parsed.data;
   } catch {
     return jsonRpcError(null, -32700, "Parse error: invalid JSON.");
   }
@@ -111,7 +119,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       // Tool execution
       case "tools/call": {
-        const toolName = rpcParams?.name as string | undefined;
+        const toolName = typeof rpcParams?.name === "string" ? rpcParams.name : undefined;
         const rawArgs = rpcParams?.arguments;
         const toolArgs: Record<string, unknown> =
           rawArgs !== null && typeof rawArgs === "object" && !Array.isArray(rawArgs)
