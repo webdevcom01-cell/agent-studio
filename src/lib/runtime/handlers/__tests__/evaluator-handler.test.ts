@@ -153,6 +153,44 @@ describe("evaluatorHandler", () => {
     expect(evalResult?.parseError).toBe(true);
   });
 
+  it("returns parseError when LLM returns wrong key (overall_score instead of overallScore)", async () => {
+    mockGenerateText.mockResolvedValue({
+      text: JSON.stringify({
+        scores: [{ name: "Quality", score: 8, reasoning: "Good" }],
+        overall_score: 8,
+        summary: "High quality.",
+      }),
+    });
+
+    const result = await evaluatorHandler(makeNode(), makeContext());
+
+    expect(result.messages[0].content).toContain("could not be parsed");
+    const evalResult = result.updatedVariables?.eval_result as Record<string, unknown>;
+    expect(evalResult?.parseError).toBe(true);
+    expect(result.updatedVariables?.__last_eval).toEqual(
+      expect.objectContaining({ success: false, parseError: true })
+    );
+  });
+
+  it("returns parseError when LLM returns overallScore as a string instead of number", async () => {
+    mockGenerateText.mockResolvedValue({
+      text: JSON.stringify({
+        scores: [{ name: "Quality", score: 8, reasoning: "Good" }],
+        overallScore: "high",
+        summary: "High quality.",
+      }),
+    });
+
+    const result = await evaluatorHandler(makeNode(), makeContext());
+
+    expect(result.messages[0].content).toContain("could not be parsed");
+    const evalResult = result.updatedVariables?.eval_result as Record<string, unknown>;
+    expect(evalResult?.parseError).toBe(true);
+    expect(result.updatedVariables?.__last_eval).toEqual(
+      expect.objectContaining({ success: false, parseError: true })
+    );
+  });
+
   it("handles AI API errors gracefully", async () => {
     mockGenerateText.mockRejectedValue(new Error("API rate limit"));
 

@@ -1,6 +1,19 @@
+import { z } from "zod";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { logger } from "@/lib/logger";
+
+const EvalResultSchema = z.object({
+  scores: z.array(
+    z.object({
+      name: z.string(),
+      score: z.number(),
+      reasoning: z.string(),
+    })
+  ),
+  overallScore: z.number(),
+  summary: z.string(),
+});
 
 interface EvalCriterion {
   name: string;
@@ -98,16 +111,10 @@ Respond in valid JSON only, no markdown. Format:
     });
 
     // Parse AI response
-    let evalResult: {
-      scores: Array<{ name: string; score: number; reasoning: string }>;
-      overallScore: number;
-      summary: string;
-    };
-
+    const cleaned = text.replace(/```json?\n?/g, "").replace(/```\n?/g, "").trim();
+    let rawParsed: unknown;
     try {
-      // Strip markdown code fences if present
-      const cleaned = text.replace(/```json?\n?/g, "").replace(/```\n?/g, "").trim();
-      evalResult = JSON.parse(cleaned);
+      rawParsed = JSON.parse(cleaned);
     } catch {
       logger.warn("Failed to parse evaluation response", {
         agentId: context.agentId,
@@ -129,6 +136,29 @@ Respond in valid JSON only, no markdown. Format:
       };
     }
 
+    const schemaResult = EvalResultSchema.safeParse(rawParsed);
+    if (!schemaResult.success) {
+      logger.warn("Evaluation response failed schema validation", {
+        agentId: context.agentId,
+      });
+
+      return {
+        messages: [
+          {
+            role: "assistant",
+            content: "Evaluation completed but the result could not be parsed.",
+          },
+        ],
+        nextNodeId: null,
+        waitForInput: false,
+        updatedVariables: {
+          [outputVariable]: { raw: text, parseError: true },
+          __last_eval: { success: false, parseError: true },
+        },
+      };
+    }
+
+    const evalResult = schemaResult.data;
     const passed = evalResult.overallScore >= passingScore;
 
     // Route based on pass/fail via sourceHandle
