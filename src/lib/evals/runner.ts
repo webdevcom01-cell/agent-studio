@@ -22,6 +22,7 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { evaluateAllAssertions } from "./assertions";
+import { validateEvalBaseUrl } from "./ssrf-guard";
 import { EvalAssertionSchema } from "./schemas";
 import type { AssertionContext, EvalAssertion, AssertionResult } from "./schemas";
 import type {
@@ -495,6 +496,7 @@ export async function runEvalSuite(
   options: RunEvalOptions = {},
 ): Promise<EvalRunSummary> {
   const baseUrl = options.baseUrl ?? "http://localhost:3000";
+  validateEvalBaseUrl(baseUrl);
   const triggeredBy = options.triggeredBy ?? "manual";
 
   // ── 1. Load suite with test cases ─────────────────────────────────────────
