@@ -36,6 +36,7 @@ import { registerEvalTools } from "./tools/evals.js";
 import { registerF1F7Tools } from "./tools/f1-f7.js";
 import { ping } from "./db.js";
 import { resolveAuthMode } from "./auth.js";
+import { handleAuthorize } from "./oauth.js";
 
 // ── Server setup ─────────────────────────────────────────────────────────────
 
@@ -88,19 +89,7 @@ async function runHTTP(): Promise<void> {
   // and /token returns MCP_API_KEY as the access token.
   // The actual security still lives in requireApiKey on POST /mcp.
 
-  app.get("/authorize", (req: Request, res: Response) => {
-    const { redirect_uri, state, code_challenge } = req.query as Record<string, string>;
-    if (!redirect_uri) {
-      res.status(400).json({ error: "missing redirect_uri" });
-      return;
-    }
-    // Issue a one-time code (we'll just use a fixed value — /token validates nothing here)
-    const code = "mcp_auth_code_" + Date.now();
-    const separator = redirect_uri.includes("?") ? "&" : "?";
-    const location = `${redirect_uri}${separator}code=${encodeURIComponent(code)}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
-    process.stderr.write(`[MCP] OAuth /authorize → redirecting (challenge=${code_challenge ?? "none"})\n`);
-    res.redirect(302, location);
-  });
+  app.get("/authorize", handleAuthorize);
 
   app.post("/token", express.urlencoded({ extended: false }), (req: Request, res: Response) => {
     // Return MCP_API_KEY as the Bearer token so Claude uses it on /mcp requests
