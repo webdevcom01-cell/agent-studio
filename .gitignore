@@ -175,3 +175,6 @@ __pycache__/
 *.base
 !scripts/lint-vault.mjs
 !scripts/project-health.mjs
+
+# Security audit — interni dokument, nikad u git
+AUDIT-security.md
