@@ -92,9 +92,11 @@ function expandGlob(pattern: string): string[] {
 
   if (!existsSync(dir)) return [];
 
-  const regex = new RegExp(
-    "^" + filePattern.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$"
-  );
+  const globToRegex = filePattern
+    .split("*")
+    .map((seg) => seg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join(".*");
+  const regex = new RegExp("^" + globToRegex + "$");
 
   try {
     return readdirSync(dir)

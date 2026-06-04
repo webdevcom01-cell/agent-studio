@@ -88,7 +88,7 @@ export function createGDriveProvider(accessToken: string): StorageProvider {
 
     async list(query: string): Promise<StorageFile[]> {
       const q = query
-        ? `name contains '${query.replace(/'/g, "\\'")}'`
+        ? `name contains '${query.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`
         : "";
       const params = new URLSearchParams({
         q: q || "trashed = false",
