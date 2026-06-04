@@ -22,7 +22,7 @@ interface QuickStartContext {
  */
 export function generateQuickStartFiles(ctx: QuickStartContext): GeneratedFiles {
   const files: GeneratedFiles = {};
-  const safeName = ctx.applicationName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const safeName = ctx.applicationName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
   files["install.sh"] =
     ctx.target === "python"
