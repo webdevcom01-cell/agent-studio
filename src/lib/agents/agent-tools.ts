@@ -14,6 +14,7 @@ import { z } from "zod";
 import { dynamicTool, zodSchema, type ToolSet } from "ai";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { randomBytes } from "node:crypto";
 import {
   checkCircuit,
   recordSuccess,
@@ -813,7 +814,7 @@ function sanitizeToolName(name: string, id: string): string {
 }
 
 function generateSpanId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${Date.now().toString(36)}-${randomBytes(6).toString("hex")}`;
 }
 
 // ─── Sub-agent execution (mirrors call-agent-handler logic) ─────────
