@@ -6,6 +6,7 @@
  *
  * Tool naming: <service>_<verb>_<resource>
  */
+import * as cheerio from "cheerio";
 
 // ---------------------------------------------------------------------------
 // MCP Tool schema types (minimal subset of the MCP spec)
@@ -649,12 +650,9 @@ function decodeBase64Url(encoded: string): string {
 }
 
 function stripHtml(html: string): string {
-  return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+  const $ = cheerio.load(html);
+  $("script, style").remove();
+  return $.root().text().replace(/\s{2,}/g, " ").trim();
 }
 
 // ---------------------------------------------------------------------------
