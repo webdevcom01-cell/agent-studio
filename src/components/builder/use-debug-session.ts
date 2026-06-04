@@ -265,7 +265,7 @@ export function useDebugSession(agentId: string) {
     if (!state.testInput.trim() || state.isRunning) return;
 
     // Generate a fresh debug session ID for this run
-    const sessionId = `dbg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const sessionId = `dbg_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
 
     // Snapshot test input for use in saveTrace (avoids stale closure)
     testInputRef.current = state.testInput;

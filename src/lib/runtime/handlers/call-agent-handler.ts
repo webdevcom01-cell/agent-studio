@@ -3,6 +3,7 @@ import { resolveTemplate } from "../template";
 import { validateNamedSchema } from "@/lib/mcp/schema-validator";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { randomBytes } from "node:crypto";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import {
   checkCircuit,
@@ -945,7 +946,7 @@ function normalizeInputMapping(
 }
 
 function generateSpanId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${Date.now().toString(36)}-${randomBytes(6).toString("hex")}`;
 }
 
 
