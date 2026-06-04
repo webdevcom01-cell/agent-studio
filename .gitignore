@@ -132,6 +132,7 @@ pr-guardian-phase1.patch
 
 # Claude Code runtime files
 .claude/scheduled_tasks.lock
+.claude/settings.local.json
 *.canvas
 *.base
 
