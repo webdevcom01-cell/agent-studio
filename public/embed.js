@@ -26,7 +26,18 @@
   var title = script.getAttribute("data-title") || "Chat";
   var welcomeMessage = script.getAttribute("data-welcome-message") || "";
   var proactiveMessage = script.getAttribute("data-proactive-message") || "Need help? I'm here!";
-  var expectedOrigin = new URL(baseUrl).origin;
+  var parsedBase;
+  try {
+    parsedBase = new URL(baseUrl);
+  } catch {
+    console.error("[AgentStudio] Invalid data-base-url");
+    return;
+  }
+  if (parsedBase.protocol !== "http:" && parsedBase.protocol !== "https:") {
+    console.error("[AgentStudio] Unsupported data-base-url scheme");
+    return;
+  }
+  var expectedOrigin = parsedBase.origin;
 
   var PROACTIVE_DELAY_MS = 30000;
   var proactiveKey = "as-proactive-" + agentId;
@@ -71,7 +82,7 @@
 
   var iframe = document.createElement("iframe");
   iframe.className = "as-widget-frame";
-  iframe.src = baseUrl + "/embed/" + encodeURIComponent(agentId) + "?" + iframeParams.toString();
+  iframe.src = expectedOrigin + "/embed/" + encodeURIComponent(agentId) + "?" + iframeParams.toString();
   iframe.setAttribute("title", title);
   iframe.setAttribute("allow", "clipboard-write");
   document.body.appendChild(iframe);
