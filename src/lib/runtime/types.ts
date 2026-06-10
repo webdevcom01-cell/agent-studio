@@ -82,6 +82,10 @@ export interface RuntimeContext {
   enableSmartCompaction?: boolean;
   // Lifecycle hook registry — emits events to registered sinks (webhooks, etc.)
   hooks?: FlowHookRegistryInterface;
+  // AgentExecution tracking — set by executeFlow, read by nested call_agent
+  _a2aTraceId?: string;
+  _parentExecutionId?: string;
+  _currentExecutionId?: string;
 }
 
 export interface ExecutionResult {

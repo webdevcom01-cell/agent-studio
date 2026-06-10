@@ -8,6 +8,7 @@ import { emitSessionEvent } from "./session-events";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { prepareContextForExecution } from "./execution-prelude";
 import type { FlowNode } from "@/types";
+import type { Prisma } from '@/generated/prisma';
 
 /**
  * Nodes that manage their own output routing via sourceHandles.
@@ -141,6 +142,24 @@ export async function executeFlow(
   await prepareContextForExecution(context, userMessage ?? null, { streaming: false });
 
   const flowStartMs = Date.now();
+
+  let __exec: { id: string } | null = null;
+  try {
+    __exec = await prisma.agentExecution.create({
+      data: {
+        agentId: context.agentId,
+        status: 'RUNNING',
+        ...(Object.keys(context.variables).length > 0 && {
+          inputParams: context.variables as unknown as Prisma.InputJsonObject,
+        }),
+        ...(context._a2aTraceId && { traceId: context._a2aTraceId }),
+        ...(context._parentExecutionId && { parentExecutionId: context._parentExecutionId }),
+      },
+    });
+    context._currentExecutionId = __exec.id;
+  } catch (e) {
+    logger.warn('AgentExecution create failed (non-fatal)', { error: e });
+  }
 
   while (context.currentNodeId && iterations < MAX_ITERATIONS) {
     iterations++;
@@ -307,6 +326,24 @@ export async function executeFlow(
       messageCount: allMessages.length,
     },
   }).catch(() => {});
+
+  if (__exec?.id) {
+    try {
+      await prisma.agentExecution.update({
+        where: { id: __exec.id },
+        data: {
+          status: iterations >= MAX_ITERATIONS ? 'TIMEOUT' : 'SUCCESS',
+          ...(allMessages.length > 0 && {
+            outputResult: { messages: allMessages } as unknown as Prisma.InputJsonObject,
+          }),
+          completedAt: new Date(),
+          durationMs: Date.now() - flowStartMs,
+        },
+      });
+    } catch (e) {
+      logger.warn('AgentExecution update failed (non-fatal)', { error: e });
+    }
+  }
 
   return { messages: allMessages, waitingForInput: false };
 }

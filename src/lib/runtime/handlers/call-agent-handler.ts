@@ -364,6 +364,7 @@ async function executeCallAttempt(
         traceId,
         timeoutSeconds,
         providerOverride: providerOverride || undefined,
+        parentExecutionId: context._currentExecutionId ?? undefined,
       });
       output = subResult.output;
 
@@ -780,6 +781,7 @@ interface SubAgentParams {
   timeoutSeconds: number;
   executeFlowFn?: ExecuteFlowFn;
   providerOverride?: string;
+  parentExecutionId?: string;
 }
 
 interface SubAgentResult {
@@ -879,6 +881,7 @@ async function executeSubAgent(params: SubAgentParams): Promise<SubAgentResult> 
     _a2aCallStack: callStack,
     _a2aTraceId: traceId,
     _userId: callerUserId ?? undefined,
+    _parentExecutionId: params.parentExecutionId ?? undefined,
   };
 
   const runFlow =
@@ -925,6 +928,8 @@ interface RuntimeContextWithDepth {
   _a2aCallStack?: string[];
   _a2aTraceId?: string;
   _userId?: string;
+  _parentExecutionId?: string;
+  _currentExecutionId?: string;
 }
 
 async function getWorkspaceFiles(
