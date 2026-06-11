@@ -1,16 +1,20 @@
 ---
 name: agent-scaffolder
 description: >
-  Fully scaffolds a new AgentStack agent from spec to live deployment using SOMA-standard architecture.
-  Automates: agent creation, standard flow building (kb_search → processor → extractor → optional
-  web_search and call_agent nodes), Obsidian vault initialization (DESIGN_SPEC.md, agent-card.md,
-  instincts.md, evo-log.md), KB seeding with 3 documents, and smoke testing.
-  Triggers: "create a new agent", "scaffold an agent", "napravi novog agenta", "add agent to pipeline",
-  "dodaj agenta u pipeline", "set up new AgentStack agent", "build a new agent from scratch",
-  "I want a new agent that does X", "new agent", "kreiraj agenta", "napravi agenta",
-  "hocu novog agenta", "napravi mi agenta", "build agent", "create agent".
-  Do NOT use for modifying existing agents (use as_patch_node_field directly) or debugging flows.
+  Fully scaffolds a new AgentStack agent from spec to live deployment using SOMA-standard
+  architecture. Automates: agent creation, standard flow building (kb_search → processor →
+  extractor → optional web_search and call_agent nodes), Obsidian vault initialization
+  (DESIGN_SPEC.md, agent-card.md, instincts.md, evo-log.md), KB seeding with 3 documents,
+  and smoke testing. Use for: quick throwaway prototype agent (no deterministic gate); for
+  production use safe-agent-builder. Do NOT use for modifying existing agents (use
+  as_patch_node_field directly) or debugging flows.
 ---
+
+> ⚠️ **DEPRECATED za produkcijske agente.** Ovaj skil gradi prompt-level quality gate
+> (model emituje QUALITY_GATE_FAIL), koji LLM ignoriše kad „hoće da pomogne" — isti failure
+> mode koji je dozvolio agentu da izmisli trend i prođe sve prompt provere. Za produkcijske ili
+> safety-osetljive agente koristi **safe-agent-builder** (deterministički function-validator +
+> condition-gate koji kodom forsira PASS/BLOCK). Ovaj skil koristi samo za jednokratne prototipove.
 
 # Skill: agent-scaffolder
 *Version: 2.0 | Based on: IMPLEMENTATION_PLAN_V2.md*
