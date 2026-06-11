@@ -9,6 +9,19 @@ import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { prepareContextForExecution } from "./execution-prelude";
 import type { FlowNode } from "@/types";
 import type { Prisma } from '@/generated/prisma';
+import { detectPII, redactPII } from "@/lib/safety/pii-detector";
+
+function redactJsonObject(obj: unknown): unknown {
+  try {
+    const serialized = JSON.stringify(obj);
+    const matches = detectPII(serialized);
+    if (matches.length === 0) return obj;
+    return JSON.parse(redactPII(serialized, matches)) as unknown;
+  } catch (e) {
+    logger.warn('PII redaction failed (fail-open)', { error: e });
+    return obj;
+  }
+}
 
 /**
  * Nodes that manage their own output routing via sourceHandles.
@@ -150,7 +163,7 @@ export async function executeFlow(
         agentId: context.agentId,
         status: 'RUNNING',
         ...(Object.keys(context.variables).length > 0 && {
-          inputParams: context.variables as unknown as Prisma.InputJsonObject,
+          inputParams: redactJsonObject(context.variables) as unknown as Prisma.InputJsonObject,
         }),
         ...(context._a2aTraceId && { traceId: context._a2aTraceId }),
         ...(context._parentExecutionId && { parentExecutionId: context._parentExecutionId }),
@@ -334,7 +347,7 @@ export async function executeFlow(
         data: {
           status: iterations >= MAX_ITERATIONS ? 'TIMEOUT' : 'SUCCESS',
           ...(allMessages.length > 0 && {
-            outputResult: { messages: allMessages } as unknown as Prisma.InputJsonObject,
+            outputResult: redactJsonObject({ messages: allMessages }) as unknown as Prisma.InputJsonObject,
           }),
           completedAt: new Date(),
           durationMs: Date.now() - flowStartMs,
