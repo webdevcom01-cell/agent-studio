@@ -45,8 +45,12 @@ function requiredKeyForModel(modelId: string): string {
   return "UNKNOWN";
 }
 
-function isKeySet(envKey: string): boolean {
-  return !!process.env[envKey];
+const PLACEHOLDER_PATTERN = /your[_-].*here|placeholder|changeme|todo|example|insert.*key/i;
+
+export function isKeySet(envKey: string): boolean {
+  const val = process.env[envKey];
+  if (!val) return false;
+  return !PLACEHOLDER_PATTERN.test(val);
 }
 
 // ── Tool registration ─────────────────────────────────────────────────────────
