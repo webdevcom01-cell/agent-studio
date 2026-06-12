@@ -1,0 +1,66 @@
+{
+  "backup_date": "2026-06-12",
+  "reason": "P0-1: deleting duplicate Agent B, fixing Agent A outputVariable",
+  "agents": [
+    {
+      "role": "KEEP (Agent A)",
+      "id": "cmq7qzgkh0019nu01a1a261s5",
+      "name": "Software Architecture Advisor",
+      "model": "gpt-4.1-mini",
+      "isPublic": false,
+      "category": null,
+      "description": "Reviews and designs software architectures — evaluates scalability, maintainability, and coupling tradeoffs, recommends patterns (CQRS, event sourcing, microservices, modular monolith), and produces ADRs",
+      "flowId": "cmq7qzgkh001anu01h55k66jg",
+      "createdAt": "2026-06-10T07:28:58.529Z",
+      "updatedAt": "2026-06-10T07:28:58.529Z",
+      "flow": {
+        "nodeCount": 1,
+        "edgeCount": 0,
+        "nodes": [
+          {
+            "id": "start",
+            "type": "ai_response",
+            "data": {
+              "label": "AI Response",
+              "model": "gpt-4.1-mini",
+              "outputVariable": null,
+              "prompt": "You are a Software Architecture Advisor who helps teams make informed structural decisions. For any system or design question, deliver: (1) current architecture assessment with coupling, cohesion, and scalability analysis, (2) pattern recommendations (CQRS, event sourcing, saga, strangler fig, hexagonal) with tradeoff table, (3) Architecture Decision Record (ADR) in standard format, (4) migration path from current state with risk assessment, and (5) failure mode analysis (what breaks under load, data loss scenarios). Apply SOLID, DRY, and 12-factor principles appropriately. Recommend the simplest architecture that meets requirements — over-engineering is a bug. Distinguish between accidental and essential complexity. Always ask 'what problem are we actually solving?'"
+            },
+            "position": { "x": 250, "y": 100 }
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "role": "DELETE (Agent B — duplicate, created 1.09s later)",
+      "id": "cmq7qzhes001dnu01nsqk4m8g",
+      "name": "Software Architecture Advisor",
+      "model": "gpt-4.1-mini",
+      "isPublic": false,
+      "category": null,
+      "description": "Reviews and designs software architectures — evaluates scalability, maintainability, and coupling tradeoffs, recommends patterns (CQRS, event sourcing, microservices, modular monolith), and produces ADRs",
+      "flowId": "cmq7qzhes001enu016aeuz6yv",
+      "createdAt": "2026-06-10T07:28:59.619Z",
+      "updatedAt": "2026-06-10T07:28:59.619Z",
+      "flow": {
+        "nodeCount": 1,
+        "edgeCount": 0,
+        "nodes": [
+          {
+            "id": "start",
+            "type": "ai_response",
+            "data": {
+              "label": "AI Response",
+              "model": "gpt-4.1-mini",
+              "outputVariable": null,
+              "prompt": "You are a Software Architecture Advisor who helps teams make informed structural decisions. For any system or design question, deliver: (1) current architecture assessment with coupling, cohesion, and scalability analysis, (2) pattern recommendations (CQRS, event sourcing, saga, strangler fig, hexagonal) with tradeoff table, (3) Architecture Decision Record (ADR) in standard format, (4) migration path from current state with risk assessment, and (5) failure mode analysis (what breaks under load, data loss scenarios). Apply SOLID, DRY, and 12-factor principles appropriately. Recommend the simplest architecture that meets requirements — over-engineering is a bug. Distinguish between accidental and essential complexity. Always ask 'what problem are we actually solving?'"
+            },
+            "position": { "x": 250, "y": 100 }
+          }
+        ],
+        "edges": []
+      }
+    }
+  ]
+}
