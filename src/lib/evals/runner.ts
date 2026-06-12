@@ -46,6 +46,8 @@ export interface RunEvalOptions {
   comparisonRunId?: string;
   /** How to trigger the agent: "chat" sends a message, "webhook" calls /execute with payload */
   triggerMode?: "chat" | "webhook";
+  /** Per-case chat timeout in ms. Defaults to EVAL_CHAT_TIMEOUT_MS (45s). Configure via EVAL_AGENT_TIMEOUT_MS env var. */
+  chatTimeoutMs?: number;
 }
 
 export interface EvalRunSummary {
@@ -228,6 +230,7 @@ async function callAgentChat(
   authHeader?: string,
   flowVersionId?: string,
   modelOverride?: string,
+  chatTimeoutMs?: number,
 ): Promise<ChatResponse> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -253,8 +256,9 @@ async function callAgentChat(
       await new Promise((resolve) => setTimeout(resolve, Math.round(delay)));
     }
 
+    const effectiveTimeoutMs = chatTimeoutMs ?? EVAL_CHAT_TIMEOUT_MS;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), EVAL_CHAT_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), effectiveTimeoutMs);
 
     const start = Date.now();
     try {
@@ -317,7 +321,7 @@ async function callAgentChat(
       // AbortError = timeout — do not retry (agent is genuinely slow / stuck)
       if (err instanceof Error && err.name === "AbortError") {
         throw new Error(
-          `Chat API timed out after ${EVAL_CHAT_TIMEOUT_MS / 1000}s — the agent did not respond in time`,
+          `Chat API timed out after ${effectiveTimeoutMs / 1000}s — the agent did not respond in time`,
         );
       }
 
@@ -553,6 +557,7 @@ export async function runEvalSuite(
       flowVersionId,
       modelOverride,
       options.triggerMode,
+      options.chatTimeoutMs,
     );
 
     caseResults.push(caseResult);
@@ -622,6 +627,7 @@ async function runSingleTestCase(
   flowVersionId?: string,
   modelOverride?: string,
   triggerMode?: "chat" | "webhook",
+  chatTimeoutMs?: number,
 ): Promise<CaseRunResult> {
   const assertions = parseAssertions(testCase.assertions);
 
@@ -648,6 +654,7 @@ async function runSingleTestCase(
         authHeader,
         flowVersionId,
         modelOverride,
+        chatTimeoutMs,
       );
     }
 

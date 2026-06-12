@@ -94,10 +94,15 @@ export async function POST(
     // Synchronous fallback
     let summary;
     try {
+      const chatTimeoutMs = process.env.EVAL_AGENT_TIMEOUT_MS
+        ? Number(process.env.EVAL_AGENT_TIMEOUT_MS)
+        : 180_000;
+
       summary = await runEvalSuite(suiteId, agentId, {
         baseUrl,
         triggeredBy,
         authHeader: cookieHeader,
+        chatTimeoutMs,
       });
     } catch (runErr) {
       // The runner creates the EvalRun before starting — mark it failed

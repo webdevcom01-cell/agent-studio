@@ -116,10 +116,15 @@ async function processEvalJob(job: Job<EvalRunJobData>): Promise<unknown> {
 
   await job.updateProgress(5);
 
+  const chatTimeoutMs = process.env.EVAL_AGENT_TIMEOUT_MS
+    ? Number(process.env.EVAL_AGENT_TIMEOUT_MS)
+    : 180_000;
+
   const result = await runEvalSuite(suiteId, agentId, {
     baseUrl,
     triggeredBy,
     authHeader,
+    chatTimeoutMs,
   });
 
   await job.updateProgress(100);
