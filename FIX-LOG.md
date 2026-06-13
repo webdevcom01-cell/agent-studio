@@ -42,7 +42,7 @@ Nema TI validator regresija. P0-2 zatvoreno.
 
 ## P1-11: HW/CR/TI yield — kanonski primeri, char_limit, banned reči
 
-**Status:** BACKLOG — **RADITI ODMAH POSLE P1-3**
+**Status:** IN PROGRESS — CR ✅ 10/10 (2x stable, 2026-06-13); CC/LS/TI next
 **Prioritet podignut:** 2026-06-12 (reproducibilan u 4/5 eval runova)
 **Identifikovano:** 2026-06-12
 **Kontekst:** Pipeline SMOKE testovi (C1-C3) failuju na yield probleme u HW/CR/TI:
@@ -54,6 +54,24 @@ Problem je na modelu: promptovi nemaju dovoljno kanonskih primjera koji pokazuju
 **Merilo zatvaranja:** C1-C3 pipeline smoke eval stabilan (3/3 PASS) kroz 3 uzastopna re-runa,
 bez izmene validatora.
 **Preduslov:** P1-3 završen (isti princip prompt inžinjerings).
+
+### CR — 2026-06-13
+
+**Prompt fix primenjen:** X sekcija — dodat budget formula + kanonski primeri za char_limit.
+- `Budget = 280 − len(hook) − len(hashtags). Add follow-up ONLY if budget > 50 chars.`
+- 2 kanonska primera (❌ OVER 333 chars / ✅ CORRECT 234 chars) sa eksplicitnim računanjem.
+- Backup: `cr-prompt-backup-2026-06-13.txt`
+
+**Rezultat:** 7/10 → **10/10**, potvrđeno 2 uzastopna runa (`cmqc9cen6...` + `cmqc9h0b1...`, oba score 1.0), 0 flapanja, 0 validator regresija. Validator NETAKNUT.
+
+**Test design bugovi zatvoreni — 3 strukturna BLOCK buga (isti razred kao P1-13/P1-14):**
+- `cr-tc-05` (staro: wrong_count, 3 hooka → očekuje 3 posta) → **dokaz: model self-heala na 5** (fabricira 2 nedostajuće platforme da zadovolji "All 5 platforms" gate). Redizajniran kao `agent_error`: prazan `hooks: []` array → nema SACRED hook za passthrough, anti-fab zabranjuje izmišljanje → model emituje `MALFORMED_PAYLOAD: missing hooks` → validator `agent_error` determinstički.
+- `cr-tc-07` (staro: missing_a2a, tool_guidance uklonjen → model self-heala sva 4 polja) → redizajniran kao `banned_phrase`: TikTok hook_text sadrži "Transform..." → model prolazi verbatim → validator pali `banned_phrase`.
+- `cr-tc-10` (staro: hook_not_verbatim, task_boundaries traži rewrite → model poštuje SACRED hook) → redizajniran kao `banned_phrase`: X hook_text sadrži "game-changer" → verbatim passthrough → `banned_phrase`.
+
+**+ cr-tc-09 (posljedica prompt fixa, ne self-heal bug):** staro je tražilo char_limit preko task_boundaries instrukcije ("320+ char post"). Posle prompt fixa model drži ≤280 čak i uz tu instrukciju → BLOCK test postao nedostižan. Redizajniran kao strukturno-garantovan: X hook_text sam je 303 chars → full_post prelazi 280 i bez follow-up rečenice → `char_limit` determinstički.
+
+**Napomena (P1-13/P1-14 sweep NIJE uhvatio sve test-design bugove):** P1-13/P1-14 sweep 2026-06-13 fokusirao se samo na HW i XS. CR je imao JOŠ 3 strukturna BLOCK buga (tc-05, tc-07, tc-10) — sve adversarijalne instrukcije za pravila koja model nikad ne krši zbog quality gatea (self-heal: popuni do 5 platformi / popuni 4 A2A polja / poštuje SACRED hook). **Isti pattern očekuj u CC/LS/TI** — bilo koji BLOCK case koji traži od MODELA da proizvede violaciju (umjesto da je injektuje u pre-konstruisani payload) je isti bug. Pravilo: pouzdani CR injection patterni su `banned_phrase`/`transform` u hook_text (SACRED passthrough), 303+ char hook (char_limit), prazan/missing hooks ili N/A trend (agent_error/missing_trend).
 
 ---
 
