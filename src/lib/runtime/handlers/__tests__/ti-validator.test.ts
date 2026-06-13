@@ -167,6 +167,16 @@ describe("TI Validator — unit tests (direct vm execution)", () => {
       };
       expect(runValidator(payload)).toBe("PASS");
     });
+
+    it("accepts a banned verb WHEN paired with a word-char measurement (MEAS escape hatch)", () => {
+      // BANNED matches "expand", MEAS matches "128k" (k is a word char → trailing \b holds) → no banned_phrase.
+      // NOTE: a trailing "%" does NOT satisfy TI MEAS ((...)\b fails after a non-word char), unlike CC.
+      const payload = {
+        ...VALID_PAYLOAD,
+        angle_suggested: "Shows how Claude Opus 4.8 expanded context to 128k tokens",
+      };
+      expect(runValidator(payload)).toBe("PASS");
+    });
   });
 
   describe("BLOCK — A2A mandatory fields", () => {
@@ -272,6 +282,51 @@ describe("TI Validator — unit tests (direct vm execution)", () => {
       const result = runValidator("MALFORMED_PAYLOAD: missing trend data in search results");
       expect(result).not.toBe("PASS");
       expect(hasRule(result, "agent_error")).toBe(true);
+    });
+  });
+
+  describe("BLOCK — missing_trend", () => {
+    it("blocks empty trend.title → missing_trend", () => {
+      const result = runValidator({ ...VALID_PAYLOAD, trend: { ...VALID_TREND, title: "" } });
+      expect(result).not.toBe("PASS");
+      expect(hasRule(result, "missing_trend")).toBe(true);
+    });
+
+    it("blocks trend.title = 'N/A' → missing_trend", () => {
+      const result = runValidator({ ...VALID_PAYLOAD, trend: { ...VALID_TREND, title: "N/A" } });
+      expect(hasRule(result, "missing_trend")).toBe(true);
+    });
+  });
+
+  describe("BLOCK — invalid_platforms", () => {
+    it("blocks platforms_target with fewer than 5 entries → invalid_platforms", () => {
+      const result = runValidator({ ...VALID_PAYLOAD, platforms_target: ["LinkedIn", "X"] });
+      expect(result).not.toBe("PASS");
+      expect(hasRule(result, "invalid_platforms")).toBe(true);
+    });
+
+    it("blocks non-array platforms_target → invalid_platforms", () => {
+      const result = runValidator({ ...VALID_PAYLOAD, platforms_target: "LinkedIn,X" });
+      expect(hasRule(result, "invalid_platforms")).toBe(true);
+    });
+  });
+
+  describe("BLOCK — banned_phrase", () => {
+    it("blocks a banned verb in angle_suggested with no measurement", () => {
+      const result = runValidator({
+        ...VALID_PAYLOAD,
+        angle_suggested: "revolutionizes content creation for developers",
+      });
+      expect(result).not.toBe("PASS");
+      expect(hasRule(result, "banned_phrase")).toBe(true);
+    });
+
+    it("a trailing percentage does NOT satisfy MEAS → still banned_phrase (TI regex quirk)", () => {
+      const result = runValidator({
+        ...VALID_PAYLOAD,
+        angle_suggested: "boosts developer throughput 40%",
+      });
+      expect(hasRule(result, "banned_phrase")).toBe(true);
     });
   });
 });

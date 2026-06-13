@@ -42,7 +42,7 @@ Nema TI validator regresija. P0-2 zatvoreno.
 
 ## P1-11: HW/CR/TI yield — kanonski primeri, char_limit, banned reči
 
-**Status:** IN PROGRESS — CR ✅ 10/10 (2x stable, 2026-06-13); CC ✅ + LS ✅ (deterministic rules → vitest, 2x stable, 2026-06-13); TI next
+**Status:** Validator test-design + prompt-alignment DONE za sva 4 agenta (CR ✅ 10/10; CC ✅ + LS ✅ + TI ✅ — deterministička pravila → vitest, 2026-06-13). PREOSTAJE: pipeline-smoke NO_TREND/downstream (HW/CR) yield — originalni P1-11 closing kriterijum (C1-C3 smoke 3/3 stabilno) NIJE ispunjen; to je "drugi razred" (web-search/downstream), zaseban task.
 **Prioritet podignut:** 2026-06-12 (reproducibilan u 4/5 eval runova)
 **Identifikovano:** 2026-06-12
 **Kontekst:** Pipeline SMOKE testovi (C1-C3) failuju na yield probleme u HW/CR/TI:
@@ -126,6 +126,22 @@ bez izmene validatora.
 **Verifikacija:** vitest cc+ls validator 39/39 PASS; `pnpm test` zelen (4218 passed, 0 failed); `as_find_broken_flows` 0 issues; CC 6/6 + LS 7/7 kroz 2 uzastopna runa identično. **Validatori netaknuti.**
 
 **Napomena o CI #1070 (commit 74ba0ca):** crveni X = flaky `ai-retry.test.ts > caps delay at maxDelayMs before applying jitter` (jitter/timing test, 1/311 failed). Nepovezano sa evalima; prolazi lokalno (8/8) i u sledećim zelenim runovima na main (#1072, #1081). Nije blocker.
+
+### TI — 2026-06-13 (isti princip kao CC/LS; TI = čist (b) slučaj, bez prompt promene)
+
+**Klasifikacija:** Svih 12 TI validator pravila prompt `start` VEĆ propisuje (mandatory A2A polja, no-fabricate title/source, confidence string+evergreen link, no hooks/posts, tačno 5 platformi, listicle→evergreen, forbidden-phrase verbi sa measurable izuzetkom). **Nijedan (a) prompt gap → NEMA TI prompt promene.** Svih 6 eval BLOCK case-ova = deterministička pravila kroz živi model (isti fragile dizajn kao CC/LS), iako su trenutno zeleni.
+
+**vitest dopuna (`ti-validator.test.ts` 14 → 21 testova):** popunjene 3 rupe + escape-hatch PASS:
+- `missing_trend` (prazan / "N/A" title), `invalid_platforms` (≠5, i non-array), `banned_phrase` (revolutionizes — bez MEAS).
+- escape-hatch PASS: `angle = "...expanded context to 128k tokens"` → BANNED=1 (expand) + MEAS=1 (128k) → nema banned_phrase.
+- **Verifikovan TI MEAS quirk (pre pisanja fixture):** `MEAS = /\d+...(%|x|times|fold|hours|tokens|points|k)\b/i` — trailing `\b` posle non-word `%` PADA, pa `"40%"` (uz razmak/kraj) NE zadovoljava MEAS → `boosts ... 40%` i dalje pali banned_phrase. Pouzdane MEAS jedinice su word-char (`x`, `times`, `fold`, `hours`, `tokens`, `points`, `k`). Drugačije od CC MEAS (gde `%` radi). Validator NETAKNUT. Dodat eksplicitan test za ovaj quirk.
+- TI validator BANNED lista je UŽA od prompt forbidden liste (`improve`/`drive` su u promptu ali NE u validatoru) — fixture koristi reč koja je stvarno u regexu.
+
+**Eval prune:** uklonjeno 6 determinističkih BLOCK case-ova (sada u vitest-u): `invalid_platforms`, `confidence_not_string`, `missing_source`, `invalid_confidence`, `ti-tc-08` banned_phrase, `ti-tc-09` scope_violation. **TI eval 10 → 4 namerno** (sva 4 = `[PIPELINE SMOKE]`). **Health-check NE sme čitati kao regresiju.**
+
+**pass^k:** 2 uzastopna runa (`cmqcl3bx2` + `cmqcl8r4w`) — oba **3/4 identično**: `listicle nudge`, `stale date nudge`, `3-star breaking news` PASS u oba; `standardni sken` FAIL u oba. Taj fail je **downstream (HW/CR), ne TI** — TI je proizveo validan 5-platform brief; case asertuje `hook_text` iz call_agent downstream-a (label sam kaže "failure može biti HW/CR"). Vs baseline (8/10) fail-case se menja (baseline: listicle+3-star) → 4 smoke case-a su web-search/downstream yield-sensitive = "drugi razred" (scope C, odloženo). **0 TI validator regresija.**
+
+**Verifikacija:** `ti-validator` 21/21; `pnpm test` zelen (4225 passed, 0 failed); `as_find_broken_flows` 0 issues; TI eval 4 case-a, validator-determinizam 100% u vitest-u. Validator + prompt NETAKNUTI.
 
 ---
 
