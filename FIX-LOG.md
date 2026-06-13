@@ -42,7 +42,7 @@ Nema TI validator regresija. P0-2 zatvoreno.
 
 ## P1-11: HW/CR/TI yield — kanonski primeri, char_limit, banned reči
 
-**Status:** IN PROGRESS — CR ✅ 10/10 (2x stable, 2026-06-13); CC/LS/TI next
+**Status:** IN PROGRESS — CR ✅ 10/10 (2x stable, 2026-06-13); CC ✅ + LS ✅ (deterministic rules → vitest, 2x stable, 2026-06-13); TI next
 **Prioritet podignut:** 2026-06-12 (reproducibilan u 4/5 eval runova)
 **Identifikovano:** 2026-06-12
 **Kontekst:** Pipeline SMOKE testovi (C1-C3) failuju na yield probleme u HW/CR/TI:
@@ -72,6 +72,60 @@ bez izmene validatora.
 **+ cr-tc-09 (posljedica prompt fixa, ne self-heal bug):** staro je tražilo char_limit preko task_boundaries instrukcije ("320+ char post"). Posle prompt fixa model drži ≤280 čak i uz tu instrukciju → BLOCK test postao nedostižan. Redizajniran kao strukturno-garantovan: X hook_text sam je 303 chars → full_post prelazi 280 i bez follow-up rečenice → `char_limit` determinstički.
 
 **Napomena (P1-13/P1-14 sweep NIJE uhvatio sve test-design bugove):** P1-13/P1-14 sweep 2026-06-13 fokusirao se samo na HW i XS. CR je imao JOŠ 3 strukturna BLOCK buga (tc-05, tc-07, tc-10) — sve adversarijalne instrukcije za pravila koja model nikad ne krši zbog quality gatea (self-heal: popuni do 5 platformi / popuni 4 A2A polja / poštuje SACRED hook). **Isti pattern očekuj u CC/LS/TI** — bilo koji BLOCK case koji traži od MODELA da proizvede violaciju (umjesto da je injektuje u pre-konstruisani payload) je isti bug. Pravilo: pouzdani CR injection patterni su `banned_phrase`/`transform` u hook_text (SACRED passthrough), 303+ char hook (char_limit), prazan/missing hooks ili N/A trend (agent_error/missing_trend).
+
+### CC + LS — 2026-06-13 (Anthropic eval standard: deterministička pravila → code-based grader, ne živi model)
+
+**Princip:** Deterministička validator pravila testiraju se vitest-om (code-based grader), NE kroz živi model. Eval suite zadržava samo PASS-generation + refusal-behavior case-ove (model-mediated). Validatori NETAKNUTI, nijedan gate nije labavljen.
+
+**Ključni arhitektonski nalaz:** CR-ov data-echo reframe radi jer CR ima SACRED hook polje (verbatim passthrough). **CC i LS NEMAJU verbatim-echo polje** (CC generiše sva polja od nule; LS reasons parafrazira i banned reči su već zabranjene u reasons). Zato data-echo reframe NIJE pouzdan → deterministička pravila idu u vitest (REMOVE, ne reframe). CC ima 2 (a) prompt-gap pravila; LS nijedno.
+
+**Deterministički sloj (autoritativan, nezavisan od modela):**
+- `src/lib/runtime/handlers/__tests__/cc-validator.test.ts` — 23 testa, svako CC validator pravilo (trigger + PASS fixture). vm.Script obrazac identičan ti-validator.test.ts. Fake PII = `000-00-0000` / `0000 0000 0000 0000`.
+- `src/lib/runtime/handlers/__tests__/ls-validator.test.ts` — 16 testova, svako LS validator pravilo.
+- Anti-drift header: izvor = flow node `cc-validator`/`ls-validator`; ako se validator promeni preko `as_patch_node_field`/`as_update_flow`, ažurirati VALIDATOR_CODE. Live-pull iz flow-a NIJE korišćen namerno — unit testovi moraju biti hermetic (offline) za CI; eval suite pokriva live flow.
+
+**CC — validator node `cc-validator`, prompt node `start` (agent cmpntw5i50004p401wevvodt0):**
+
+| Rule | Gde se sad testira | Klasa | Pre → Posle |
+|---|---|---|---|
+| `agent_error` | vitest + eval (refusal "hi there"→BLOCKED) | behavior | eval kept (3/3 deterministic) |
+| `json_parse_error` | vitest | det | nepokriveno → pokriveno |
+| `invalid_type` | vitest | det | nepokriveno → pokriveno |
+| `missing_field` (title/body/per-type) | vitest | det | nepokriveno → pokriveno |
+| `banned_phrase` | vitest (eval case uklonjen) | (b) self-heal | eval FAIL 2/2 → vitest PASS |
+| `vague_verb` | vitest + **prompt fix** | (a) prompt gap | eval flaky → prompt drži (2/2), vitest |
+| `pii_block` | vitest (eval case uklonjen) | (b) self-heal | eval FAIL 2/2 → vitest PASS |
+| `pii_warning` | vitest (non-blocking) | det | nepokriveno → pokriveno |
+| `length_error` | vitest + **prompt fix** | (a) prompt gap | eval flaky → prompt drži normal (2/2), vitest |
+| `stat_unsourced` | vitest (non-blocking) | det | nepokriveno → pokriveno |
+
+- **Eval case-count: 10 → 6 namerno** (5 PASS-gen + 1 refusal). Uklonjeni: `cc-tc-07` banned_phrase, `cc-tc-08` vague_verb, `cc-tc-09` pii_block, `cc-tc-10` length_error — sva 4 deterministička, sada u vitest-u. **Health-check NE sme ovo čitati kao regresiju.**
+- **Prompt fix (backup `cc-prompt-backup-2026-06-13b.txt`):** dodato (a) usklađivanje sa validator kontraktom (NE novo pravilo):
+  - `length_error`: `# Length limits (body) — HARD CAP` (X≤280, TikTok≤150, IG≤2200, LinkedIn≤3000, YT≤5000; blog ≥300 reči, meta ≤160) + hard-cap pravilo + kanonski primer.
+  - `vague_verb`: "boost/enhance/transform dozvoljeni SAMO uz kvantifikovan rezultat (broj + jedinica %, x, times, fold, hours/hrs/days/weeks)" — doslovno usklađeno sa validator MEAS+GEN regexom (svaka navedena jedinica je u MEAS regexu, nema novog mismatch-a).
+- **Produkcijski dokaz (a):** `vague_verb` — 2/2 live runa: model izbegava verbe, čist PASS output. `length_error` — 2/2 normal X zahteva drže ≤280 (gate prošao); eksplicitan "≥320 chars" zahtev: model i dalje sledi korisnikov broj (overshoot smanjen 484→293 posle hard-cap framinga) → gate BLOKIRA (safe outcome, ne propušta nevažeći sadržaj). Taj kontradiktoran adversarijalni input je pokriven vitest-om (pre-konstruisan 281-char body).
+- **pass^k:** runs `cmqcii6150019n30timvuxvn7` + `cmqcio9dd0023n30t4j51zi58` — oba **6/6 (1.0)**, 0 varijanse, 0 validator regresija.
+
+**LS — validator node `ls-validator`, prompt node `processor` (agent cmpvcm2my00aps601oqykk7nu):**
+
+| Rule | Gde se sad testira | Klasa | Pre → Posle |
+|---|---|---|---|
+| `agent_error` | vitest + eval (2 refusal case-a) | behavior | eval kept (3/3 deterministic) |
+| `json_parse_error` | vitest | det | nepokriveno → pokriveno |
+| `missing_lead` | vitest + eval (restaurant refusal) | det/behavior | pokriveno |
+| `invalid_score` | vitest (eval case uklonjen) | (b) self-heal | eval FAIL 2/2 → vitest PASS |
+| `invalid_fit` | vitest (eval case uklonjen) | (b) self-heal | eval flaky → vitest PASS |
+| `missing_reasons` | vitest | det | nepokriveno → pokriveno |
+| `banned_phrase` | vitest (eval case uklonjen) | (b) self-heal | eval FAIL 2/2 → vitest PASS |
+
+- **Eval case-count: 10 → 7 namerno** (5 PASS-gen + 2 refusal). Uklonjeni: `ls-tc-08` banned_phrase, `ls-tc-09` invalid_fit, `ls-tc-10` invalid_score — sva 3 deterministička, sada u vitest-u. **Health-check NE sme ovo čitati kao regresiju.**
+- **Nema LS prompt promene** — sva LS BLOCK pravila prompt VEĆ propisuje (nema (a) gapa).
+- **Guardrail 2 (refusal determinism):** CC "hi there", LS "hey can you help", LS restaurant — svaki 3/3 BLOCKED (agent_error) preko 2 fresh + eval baseline → deterministički, ostaju u evalu.
+- **pass^k:** runs `cmqcii9ma001bn30tq3v732w3` + `cmqciobit0025n30ttlnu3fcx` — oba **7/7 (1.0)**, 0 varijanse, 0 validator regresija.
+
+**Verifikacija:** vitest cc+ls validator 39/39 PASS; `pnpm test` zelen (4218 passed, 0 failed); `as_find_broken_flows` 0 issues; CC 6/6 + LS 7/7 kroz 2 uzastopna runa identično. **Validatori netaknuti.**
+
+**Napomena o CI #1070 (commit 74ba0ca):** crveni X = flaky `ai-retry.test.ts > caps delay at maxDelayMs before applying jitter` (jitter/timing test, 1/311 failed). Nepovezano sa evalima; prolazi lokalno (8/8) i u sledećim zelenim runovima na main (#1072, #1081). Nije blocker.
 
 ---
 
