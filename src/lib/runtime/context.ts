@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import type { RuntimeContext, OutputMessage } from "./types";
 import { parseFlowContent } from "@/lib/validators/flow-content";
 
@@ -6,12 +7,14 @@ export async function loadContext(
   agentId: string,
   conversationId?: string
 ): Promise<RuntimeContext> {
-  const agent = await prisma.agent.findUniqueOrThrow({
-    where: { id: agentId },
-    include: {
-      flow: true,
-    },
-  });
+  const agent = await withTenant((tx) =>
+    tx.agent.findUniqueOrThrow({
+      where: { id: agentId },
+      include: {
+        flow: true,
+      },
+    }),
+  );
 
   if (!agent.flow) throw new Error("Agent has no flow");
 

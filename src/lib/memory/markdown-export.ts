@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 interface MemoryRecord {
@@ -54,10 +55,12 @@ function truncate(text: string, maxLen: number = 120): string {
  * ```
  */
 export async function exportAgentMemoryAsMarkdown(agentId: string): Promise<string> {
-  const agent = await prisma.agent.findUnique({
-    where: { id: agentId },
-    select: { name: true },
-  });
+  const agent = await withTenant((tx) =>
+    tx.agent.findUnique({
+      where: { id: agentId },
+      select: { name: true },
+    }),
+  );
 
   const memories = await prisma.agentMemory.findMany({
     where: { agentId },
