@@ -15,6 +15,8 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
+import { auth } from "@/lib/auth";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { generateEvalSuite } from "@/lib/evals/generator";
@@ -27,37 +29,41 @@ export async function POST(): Promise<NextResponse> {
     const authResult = await requireAuth();
     if (isAuthError(authResult)) return authResult;
     const { userId } = authResult;
+    const session = await auth().catch(() => null);
+    const orgId = session?.user?.currentOrgId ?? null;
 
     // Find agents that belong to this user and have no eval suites yet
-    const agentsWithoutSuites = await prisma.agent.findMany({
-      where: {
-        userId,
-        evalSuites: { none: {} },
-      },
-      select: {
-        id: true,
-        name: true,
-        systemPrompt: true,
-        category: true,
-        knowledgeBase: {
-          select: {
-            sources: {
-              where: { status: "READY" },
-              take: 3,
-              select: {
-                chunks: {
-                  take: 2,
-                  select: { content: true },
-                  orderBy: { createdAt: "asc" },
+    const agentsWithoutSuites = await withOrgContext(prisma, orgId, (tx) =>
+      tx.agent.findMany({
+        where: {
+          userId,
+          evalSuites: { none: {} },
+        },
+        select: {
+          id: true,
+          name: true,
+          systemPrompt: true,
+          category: true,
+          knowledgeBase: {
+            select: {
+              sources: {
+                where: { status: "READY" },
+                take: 3,
+                select: {
+                  chunks: {
+                    take: 2,
+                    select: { content: true },
+                    orderBy: { createdAt: "asc" },
+                  },
                 },
               },
             },
           },
         },
-      },
-      take: MAX_AGENTS_PER_BACKFILL,
-      orderBy: { createdAt: "asc" },
-    });
+        take: MAX_AGENTS_PER_BACKFILL,
+        orderBy: { createdAt: "asc" },
+      }),
+    );
 
     const total = agentsWithoutSuites.length;
 

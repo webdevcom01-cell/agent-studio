@@ -23,7 +23,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma";
-import { prismaRead } from "@/lib/prisma";
+import { prisma, prismaRead } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
+import { auth } from "@/lib/auth";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
@@ -97,6 +99,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const authResult = await requireAuth();
     if (isAuthError(authResult)) return authResult;
+
+    const session = await auth().catch(() => null);
+    const orgId = session?.user?.currentOrgId ?? null;
 
     const params = Object.fromEntries(new URL(req.url).searchParams);
     const parsed = discoverSchema.safeParse(params);
@@ -228,16 +233,18 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       select: { tags: true },
     };
 
-    const [agents, total, categoryStats, allTagAgents] = await Promise.all([
-      prismaRead.agent.findMany(findManyArgs) as unknown as Promise<AgentWithExtras[]>,
-      prismaRead.agent.count({ where }),
-      prismaRead.agent.groupBy(groupByArgs).catch(() => []) as Promise<
-        { category: string | null; _count: { category: number } }[]
-      >,
-      prismaRead.agent.findMany(tagsQueryArgs).catch(() => []) as Promise<
-        { tags: string[] }[]
-      >,
-    ]);
+    const [agents, total, categoryStats, allTagAgents] = await withOrgContext(prisma, orgId, (tx) =>
+      Promise.all([
+        tx.agent.findMany(findManyArgs) as unknown as Promise<AgentWithExtras[]>,
+        tx.agent.count({ where }),
+        tx.agent.groupBy(groupByArgs).catch(() => []) as Promise<
+          { category: string | null; _count: { category: number } }[]
+        >,
+        tx.agent.findMany(tagsQueryArgs).catch(() => []) as Promise<
+          { tags: string[] }[]
+        >,
+      ]),
+    );
 
     // Aggregate tag counts
     const tagCounts = new Map<string, number>();
