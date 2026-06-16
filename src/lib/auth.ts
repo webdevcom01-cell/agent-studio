@@ -167,17 +167,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (userId && (user || trigger === "update")) {
         const dbUser = await prisma.user.findUnique({
           where: { id: userId },
-          select: {
-            onboardingCompletedAt: true,
-            orgMemberships: {
-              select: { organizationId: true },
-              orderBy: { joinedAt: "asc" },
-              take: 1,
-            },
-          },
+          select: { onboardingCompletedAt: true },
         });
         token.onboardingCompleted = !!dbUser?.onboardingCompletedAt;
-        token.currentOrgId = dbUser?.orgMemberships[0]?.organizationId ?? null;
+        // Resolve the user's org via the SECURITY DEFINER fn user_primary_org() so it
+        // works even when OrganizationMember is RLS-protected for the app_user role.
+        // Falls back to a direct read if the function isn't deployed yet (keeps login
+        // working pre-migration).
+        try {
+          const orgRows = await prisma.$queryRaw<Array<{ org: string | null }>>`
+            SELECT user_primary_org(${userId}) AS org
+          `;
+          token.currentOrgId = orgRows[0]?.org ?? null;
+        } catch {
+          const membership = await prisma.organizationMember.findFirst({
+            where: { userId },
+            select: { organizationId: true },
+            orderBy: { joinedAt: "asc" },
+          });
+          token.currentOrgId = membership?.organizationId ?? null;
+        }
       }
       return token;
     },
