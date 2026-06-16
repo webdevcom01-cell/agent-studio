@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
+import { withAdminBypass } from "@/lib/api/tenant-context";
+import { runWithOrgId } from "@/lib/context/org-context";
 import { prisma } from "@/lib/prisma";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
@@ -118,10 +120,12 @@ export async function POST(
     const textPart = inputParts.find((p) => p.type === "text");
     const inputMessage = textPart?.text ?? "";
 
-    const agent = await prisma.agent.findFirst({
-      where: { id: agentId, userId: authResult.userId },
-      include: { flow: true },
-    });
+    const agent = await withAdminBypass((db) =>
+      db.agent.findFirst({
+        where: { id: agentId, userId: authResult.userId },
+        include: { flow: true },
+      }),
+    );
 
     if (!agent) {
       return jsonRpcError(body.id ?? null, -32000, "Agent not found", 404);
@@ -180,7 +184,9 @@ export async function POST(
     };
 
     const startTime = Date.now();
-    const result = await executeFlow(context, inputMessage || undefined);
+    const result = await runWithOrgId(agent.organizationId, () =>
+      executeFlow(context, inputMessage || undefined),
+    );
     const durationMs = Date.now() - startTime;
 
     if (callerAgentId !== agentId) {
