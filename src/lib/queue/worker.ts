@@ -454,10 +454,13 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
   let conversationId: string | null = null;
 
   try {
-    const agentExists = await prisma.agent.findFirst({
-      where: { id: agentId, userId },
-      select: { id: true },
-    });
+    const { withTenant } = await import("@/lib/api/tenant-context");
+    const agentExists = await withTenant((tx) =>
+      tx.agent.findFirst({
+        where: { id: agentId, userId },
+        select: { id: true },
+      }),
+    );
     if (!agentExists) throw new Error(`Agent "${agentId}" not found`);
 
     await job.updateProgress(20);
