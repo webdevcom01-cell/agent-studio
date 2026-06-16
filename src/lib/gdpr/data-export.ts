@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 export interface ExportData {
@@ -30,12 +31,14 @@ export async function generateUserExport(userId: string): Promise<ExportData> {
     },
   });
 
-  const agents = await prisma.agent.findMany({
-    where: { userId },
-    include: {
-      flow: { select: { content: true } },
-    },
-  });
+  const agents = await withAdminBypass((db) =>
+    db.agent.findMany({
+      where: { userId },
+      include: {
+        flow: { select: { content: true } },
+      },
+    }),
+  );
 
   const agentIds = agents.map((a) => a.id);
 

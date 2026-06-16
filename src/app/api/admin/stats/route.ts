@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 export async function GET(): Promise<NextResponse> {
@@ -21,45 +22,47 @@ export async function GET(): Promise<NextResponse> {
       recentConversations,
       activeUsers,
       topUsers,
-    ] = await Promise.all([
-      prisma.agent.count(),
-      prisma.conversation.count(),
-      prisma.user.count(),
-      prisma.webhookExecution.count({
-        where: { triggeredAt: { gte: thirtyDaysAgo } },
-      }),
-      prisma.webhookExecution.count({
-        where: { triggeredAt: { gte: thirtyDaysAgo }, status: "FAILED" },
-      }),
-      prisma.conversation.count({
-        where: { createdAt: { gte: thirtyDaysAgo } },
-      }),
-      prisma.user.count({
-        where: { updatedAt: { gte: oneDayAgo } },
-      }),
-      // Top users by number of agents (visibility only — no PII filtering needed
-      // since this is an admin-only view with no access enforcement)
-      prisma.user.findMany({
-        take: 10,
-        where: {
-          agents: { some: {} },
-        },
-        orderBy: {
-          agents: { _count: "desc" },
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          createdAt: true,
-          _count: {
-            select: {
-              agents: true,
+    ] = await withAdminBypass((db) =>
+      Promise.all([
+        db.agent.count(),
+        db.conversation.count(),
+        db.user.count(),
+        db.webhookExecution.count({
+          where: { triggeredAt: { gte: thirtyDaysAgo } },
+        }),
+        db.webhookExecution.count({
+          where: { triggeredAt: { gte: thirtyDaysAgo }, status: "FAILED" },
+        }),
+        db.conversation.count({
+          where: { createdAt: { gte: thirtyDaysAgo } },
+        }),
+        db.user.count({
+          where: { updatedAt: { gte: oneDayAgo } },
+        }),
+        // Top users by number of agents (visibility only — no PII filtering needed
+        // since this is an admin-only view with no access enforcement)
+        db.user.findMany({
+          take: 10,
+          where: {
+            agents: { some: {} },
+          },
+          orderBy: {
+            agents: { _count: "desc" },
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            createdAt: true,
+            _count: {
+              select: {
+                agents: true,
+              },
             },
           },
-        },
-      }),
-    ]);
+        }),
+      ]),
+    );
 
     const webhookErrorRate =
       recentWebhookExecutions > 0

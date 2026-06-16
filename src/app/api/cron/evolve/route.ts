@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateText } from "ai";
 import { getModel } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import {
   evolveAgentInstincts,
@@ -34,10 +35,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const agents = await prisma.agent.findMany({
-      where: { eccEnabled: true },
-      select: { id: true, name: true },
-    });
+    const agents = await withAdminBypass((db) =>
+      db.agent.findMany({
+        where: { eccEnabled: true },
+        select: { id: true, name: true },
+      }),
+    );
 
     let totalClustered = 0;
     let totalPromoted = 0;
