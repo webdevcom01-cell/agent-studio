@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { getHandler } from "@/lib/runtime/handlers";
 import { logger } from "@/lib/logger";
 import type { FlowContent, FlowNode } from "@/types";
@@ -313,10 +314,12 @@ async function checkAgentReachability(
   }
 
   try {
-    const agents = await prisma.agent.findMany({
-      where: { id: { in: targetIds } },
-      select: { id: true },
-    });
+    const agents = await withAdminBypass((db) =>
+      db.agent.findMany({
+        where: { id: { in: targetIds } },
+        select: { id: true },
+      }),
+    );
 
     const foundIds = new Set(agents.map((a) => a.id));
     const missing = targetIds.filter((id) => !foundIds.has(id));
