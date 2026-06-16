@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
 import { generateEmbeddings, chunkText, estimateTokens } from "@/lib/knowledge";
 import { logger } from "@/lib/logger";
@@ -112,17 +113,19 @@ async function ensureVirtualSource(): Promise<void> {
   });
   if (existing) return;
 
-  await prisma.agent.upsert({
-    where: { id: ECC_VIRTUAL_AGENT_ID },
-    create: {
-      id: ECC_VIRTUAL_AGENT_ID,
-      name: "ECC Skills (System)",
-      description: "Virtual agent for ECC skill vectorization",
-      systemPrompt: "",
-      model: "gpt-4.1-mini",
-    },
-    update: {},
-  });
+  await withAdminBypass((db) =>
+    db.agent.upsert({
+      where: { id: ECC_VIRTUAL_AGENT_ID },
+      create: {
+        id: ECC_VIRTUAL_AGENT_ID,
+        name: "ECC Skills (System)",
+        description: "Virtual agent for ECC skill vectorization",
+        systemPrompt: "",
+        model: "gpt-4.1-mini",
+      },
+      update: {},
+    }),
+  );
 
   await prisma.knowledgeBase.upsert({
     where: { id: ECC_VIRTUAL_KB_ID },

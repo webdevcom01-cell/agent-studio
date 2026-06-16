@@ -20,6 +20,7 @@
 import { generateText } from "ai";
 import { getModel } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { recordMetric } from "@/lib/observability/metrics";
 import { isECCEnabled } from "./feature-flag";
@@ -83,10 +84,12 @@ export async function fireSdkLearnHook(
     if (!isECCEnabled()) return;
 
     // 3. Check per-agent flag — single DB query, low cost
-    const agent = await prisma.agent.findUnique({
-      where: { id: record.agentId },
-      select: { eccEnabled: true },
-    });
+    const agent = await withAdminBypass((db) =>
+      db.agent.findUnique({
+        where: { id: record.agentId },
+        select: { eccEnabled: true },
+      }),
+    );
     if (!agent?.eccEnabled) return;
 
     // 4. Extract pattern and create/reinforce Instinct
