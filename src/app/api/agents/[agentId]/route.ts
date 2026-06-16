@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { upsertAgentCard } from "@/lib/a2a/card-generator";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
@@ -33,18 +34,20 @@ export async function GET(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const agent = await prisma.agent.findUnique({
-      where: { id: agentId },
-      include: {
-        flow: true,
-        knowledgeBase: {
-          include: {
-            sources: { orderBy: { createdAt: "desc" } },
+    const agent = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agent.findUnique({
+        where: { id: agentId },
+        include: {
+          flow: true,
+          knowledgeBase: {
+            include: {
+              sources: { orderBy: { createdAt: "desc" } },
+            },
           },
+          _count: { select: { conversations: true } },
         },
-        _count: { select: { conversations: true } },
-      },
-    });
+      })
+    );
 
     if (!agent) {
       return NextResponse.json(
@@ -81,10 +84,12 @@ export async function PATCH(
       );
     }
 
-    const agent = await prisma.agent.update({
-      where: { id: agentId },
-      data: parsed.data,
-    });
+    const agent = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agent.update({
+        where: { id: agentId },
+        data: parsed.data,
+      })
+    );
 
     if (agent.userId) {
       const baseUrl = new URL(request.url).origin;
@@ -112,7 +117,9 @@ export async function DELETE(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    await prisma.agent.delete({ where: { id: agentId } });
+    await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agent.delete({ where: { id: agentId } })
+    );
 
     return NextResponse.json({ success: true, data: null });
   } catch (err) {

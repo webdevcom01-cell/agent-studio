@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma, prismaAdmin } from "@/lib/prisma";
 import { withOrgContext } from "@/lib/db/rls-middleware";
 import { getCurrentOrgId } from "@/lib/context/org-context";
 import type { Prisma, PrismaClient } from "@/generated/prisma";
@@ -23,8 +23,22 @@ export function withTenant<T>(
  * Use only for admin routes, cron jobs, or system operations that
  * legitimately span multiple organizations.
  */
+/**
+ * Resolve the admin (BYPASSRLS) client. Falls back to the primary client when
+ * prismaAdmin is not available — e.g. local/dev without DATABASE_URL_ADMIN_USER,
+ * or unit tests that mock only `prisma`. (Accessing a missing named export of a
+ * mocked module throws under Vitest, hence the guard.)
+ */
+function adminClient(): PrismaClient {
+  try {
+    return prismaAdmin ?? prisma;
+  } catch {
+    return prisma;
+  }
+}
+
 export function withAdminBypass<T>(
   fn: (db: PrismaClient) => Promise<T>,
 ): Promise<T> {
-  return fn(prisma);
+  return fn(adminClient());
 }

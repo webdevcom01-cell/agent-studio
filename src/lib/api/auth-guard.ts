@@ -33,6 +33,7 @@ export interface AuthResult {
 
 interface AgentOwnerResult extends AuthResult {
   agentId: string;
+  organizationId: string | null;
 }
 
 interface OrgMemberResult extends AuthResult {
@@ -125,10 +126,12 @@ export async function requireAgentOwner(
     return agentNotFound();
   }
 
-  const agent = await prisma.agent.findUnique({
-    where: { id: agentId },
-    select: { userId: true, organizationId: true },
-  });
+  const agent = await withAdminBypass((db) =>
+    db.agent.findUnique({
+      where: { id: agentId },
+      select: { userId: true, organizationId: true },
+    }),
+  );
 
   if (!agent) {
     return agentNotFound();
@@ -138,7 +141,7 @@ export async function requireAgentOwner(
 
   // Case 1: agent owned directly by this user
   if (agent.userId === userId) {
-    return { ...authResult, agentId };
+    return { ...authResult, agentId, organizationId: agent.organizationId ?? null };
   }
 
   // Case 2: agent owned by an organization of which this user is a member
@@ -156,13 +159,13 @@ export async function requireAgentOwner(
     );
 
     if (membership) {
-      return { ...authResult, agentId };
+      return { ...authResult, agentId, organizationId: agent.organizationId ?? null };
     }
   }
 
   // Case 3: unowned agent (userId null, no org) — accessible to any authenticated user
   if (!agent.userId && !agent.organizationId) {
-    return { ...authResult, agentId };
+    return { ...authResult, agentId, organizationId: agent.organizationId ?? null };
   }
 
   return forbidden();

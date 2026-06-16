@@ -7,6 +7,7 @@ import { PrismaClient } from "@/generated/prisma";
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
   prismaRead: PrismaClient | undefined;
+  prismaAdmin: PrismaClient | undefined;
 };
 
 /** Primary client — used for all writes and default reads. */
@@ -19,6 +20,23 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient();
  * Set DATABASE_READ_URL env var to enable read replica routing.
  */
 export const prismaRead: PrismaClient = globalForPrisma.prismaRead ?? createReadClient();
+
+/**
+ * Admin client — BYPASSRLS connection (admin_user role) for system/cron work
+ * and for resolving tenant context (e.g. agent→org) before RLS context is set.
+ * Uses DATABASE_URL_ADMIN_USER. Falls back to the primary client when that env
+ * var is not set, so behavior is unchanged until the dedicated role is wired in.
+ */
+export const prismaAdmin: PrismaClient = globalForPrisma.prismaAdmin ?? createAdminClient();
+
+function createAdminClient(): PrismaClient {
+  const adminUrl = process.env.DATABASE_URL_ADMIN_USER;
+  if (!adminUrl) return prisma;
+
+  return new PrismaClient({
+    datasourceUrl: adminUrl,
+  });
+}
 
 function createReadClient(): PrismaClient {
   const readUrl = process.env.DATABASE_READ_URL;
@@ -50,4 +68,5 @@ export async function measureReplicationLag(): Promise<number | null> {
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
   globalForPrisma.prismaRead = prismaRead;
+  globalForPrisma.prismaAdmin = prismaAdmin;
 }
