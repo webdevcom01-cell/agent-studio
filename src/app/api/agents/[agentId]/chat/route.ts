@@ -206,7 +206,18 @@ export async function POST(
 
   try {
     const startTime = Date.now();
-    const context = await loadContext(agentId, conversationId);
+    // Resolve the AGENT's org (the tenant that owns the flow + KB the run reads).
+    // Use the agent's org — not the caller's — so public/embed runs (no session)
+    // still execute in the correct tenant. Threaded explicitly so deep reads work
+    // DURING streaming, where AsyncLocalStorage is out of scope.
+    const agentOrg = await withAdminBypass((db) =>
+      db.agent.findUnique({
+        where: { id: agentId },
+        select: { organizationId: true, model: true },
+      }),
+    );
+    const execOrgId = agentOrg?.organizationId ?? null;
+    const context = await loadContext(agentId, conversationId, execOrgId);
 
     // Optionally inject userId from session — needed for human_approval node
     // Chat endpoint is public (for embed), so we use auth() non-blocking here
@@ -238,10 +249,9 @@ export async function POST(
       }
     }
 
-    // Authorized read (requireAgentOwner already ran) — via admin client so it isn't
-    // RLS-filtered. NOTE: execution org-context for loadContext/executeFlow(Streaming)
-    // is threaded at the engine level (see STATUS.md Phase 3 follow-up), not here.
-    const agent = await withAdminBypass((db) => db.agent.findUnique({ where: { id: agentId }, select: { model: true } }));
+    // Reuse the agent fetched above (model + organizationId). Execution org-context
+    // is now threaded explicitly via context.orgId (set by loadContext).
+    const agent = agentOrg;
     // Head-to-head eval compare: override model if specified
     // Injects modelOverride into all ai_response nodes in the flow content
     if (evalModelOverride && context.flowContent?.nodes) {
@@ -272,7 +282,7 @@ export async function POST(
         subAgentId: pendingSubAgentId,
       });
 
-      const subContext = await loadContext(pendingSubAgentId, pendingSubConvId);
+      const subContext = await loadContext(pendingSubAgentId, pendingSubConvId, execOrgId);
       const subResult = await executeFlow(subContext, message);
 
       if (subResult.waitingForInput) {

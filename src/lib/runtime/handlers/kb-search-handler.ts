@@ -1,6 +1,6 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
-import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { hybridSearch, computeDynamicTopK, expandChunksWithContext } from "@/lib/knowledge";
 import { trackKBSearch } from "@/lib/analytics";
 import { logger } from "@/lib/logger";
@@ -27,9 +27,13 @@ export const kbSearchHandler: NodeHandler = async (node, context) => {
   }
 
   try {
-    const kb = await prisma.knowledgeBase.findUnique({
-      where: { agentId: context.agentId },
-    });
+    const kb = await withTenant(
+      (tx) =>
+        tx.knowledgeBase.findUnique({
+          where: { agentId: context.agentId },
+        }),
+      context.orgId,
+    );
 
     if (!kb) {
       return {

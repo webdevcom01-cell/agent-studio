@@ -14,8 +14,14 @@ import type { Prisma, PrismaClient } from "@/generated/prisma";
  */
 export function withTenant<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  explicitOrgId?: string | null,
 ): Promise<T> {
-  return withOrgContext(prisma, getCurrentOrgId(), fn);
+  // When an explicit orgId is provided (e.g. threaded from RuntimeContext
+  // during streaming, where AsyncLocalStorage is NOT in scope), use it.
+  // Otherwise fall back to the ALS-resolved org (awaited request paths).
+  const orgId =
+    explicitOrgId !== undefined ? explicitOrgId : getCurrentOrgId();
+  return withOrgContext(prisma, orgId, fn);
 }
 
 /**

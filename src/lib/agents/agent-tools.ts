@@ -111,6 +111,8 @@ export interface AgentToolContext {
   callerAgentId: string;
   /** Owner user ID for access control + rate limiting */
   userId: string | null;
+  /** Tenant org for RLS — threaded explicitly (streaming-safe) */
+  orgId?: string | null;
   /** Current A2A nesting depth (prevents runaway recursion) */
   depth?: number;
   /** Call stack for circular detection */
@@ -172,7 +174,7 @@ export async function getAgentToolsForAgent(
 
   try {
     // Fetch sibling agents (same owner, exclude self, must have a flow)
-    const agents = await loadAvailableAgents(callerAgentId, ctx.userId);
+    const agents = await loadAvailableAgents(callerAgentId, ctx.userId, ctx.orgId);
 
     if (agents.length === 0) return {};
 
@@ -384,6 +386,7 @@ async function executeAgentTool(
       traceId,
       timeoutSeconds: resolvedTimeout,
       abortSignal,
+      orgId: ctx.orgId,
     });
 
     recordSuccess(callerAgentId, agent.id);
@@ -674,7 +677,8 @@ async function savePartialResult(
  */
 async function loadAvailableAgents(
   callerAgentId: string,
-  userId: string | null
+  userId: string | null,
+  orgId?: string | null,
 ): Promise<AgentInfoWithFlow[]> {
   const whereClause = userId
     ? {
@@ -688,7 +692,8 @@ async function loadAvailableAgents(
         flow: { isNot: null },
       };
 
-  const agents = await withTenant((tx) =>
+  const agents = await withTenant(
+    (tx) =>
     tx.agent.findMany({
       where: whereClause,
       select: {
@@ -700,6 +705,7 @@ async function loadAvailableAgents(
       take: 20,
       orderBy: { updatedAt: "desc" },
     }),
+    orgId,
   );
 
   return agents;
@@ -831,6 +837,7 @@ interface SubAgentParams {
   traceId: string;
   timeoutSeconds: number;
   abortSignal?: AbortSignal;
+  orgId?: string | null;
 }
 
 interface SubAgentResult {
@@ -849,6 +856,7 @@ async function executeSubAgentInternal(
     traceId,
     timeoutSeconds,
     abortSignal,
+    orgId,
   } = params;
 
   const whereClause = callerUserId
@@ -858,11 +866,13 @@ async function executeSubAgentInternal(
       }
     : { id: targetAgentId };
 
-  const agent = await withTenant((tx) =>
-    tx.agent.findFirst({
-      where: whereClause,
-      include: { flow: true },
-    }),
+  const agent = await withTenant(
+    (tx) =>
+      tx.agent.findFirst({
+        where: whereClause,
+        include: { flow: true },
+      }),
+    orgId,
   );
 
   if (!agent) {
@@ -886,6 +896,7 @@ async function executeSubAgentInternal(
   const subContext = {
     conversationId: conversation.id,
     agentId: targetAgentId,
+    orgId,
     flowContent,
     currentNodeId: null,
     variables: { ...input } as Record<string, unknown>,
