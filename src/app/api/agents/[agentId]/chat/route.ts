@@ -4,6 +4,7 @@ import { executeFlowStreaming } from "@/lib/runtime/engine-streaming";
 import { loadContext } from "@/lib/runtime/context";
 import { trackChatResponse, trackError } from "@/lib/analytics";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { checkRateLimit, checkRateLimitAsync } from "@/lib/rate-limit";
 import { parseBodyWithLimit, BodyTooLargeError } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
@@ -237,7 +238,10 @@ export async function POST(
       }
     }
 
-    const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { model: true } });
+    // Authorized read (requireAgentOwner already ran) — via admin client so it isn't
+    // RLS-filtered. NOTE: execution org-context for loadContext/executeFlow(Streaming)
+    // is threaded at the engine level (see STATUS.md Phase 3 follow-up), not here.
+    const agent = await withAdminBypass((db) => db.agent.findUnique({ where: { id: agentId }, select: { model: true } }));
     // Head-to-head eval compare: override model if specified
     // Injects modelOverride into all ai_response nodes in the flow content
     if (evalModelOverride && context.flowContent?.nodes) {
