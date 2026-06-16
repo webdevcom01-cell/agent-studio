@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import type { AgentExportData } from "@/lib/schemas/agent-export";
 import { parseFlowContent } from "@/lib/validators/flow-content";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
@@ -39,15 +40,10 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     return NextResponse.json({ success: false, error: parsed.error.message }, { status: 422 });
   }
 
-  const agent = await prisma.agent.findUnique({
-    where: { id: agentId },
-    select: { organizationId: true },
-  });
-  if (!agent) {
-    return NextResponse.json({ success: false, error: "Agent not found" }, { status: 404 });
+  const organizationId = authResult.organizationId;
+  if (!organizationId) {
+    return NextResponse.json({ success: false, error: "Agent has no organization" }, { status: 422 });
   }
-
-  const organizationId = agent.organizationId ?? authResult.userId;
 
   try {
     const { payload, checksum } = await exportTemplate(agentId, organizationId);
@@ -56,19 +52,21 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
 
     if (parsed.data.save) {
       const name = parsed.data.name ?? `Export of ${agentId}`;
-      const template = await prisma.template.create({
-        data: {
-          organizationId,
-          name,
-          description: parsed.data.description ?? null,
-          category: parsed.data.category ?? "GENERAL",
-          tags: parsed.data.tags ?? [],
-          isPublic: parsed.data.isPublic ?? false,
-          payload: payload as object,
-          checksum,
-          sourceAgentId: agentId,
-        },
-      });
+      const template = await withOrgContext(prisma, organizationId, (tx) =>
+        tx.template.create({
+          data: {
+            organizationId,
+            name,
+            description: parsed.data.description ?? null,
+            category: parsed.data.category ?? "GENERAL",
+            tags: parsed.data.tags ?? [],
+            isPublic: parsed.data.isPublic ?? false,
+            payload: payload as object,
+            checksum,
+            sourceAgentId: agentId,
+          },
+        }),
+      );
       templateId = template.id;
     }
 
@@ -88,10 +86,12 @@ export async function GET(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const agent = await prisma.agent.findUnique({
-      where: { id: agentId },
-      include: { flow: true },
-    });
+    const agent = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agent.findUnique({
+        where: { id: agentId },
+        include: { flow: true },
+      }),
+    );
 
     if (!agent) {
       return NextResponse.json(

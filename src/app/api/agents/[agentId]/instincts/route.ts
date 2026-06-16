@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import {
@@ -30,10 +31,12 @@ export async function GET(
     if (isAuthError(authResult)) return authResult;
 
     // Verify agent exists and fetch eccEnabled flag
-    const agent = await prisma.agent.findUnique({
-      where: { id: agentId },
-      select: { id: true, eccEnabled: true },
-    });
+    const agent = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agent.findUnique({
+        where: { id: agentId },
+        select: { id: true, eccEnabled: true },
+      }),
+    );
 
     if (!agent) {
       return NextResponse.json(

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { ingestSource } from "@/lib/knowledge";
 import { addKBIngestJob } from "@/lib/queue";
 import { logger } from "@/lib/logger";
@@ -34,10 +35,12 @@ export async function GET(
     );
     const skip = (page - 1) * limit;
 
-    const agent = await prisma.agent.findUnique({
-      where: { id: agentId },
-      select: { knowledgeBase: { select: { id: true } } },
-    });
+    const agent = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agent.findUnique({
+        where: { id: agentId },
+        select: { knowledgeBase: { select: { id: true } } },
+      }),
+    );
 
     if (!agent?.knowledgeBase) {
       return NextResponse.json(
@@ -92,10 +95,12 @@ export async function POST(
       );
     }
 
-    const agent = await prisma.agent.findUnique({
-      where: { id: agentId },
-      select: { knowledgeBase: { select: { id: true } } },
-    });
+    const agent = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agent.findUnique({
+        where: { id: agentId },
+        select: { knowledgeBase: { select: { id: true } } },
+      }),
+    );
 
     if (!agent?.knowledgeBase) {
       return NextResponse.json(

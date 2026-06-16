@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { generateEvalSuite } from "@/lib/evals/generator";
@@ -58,14 +59,15 @@ export async function POST(
     }
 
     // Load agent from DB for context
-    const agent = await prisma.agent.findUnique({
-      where: { id: agentId },
-      select: {
-        name: true,
-        description: true,
-        systemPrompt: true,
-        category: true,
-        knowledgeBase: {
+    const agent = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agent.findUnique({
+        where: { id: agentId },
+        select: {
+          name: true,
+          description: true,
+          systemPrompt: true,
+          category: true,
+          knowledgeBase: {
           select: {
             sources: {
               where: { status: "READY" },
@@ -81,7 +83,7 @@ export async function POST(
           },
         },
       },
-    });
+    }));
 
     if (!agent) {
       return NextResponse.json(
