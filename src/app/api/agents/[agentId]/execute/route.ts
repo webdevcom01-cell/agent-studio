@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
+import { withAdminBypass, withTenant } from "@/lib/api/tenant-context";
+import { runWithOrgId } from "@/lib/context/org-context";
 import { logger } from "@/lib/logger";
 import { executeFlow } from "@/lib/runtime/engine";
 import { parseFlowContent } from "@/lib/validators/flow-content";
@@ -33,65 +35,85 @@ export async function POST(
       );
     }
 
-    const agent = await prisma.agent.findFirst({
-      where: { id: agentId, userId: authResult.userId },
-      include: { flow: true },
-    });
-
-    if (!agent) {
+    // Resolve the agent's org (bypass RLS) and enforce ownership by userId.
+    const owner = await withAdminBypass((db) =>
+      db.agent.findFirst({
+        where: { id: agentId, userId: authResult.userId },
+        select: { organizationId: true },
+      }),
+    );
+    if (!owner) {
       return NextResponse.json(
         { success: false, error: "Agent not found" },
         { status: 404 }
       );
     }
 
-    if (!agent.flow) {
-      return NextResponse.json(
-        { success: false, error: "Agent has no flow" },
-        { status: 400 }
+    // Run the whole execution within org context (ALS). DB reads inside pick up
+    // the org via withTenant; the LLM/flow run is NOT inside a DB transaction.
+    return await runWithOrgId(owner.organizationId, async () => {
+      const agent = await withTenant((tx) =>
+        tx.agent.findFirst({
+          where: { id: agentId, userId: authResult.userId },
+          include: { flow: true },
+        }),
       );
-    }
 
-    const flowContent = parseFlowContent(agent.flow.content);
-    const inputVars = parsed.data.input as Record<string, unknown>;
+      if (!agent) {
+        return NextResponse.json(
+          { success: false, error: "Agent not found" },
+          { status: 404 }
+        );
+      }
 
-    const conversation = await prisma.conversation.create({
-      data: {
-        agentId,
-        status: "ACTIVE",
-        variables: inputVars as object,
-      },
-    });
+      if (!agent.flow) {
+        return NextResponse.json(
+          { success: false, error: "Agent has no flow" },
+          { status: 400 }
+        );
+      }
 
-    const context = {
-      conversationId: conversation.id,
-      agentId,
-      flowContent,
-      currentNodeId: null as string | null,
-      variables: { ...inputVars },
-      messageHistory: [] as {
-        role: "user" | "assistant" | "system";
-        content: string;
-      }[],
-      isNewConversation: true,
-    };
+      const flowContent = parseFlowContent(agent.flow.content);
+      const inputVars = parsed.data.input as Record<string, unknown>;
 
-    const startTime = Date.now();
-    const result = await executeFlow(context);
-    const durationMs = Date.now() - startTime;
+      const conversation = await prisma.conversation.create({
+        data: {
+          agentId,
+          status: "ACTIVE",
+          variables: inputVars as object,
+        },
+      });
 
-    const lastAssistant = result.messages
-      .filter((m) => m.role === "assistant")
-      .pop();
-
-    return NextResponse.json({
-      success: true,
-      data: {
+      const context = {
         conversationId: conversation.id,
-        status: "COMPLETED",
-        output: lastAssistant?.content ?? null,
-        durationMs,
-      },
+        agentId,
+        flowContent,
+        currentNodeId: null as string | null,
+        variables: { ...inputVars },
+        messageHistory: [] as {
+          role: "user" | "assistant" | "system";
+          content: string;
+        }[],
+        isNewConversation: true,
+      };
+
+      const startTime = Date.now();
+      const result = await executeFlow(context);
+      const durationMs = Date.now() - startTime;
+
+      const lastAssistant = result.messages
+        .filter((m) => m.role === "assistant")
+        .pop();
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          conversationId: conversation.id,
+          status: "COMPLETED",
+          output: lastAssistant?.content ?? null,
+          durationMs,
+        },
+      });
     });
   } catch (err) {
     logger.error("Execution failed", err instanceof Error ? err : new Error(String(err)));
