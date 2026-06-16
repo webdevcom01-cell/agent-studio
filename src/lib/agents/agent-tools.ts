@@ -13,6 +13,7 @@
 import { z } from "zod";
 import { dynamicTool, zodSchema, type ToolSet } from "ai";
 import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { randomBytes } from "node:crypto";
 import {
@@ -687,17 +688,19 @@ async function loadAvailableAgents(
         flow: { isNot: null },
       };
 
-  const agents = await prisma.agent.findMany({
-    where: whereClause,
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      flow: { select: { content: true } },
-    },
-    take: 20,
-    orderBy: { updatedAt: "desc" },
-  });
+  const agents = await withTenant((tx) =>
+    tx.agent.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        flow: { select: { content: true } },
+      },
+      take: 20,
+      orderBy: { updatedAt: "desc" },
+    }),
+  );
 
   return agents;
 }
@@ -855,10 +858,12 @@ async function executeSubAgentInternal(
       }
     : { id: targetAgentId };
 
-  const agent = await prisma.agent.findFirst({
-    where: whereClause,
-    include: { flow: true },
-  });
+  const agent = await withTenant((tx) =>
+    tx.agent.findFirst({
+      where: whereClause,
+      include: { flow: true },
+    }),
+  );
 
   if (!agent) {
     throw new Error(`Agent "${targetAgentId}" not found or access denied`);

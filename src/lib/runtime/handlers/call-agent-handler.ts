@@ -2,6 +2,7 @@ import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { validateNamedSchema } from "@/lib/mcp/schema-validator";
 import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { randomBytes } from "node:crypto";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
@@ -808,10 +809,12 @@ async function executeSubAgent(params: SubAgentParams): Promise<SubAgentResult> 
     ? { id: targetAgentId, userId: callerUserId }
     : { id: targetAgentId };
 
-  const agent = await prisma.agent.findFirst({
-    where: whereClause,
-    include: { flow: true },
-  });
+  const agent = await withTenant((tx) =>
+    tx.agent.findFirst({
+      where: whereClause,
+      include: { flow: true },
+    }),
+  );
 
   if (!agent) {
     throw new Error(`Agent "${targetAgentId}" not found or access denied`);
