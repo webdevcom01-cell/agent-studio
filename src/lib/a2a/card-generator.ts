@@ -1,4 +1,5 @@
-import { prisma, prismaRead } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 
 export interface A2ASkill {
   id: string;
@@ -26,15 +27,17 @@ export async function generateAgentCard(
   userId: string,
   baseUrl: string
 ): Promise<AgentCardSchema> {
-  const agent = await prisma.agent.findFirst({
-    where: { id: agentId, userId },
-    include: {
-      mcpServers: {
-        include: { mcpServer: true },
-        where: { mcpServer: { enabled: true } },
+  const agent = await withAdminBypass((db) =>
+    db.agent.findFirst({
+      where: { id: agentId, userId },
+      include: {
+        mcpServers: {
+          include: { mcpServer: true },
+          where: { mcpServer: { enabled: true } },
+        },
       },
-    },
-  });
+    }),
+  );
 
   if (!agent) throw new Error("Agent not found");
 
@@ -116,16 +119,18 @@ export async function generateAgentCardV03(
   agentId: string,
   baseUrl: string,
 ): Promise<A2ACardV03> {
-  const agent = await prismaRead.agent.findUnique({
-    where: { id: agentId },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      isPublic: true,
-      agentCard: { select: { skills: true } },
-    },
-  });
+  const agent = await withAdminBypass((db) =>
+    db.agent.findUnique({
+      where: { id: agentId },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        isPublic: true,
+        agentCard: { select: { skills: true } },
+      },
+    }),
+  );
 
   if (!agent) throw new Error("Agent not found");
   if (!agent.isPublic) throw new Error("Agent card not public");
@@ -177,11 +182,13 @@ export async function generateAgentCardV03(
 export async function listPublicAgentCards(
   baseUrl: string,
 ): Promise<{ name: string; description: string; cardUrl: string }[]> {
-  const agents = await prismaRead.agent.findMany({
-    where: { isPublic: true },
-    select: { id: true, name: true, description: true },
-    orderBy: { name: "asc" },
-  });
+  const agents = await withAdminBypass((db) =>
+    db.agent.findMany({
+      where: { isPublic: true },
+      select: { id: true, name: true, description: true },
+      orderBy: { name: "asc" },
+    }),
+  );
 
   return agents.map((agent) => ({
     name: agent.name,

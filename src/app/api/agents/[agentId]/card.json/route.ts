@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 interface RouteParams {
@@ -36,17 +37,19 @@ export async function GET(
   try {
     const { agentId } = await params;
 
-    const agent = await prisma.agent.findUnique({
-      where: { id: agentId },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        isPublic: true,
-        tags: true,
-        category: true,
-      },
-    });
+    const agent = await withAdminBypass((db) =>
+      db.agent.findUnique({
+        where: { id: agentId },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          isPublic: true,
+          tags: true,
+          category: true,
+        },
+      }),
+    );
 
     if (!agent) {
       return NextResponse.json(
