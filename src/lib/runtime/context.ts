@@ -5,15 +5,18 @@ import { parseFlowContent } from "@/lib/validators/flow-content";
 
 export async function loadContext(
   agentId: string,
-  conversationId?: string
+  conversationId?: string,
+  orgId?: string | null,
 ): Promise<RuntimeContext> {
-  const agent = await withTenant((tx) =>
-    tx.agent.findUniqueOrThrow({
-      where: { id: agentId },
-      include: {
-        flow: true,
-      },
-    }),
+  const agent = await withTenant(
+    (tx) =>
+      tx.agent.findUniqueOrThrow({
+        where: { id: agentId },
+        include: {
+          flow: true,
+        },
+      }),
+    orgId,
   );
 
   if (!agent.flow) throw new Error("Agent has no flow");
@@ -31,6 +34,7 @@ export async function loadContext(
     return {
       conversationId: conversation.id,
       agentId,
+      orgId,
       flowContent,
       currentNodeId: conversation.currentNodeId,
       variables: (conversation.variables as Record<string, unknown>) ?? {},
@@ -54,6 +58,7 @@ export async function loadContext(
   return {
     conversationId: conversation.id,
     agentId,
+    orgId,
     flowContent,
     currentNodeId: null,
     variables: {},

@@ -67,6 +67,9 @@ export interface RuntimeContext {
   isResuming?: boolean;
   isNewConversation: boolean;
   userId?: string;
+  // Tenant org for RLS — threaded explicitly so deep reads work DURING
+  // streaming (where AsyncLocalStorage is out of scope). Set by entry points.
+  orgId?: string | null;
   // Debug mode — when true, engine emits debug_* events into the stream
   debugMode?: boolean;
   // OTEL traceId for cross-referencing in Grafana

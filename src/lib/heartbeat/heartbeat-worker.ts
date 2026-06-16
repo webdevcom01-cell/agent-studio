@@ -57,7 +57,7 @@ export async function processHeartbeatRunJob(job: Job<HeartbeatJobData>): Promis
 
     await job.updateProgress(20);
 
-    const context = await loadContext(agentId);
+    const context = await loadContext(agentId, undefined, organizationId);
     context.variables = {
       ...context.variables,
       __heartbeat_config_id: configId,

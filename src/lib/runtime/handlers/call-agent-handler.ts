@@ -366,6 +366,7 @@ async function executeCallAttempt(
         timeoutSeconds,
         providerOverride: providerOverride || undefined,
         parentExecutionId: context._currentExecutionId ?? undefined,
+        orgId: context.orgId,
       });
       output = subResult.output;
 
@@ -522,6 +523,7 @@ interface ParallelExecParams {
     agentId: string;
     conversationId: string;
     variables: Record<string, unknown>;
+    orgId?: string | null;
   };
   parallelTargets: ParallelTarget[];
   depth: number;
@@ -602,6 +604,7 @@ async function executeParallel(
           traceId,
           timeoutSeconds,
           executeFlowFn: execFlowFn as ExecuteFlowFn,
+          orgId: context.orgId,
         });
 
         const durationMs = Date.now() - startTime;
@@ -783,6 +786,7 @@ interface SubAgentParams {
   executeFlowFn?: ExecuteFlowFn;
   providerOverride?: string;
   parentExecutionId?: string;
+  orgId?: string | null;
 }
 
 interface SubAgentResult {
@@ -803,17 +807,20 @@ async function executeSubAgent(params: SubAgentParams): Promise<SubAgentResult> 
     traceId,
     timeoutSeconds,
     executeFlowFn,
+    orgId,
   } = params;
 
   const whereClause = callerUserId
     ? { id: targetAgentId, userId: callerUserId }
     : { id: targetAgentId };
 
-  const agent = await withTenant((tx) =>
-    tx.agent.findFirst({
-      where: whereClause,
-      include: { flow: true },
-    }),
+  const agent = await withTenant(
+    (tx) =>
+      tx.agent.findFirst({
+        where: whereClause,
+        include: { flow: true },
+      }),
+    orgId,
   );
 
   if (!agent) {
@@ -869,6 +876,7 @@ async function executeSubAgent(params: SubAgentParams): Promise<SubAgentResult> 
   const subContext: RuntimeContextWithDepth = {
     conversationId: conversation.id,
     agentId: targetAgentId,
+    orgId,
     flowContent,
     currentNodeId: null,
     variables: {
@@ -927,6 +935,7 @@ interface RuntimeContextWithDepth {
   messageHistory: { role: "user" | "assistant" | "system"; content: string }[];
   isNewConversation: boolean;
   isResuming?: boolean;
+  orgId?: string | null;
   _a2aDepth?: number;
   _a2aCallStack?: string[];
   _a2aTraceId?: string;

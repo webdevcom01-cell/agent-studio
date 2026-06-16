@@ -14,6 +14,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import { loadContext, saveContext, saveMessages } from "@/lib/runtime/context";
@@ -236,20 +237,28 @@ export async function executeWebhookTrigger(
   const startedAt = Date.now();
 
   // ── 1. Load webhook config ────────────────────────────────────────────────
-  const webhookConfig = await prisma.webhookConfig.findFirst({
-    where: { id: webhookId, agentId },
-    select: {
-      id: true,
-      enabled: true,
-      secret: true,
-      secretEncrypted: true,
-      bodyMappings: true,
-      headerMappings: true,
-      eventFilters: true,
-      asyncExecution: true,
-      issueKeyTemplate: true,
-    },
-  });
+  // Inbound webhooks carry no user session. The config lookup (by webhookId +
+  // agentId, gated by HMAC verification below) is a system auth read, so it runs
+  // via admin bypass — and also yields the agent's org used to scope the RLS-on
+  // execution reads (Agent/Flow) that follow.
+  const webhookConfig = await withAdminBypass((db) =>
+    db.webhookConfig.findFirst({
+      where: { id: webhookId, agentId },
+      select: {
+        id: true,
+        enabled: true,
+        secret: true,
+        secretEncrypted: true,
+        bodyMappings: true,
+        headerMappings: true,
+        eventFilters: true,
+        asyncExecution: true,
+        issueKeyTemplate: true,
+        agent: { select: { organizationId: true } },
+      },
+    }),
+  );
+  const webhookOrgId = webhookConfig?.agent?.organizationId ?? null;
 
   if (!webhookConfig) {
     return { success: false, status: 404, error: "Webhook not found" };
@@ -596,7 +605,7 @@ export async function executeWebhookTrigger(
     });
 
     // Create context with webhook variables pre-loaded
-    const context = await loadContext(agentId);
+    const context = await loadContext(agentId, undefined, webhookOrgId);
     conversationId = context.conversationId;
 
     // Inject webhook variables into context (they'll override flow defaults)

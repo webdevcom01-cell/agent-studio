@@ -168,6 +168,7 @@ export async function POST(
     const context = {
       conversationId: conversation.id,
       agentId,
+      orgId: agent.organizationId,
       flowContent,
       currentNodeId: null as string | null,
       variables: inputMessage

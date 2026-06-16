@@ -44,6 +44,7 @@ async function loadAgentTools(
     const ctx: AgentToolContext = {
       callerAgentId: agentId,
       userId: context.userId ?? null,
+      orgId: context.orgId,
       depth: extended._a2aDepth as number | undefined,
       callStack: extended._a2aCallStack as string[] | undefined,
       traceId: extended._a2aTraceId as string | undefined,

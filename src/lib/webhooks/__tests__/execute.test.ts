@@ -144,8 +144,9 @@ describe("executeWebhookTrigger", () => {
         headers: makeHeaders(),
       });
 
-      // Context is loaded — then variables are injected before executeFlow is called
-      expect(loadContext).toHaveBeenCalledWith(AGENT_ID);
+      // Context is loaded (with explicit org for RLS) — then variables are
+      // injected before executeFlow is called
+      expect(loadContext).toHaveBeenCalledWith(AGENT_ID, undefined, null);
     });
 
     it("applies body mappings correctly", async () => {
