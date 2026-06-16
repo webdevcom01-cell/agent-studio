@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 interface RouteParams {
@@ -23,11 +24,13 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const children = await prisma.agent.findMany({
-      where: { parentAgentId: agentId },
-      select: { id: true, name: true, model: true, description: true, departmentId: true, createdAt: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const children = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agent.findMany({
+        where: { parentAgentId: agentId },
+        select: { id: true, name: true, model: true, description: true, departmentId: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+    );
 
     return NextResponse.json({ success: true, data: children });
   } catch (error) {
@@ -64,20 +67,24 @@ export async function POST(
   }
 
   try {
-    const child = await prisma.agent.findUnique({
-      where: { id: childAgentId },
-      select: { id: true, userId: true, organizationId: true },
-    });
+    const child = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agent.findUnique({
+        where: { id: childAgentId },
+        select: { id: true, userId: true, organizationId: true },
+      }),
+    );
 
     if (!child) {
       return NextResponse.json({ success: false, error: "Child agent not found" }, { status: 404 });
     }
 
-    const updated = await prisma.agent.update({
-      where: { id: childAgentId },
-      data: { parentAgentId: agentId },
-      select: { id: true, name: true, parentAgentId: true },
-    });
+    const updated = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agent.update({
+        where: { id: childAgentId },
+        data: { parentAgentId: agentId },
+        select: { id: true, name: true, parentAgentId: true },
+      }),
+    );
 
     return NextResponse.json({ success: true, data: updated }, { status: 201 });
   } catch (error) {

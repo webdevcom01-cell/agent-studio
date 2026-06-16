@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { parseSource } from "@/lib/knowledge";
 import { ingestSource } from "@/lib/knowledge";
 import { addKBIngestJob } from "@/lib/queue";
@@ -40,10 +41,12 @@ export async function POST(
     );
   }
 
-  const agent = await prisma.agent.findUnique({
-    where: { id: agentId },
-    select: { knowledgeBase: { select: { id: true } } },
-  });
+  const agent = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+    tx.agent.findUnique({
+      where: { id: agentId },
+      select: { knowledgeBase: { select: { id: true } } },
+    }),
+  );
 
   if (!agent?.knowledgeBase) {
     return NextResponse.json(
