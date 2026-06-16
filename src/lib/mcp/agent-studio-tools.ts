@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { hybridSearch } from "@/lib/knowledge";
 import { createTask, markFailed } from "@/lib/managed-tasks/manager";
@@ -238,30 +239,32 @@ async function toolListAgents(
   const limit = Math.min(Number.isFinite(rawLimit) ? rawLimit : DEFAULT_AGENT_LIMIT, MAX_AGENT_LIMIT);
   const search = typeof args.search === "string" ? args.search : undefined;
 
-  const agents = await prisma.agent.findMany({
-    where: {
-      userId,
-      ...(search
-        ? {
-            OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { description: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      model: true,
-      createdAt: true,
-      updatedAt: true,
-      _count: { select: { conversations: true } },
-    },
-    orderBy: { updatedAt: "desc" },
-    take: limit,
-  });
+  const agents = await withAdminBypass((db) =>
+    db.agent.findMany({
+      where: {
+        userId,
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search, mode: "insensitive" } },
+                { description: { contains: search, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        model: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: { select: { conversations: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: limit,
+    }),
+  );
 
   return ok({
     agents: agents.map((a) => ({
@@ -285,20 +288,22 @@ async function toolGetAgent(
   const agentId = typeof args.agentId === "string" ? args.agentId : null;
   if (!agentId) return err("agentId is required.");
 
-  const agent = await prisma.agent.findFirst({
-    where: { id: agentId, userId },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      model: true,
-      createdAt: true,
-      updatedAt: true,
-      flow: { select: { id: true } },
-      knowledgeBase: { select: { id: true } },
-      _count: { select: { conversations: true } },
-    },
-  });
+  const agent = await withAdminBypass((db) =>
+    db.agent.findFirst({
+      where: { id: agentId, userId },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        model: true,
+        createdAt: true,
+        updatedAt: true,
+        flow: { select: { id: true } },
+        knowledgeBase: { select: { id: true } },
+        _count: { select: { conversations: true } },
+      },
+    }),
+  );
 
   if (!agent) return err(`Agent "${agentId}" not found.`);
 
@@ -343,10 +348,12 @@ async function toolTriggerAgent(
   }
 
   // Verify the agent exists and belongs to this user before enqueueing
-  const agent = await prisma.agent.findFirst({
-    where: { id: agentId, userId },
-    select: { id: true, name: true, flow: { select: { id: true } } },
-  });
+  const agent = await withAdminBypass((db) =>
+    db.agent.findFirst({
+      where: { id: agentId, userId },
+      select: { id: true, name: true, flow: { select: { id: true } } },
+    }),
+  );
 
   if (!agent) return err(`Agent "${agentId}" not found.`);
   if (!agent.flow) return err(`Agent "${agentId}" has no flow configured.`);
