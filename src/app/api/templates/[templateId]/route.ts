@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 interface RouteParams {
@@ -23,7 +25,7 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
   const { templateId } = await params;
 
   try {
-    const template = await prisma.template.findUnique({ where: { id: templateId } });
+    const template = await withAdminBypass((db) => db.template.findUnique({ where: { id: templateId } }));
     if (!template) {
       return NextResponse.json({ success: false, error: "Template not found" }, { status: 404 });
     }
@@ -43,10 +45,12 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
 export async function PATCH(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
   const { templateId } = await params;
 
-  const template = await prisma.template.findUnique({
-    where: { id: templateId },
-    select: { id: true, organizationId: true },
-  });
+  const template = await withAdminBypass((db) =>
+    db.template.findUnique({
+      where: { id: templateId },
+      select: { id: true, organizationId: true },
+    }),
+  );
   if (!template) return NextResponse.json({ success: false, error: "Template not found" }, { status: 404 });
 
   const authResult = await requireOrgMember(template.organizationId, request);
@@ -65,16 +69,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
   }
 
   try {
-    const updated = await prisma.template.update({
-      where: { id: templateId },
-      data: {
-        ...(parsed.data.name !== undefined && { name: parsed.data.name }),
-        ...(parsed.data.description !== undefined && { description: parsed.data.description }),
-        ...(parsed.data.category !== undefined && { category: parsed.data.category }),
-        ...(parsed.data.tags !== undefined && { tags: parsed.data.tags }),
-        ...(parsed.data.isPublic !== undefined && { isPublic: parsed.data.isPublic }),
-      },
-    });
+    const updated = await withOrgContext(prisma, template.organizationId, (tx) =>
+      tx.template.update({
+        where: { id: templateId },
+        data: {
+          ...(parsed.data.name !== undefined && { name: parsed.data.name }),
+          ...(parsed.data.description !== undefined && { description: parsed.data.description }),
+          ...(parsed.data.category !== undefined && { category: parsed.data.category }),
+          ...(parsed.data.tags !== undefined && { tags: parsed.data.tags }),
+          ...(parsed.data.isPublic !== undefined && { isPublic: parsed.data.isPublic }),
+        },
+      }),
+    );
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     logger.error("PATCH /api/templates/[templateId] error", { templateId, error });
@@ -85,17 +91,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
 export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
   const { templateId } = await params;
 
-  const template = await prisma.template.findUnique({
-    where: { id: templateId },
-    select: { id: true, organizationId: true },
-  });
+  const template = await withAdminBypass((db) =>
+    db.template.findUnique({
+      where: { id: templateId },
+      select: { id: true, organizationId: true },
+    }),
+  );
   if (!template) return NextResponse.json({ success: false, error: "Template not found" }, { status: 404 });
 
   const authResult = await requireOrgMember(template.organizationId, request);
   if (isAuthError(authResult)) return authResult;
 
   try {
-    await prisma.template.delete({ where: { id: templateId } });
+    await withOrgContext(prisma, template.organizationId, (tx) =>
+      tx.template.delete({ where: { id: templateId } }),
+    );
     return NextResponse.json({ success: true, data: null });
   } catch (error) {
     logger.error("DELETE /api/templates/[templateId] error", { templateId, error });

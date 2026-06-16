@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth, requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import type { Prisma } from "@/generated/prisma";
 
@@ -40,21 +42,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         }),
       };
 
-      const templates = await prisma.template.findMany({
-        where,
-        orderBy: [{ importCount: "desc" }, { createdAt: "desc" }],
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          category: true,
-          tags: true,
-          version: true,
-          importCount: true,
-          checksum: true,
-          createdAt: true,
-        },
-      });
+      const templates = await withAdminBypass((db) =>
+        db.template.findMany({
+          where,
+          orderBy: [{ importCount: "desc" }, { createdAt: "desc" }],
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            category: true,
+            tags: true,
+            version: true,
+            importCount: true,
+            checksum: true,
+            createdAt: true,
+          },
+        }),
+      );
       return NextResponse.json({ success: true, data: templates });
     } catch (error) {
       logger.error("GET /api/templates marketplace error", { error });
@@ -70,19 +74,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const templates = await prisma.template.findMany({
-      where: {
-        organizationId: orgId,
-        ...(category && { category }),
-        ...(search && {
-          OR: [
-            { name: { contains: search, mode: "insensitive" } },
-            { description: { contains: search, mode: "insensitive" } },
-          ],
-        }),
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const templates = await withOrgContext(prisma, orgId, (tx) =>
+      tx.template.findMany({
+        where: {
+          organizationId: orgId,
+          ...(category && { category }),
+          ...(search && {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { description: { contains: search, mode: "insensitive" } },
+            ],
+          }),
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+    );
     return NextResponse.json({ success: true, data: templates });
   } catch (error) {
     logger.error("GET /api/templates error", { orgId, error });
@@ -113,19 +119,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (isAuthError(orgAuth)) return orgAuth;
 
   try {
-    const template = await prisma.template.create({
-      data: {
-        organizationId,
-        name,
-        description: description ?? null,
-        category: category ?? "GENERAL",
-        tags: tags ?? [],
-        isPublic: isPublic ?? false,
-        payload: payload as object,
-        checksum,
-        sourceAgentId: sourceAgentId ?? null,
-      },
-    });
+    const template = await withOrgContext(prisma, organizationId, (tx) =>
+      tx.template.create({
+        data: {
+          organizationId,
+          name,
+          description: description ?? null,
+          category: category ?? "GENERAL",
+          tags: tags ?? [],
+          isPublic: isPublic ?? false,
+          payload: payload as object,
+          checksum,
+          sourceAgentId: sourceAgentId ?? null,
+        },
+      }),
+    );
     return NextResponse.json({ success: true, data: template }, { status: 201 });
   } catch (error) {
     logger.error("POST /api/templates error", { organizationId, error });

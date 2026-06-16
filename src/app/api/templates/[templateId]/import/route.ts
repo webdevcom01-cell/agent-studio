@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -13,7 +14,7 @@ interface RouteParams {
 export async function POST(request: NextRequest, { params }: RouteParams): Promise<NextResponse> {
   const { templateId } = await params;
 
-  const template = await prisma.template.findUnique({ where: { id: templateId } });
+  const template = await withAdminBypass((db) => db.template.findUnique({ where: { id: templateId } }));
   if (!template) {
     return NextResponse.json({ success: false, error: "Template not found" }, { status: 404 });
   }
@@ -48,10 +49,12 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
       orgId,
     );
 
-    await prisma.template.update({
-      where: { id: templateId },
-      data: { importCount: { increment: 1 } },
-    });
+    await withAdminBypass((db) =>
+      db.template.update({
+        where: { id: templateId },
+        data: { importCount: { increment: 1 } },
+      }),
+    );
 
     logger.info("Template imported from marketplace", { templateId, orgId, agentId: result.agentId });
 
