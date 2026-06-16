@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
+import { auth } from "@/lib/auth";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -19,17 +21,22 @@ export async function GET(): Promise<NextResponse> {
   const authResult = await requireAuth(undefined, "agents:read");
   if (isAuthError(authResult)) return authResult;
 
-  const agents = await prisma.agent.findMany({
-    where: {
-      OR: [{ userId: authResult.userId }, { userId: null }],
-    },
-    orderBy: { updatedAt: "desc" },
-    include: {
-      flow: { select: { id: true } },
-      knowledgeBase: { select: { id: true } },
-      _count: { select: { conversations: true } },
-    },
-  });
+  const session = await auth().catch(() => null);
+  const orgId = session?.user?.currentOrgId ?? null;
+
+  const agents = await withOrgContext(prisma, orgId, (tx) =>
+    tx.agent.findMany({
+      where: {
+        OR: [{ userId: authResult.userId }, { userId: null }],
+      },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        flow: { select: { id: true } },
+        knowledgeBase: { select: { id: true } },
+        _count: { select: { conversations: true } },
+      },
+    }),
+  );
 
   return NextResponse.json({ success: true, data: agents });
 }
@@ -49,9 +56,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const agentCount = await prisma.agent.count({
-      where: { userId: authResult.userId },
-    });
+    const session = await auth().catch(() => null);
+    const orgId = session?.user?.currentOrgId ?? null;
+
+    const agentCount = await withOrgContext(prisma, orgId, (tx) =>
+      tx.agent.count({
+        where: { userId: authResult.userId },
+      }),
+    );
     if (agentCount >= MAX_AGENTS_PER_USER) {
       return NextResponse.json(
         { success: false, error: `Agent limit reached (${MAX_AGENTS_PER_USER} max)` },
@@ -70,40 +82,43 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const { name, description, systemPrompt, model } = parsed.data;
 
-    const agent = await prisma.agent.create({
-      data: {
-        name,
-        description,
-        systemPrompt,
-        model,
-        userId: authResult.userId,
-        flow: {
-          create: {
-            content: {
-              nodes: [
-                {
-                  id: "start",
-                  type: "ai_response",
-                  position: { x: 250, y: 100 },
-                  data: { label: "AI Response", prompt: systemPrompt, model },
-                },
-              ],
-              edges: [],
-              variables: [],
+    const agent = await withOrgContext(prisma, orgId, (tx) =>
+      tx.agent.create({
+        data: {
+          name,
+          description,
+          systemPrompt,
+          model,
+          userId: authResult.userId,
+          organizationId: orgId ?? undefined,
+          flow: {
+            create: {
+              content: {
+                nodes: [
+                  {
+                    id: "start",
+                    type: "ai_response",
+                    position: { x: 250, y: 100 },
+                    data: { label: "AI Response", prompt: systemPrompt, model },
+                  },
+                ],
+                edges: [],
+                variables: [],
+              },
+            },
+          },
+          knowledgeBase: {
+            create: {
+              name: `${name} KB`,
             },
           },
         },
-        knowledgeBase: {
-          create: {
-            name: `${name} KB`,
-          },
+        include: {
+          flow: { select: { id: true } },
+          knowledgeBase: { select: { id: true } },
         },
-      },
-      include: {
-        flow: { select: { id: true } },
-        knowledgeBase: { select: { id: true } },
-      },
-    });
+      }),
+    );
 
     return NextResponse.json({ success: true, data: agent }, { status: 201 });
   } catch (err) {
