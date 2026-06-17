@@ -32,6 +32,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { applySecurityHeaders } from "@/lib/api/security-headers";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import {
   verifyGitHubSignature,
   verifyGitLabToken,
@@ -72,17 +73,19 @@ export async function POST(
 
   try {
     // ── 1. Load WebhookConfig ─────────────────────────────────────────────────
-    const config = await prisma.webhookConfig.findFirst({
-      where: { id: webhookId, agentId },
-      select: {
-        id: true,
-        enabled: true,
-        secret: true,
-        secretEncrypted: true,
-        signatureProvider: true,
-        isPipelineTrigger: true,
-      },
-    }) as { id: string; enabled: boolean; secret: string; secretEncrypted: boolean; signatureProvider: string; isPipelineTrigger: boolean } | null;
+    const config = await withAdminBypass((db) =>
+      db.webhookConfig.findFirst({
+        where: { id: webhookId, agentId },
+        select: {
+          id: true,
+          enabled: true,
+          secret: true,
+          secretEncrypted: true,
+          signatureProvider: true,
+          isPipelineTrigger: true,
+        },
+      }),
+    ) as { id: string; enabled: boolean; secret: string; secretEncrypted: boolean; signatureProvider: string; isPipelineTrigger: boolean } | null;
 
     if (!config) {
       return makeResponse({ error: "Webhook not found" }, 404);

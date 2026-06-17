@@ -29,6 +29,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import {
@@ -99,24 +100,26 @@ export async function POST(
   // ── Create WebhookConfig ──────────────────────────────────────────────────
   const webhookName = `${template.name} (auto-deployed)`;
 
-  const webhookConfig = await prisma.webhookConfig.create({
-    data: {
-      agentId,
-      name: webhookName,
-      description: template.description ?? undefined,
-      secret: encrypted,
-      secretEncrypted: isEncrypted,
-      signatureProvider,
-      isPipelineTrigger: true,
-      asyncExecution,
-      eventFilters,
-      bodyMappings: [],
-      headerMappings: [],
-    },
-    select: {
-      id: true,
-    },
-  });
+  const webhookConfig = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+    tx.webhookConfig.create({
+      data: {
+        agentId,
+        name: webhookName,
+        description: template.description ?? undefined,
+        secret: encrypted,
+        secretEncrypted: isEncrypted,
+        signatureProvider,
+        isPipelineTrigger: true,
+        asyncExecution,
+        eventFilters,
+        bodyMappings: [],
+        headerMappings: [],
+      },
+      select: {
+        id: true,
+      },
+    }),
+  );
 
   // Increment usage counter
   await prisma.pipelineTemplate.update({

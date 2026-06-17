@@ -19,6 +19,7 @@ import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 
 // ─── CSV helpers (RFC-4180) ────────────────────────────────────────────────────
 
@@ -80,10 +81,10 @@ export async function GET(
     const { limit, status } = parsed.data;
 
     // Verify the webhook belongs to this agent and fetch its name for the filename
-    const webhook = await prisma.webhookConfig.findFirst({
+    const webhook = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.webhookConfig.findFirst({
       where: { id: webhookId, agentId },
       select: { id: true, name: true },
-    });
+    }));
     if (!webhook) {
       return NextResponse.json(
         { success: false, error: "Webhook not found" },

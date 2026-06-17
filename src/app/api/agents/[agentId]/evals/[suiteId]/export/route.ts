@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
@@ -73,10 +74,12 @@ export async function GET(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const suite = await prisma.evalSuite.findUnique({
-      where: { id: suiteId, agentId },
-      select: { id: true, name: true },
-    });
+    const suite = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalSuite.findUnique({
+        where: { id: suiteId, agentId },
+        select: { id: true, name: true },
+      }),
+    );
     if (!suite) {
       return NextResponse.json(
         { success: false, error: "Eval suite not found" },
@@ -87,27 +90,29 @@ export async function GET(
     const url = new URL(request.url);
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 100);
 
-    const runs = await prisma.evalRun.findMany({
-      where: { suiteId, status: "COMPLETED" },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      include: {
-        results: {
-          orderBy: { createdAt: "asc" },
-          include: {
-            testCase: {
-              select: {
-                id: true,
-                label: true,
-                input: true,
-                tags: true,
-                order: true,
+    const runs = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalRun.findMany({
+        where: { suiteId, status: "COMPLETED" },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        include: {
+          results: {
+            orderBy: { createdAt: "asc" },
+            include: {
+              testCase: {
+                select: {
+                  id: true,
+                  label: true,
+                  input: true,
+                  tags: true,
+                  order: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      }),
+    );
 
     const lines: string[] = [];
     lines.push(CSV_HEADERS.join(","));

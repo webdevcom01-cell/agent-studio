@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { upsertAgentCard } from "@/lib/a2a/card-generator";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
@@ -30,7 +31,7 @@ export async function GET(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const flow = await prisma.flow.findUnique({
+    const flow = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.flow.findUnique({
       where: { agentId },
       include: {
         versions: {
@@ -39,7 +40,7 @@ export async function GET(
           take: 1,
         },
       },
-    });
+    }));
 
     if (!flow) {
       return NextResponse.json(
@@ -116,7 +117,7 @@ export async function PUT(
     const clientLockVersion =
       typeof body.clientLockVersion === "number" ? body.clientLockVersion : undefined;
 
-    const { flow, version } = await prisma.$transaction(async (tx) => {
+    const { flow, version } = await withOrgContext(prisma, authResult.organizationId, async (tx) => {
       // Optimistic locking check — only when client sends a lockVersion
       if (clientLockVersion !== undefined) {
         try {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { VersionService } from "@/lib/versioning/version-service";
@@ -19,7 +20,7 @@ export async function GET(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const flow = await prisma.flow.findUnique({ where: { agentId } });
+    const flow = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.flow.findUnique({ where: { agentId } }));
     if (!flow) {
       return NextResponse.json(
         { success: false, error: "Flow not found" },
@@ -56,7 +57,7 @@ export async function POST(
       );
     }
 
-    const flow = await prisma.flow.findUnique({ where: { agentId } });
+    const flow = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.flow.findUnique({ where: { agentId } }));
     if (!flow) {
       return NextResponse.json(
         { success: false, error: "Flow not found" },

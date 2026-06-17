@@ -29,6 +29,7 @@ import { join, extname, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { ingestSource, searchKnowledgeBase } from "@/lib/knowledge";
 import type { SearchResult } from "@/lib/knowledge";
 import { logger } from "@/lib/logger";
@@ -243,7 +244,7 @@ export async function searchCodebase(
   topK = 5,
 ): Promise<SearchResult[]> {
   try {
-    const kb = await prisma.knowledgeBase.findUnique({ where: { agentId } });
+    const kb = await withAdminBypass((db) => db.knowledgeBase.findUnique({ where: { agentId } }));
     if (!kb) return [];
 
     const results = await searchKnowledgeBase(kb.id, query, topK);
@@ -286,7 +287,7 @@ async function findOrCreateKB(agentId: string) {
   // Use upsert instead of findUnique + create to prevent a race condition when
   // two pipeline runs start simultaneously for the same agent. Both might see
   // findUnique → null and both attempt create → unique constraint violation.
-  return prisma.knowledgeBase.upsert({
+  return withAdminBypass((db) => db.knowledgeBase.upsert({
     where: { agentId },
     update: {}, // KB already exists — no fields to change
     create: {
@@ -302,7 +303,7 @@ async function findOrCreateKB(agentId: string) {
       fusionStrategy: "rrf",
       contextualEnrichment: false,
     },
-  });
+  }));
 }
 
 /**

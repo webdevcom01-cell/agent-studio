@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { EvalTestCaseInputSchema } from "@/lib/evals/schemas";
@@ -29,8 +30,10 @@ const DeleteCaseSchema = z.object({
   id: z.string().min(1),
 });
 
-async function getSuiteOrNull(suiteId: string, agentId: string) {
-  return prisma.evalSuite.findUnique({ where: { id: suiteId, agentId } });
+async function getSuiteOrNull(suiteId: string, agentId: string, organizationId: string | null) {
+  return withOrgContext(prisma, organizationId, (tx) =>
+    tx.evalSuite.findUnique({ where: { id: suiteId, agentId } }),
+  );
 }
 
 /**
@@ -46,7 +49,7 @@ export async function GET(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const suite = await getSuiteOrNull(suiteId, agentId);
+    const suite = await getSuiteOrNull(suiteId, agentId, authResult.organizationId);
     if (!suite) {
       return NextResponse.json(
         { success: false, error: "Eval suite not found" },
@@ -54,25 +57,27 @@ export async function GET(
       );
     }
 
-    const cases = await prisma.evalTestCase.findMany({
-      where: { suiteId },
-      orderBy: { order: "asc" },
-      include: {
-        results: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            id: true,
-            status: true,
-            score: true,
-            latencyMs: true,
-            agentOutput: true,
-            assertions: true,
-            createdAt: true,
+    const cases = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalTestCase.findMany({
+        where: { suiteId },
+        orderBy: { order: "asc" },
+        include: {
+          results: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: {
+              id: true,
+              status: true,
+              score: true,
+              latencyMs: true,
+              agentOutput: true,
+              assertions: true,
+              createdAt: true,
+            },
           },
         },
-      },
-    });
+      }),
+    );
 
     return NextResponse.json({ success: true, data: cases });
   } catch (err) {
@@ -97,7 +102,7 @@ export async function POST(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const suite = await getSuiteOrNull(suiteId, agentId);
+    const suite = await getSuiteOrNull(suiteId, agentId, authResult.organizationId);
     if (!suite) {
       return NextResponse.json(
         { success: false, error: "Eval suite not found" },
@@ -106,7 +111,9 @@ export async function POST(
     }
 
     // Enforce per-suite case limit
-    const existingCount = await prisma.evalTestCase.count({ where: { suiteId } });
+    const existingCount = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalTestCase.count({ where: { suiteId } }),
+    );
     if (existingCount >= MAX_TEST_CASES) {
       return NextResponse.json(
         { success: false, error: `Maximum of ${MAX_TEST_CASES} test cases per suite reached` },
@@ -124,28 +131,34 @@ export async function POST(
     }
 
     // Auto-set order to end of list if not provided
-    const maxOrder = await prisma.evalTestCase.aggregate({
-      where: { suiteId },
-      _max: { order: true },
-    });
+    const maxOrder = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalTestCase.aggregate({
+        where: { suiteId },
+        _max: { order: true },
+      }),
+    );
     const nextOrder = parsed.data.order ?? (maxOrder._max.order ?? -1) + 1;
 
-    const testCase = await prisma.evalTestCase.create({
-      data: {
-        suiteId,
-        label: parsed.data.label,
-        input: parsed.data.input,
-        assertions: parsed.data.assertions,
-        tags: parsed.data.tags,
-        order: nextOrder,
-      },
-    });
+    const testCase = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalTestCase.create({
+        data: {
+          suiteId,
+          label: parsed.data.label,
+          input: parsed.data.input,
+          assertions: parsed.data.assertions,
+          tags: parsed.data.tags,
+          order: nextOrder,
+        },
+      }),
+    );
 
     // Update suite's updatedAt
-    await prisma.evalSuite.update({
-      where: { id: suiteId },
-      data: { updatedAt: new Date() },
-    });
+    await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalSuite.update({
+        where: { id: suiteId },
+        data: { updatedAt: new Date() },
+      }),
+    );
 
     return NextResponse.json({ success: true, data: testCase }, { status: 201 });
   } catch (err) {
@@ -171,7 +184,7 @@ export async function PUT(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const suite = await getSuiteOrNull(suiteId, agentId);
+    const suite = await getSuiteOrNull(suiteId, agentId, authResult.organizationId);
     if (!suite) {
       return NextResponse.json(
         { success: false, error: "Eval suite not found" },
@@ -190,10 +203,12 @@ export async function PUT(
 
     // Verify all case IDs belong to this suite
     const caseIds = parsed.data.cases.map((c) => c.id);
-    const existingCases = await prisma.evalTestCase.findMany({
-      where: { id: { in: caseIds }, suiteId },
-      select: { id: true },
-    });
+    const existingCases = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalTestCase.findMany({
+        where: { id: { in: caseIds }, suiteId },
+        select: { id: true },
+      }),
+    );
     if (existingCases.length !== caseIds.length) {
       return NextResponse.json(
         { success: false, error: "One or more test case IDs not found in this suite" },
@@ -202,18 +217,20 @@ export async function PUT(
     }
 
     // Run all updates in a transaction
-    const updates = await prisma.$transaction(
-      parsed.data.cases.map((c) =>
-        prisma.evalTestCase.update({
-          where: { id: c.id },
-          data: {
-            ...(c.label !== undefined && { label: c.label }),
-            ...(c.input !== undefined && { input: c.input }),
-            ...(c.assertions !== undefined && { assertions: c.assertions as import("@/generated/prisma/runtime/library").InputJsonValue }),
-            ...(c.tags !== undefined && { tags: c.tags }),
-            ...(c.order !== undefined && { order: c.order }),
-          },
-        }),
+    const updates = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      Promise.all(
+        parsed.data.cases.map((c) =>
+          tx.evalTestCase.update({
+            where: { id: c.id },
+            data: {
+              ...(c.label !== undefined && { label: c.label }),
+              ...(c.input !== undefined && { input: c.input }),
+              ...(c.assertions !== undefined && { assertions: c.assertions as import("@/generated/prisma/runtime/library").InputJsonValue }),
+              ...(c.tags !== undefined && { tags: c.tags }),
+              ...(c.order !== undefined && { order: c.order }),
+            },
+          }),
+        ),
       ),
     );
 
@@ -240,7 +257,7 @@ export async function DELETE(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const suite = await getSuiteOrNull(suiteId, agentId);
+    const suite = await getSuiteOrNull(suiteId, agentId, authResult.organizationId);
     if (!suite) {
       return NextResponse.json(
         { success: false, error: "Eval suite not found" },
@@ -257,9 +274,11 @@ export async function DELETE(
       );
     }
 
-    const testCase = await prisma.evalTestCase.findUnique({
-      where: { id: parsed.data.id, suiteId },
-    });
+    const testCase = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalTestCase.findUnique({
+        where: { id: parsed.data.id, suiteId },
+      }),
+    );
     if (!testCase) {
       return NextResponse.json(
         { success: false, error: "Test case not found" },
@@ -267,7 +286,9 @@ export async function DELETE(
       );
     }
 
-    await prisma.evalTestCase.delete({ where: { id: parsed.data.id } });
+    await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalTestCase.delete({ where: { id: parsed.data.id } }),
+    );
 
     return NextResponse.json({ success: true, data: null });
   } catch (err) {

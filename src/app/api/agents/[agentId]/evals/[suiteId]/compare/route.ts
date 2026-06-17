@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { runEvalSuite } from "@/lib/evals/runner";
@@ -40,10 +41,12 @@ export async function POST(
     if (isAuthError(authResult)) return authResult;
 
     // Verify suite exists and has test cases
-    const suite = await prisma.evalSuite.findUnique({
-      where: { id: suiteId, agentId },
-      include: { _count: { select: { testCases: true } } },
-    });
+    const suite = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalSuite.findUnique({
+        where: { id: suiteId, agentId },
+        include: { _count: { select: { testCases: true } } },
+      }),
+    );
     if (!suite) {
       return NextResponse.json(
         { success: false, error: "Eval suite not found" },
@@ -140,14 +143,18 @@ export async function POST(
 
     // Load per-case assertion results from DB for assertion-level breakdown
     const [rawResultsA, rawResultsB] = await Promise.all([
-      prisma.evalResult.findMany({
-        where: { runId: summaryA.runId },
-        select: { testCaseId: true, assertions: true },
-      }),
-      prisma.evalResult.findMany({
-        where: { runId: summaryB.runId },
-        select: { testCaseId: true, assertions: true },
-      }),
+      withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.evalResult.findMany({
+          where: { runId: summaryA.runId },
+          select: { testCaseId: true, assertions: true },
+        }),
+      ),
+      withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.evalResult.findMany({
+          where: { runId: summaryB.runId },
+          select: { testCaseId: true, assertions: true },
+        }),
+      ),
     ]);
 
     // Calculate delta from per-case results + assertion breakdown

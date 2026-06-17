@@ -15,6 +15,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { runEvalSuite } from "./runner";
 
@@ -54,11 +55,13 @@ async function runDeployEvals(
   // 1. Find suites with runOnDeploy: true that have at least one test case
   let suites: Array<{ id: string; name: string; _count: { testCases: number } }>;
   try {
-    suites = await prisma.evalSuite.findMany({
-      where: { agentId, runOnDeploy: true },
-      select: { id: true, name: true, _count: { select: { testCases: true } } },
-      orderBy: { createdAt: "asc" },
-    });
+    suites = await withAdminBypass((db) =>
+      db.evalSuite.findMany({
+        where: { agentId, runOnDeploy: true },
+        select: { id: true, name: true, _count: { select: { testCases: true } } },
+        orderBy: { createdAt: "asc" },
+      }),
+    );
   } catch (err) {
     logger.error("deploy-hook: failed to query eval suites", { agentId, err });
     return;

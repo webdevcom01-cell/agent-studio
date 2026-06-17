@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
@@ -73,10 +74,12 @@ export async function GET(
     if (isAuthError(authResult)) return authResult;
 
     // Verify suite belongs to agent
-    const suite = await prisma.evalSuite.findUnique({
-      where: { id: suiteId, agentId },
-      select: { id: true, name: true },
-    });
+    const suite = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalSuite.findUnique({
+        where: { id: suiteId, agentId },
+        select: { id: true, name: true },
+      }),
+    );
     if (!suite) {
       return NextResponse.json(
         { success: false, error: "Eval suite not found" },
@@ -84,25 +87,27 @@ export async function GET(
       );
     }
 
-    const run = await prisma.evalRun.findUnique({
-      where: { id: runId, suiteId },
-      include: {
-        results: {
-          orderBy: { createdAt: "asc" },
-          include: {
-            testCase: {
-              select: {
-                id: true,
-                label: true,
-                input: true,
-                tags: true,
-                order: true,
+    const run = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalRun.findUnique({
+        where: { id: runId, suiteId },
+        include: {
+          results: {
+            orderBy: { createdAt: "asc" },
+            include: {
+              testCase: {
+                select: {
+                  id: true,
+                  label: true,
+                  input: true,
+                  tags: true,
+                  order: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      }),
+    );
 
     if (!run) {
       return NextResponse.json(

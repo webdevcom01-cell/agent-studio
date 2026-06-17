@@ -24,6 +24,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { runEvalSuite } from "./runner";
 
@@ -253,7 +254,7 @@ interface RawScheduledSuite {
 }
 
 export async function getScheduleEnabledSuites(): Promise<EligibleSuite[]> {
-  const suites = (await prisma.evalSuite.findMany({
+  const suites = (await withAdminBypass((db) => db.evalSuite.findMany({
     where: {
       scheduleEnabled: true,
       scheduleCron: { not: null },
@@ -266,7 +267,7 @@ export async function getScheduleEnabledSuites(): Promise<EligibleSuite[]> {
       lastScheduledAt: true,
       _count: { select: { testCases: true } },
     },
-  })) as RawScheduledSuite[];
+  }))) as RawScheduledSuite[];
 
   // Filter to suites that actually have test cases + valid cron (including TZ suffix)
   return suites
@@ -337,10 +338,12 @@ async function runScheduledEvals({
       });
 
       // Update lastScheduledAt after successful run
-      await prisma.evalSuite.update({
-        where: { id: suite.id },
-        data: { lastScheduledAt: now },
-      });
+      await withAdminBypass((db) =>
+        db.evalSuite.update({
+          where: { id: suite.id },
+          data: { lastScheduledAt: now },
+        }),
+      );
 
       logger.info("schedule-hook: suite finished", {
         suiteId: suite.id,

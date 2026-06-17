@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { UpdateEvalSuiteSchema } from "@/lib/evals/schemas";
@@ -8,10 +9,12 @@ interface RouteParams {
   params: Promise<{ agentId: string; suiteId: string }>;
 }
 
-async function getSuiteOrNotFound(suiteId: string, agentId: string) {
-  const suite = await prisma.evalSuite.findUnique({
-    where: { id: suiteId, agentId },
-  });
+async function getSuiteOrNotFound(suiteId: string, agentId: string, organizationId: string | null) {
+  const suite = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.evalSuite.findUnique({
+      where: { id: suiteId, agentId },
+    }),
+  );
   return suite;
 }
 
@@ -28,7 +31,8 @@ export async function GET(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const suite = await prisma.evalSuite.findUnique({
+    const suite = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalSuite.findUnique({
       where: { id: suiteId, agentId },
       include: {
         testCases: {
@@ -65,7 +69,8 @@ export async function GET(
         },
         _count: { select: { testCases: true, runs: true } },
       },
-    });
+      }),
+    );
 
     if (!suite) {
       return NextResponse.json(
@@ -97,7 +102,7 @@ export async function PATCH(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const existing = await getSuiteOrNotFound(suiteId, agentId);
+    const existing = await getSuiteOrNotFound(suiteId, agentId, authResult.organizationId);
     if (!existing) {
       return NextResponse.json(
         { success: false, error: "Eval suite not found" },
@@ -116,16 +121,20 @@ export async function PATCH(
 
     // If marking as default, clear existing default first
     if (parsed.data.isDefault === true) {
-      await prisma.evalSuite.updateMany({
-        where: { agentId, isDefault: true, id: { not: suiteId } },
-        data: { isDefault: false },
-      });
+      await withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.evalSuite.updateMany({
+          where: { agentId, isDefault: true, id: { not: suiteId } },
+          data: { isDefault: false },
+        }),
+      );
     }
 
-    const updated = await prisma.evalSuite.update({
-      where: { id: suiteId },
-      data: parsed.data,
-    });
+    const updated = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalSuite.update({
+        where: { id: suiteId },
+        data: parsed.data,
+      }),
+    );
 
     return NextResponse.json({ success: true, data: updated });
   } catch (err) {
@@ -150,7 +159,7 @@ export async function DELETE(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const existing = await getSuiteOrNotFound(suiteId, agentId);
+    const existing = await getSuiteOrNotFound(suiteId, agentId, authResult.organizationId);
     if (!existing) {
       return NextResponse.json(
         { success: false, error: "Eval suite not found" },
@@ -158,7 +167,9 @@ export async function DELETE(
       );
     }
 
-    await prisma.evalSuite.delete({ where: { id: suiteId } });
+    await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalSuite.delete({ where: { id: suiteId } }),
+    );
 
     logger.info("eval_suite_deleted", { suiteId, agentId });
     return NextResponse.json({ success: true, data: null });

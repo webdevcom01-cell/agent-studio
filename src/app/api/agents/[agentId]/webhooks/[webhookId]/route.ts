@@ -11,6 +11,7 @@ import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { applySecurityHeaders } from "@/lib/api/security-headers";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 const UpdateWebhookSchema = z.object({
@@ -39,8 +40,8 @@ const UpdateWebhookSchema = z.object({
     .optional(),
 });
 
-async function resolveWebhook(agentId: string, webhookId: string) {
-  return prisma.webhookConfig.findFirst({ where: { id: webhookId, agentId } });
+async function resolveWebhook(agentId: string, webhookId: string, organizationId: string | null | undefined) {
+  return withOrgContext(prisma, organizationId, (tx) => tx.webhookConfig.findFirst({ where: { id: webhookId, agentId } }));
 }
 
 export async function GET(
@@ -52,7 +53,7 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const webhook = await prisma.webhookConfig.findFirst({
+    const webhook = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.webhookConfig.findFirst({
       where: { id: webhookId, agentId },
       include: {
         executions: {
@@ -75,7 +76,7 @@ export async function GET(
           },
         },
       },
-    });
+    }));
 
     if (!webhook) {
       const response = NextResponse.json(
@@ -112,7 +113,7 @@ export async function PATCH(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const existing = await resolveWebhook(agentId, webhookId);
+    const existing = await resolveWebhook(agentId, webhookId, authResult.organizationId);
     if (!existing) {
       const response = NextResponse.json(
         { success: false, error: "Webhook not found" },
@@ -133,7 +134,7 @@ export async function PATCH(
       return response;
     }
 
-    const updated = await prisma.webhookConfig.update({
+    const updated = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.webhookConfig.update({
       where: { id: webhookId },
       data: parsed.data,
       select: {
@@ -146,7 +147,7 @@ export async function PATCH(
         headerMappings: true,
         updatedAt: true,
       },
-    });
+    }));
 
     const response = NextResponse.json({ success: true, data: updated });
     applySecurityHeaders(response, request.nextUrl.pathname);
@@ -171,7 +172,7 @@ export async function DELETE(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const existing = await resolveWebhook(agentId, webhookId);
+    const existing = await resolveWebhook(agentId, webhookId, authResult.organizationId);
     if (!existing) {
       const response = NextResponse.json(
         { success: false, error: "Webhook not found" },
@@ -181,7 +182,7 @@ export async function DELETE(
       return response;
     }
 
-    await prisma.webhookConfig.delete({ where: { id: webhookId } });
+    await withOrgContext(prisma, authResult.organizationId, (tx) => tx.webhookConfig.delete({ where: { id: webhookId } }));
 
     logger.info("Webhook config deleted", { agentId, webhookId });
 

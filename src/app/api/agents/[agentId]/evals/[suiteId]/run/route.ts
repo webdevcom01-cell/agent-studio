@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { runEvalSuite, failEvalRun } from "@/lib/evals/runner";
@@ -28,10 +29,12 @@ export async function POST(
     if (isAuthError(authResult)) return authResult;
 
     // Check suite exists
-    const suite = await prisma.evalSuite.findUnique({
-      where: { id: suiteId, agentId },
-      include: { _count: { select: { testCases: true } } },
-    });
+    const suite = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalSuite.findUnique({
+        where: { id: suiteId, agentId },
+        include: { _count: { select: { testCases: true } } },
+      }),
+    );
     if (!suite) {
       return NextResponse.json(
         { success: false, error: "Eval suite not found" },
@@ -47,9 +50,11 @@ export async function POST(
     }
 
     // Prevent multiple concurrent runs for the same suite
-    const activeRuns = await prisma.evalRun.count({
-      where: { suiteId, status: "RUNNING" },
-    });
+    const activeRuns = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalRun.count({
+        where: { suiteId, status: "RUNNING" },
+      }),
+    );
     if (activeRuns >= MAX_ACTIVE_RUNS) {
       return NextResponse.json(
         { success: false, error: "An eval run is already in progress for this suite" },
@@ -106,10 +111,12 @@ export async function POST(
       });
     } catch (runErr) {
       // The runner creates the EvalRun before starting — mark it failed
-      const failedRun = await prisma.evalRun.findFirst({
-        where: { suiteId, status: "RUNNING" },
-        orderBy: { createdAt: "desc" },
-      });
+      const failedRun = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.evalRun.findFirst({
+          where: { suiteId, status: "RUNNING" },
+          orderBy: { createdAt: "desc" },
+        }),
+      );
       if (failedRun) {
         await failEvalRun(failedRun.id, runErr instanceof Error ? runErr.message : "Unknown error");
       }
@@ -140,10 +147,12 @@ export async function GET(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const suite = await prisma.evalSuite.findUnique({
-      where: { id: suiteId, agentId },
-      select: { id: true },
-    });
+    const suite = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalSuite.findUnique({
+        where: { id: suiteId, agentId },
+        select: { id: true },
+      }),
+    );
     if (!suite) {
       return NextResponse.json(
         { success: false, error: "Eval suite not found" },
@@ -156,26 +165,30 @@ export async function GET(
     const offset = Number(url.searchParams.get("offset") ?? 0);
 
     const [runs, total] = await Promise.all([
-      prisma.evalRun.findMany({
-        where: { suiteId },
-        orderBy: { createdAt: "desc" },
-        take: limit,
-        skip: offset,
-        select: {
-          id: true,
-          status: true,
-          score: true,
-          passedCases: true,
-          failedCases: true,
-          totalCases: true,
-          durationMs: true,
-          triggeredBy: true,
-          errorMessage: true,
-          createdAt: true,
-          completedAt: true,
-        },
-      }),
-      prisma.evalRun.count({ where: { suiteId } }),
+      withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.evalRun.findMany({
+          where: { suiteId },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          skip: offset,
+          select: {
+            id: true,
+            status: true,
+            score: true,
+            passedCases: true,
+            failedCases: true,
+            totalCases: true,
+            durationMs: true,
+            triggeredBy: true,
+            errorMessage: true,
+            createdAt: true,
+            completedAt: true,
+          },
+        }),
+      ),
+      withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.evalRun.count({ where: { suiteId } }),
+      ),
     ]);
 
     return NextResponse.json({

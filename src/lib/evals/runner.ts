@@ -20,6 +20,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { evaluateAllAssertions } from "./assertions";
 import { validateEvalBaseUrl } from "./ssrf-guard";
@@ -504,14 +505,16 @@ export async function runEvalSuite(
   const triggeredBy = options.triggeredBy ?? "manual";
 
   // ── 1. Load suite with test cases ─────────────────────────────────────────
-  const suite = await prisma.evalSuite.findUniqueOrThrow({
-    where: { id: suiteId, agentId },
-    include: {
-      testCases: {
-        orderBy: { order: "asc" },
+  const suite = await withAdminBypass((db) =>
+    db.evalSuite.findUniqueOrThrow({
+      where: { id: suiteId, agentId },
+      include: {
+        testCases: {
+          orderBy: { order: "asc" },
+        },
       },
-    },
-  });
+    }),
+  );
 
   const totalCases = suite.testCases.length;
   const flowVersionId = options.flowVersionId;

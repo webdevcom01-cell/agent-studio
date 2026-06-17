@@ -10,6 +10,7 @@ import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { applySecurityHeaders } from "@/lib/api/security-headers";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { generateWebhookSecret, encryptWebhookSecret } from "@/lib/webhooks/verify";
 import { auditWebhookCreate } from "@/lib/security/audit";
@@ -56,7 +57,7 @@ export async function GET(
   if (scopeError) return scopeError;
 
   try {
-    const webhooks = await prisma.webhookConfig.findMany({
+    const webhooks = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.webhookConfig.findMany({
       where: { agentId },
       orderBy: { createdAt: "desc" },
       select: {
@@ -78,7 +79,7 @@ export async function GET(
         isPipelineTrigger: true,
         _count: { select: { executions: true } },
       },
-    });
+    }));
 
     const response = NextResponse.json({ success: true, data: webhooks });
     applySecurityHeaders(response, request.nextUrl.pathname);
@@ -121,7 +122,7 @@ export async function POST(
     const plaintextSecret = generateWebhookSecret();
     const { encrypted, isEncrypted } = encryptWebhookSecret(plaintextSecret);
 
-    const webhook = await prisma.webhookConfig.create({
+    const webhook = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.webhookConfig.create({
       data: {
         agentId,
         name,
@@ -146,7 +147,7 @@ export async function POST(
         isPipelineTrigger: true,
         createdAt: true,
       },
-    });
+    }));
 
     logger.info("Webhook config created", { agentId, webhookId: webhook.id });
 

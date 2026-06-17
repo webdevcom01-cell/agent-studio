@@ -7,6 +7,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { hybridSearch, computeDynamicTopK, expandChunksWithContext, sanitizeChunkContent } from "./search";
 import type { SearchResult } from "./search";
 import { extractCitations, formatCitationsForAI } from "./citations";
@@ -70,10 +71,10 @@ export async function injectRAGContext(
   let kbId: string;
   let hasKB = false;
   try {
-    const kb = await prisma.knowledgeBase.findUnique({
+    const kb = await withAdminBypass((db) => db.knowledgeBase.findUnique({
       where: { agentId },
       select: { id: true, _count: { select: { sources: { where: { status: "READY" } } } } },
-    });
+    }));
     if (!kb || kb._count.sources === 0) return { ...noResult, knowledgeBaseId: kb?.id ?? null };
     kbId = kb.id;
     hasKB = true;

@@ -205,7 +205,7 @@ async function extractAndLearnPattern(
 
   // Atomic upsert: use a Prisma transaction to prevent race conditions
   // where two concurrent executions both create the same instinct.
-  await prisma.$transaction(async (tx) => {
+  await withAdminBypass((db) => db.$transaction(async (tx) => {
     const existing = await tx.instinct.findFirst({
       where: { agentId: record.agentId, name: patternName },
       select: { id: true, confidence: true, frequency: true, examples: true },
@@ -260,7 +260,7 @@ async function extractAndLearnPattern(
         agentId: record.agentId,
       });
     }
-  });
+  }));
 
   // Fire-and-forget: sync the updated instinct to Obsidian vault
   void (async () => {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
@@ -17,13 +18,15 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const members = await prisma.organizationMember.findMany({
-      where: { organizationId: orgId },
-      include: {
-        user: { select: { id: true, name: true, email: true, image: true } },
-      },
-      orderBy: { joinedAt: "asc" },
-    });
+    const members = await withAdminBypass((db) =>
+      db.organizationMember.findMany({
+        where: { organizationId: orgId },
+        include: {
+          user: { select: { id: true, name: true, email: true, image: true } },
+        },
+        orderBy: { joinedAt: "asc" },
+      }),
+    );
 
     return NextResponse.json({
       success: true,

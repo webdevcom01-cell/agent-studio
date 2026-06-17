@@ -9,6 +9,7 @@ import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { applySecurityHeaders } from "@/lib/api/security-headers";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { kbConfigUpdateSchema, resolveEmbeddingDimension } from "@/lib/schemas/kb-config";
 import { ZodError } from "zod";
@@ -56,10 +57,12 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const kb = await prisma.knowledgeBase.findFirst({
-      where: { agentId },
-      select: CONFIG_SELECT,
-    });
+    const kb = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.knowledgeBase.findFirst({
+        where: { agentId },
+        select: CONFIG_SELECT,
+      })
+    );
 
     if (!kb) {
       const response = NextResponse.json(
@@ -96,10 +99,12 @@ export async function PATCH(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const kb = await prisma.knowledgeBase.findFirst({
-      where: { agentId },
-      select: { id: true },
-    });
+    const kb = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.knowledgeBase.findFirst({
+        where: { agentId },
+        select: { id: true },
+      })
+    );
 
     if (!kb) {
       const response = NextResponse.json(
@@ -136,11 +141,13 @@ export async function PATCH(
     if (parsed.maxChunks !== undefined) data.maxChunks = parsed.maxChunks;
     if (parsed.contextOrdering !== undefined) data.contextOrdering = parsed.contextOrdering;
 
-    const updated = await prisma.knowledgeBase.update({
-      where: { id: kb.id },
-      select: CONFIG_SELECT,
-      data,
-    });
+    const updated = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.knowledgeBase.update({
+        where: { id: kb.id },
+        select: CONFIG_SELECT,
+        data,
+      })
+    );
 
     logger.info("KB config updated", { agentId, fields: Object.keys(data) });
 

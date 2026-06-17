@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { requireOrgAdmin, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { auditOrgMemberRemove } from "@/lib/security/audit";
@@ -18,10 +19,12 @@ export async function DELETE(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const member = await prisma.organizationMember.findUnique({
-      where: { id: memberId },
-      select: { userId: true, role: true, organizationId: true },
-    });
+    const member = await withAdminBypass((db) =>
+      db.organizationMember.findUnique({
+        where: { id: memberId },
+        select: { userId: true, role: true, organizationId: true },
+      }),
+    );
 
     if (!member || member.organizationId !== orgId) {
       return NextResponse.json(
@@ -37,9 +40,11 @@ export async function DELETE(
       );
     }
 
-    await prisma.organizationMember.delete({
-      where: { id: memberId },
-    });
+    await withAdminBypass((db) =>
+      db.organizationMember.delete({
+        where: { id: memberId },
+      }),
+    );
 
     logger.info("Member removed from organization", {
       orgId,

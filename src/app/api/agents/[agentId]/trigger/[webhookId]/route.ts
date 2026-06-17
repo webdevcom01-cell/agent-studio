@@ -31,6 +31,7 @@ import { applySecurityHeaders } from "@/lib/api/security-headers";
 import { logger } from "@/lib/logger";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { executeWebhookTrigger } from "@/lib/webhooks/execute";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { prisma } from "@/lib/prisma";
 
 // Allow longer execution for flows with AI steps or MCP tool calls
@@ -45,10 +46,12 @@ export async function POST(
 
   try {
     // ── Guard: reject pipeline-trigger webhooks — they use a dedicated route ─────
-    const config = await prisma.webhookConfig.findFirst({
-      where: { id: webhookId, agentId },
-      select: { isPipelineTrigger: true, enabled: true },
-    }) as { isPipelineTrigger: boolean; enabled: boolean } | null;
+    const config = await withAdminBypass((db) =>
+      db.webhookConfig.findFirst({
+        where: { id: webhookId, agentId },
+        select: { isPipelineTrigger: true, enabled: true },
+      }),
+    ) as { isPipelineTrigger: boolean; enabled: boolean } | null;
 
     if (config?.isPipelineTrigger) {
       const pipelineUrl = `/api/agents/${agentId}/pipelines/webhook-trigger/${webhookId}`;

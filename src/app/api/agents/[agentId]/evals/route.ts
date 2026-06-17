@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError, checkScope } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { CreateEvalSuiteSchema } from "@/lib/evals/schemas";
@@ -26,26 +27,28 @@ export async function GET(
     const scopeError = checkScope(authResult, "evals:read");
     if (scopeError) return scopeError;
 
-    const suites = await prisma.evalSuite.findMany({
-      where: { agentId },
-      orderBy: { createdAt: "desc" },
-      include: {
-        _count: { select: { testCases: true, runs: true } },
-        runs: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            id: true,
-            status: true,
-            score: true,
-            passedCases: true,
-            failedCases: true,
-            totalCases: true,
-            createdAt: true,
+    const suites = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalSuite.findMany({
+        where: { agentId },
+        orderBy: { createdAt: "desc" },
+        include: {
+          _count: { select: { testCases: true, runs: true } },
+          runs: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: {
+              id: true,
+              status: true,
+              score: true,
+              passedCases: true,
+              failedCases: true,
+              totalCases: true,
+              createdAt: true,
+            },
           },
         },
-      },
-    });
+      }),
+    );
 
     const data = suites.map((s) => ({
       id: s.id,
@@ -86,7 +89,9 @@ export async function POST(
     if (scopeError) return scopeError;
 
     // Enforce per-agent suite limit
-    const existingCount = await prisma.evalSuite.count({ where: { agentId } });
+    const existingCount = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalSuite.count({ where: { agentId } }),
+    );
     if (existingCount >= MAX_SUITES_PER_AGENT) {
       return NextResponse.json(
         { success: false, error: `Maximum of ${MAX_SUITES_PER_AGENT} eval suites per agent reached` },
@@ -105,24 +110,28 @@ export async function POST(
 
     // If marking as default, clear existing default first
     if (parsed.data.isDefault) {
-      await prisma.evalSuite.updateMany({
-        where: { agentId, isDefault: true },
-        data: { isDefault: false },
-      });
+      await withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.evalSuite.updateMany({
+          where: { agentId, isDefault: true },
+          data: { isDefault: false },
+        }),
+      );
     }
 
-    const suite = await prisma.evalSuite.create({
-      data: {
-        agentId,
-        name: parsed.data.name,
-        description: parsed.data.description,
-        isDefault: parsed.data.isDefault ?? false,
-        runOnDeploy: parsed.data.runOnDeploy ?? false,
-      },
-      include: {
-        _count: { select: { testCases: true, runs: true } },
-      },
-    });
+    const suite = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.evalSuite.create({
+        data: {
+          agentId,
+          name: parsed.data.name,
+          description: parsed.data.description,
+          isDefault: parsed.data.isDefault ?? false,
+          runOnDeploy: parsed.data.runOnDeploy ?? false,
+        },
+        include: {
+          _count: { select: { testCases: true, runs: true } },
+        },
+      }),
+    );
 
     logger.info("eval_suite_created", { suiteId: suite.id, agentId });
     return NextResponse.json({ success: true, data: suite }, { status: 201 });
