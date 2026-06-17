@@ -7,6 +7,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 const MAX_RETRIES = 3;
@@ -112,20 +113,20 @@ export async function moveToDeadLetter(
 export async function checkCircuitBreaker(
   webhookConfigId: string,
 ): Promise<{ tripped: boolean }> {
-  const config = await prisma.webhookConfig.findUnique({
+  const config = await withAdminBypass((db) => db.webhookConfig.findUnique({
     where: { id: webhookConfigId },
     select: { failureCount: true, enabled: true },
-  });
+  }));
 
   if (!config || !config.enabled) {
     return { tripped: false };
   }
 
   if (config.failureCount >= CIRCUIT_BREAKER_THRESHOLD) {
-    await prisma.webhookConfig.update({
+    await withAdminBypass((db) => db.webhookConfig.update({
       where: { id: webhookConfigId },
       data: { enabled: false },
-    });
+    }));
 
     logger.warn("Webhook circuit breaker tripped — auto-disabled", {
       webhookConfigId,

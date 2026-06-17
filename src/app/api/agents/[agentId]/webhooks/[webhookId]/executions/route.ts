@@ -25,6 +25,7 @@ import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { applySecurityHeaders } from "@/lib/api/security-headers";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 // ─── Validation ───────────────────────────────────────────────────────────────
@@ -64,10 +65,10 @@ export async function GET(
     const { cursor, limit, status } = parsed.data;
 
     // Verify the webhook belongs to this agent
-    const webhookExists = await prisma.webhookConfig.findFirst({
+    const webhookExists = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.webhookConfig.findFirst({
       where: { id: webhookId, agentId },
       select: { id: true },
-    });
+    }));
     if (!webhookExists) {
       const response = NextResponse.json(
         { success: false, error: "Webhook not found" },

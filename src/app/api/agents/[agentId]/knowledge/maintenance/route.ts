@@ -9,6 +9,7 @@ import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import {
   detectDeadChunks,
@@ -35,10 +36,12 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const kb = await prisma.knowledgeBase.findFirst({
-      where: { agentId },
-      select: { id: true },
-    });
+    const kb = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.knowledgeBase.findFirst({
+        where: { agentId },
+        select: { id: true },
+      })
+    );
 
     if (!kb) {
       return NextResponse.json(
@@ -68,10 +71,12 @@ export async function POST(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const kb = await prisma.knowledgeBase.findFirst({
-      where: { agentId },
-      select: { id: true },
-    });
+    const kb = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.knowledgeBase.findFirst({
+        where: { agentId },
+        select: { id: true },
+      })
+    );
 
     if (!kb) {
       return NextResponse.json(

@@ -3,6 +3,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
 import { detectEmbeddingDrift } from "./embedding-drift";
@@ -74,10 +75,10 @@ export async function getKBAnalytics(knowledgeBaseId: string): Promise<KBAnalyti
   };
 
   try {
-    const kb = await prisma.knowledgeBase.findUnique({
+    const kb = await withAdminBypass((db) => db.knowledgeBase.findUnique({
       where: { id: knowledgeBaseId },
       select: { embeddingModel: true, agentId: true },
-    });
+    }));
     if (!kb) return defaults;
     defaults.embeddingModel = kb.embeddingModel;
 

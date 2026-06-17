@@ -20,6 +20,7 @@ import Credentials from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { createEncryptedAdapter } from "@/lib/auth-adapter";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 
 // ── OIDC provider factory ────────────────────────────────────────────────────
 // Dynamically constructs a standards-compliant OIDC provider when all three
@@ -180,11 +181,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           `;
           token.currentOrgId = orgRows[0]?.org ?? null;
         } catch {
-          const membership = await prisma.organizationMember.findFirst({
+          const membership = await withAdminBypass((db) => db.organizationMember.findFirst({
             where: { userId },
             select: { organizationId: true },
             orderBy: { joinedAt: "asc" },
-          });
+          }));
           token.currentOrgId = membership?.organizationId ?? null;
         }
         // Auto-provision a personal org on first login so brand-new users work

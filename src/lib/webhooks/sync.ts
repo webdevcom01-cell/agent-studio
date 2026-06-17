@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { generateWebhookSecret, encryptWebhookSecret } from "./verify";
 import type { FlowContent } from "@/types";
@@ -56,7 +57,7 @@ export async function syncWebhooksFromFlow(
   );
 
   // ── Load existing node-linked webhook configs ───────────────────────────────
-  const existing = await prisma.webhookConfig.findMany({
+  const existing = await withAdminBypass((db) => db.webhookConfig.findMany({
     where: { agentId, nodeId: { not: null } },
     select: {
       id: true,
@@ -64,7 +65,7 @@ export async function syncWebhooksFromFlow(
       name: true,
       enabled: true,
     },
-  });
+  }));
 
   const existingByNodeId = new Map(
     existing
@@ -88,7 +89,7 @@ export async function syncWebhooksFromFlow(
       try {
         const plaintextSecret = generateWebhookSecret();
         const { encrypted, isEncrypted } = encryptWebhookSecret(plaintextSecret);
-        await prisma.webhookConfig.create({
+        await withAdminBypass((db) => db.webhookConfig.create({
           data: {
             agentId,
             nodeId,
@@ -99,7 +100,7 @@ export async function syncWebhooksFromFlow(
             bodyMappings: [],
             headerMappings: [],
           },
-        });
+        }));
         result.created++;
         logger.info("webhook_sync_created", { agentId, nodeId, name });
       } catch (err) {
@@ -111,10 +112,10 @@ export async function syncWebhooksFromFlow(
       // UPDATE — only sync the name if it changed; never overwrite the secret
       if (existingRecord.name !== name) {
         try {
-          await prisma.webhookConfig.update({
+          await withAdminBypass((db) => db.webhookConfig.update({
             where: { id: existingRecord.id },
             data: { name },
-          });
+          }));
           result.updated++;
           logger.info("webhook_sync_updated", { agentId, nodeId, name });
         } catch (err) {
@@ -128,10 +129,10 @@ export async function syncWebhooksFromFlow(
   for (const [nodeId, record] of existingByNodeId) {
     if (!processedNodeIds.has(nodeId) && record.enabled) {
       try {
-        await prisma.webhookConfig.update({
+        await withAdminBypass((db) => db.webhookConfig.update({
           where: { id: record.id },
           data: { enabled: false },
-        });
+        }));
         result.disabled++;
         logger.info("webhook_sync_disabled", { agentId, nodeId });
       } catch (err) {

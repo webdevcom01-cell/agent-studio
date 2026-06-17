@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
 
@@ -27,10 +28,10 @@ export async function detectEmbeddingDrift(
   knowledgeBaseId: string
 ): Promise<EmbeddingDriftStatus> {
   try {
-    const kb = await prisma.knowledgeBase.findUnique({
+    const kb = await withAdminBypass((db) => db.knowledgeBase.findUnique({
       where: { id: knowledgeBaseId },
       select: { embeddingModel: true },
-    });
+    }));
 
     const currentModel = kb?.embeddingModel ?? "text-embedding-3-small";
 

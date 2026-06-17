@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
 import { generateEmbedding } from "./embeddings";
 import { getCachedQueryEmbedding, setCachedQueryEmbedding } from "./embedding-cache";
@@ -32,7 +33,7 @@ interface KBSearchConfig {
 
 async function loadKBConfig(knowledgeBaseId: string): Promise<KBSearchConfig | null> {
   try {
-    const kb = await prisma.knowledgeBase.findUnique({
+    const kb = await withAdminBypass((db) => db.knowledgeBase.findUnique({
       where: { id: knowledgeBaseId },
       select: {
         searchTopK: true,
@@ -44,7 +45,7 @@ async function loadKBConfig(knowledgeBaseId: string): Promise<KBSearchConfig | n
         queryTransform: true,
         contextOrdering: true,
       },
-    });
+    }));
     if (!kb) return null;
 
     // contextualEnrichment is in schema.prisma + DB but not in generated types yet
@@ -205,7 +206,7 @@ export async function searchKnowledgeBase(
   // tuning would silently revert to the server default. Pin both on the
   // same connection by wrapping in a single transaction.
   const searchStart = performance.now();
-  const results = await prisma.$transaction(async (tx) => {
+  const results = await withAdminBypass((db) => db.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SET LOCAL hnsw.ef_search = ${Prisma.raw(String(efSearch))}`);
     return tx.$queryRaw<VectorSearchRow[]>(
       Prisma.sql`
@@ -222,7 +223,7 @@ export async function searchKnowledgeBase(
         LIMIT ${topK}
       `
     );
-  });
+  }));
   const searchDurationMs = performance.now() - searchStart;
   recordMetric("kb.search.vector_query_ms", searchDurationMs, "ms", {
     knowledgeBaseId,

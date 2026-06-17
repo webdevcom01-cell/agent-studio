@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { writeAuditLog } from "@/lib/security/audit";
 import type { AccessLevel } from "@/generated/prisma";
@@ -56,10 +57,10 @@ export async function checkSkillAccess(
   skillId: string,
   requiredLevel: AccessLevel,
 ): Promise<boolean> {
-  const permission = await prisma.agentSkillPermission.findUnique({
+  const permission = await withAdminBypass((db) => db.agentSkillPermission.findUnique({
     where: { agentId_skillId: { agentId, skillId } },
     select: { accessLevel: true },
-  });
+  }));
 
   if (!permission) return false;
 
@@ -78,10 +79,10 @@ export async function enforceSkillAccess(
   requiredLevel: AccessLevel,
   userId?: string,
 ): Promise<void> {
-  const permission = await prisma.agentSkillPermission.findUnique({
+  const permission = await withAdminBypass((db) => db.agentSkillPermission.findUnique({
     where: { agentId_skillId: { agentId, skillId } },
     select: { accessLevel: true },
-  });
+  }));
 
   const grantedLevel = (permission?.accessLevel ?? null) as AccessLevel | null;
   const grantedRank = grantedLevel ? (ACCESS_HIERARCHY[grantedLevel] ?? 0) : 0;
@@ -135,10 +136,10 @@ export async function listAccessibleSkills(
 ): Promise<{ skillId: string; accessLevel: AccessLevel }[]> {
   const requiredRank = ACCESS_HIERARCHY[minimumLevel] ?? 1;
 
-  const permissions = await prisma.agentSkillPermission.findMany({
+  const permissions = await withAdminBypass((db) => db.agentSkillPermission.findMany({
     where: { agentId },
     select: { skillId: true, accessLevel: true },
-  });
+  }));
 
   return permissions.filter(
     (p) => (ACCESS_HIERARCHY[p.accessLevel] ?? 0) >= requiredRank,
@@ -153,11 +154,11 @@ export async function grantSkillAccess(
   level: AccessLevel,
   grantedByUserId?: string,
 ): Promise<void> {
-  await prisma.agentSkillPermission.upsert({
+  await withAdminBypass((db) => db.agentSkillPermission.upsert({
     where: { agentId_skillId: { agentId, skillId } },
     create: { agentId, skillId, accessLevel: level },
     update: { accessLevel: level },
-  });
+  }));
 
   writeAuditLog({
     userId: grantedByUserId,
@@ -173,9 +174,9 @@ export async function revokeSkillAccess(
   skillId: string,
   revokedByUserId?: string,
 ): Promise<void> {
-  await prisma.agentSkillPermission.deleteMany({
+  await withAdminBypass((db) => db.agentSkillPermission.deleteMany({
     where: { agentId, skillId },
-  });
+  }));
 
   writeAuditLog({
     userId: revokedByUserId,
@@ -189,9 +190,9 @@ export async function revokeSkillAccess(
 export async function getAgentSkills(
   agentId: string,
 ): Promise<{ skillId: string; accessLevel: AccessLevel }[]> {
-  const permissions = await prisma.agentSkillPermission.findMany({
+  const permissions = await withAdminBypass((db) => db.agentSkillPermission.findMany({
     where: { agentId },
     select: { skillId: true, accessLevel: true },
-  });
+  }));
   return permissions;
 }

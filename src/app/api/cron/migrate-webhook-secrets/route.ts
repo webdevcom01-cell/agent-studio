@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { isEncryptionConfigured } from "@/lib/crypto";
 import { encryptWebhookSecret } from "@/lib/webhooks/verify";
@@ -33,11 +34,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     let hasMore = true;
 
     while (hasMore) {
-      const batch = await prisma.webhookConfig.findMany({
+      const batch = await withAdminBypass((db) => db.webhookConfig.findMany({
         where: { secretEncrypted: false },
         select: { id: true, secret: true },
         take: BATCH_SIZE,
-      });
+      }));
 
       if (batch.length === 0) {
         hasMore = false;
@@ -51,10 +52,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           continue;
         }
 
-        await prisma.webhookConfig.update({
+        await withAdminBypass((db) => db.webhookConfig.update({
           where: { id: webhook.id },
           data: { secret: encrypted, secretEncrypted: true },
-        });
+        }));
         totalMigrated++;
       }
 

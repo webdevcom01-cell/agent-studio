@@ -11,6 +11,7 @@ import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { applySecurityHeaders } from "@/lib/api/security-headers";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { generateWebhookSecret, encryptWebhookSecret } from "@/lib/webhooks/verify";
 
@@ -23,10 +24,10 @@ export async function POST(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const existing = await prisma.webhookConfig.findFirst({
+    const existing = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.webhookConfig.findFirst({
       where: { id: webhookId, agentId },
       select: { id: true },
-    });
+    }));
 
     if (!existing) {
       const response = NextResponse.json(
@@ -40,10 +41,10 @@ export async function POST(
     const plaintextSecret = generateWebhookSecret();
     const { encrypted, isEncrypted } = encryptWebhookSecret(plaintextSecret);
 
-    await prisma.webhookConfig.update({
+    await withOrgContext(prisma, authResult.organizationId, (tx) => tx.webhookConfig.update({
       where: { id: webhookId },
       data: { secret: encrypted, secretEncrypted: isEncrypted },
-    });
+    }));
 
     logger.info("Webhook secret rotated", { agentId, webhookId });
 
