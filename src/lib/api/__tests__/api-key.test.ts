@@ -121,6 +121,7 @@ describe("validateApiKey", () => {
       id: "k1",
       userId: "u1",
       scopes: ["agents:read", "flows:execute"],
+      organizationId: "org1",
       expiresAt: null,
       revokedAt: null,
     } as never);
@@ -133,6 +134,24 @@ describe("validateApiKey", () => {
     expect(result?.userId).toBe("u1");
     expect(result?.apiKeyId).toBe("k1");
     expect(result?.scopes).toEqual(["agents:read", "flows:execute"]);
+    expect(result?.organizationId).toBe("org1");
+  });
+
+  it("returns null organizationId for legacy unbound key", async () => {
+    mockPrisma.apiKey.findUnique.mockResolvedValue({
+      id: "k1",
+      userId: "u1",
+      scopes: [],
+      organizationId: null,
+      expiresAt: null,
+      revokedAt: null,
+    } as never);
+    mockPrisma.apiKey.update.mockResolvedValue({} as never);
+
+    const { key } = generateApiKey();
+    const result = await validateApiKey(key);
+
+    expect(result?.organizationId).toBeNull();
   });
 
   it("updates lastUsedAt fire-and-forget on valid key", async () => {

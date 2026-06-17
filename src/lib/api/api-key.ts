@@ -65,6 +65,8 @@ export interface ApiKeyAuthResult {
   userId: string;
   apiKeyId: string;
   scopes: string[];
+  /** Org this key is bound to, or null for legacy/unbound keys. */
+  organizationId: string | null;
 }
 
 /**
@@ -85,6 +87,7 @@ export async function validateApiKey(
     id: string;
     userId: string;
     scopes: string[];
+    organizationId: string | null;
     expiresAt: Date | null;
     revokedAt: Date | null;
   } | null;
@@ -96,6 +99,7 @@ export async function validateApiKey(
         id: true,
         userId: true,
         scopes: true,
+        organizationId: true,
         expiresAt: true,
         revokedAt: true,
       },
@@ -118,6 +122,7 @@ export async function validateApiKey(
     userId: apiKey.userId,
     apiKeyId: apiKey.id,
     scopes: apiKey.scopes,
+    organizationId: apiKey.organizationId,
   };
 }
 

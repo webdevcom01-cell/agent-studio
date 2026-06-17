@@ -102,6 +102,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         keyPrefix,
         name,
         userId: authResult.userId,
+        // Bind the key to the creator's current org so programmatic callers
+        // carry an explicit tenant context (auth still falls back to the user's
+        // earliest membership if this is ever null).
+        organizationId: authResult.organizationId,
         scopes,
         expiresAt,
       },

@@ -112,7 +112,10 @@ export async function requireAuth(
       userId: keyResult.userId,
       apiKeyId: keyResult.apiKeyId,
       scopes: keyResult.scopes,
-      organizationId: await resolveApiKeyOrgId(keyResult.userId),
+      // Prefer the org the key is explicitly bound to; fall back to the user's
+      // earliest membership for legacy keys created before org binding.
+      organizationId:
+        keyResult.organizationId ?? (await resolveApiKeyOrgId(keyResult.userId)),
     };
     return authResult;
   }

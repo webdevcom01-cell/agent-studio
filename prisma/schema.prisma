@@ -51,6 +51,10 @@ model ApiKey {
   name        String
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Org this key is scoped to. Null for legacy keys created before org binding;
+  /// auth falls back to the user's earliest membership in that case.
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   /// Array of scope strings, e.g. ["agents:read","agents:write","flows:execute"]
   scopes      String[]  @default([])
   expiresAt   DateTime?
@@ -63,6 +67,7 @@ model ApiKey {
   @@index([keyHash])
   @@index([userId])
   @@index([userId, revokedAt])
+  @@index([organizationId])
 }
 
 model Account {
@@ -1561,6 +1566,7 @@ model Organization {
   members     OrganizationMember[]
   agents      Agent[]               @relation("OrgAgents")
   invitations Invitation[]
+  apiKeys     ApiKey[]
   createdAt   DateTime              @default(now())
   updatedAt   DateTime              @updatedAt
 
