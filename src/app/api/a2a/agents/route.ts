@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
 import { withOrgContext } from "@/lib/db/rls-middleware";
-import { auth } from "@/lib/auth";
 import { generateAgentCard } from "@/lib/a2a/card-generator";
 import { logger } from "@/lib/logger";
 
@@ -11,8 +10,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const authResult = await requireAuth();
     if (isAuthError(authResult)) return authResult;
 
-    const session = await auth().catch(() => null);
-    const orgId = session?.user?.currentOrgId ?? null;
+    const orgId = authResult.organizationId;
 
     const agents = await withOrgContext(prisma, orgId, (tx) =>
       tx.agent.findMany({

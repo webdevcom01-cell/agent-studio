@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { withOrgContext } from "@/lib/db/rls-middleware";
-import { auth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { agentExportSchema } from "@/lib/schemas/agent-export";
@@ -57,10 +56,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { agent: agentData, flow: flowData } = parsed.data;
 
-  // Resolve the tenant org; imported agents must belong to the user's org so
-  // they're visible under RLS. Reject rather than create an org-less (invisible) row.
-  const session = await auth().catch(() => null);
-  const orgId = session?.user?.currentOrgId ?? null;
+  // Org is resolved centrally in requireAuth (session currentOrgId, or the
+  // user's earliest membership for API-key callers). Imported agents must
+  // belong to the user's org so they're visible under RLS — reject rather than
+  // create an org-less (invisible) row.
+  const orgId = authResult.organizationId;
   if (!orgId) {
     return NextResponse.json(
       { success: false, error: "No organization context for import" },

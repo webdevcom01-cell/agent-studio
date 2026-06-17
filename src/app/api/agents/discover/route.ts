@@ -25,7 +25,6 @@ import { z } from "zod";
 import { Prisma } from "@/generated/prisma";
 import { prisma, prismaRead } from "@/lib/prisma";
 import { withOrgContext } from "@/lib/db/rls-middleware";
-import { auth } from "@/lib/auth";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
@@ -100,8 +99,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const authResult = await requireAuth();
     if (isAuthError(authResult)) return authResult;
 
-    const session = await auth().catch(() => null);
-    const orgId = session?.user?.currentOrgId ?? null;
+    const orgId = authResult.organizationId;
 
     const params = Object.fromEntries(new URL(req.url).searchParams);
     const parsed = discoverSchema.safeParse(params);

@@ -16,7 +16,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withOrgContext } from "@/lib/db/rls-middleware";
-import { auth } from "@/lib/auth";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { generateEvalSuite } from "@/lib/evals/generator";
@@ -29,8 +28,7 @@ export async function POST(): Promise<NextResponse> {
     const authResult = await requireAuth();
     if (isAuthError(authResult)) return authResult;
     const { userId } = authResult;
-    const session = await auth().catch(() => null);
-    const orgId = session?.user?.currentOrgId ?? null;
+    const orgId = authResult.organizationId;
 
     // Find agents that belong to this user and have no eval suites yet
     const agentsWithoutSuites = await withOrgContext(prisma, orgId, (tx) =>

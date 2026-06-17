@@ -15,7 +15,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers as nextHeaders } from "next/headers";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { validateApiKey, hasScope, type ApiKeyScope } from "@/lib/api/api-key";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 
@@ -29,6 +28,14 @@ export interface AuthResult {
   apiKeyId: string | null;
   /** Scopes granted by the API key (empty array for session auth = full access) */
   scopes: string[];
+  /**
+   * Tenant org for this request. Resolved centrally so every route gets a
+   * consistent value regardless of auth method:
+   *   - session auth : the session's currently-selected org (currentOrgId)
+   *   - API-key auth : the user's earliest org membership (no cookie session)
+   * Null only when the user belongs to no organization.
+   */
+  organizationId: string | null;
 }
 
 interface AgentOwnerResult extends AuthResult {
@@ -55,6 +62,26 @@ function agentNotFound(): NextResponse {
   return NextResponse.json({ success: false, error: "Agent not found" }, { status: 404 });
 }
 
+// ── Org resolution ───────────────────────────────────────────────────────────
+// Resolve the tenant org for an API-key caller. API keys have no cookie session,
+// and the ApiKey model is not yet org-scoped, so we attribute the request to the
+// user's earliest org membership — for single-org users this is their
+// auto-provisioned personal org. Uses an admin-bypass read because the RLS org
+// context is not established yet at authentication time.
+//
+// TODO(multi-org): add an `organizationId` column to ApiKey so a key can be
+// explicitly bound to one org, and prefer that here when present.
+async function resolveApiKeyOrgId(userId: string): Promise<string | null> {
+  const membership = await withAdminBypass((db) =>
+    db.organizationMember.findFirst({
+      where: { userId },
+      select: { organizationId: true },
+      orderBy: { joinedAt: "asc" },
+    }),
+  );
+  return membership?.organizationId ?? null;
+}
+
 // ── Core: requireAuth ────────────────────────────────────────────────────────
 // Accepts an optional NextRequest to check the x-api-key header.
 // Falls back to session cookie when no API key provided.
@@ -76,16 +103,17 @@ export async function requireAuth(
     if (!keyResult) {
       return unauthorized("Invalid or expired API key");
     }
-    const authResult: AuthResult = {
-      userId: keyResult.userId,
-      apiKeyId: keyResult.apiKeyId,
-      scopes: keyResult.scopes,
-    };
     if (requiredScope && keyResult.scopes.length > 0) {
       if (!hasScope(keyResult.scopes, requiredScope)) {
         return forbidden(`API key missing required scope: ${requiredScope}`);
       }
     }
+    const authResult: AuthResult = {
+      userId: keyResult.userId,
+      apiKeyId: keyResult.apiKeyId,
+      scopes: keyResult.scopes,
+      organizationId: await resolveApiKeyOrgId(keyResult.userId),
+    };
     return authResult;
   }
 
@@ -95,7 +123,12 @@ export async function requireAuth(
     return unauthorized();
   }
 
-  return { userId: session.user.id, apiKeyId: null, scopes: [] };
+  return {
+    userId: session.user.id,
+    apiKeyId: null,
+    scopes: [],
+    organizationId: session.user.currentOrgId ?? null,
+  };
 }
 
 // ── checkScope ───────────────────────────────────────────────────────────────

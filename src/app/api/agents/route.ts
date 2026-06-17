@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { withOrgContext } from "@/lib/db/rls-middleware";
-import { auth } from "@/lib/auth";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -21,8 +20,7 @@ export async function GET(): Promise<NextResponse> {
   const authResult = await requireAuth(undefined, "agents:read");
   if (isAuthError(authResult)) return authResult;
 
-  const session = await auth().catch(() => null);
-  const orgId = session?.user?.currentOrgId ?? null;
+  const orgId = authResult.organizationId;
 
   const agents = await withOrgContext(prisma, orgId, (tx) =>
     tx.agent.findMany({
@@ -56,11 +54,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const session = await auth().catch(() => null);
-    const orgId = session?.user?.currentOrgId ?? null;
-    // Every agent must belong to an org so it's visible under RLS. A logged-in
-    // user always has one (auto-provisioned on login); reject if somehow absent
-    // rather than create an org-less (invisible) agent.
+    // Org is resolved centrally in requireAuth (session currentOrgId, or the
+    // user's earliest membership for API-key callers). Every agent must belong
+    // to an org so it's visible under RLS — reject rather than create an
+    // org-less (invisible) agent.
+    const orgId = authResult.organizationId;
     if (!orgId) {
       return NextResponse.json(
         { success: false, error: "No organization context" },
