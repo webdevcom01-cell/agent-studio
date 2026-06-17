@@ -97,6 +97,20 @@ describe("rls-enforcement flag", () => {
     expect(await isFeatureEnabled("rls-enforcement")).toBe(true);
   });
 
+  it("turns on for case-insensitive / truthy spellings (True, TRUE, 1, yes, on)", async () => {
+    for (const v of ["True", "TRUE", " true ", "1", "yes", "YES", "on"]) {
+      process.env.RLS_ENFORCEMENT_ENABLED = v;
+      expect(await isFeatureEnabled("rls-enforcement")).toBe(true);
+    }
+  });
+
+  it("stays off for non-truthy spellings (False, 0, no, empty)", async () => {
+    for (const v of ["False", "0", "no", ""]) {
+      process.env.RLS_ENFORCEMENT_ENABLED = v;
+      expect(await isFeatureEnabled("rls-enforcement")).toBe(false);
+    }
+  });
+
   it("stays off when RLS_ENFORCEMENT_ENABLED=false", async () => {
     process.env.RLS_ENFORCEMENT_ENABLED = "false";
     expect(await isFeatureEnabled("rls-enforcement")).toBe(false);

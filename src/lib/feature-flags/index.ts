@@ -108,11 +108,13 @@ export async function isFeatureEnabled(
 
   // Env var runtime override for rls-enforcement — evaluated at call time so
   // CI/prod can flip enforcement without a code deploy.
-  if (
-    flagKey === "rls-enforcement" &&
-    process.env.RLS_ENFORCEMENT_ENABLED === "true"
-  ) {
-    return true;
+  // Parse case-insensitively and accept common truthy spellings: a value like
+  // "True" (Railway UI / Python-style) must NOT be silently treated as off.
+  if (flagKey === "rls-enforcement") {
+    const v = process.env.RLS_ENFORCEMENT_ENABLED?.trim().toLowerCase();
+    if (v === "true" || v === "1" || v === "yes" || v === "on") {
+      return true;
+    }
   }
 
   // Default: check enabled + percentage rollout
