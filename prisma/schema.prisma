@@ -186,6 +186,7 @@ model Agent {
   @@index([userId])
   @@index([userId, updatedAt])
   @@index([organizationId])
+  @@index([organizationId, id])
   @@index([category])
   @@index([isPublic, updatedAt])
 }
@@ -1336,6 +1337,8 @@ model CompanyMission {
   goals          Goal[]
   updatedAt      DateTime @updatedAt
   createdAt      DateTime @default(now())
+
+  @@index([organizationId, id])
 }
 
 model Goal {
@@ -1359,6 +1362,7 @@ model Goal {
 
   @@index([organizationId, status])
   @@index([parentGoalId])
+  @@index([organizationId, id])
 }
 
 model AgentGoalLink {
@@ -1401,6 +1405,7 @@ model HeartbeatConfig {
   updatedAt      DateTime      @updatedAt
 
   @@index([organizationId])
+  @@index([organizationId, id])
 }
 
 model HeartbeatContext {
@@ -1418,6 +1423,7 @@ model HeartbeatContext {
   @@unique([agentId, key])
   @@index([agentId])
   @@index([expiresAt])
+  @@index([organizationId, id])
 }
 
 model HeartbeatRun {
@@ -1439,6 +1445,7 @@ model HeartbeatRun {
 
   @@index([agentId, startedAt])
   @@index([organizationId])
+  @@index([organizationId, id])
 }
 
 // ---------------------------------------------------------------------------
@@ -1459,6 +1466,7 @@ model Department {
 
   @@index([organizationId])
   @@index([parentId])
+  @@index([organizationId, id])
 }
 
 model AgentPermissionGrant {
@@ -1476,6 +1484,7 @@ model AgentPermissionGrant {
   @@unique([grantorAgentId, granteeAgentId, permission, scope])
   @@index([granteeAgentId])
   @@index([organizationId])
+  @@index([organizationId, id])
 }
 
 // ---------------------------------------------------------------------------
@@ -1584,6 +1593,7 @@ model OrganizationMember {
 
   @@unique([userId, organizationId])
   @@index([organizationId])
+  @@index([organizationId, id])
 }
 
 model Invitation {
@@ -1599,6 +1609,7 @@ model Invitation {
 
   @@index([token])
   @@index([email, organizationId])
+  @@index([organizationId, id])
 }
 
 model ModelPerformanceStat {
@@ -1640,6 +1651,7 @@ model Template {
 
   @@index([organizationId])
   @@index([isPublic, category])
+  @@index([organizationId, id])
 }
 
 // ---------------------------------------------------------------------------
@@ -1668,6 +1680,7 @@ model ApprovalPolicy {
 
   @@index([agentId])
   @@index([organizationId])
+  @@index([organizationId, id])
 }
 
 model PolicyDecision {
@@ -1696,6 +1709,7 @@ model PolicyDecision {
   @@index([agentId, status])
   @@index([organizationId, status])
   @@index([status, expiresAt])
+  @@index([organizationId, id])
 }
 
 // ---------------------------------------------------------------------------
