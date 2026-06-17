@@ -58,6 +58,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const session = await auth().catch(() => null);
     const orgId = session?.user?.currentOrgId ?? null;
+    // Every agent must belong to an org so it's visible under RLS. A logged-in
+    // user always has one (auto-provisioned on login); reject if somehow absent
+    // rather than create an org-less (invisible) agent.
+    if (!orgId) {
+      return NextResponse.json(
+        { success: false, error: "No organization context" },
+        { status: 403 },
+      );
+    }
 
     const agentCount = await withOrgContext(prisma, orgId, (tx) =>
       tx.agent.count({
@@ -90,7 +99,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           systemPrompt,
           model,
           userId: authResult.userId,
-          organizationId: orgId ?? undefined,
+          organizationId: orgId,
           flow: {
             create: {
               content: {

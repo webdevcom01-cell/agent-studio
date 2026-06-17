@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
+import { auth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { agentExportSchema } from "@/lib/schemas/agent-export";
@@ -55,8 +57,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { agent: agentData, flow: flowData } = parsed.data;
 
+  // Resolve the tenant org; imported agents must belong to the user's org so
+  // they're visible under RLS. Reject rather than create an org-less (invisible) row.
+  const session = await auth().catch(() => null);
+  const orgId = session?.user?.currentOrgId ?? null;
+  if (!orgId) {
+    return NextResponse.json(
+      { success: false, error: "No organization context for import" },
+      { status: 403 },
+    );
+  }
+
   try {
-    const agent = await prisma.$transaction(async (tx) => {
+    const agent = await withOrgContext(prisma, orgId, async (tx) => {
       const agentCount = await tx.agent.count({
         where: { userId: authResult.userId },
       });
@@ -71,6 +84,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           systemPrompt: agentData.systemPrompt,
           model: agentData.model,
           userId: authResult.userId,
+          organizationId: orgId,
           flow: {
             create: {
               content: flowData as unknown as Prisma.InputJsonValue,
@@ -87,7 +101,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           knowledgeBase: { select: { id: true } },
         },
       });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    });
 
     return NextResponse.json({ success: true, data: agent }, { status: 201 });
   } catch (err) {
