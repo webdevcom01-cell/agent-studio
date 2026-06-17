@@ -167,7 +167,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (userId && (user || trigger === "update")) {
         const dbUser = await prisma.user.findUnique({
           where: { id: userId },
-          select: { onboardingCompletedAt: true },
+          select: { onboardingCompletedAt: true, name: true, email: true },
         });
         token.onboardingCompleted = !!dbUser?.onboardingCompletedAt;
         // Resolve the user's org via the SECURITY DEFINER fn user_primary_org() so it
@@ -186,6 +186,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             orderBy: { joinedAt: "asc" },
           });
           token.currentOrgId = membership?.organizationId ?? null;
+        }
+        // Auto-provision a personal org on first login so brand-new users work
+        // under RLS (no org -> currentOrgId null -> they'd see nothing / create
+        // org-less, invisible rows). Best-effort: login still succeeds if it fails.
+        if (!token.currentOrgId) {
+          try {
+            const { ensurePersonalOrg } = await import("@/lib/org/ensure-personal-org");
+            token.currentOrgId = await ensurePersonalOrg(
+              userId,
+              dbUser?.name ?? dbUser?.email ?? null,
+            );
+          } catch {
+            token.currentOrgId = null;
+          }
         }
       }
       return token;
