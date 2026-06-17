@@ -53,6 +53,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: RLS coverage guard
+        run: bash scripts/check-rls-coverage.sh src
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
