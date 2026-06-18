@@ -234,6 +234,19 @@ jobs:
       - name: Run Prisma migrations
         run: pnpm prisma migrate deploy
 
+      # The role-creation migration sets a placeholder password (prod overrides it
+      # via the Railway console). CI must do the same so the app can authenticate as
+      # app_user / admin_user — otherwise prismaAdmin (withAdminBypass) connections
+      # fail and auth-dependent routes 500. Passwords are read from the *_USER URLs.
+      - name: Set RLS role passwords for CI
+        run: |
+          APP_PW=$(printf '%s' "$DATABASE_URL_APP_USER" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')
+          ADMIN_PW=$(printf '%s' "$DATABASE_URL_ADMIN_USER" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "ALTER ROLE app_user WITH LOGIN PASSWORD '${APP_PW}';" \
+            -c "ALTER ROLE admin_user WITH LOGIN PASSWORD '${ADMIN_PW}';" \
+            -c "GRANT CONNECT ON DATABASE agent_studio_test TO app_user, admin_user;"
+
       - name: Generate E2E session token
         run: |
           TOKEN=$(pnpm tsx e2e/scripts/generate-ci-session.ts)
