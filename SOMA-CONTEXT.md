@@ -19,10 +19,12 @@ TI (Trend Intelligence) → HW (Hook Writer) → CR (Content Repurposer)
 
 | Agent | Agent ID | KB ID |
 |-------|----------|-------|
-| Trend Intelligence (TI) | `c1777723587797ch65fqcudn` | `c1777724361613zkacaonj60` |
-| Hook Writer (HW) | `cmp832hkithbhj9suiqgmjqpw` | `c17777243623082bxh7e2crn` |
-| Content Repurposer (CR) | `c1777723587821zymz38ug0j` | `c1777724362990ottwffcep9` |
-| Score Analyzer (SA) | `cmp7gtng100hdpc01cqr5d2hy` | `cmp7gtng100hfpc010xztikpd` |
+| Trend Intelligence (TI) | `cmpnu72fy0008p401ixaaehq8` | `cmpnu72fz000ap401izual23g` |
+| Hook Writer (HW) | `cmp832hkithbhj9suiqgmjqpw` | `cmj2xfhpxnihi5ohkfiubtzqm` |
+| Content Repurposer (CR) | `cgfnroihfs8ma03wsmp9bvbhq` | `cmpsknkbo0001pbofdslfjsw3` |
+| Score Analyzer (SA) | ⚠️ nije pronađen u live bazi (2026-06-18) | — |
+
+> ⚠️ **Verifikovano iz live baze 2026-06-18** (Agent Studio MCP). Prethodni Agent/KB ID-evi su bili zastarjeli (samo HW agent ID je bio tačan). **Score Analyzer agent više nije prisutan u bazi** — provjeriti da li je retiran/preimenovan.
 
 Agent Studio URL: `https://agent-studio-production-c43e.up.railway.app`
 API Key: Pohranjen u Agent Studio MCP konfiguraciji — ne treba ga ponovo unositi.
@@ -62,7 +64,7 @@ API Key: Pohranjen u Agent Studio MCP konfiguraciji — ne treba ga ponovo unosi
 
 1. **Score Analyzer = STANDALONE** — nije u chainu. Koristiti za ručnu QA hookova ili scoring vanjskih hookova.
 2. **HW Opcija B** — 5 distinktnih platform-specifičnih hookova po runu (ne 1 shared hook).
-3. **TI timeout = 180s**, HW = 120s, CR = 120s — ne koristiti defaults.
+3. **Per-hop call_agent timeouti (live, verifikovano 2026-06-18):** TI→HW = `300s`, HW→CR = `180s`, CR = terminalni (nema call_agent node). Ranije dokumentovano "180s/120s/120s" je bilo netačno.
 4. **OBAVEZNO:** TI message uvijek počinje sa `Today is YYYY-MM-DD.`
 5. **Winners threshold = ≥17/20 per platform** — svaka platforma se ocjenjuje posebno.
 6. **Evo-log write = append mode**, nikad section_heading, nikad replace (osim prvog unosa).
