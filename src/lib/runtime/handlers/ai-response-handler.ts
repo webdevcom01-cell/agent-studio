@@ -14,6 +14,7 @@ import { resolveSchema, AVAILABLE_SCHEMAS } from "@/lib/sdlc/schemas";
 import { emitHook } from "../hooks";
 import { resolveTemplate } from "../template";
 import { resolveEffectiveTierOverride } from "../tier-override";
+import { assembleSystemPrompt } from "../system-prompt";
 import { checkInputSafety, checkOutputSafety } from "@/lib/safety/engine-safety-middleware";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { recordCost } from "@/lib/budget/cost-tracker";
@@ -123,7 +124,12 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
       .reverse()
       .find((m) => m.role === "user")?.content ?? "";
 
-    let effectiveSystemPrompt = prompt;
+    // ── Context block computation (assembled below) ───────────────────────
+    // Each block is computed independently, then assembled by assembleSystemPrompt
+    // so the ordering is centralized (N7: opt-in stable prefix for KV-caching).
+
+    // base prompt — RAG-augmented when a retrieval query is available
+    let baseBlock = prompt;
     if (latestUserMsg) {
       // Reformulate query using conversation history (handles "tell me more", pronouns, etc.)
       const reformulatedQuery = await reformulateWithHistory(
@@ -132,12 +138,12 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
       );
       const ragResult = await injectRAGContext(
         context.agentId,
-        effectiveSystemPrompt,
+        baseBlock,
         reformulatedQuery,
         context.conversationId,
         { disabled: !enableRAG },
       );
-      effectiveSystemPrompt = ragResult.augmentedSystemPrompt;
+      baseBlock = ragResult.augmentedSystemPrompt;
       if (ragResult.retrievedChunkCount > 0) {
         logger.info("RAG injected into ai_response node", {
           agentId: context.agentId,
@@ -146,67 +152,67 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
         });
       }
     }
-    // ──────────────────────────────────────────────────────────────────────────
 
-    // ── Context summary injection ─────────────────────────────────────────
-    // If smart compaction ran previously, inject the saved summary so the AI
-    // retains awareness of earlier conversation context beyond the 20-message window.
+    // Context summary (from smart compaction) — earlier-conversation awareness
     const contextSummary = context.variables["__context_summary"];
-    if (typeof contextSummary === "string" && contextSummary.length > 0) {
-      effectiveSystemPrompt = `[Context from earlier in this conversation:\n${contextSummary}]\n\n${effectiveSystemPrompt}`;
-    }
-    // ──────────────────────────────────────────────────────────────────────────
+    const summaryBlock =
+      typeof contextSummary === "string" && contextSummary.length > 0
+        ? `[Context from earlier in this conversation:\n${contextSummary}]`
+        : "";
 
-    // ── Hot memory injection ─────────────────────────────────────────────
-    // If hot memory was loaded at flow start, inject it into the system prompt
-    // so the AI has access to remembered facts from previous conversations.
+    // Hot memory (remembered facts loaded at flow start)
     const hotMemory = context.variables["__hot_memory"];
-    if (typeof hotMemory === "string" && hotMemory.length > 0) {
-      effectiveSystemPrompt = `${hotMemory}\n\n${effectiveSystemPrompt}`;
-    }
-    // ──────────────────────────────────────────────────────────────────────────
+    const hotMemoryBlock =
+      typeof hotMemory === "string" && hotMemory.length > 0 ? hotMemory : "";
 
-    // ── Goal alignment injection (F4) ────────────────────────────────────
+    // Goal alignment (F4) — stable per agent
     const goalPrompt = context.variables["__goal_prompt"];
-    if (typeof goalPrompt === "string" && goalPrompt.length > 0) {
-      effectiveSystemPrompt = `${effectiveSystemPrompt}\n\n${goalPrompt}`;
-    }
-    // ──────────────────────────────────────────────────────────────────────────
+    const goalBlock =
+      typeof goalPrompt === "string" && goalPrompt.length > 0 ? goalPrompt : "";
 
-    // ── Skill injection: dynamic router (F3) → static C2.3 fallback ─────
-    // Try ECC dynamic skill routing first (embedding similarity, threshold 0.35).
-    // Falls back to 3-layer C2.3 composition when ECC is disabled or no skills
-    // match the current prompt.
+    // Skills: dynamic ECC router (F3) → static C2.3 fallback
+    let skillBlock = "";
     try {
       const routedSkills = await routeToSkill(
         latestUserMsg || prompt,
         context.agentId,
       );
       if (routedSkills.length > 0) {
-        const skillBlock = formatRoutedSkillsForPrompt(routedSkills);
-        effectiveSystemPrompt = `${skillBlock}\n\n${effectiveSystemPrompt}`;
+        skillBlock = formatRoutedSkillsForPrompt(routedSkills);
       } else {
-        // ECC disabled or no matching skills — fall back to C2.3 static pipeline
         const pipeline = await composeSkillPipeline(context.agentId);
         if (pipeline.length > 0) {
-          const skillBlock = formatSkillPipelineForPrompt(pipeline);
-          effectiveSystemPrompt = `${skillBlock}\n\n${effectiveSystemPrompt}`;
+          skillBlock = formatSkillPipelineForPrompt(pipeline);
         }
       }
     } catch {
       // Skill injection failure is non-fatal
     }
-    // ──────────────────────────────────────────────────────────────────────────
 
-    // ── LSP context injection (F1.4): prepend type/diagnostic info ─────────
+    // LSP context (F1.4) — type/diagnostic info
+    let lspBlock = "";
     try {
       const lspContext = context.variables["__lsp_context"];
       if (lspContext && typeof lspContext === "string" && lspContext.trim()) {
-        effectiveSystemPrompt = `<lsp_context>\n${lspContext.trim()}\n</lsp_context>\n\n${effectiveSystemPrompt}`;
+        lspBlock = `<lsp_context>\n${lspContext.trim()}\n</lsp_context>`;
       }
     } catch {
       // LSP context injection failure is non-fatal
     }
+
+    // N7: opt-in stable-prefix ordering via `stablePrefix`; default is
+    // byte-identical to the previous inline assembly.
+    let effectiveSystemPrompt = assembleSystemPrompt(
+      {
+        base: baseBlock,
+        summary: summaryBlock,
+        hotMemory: hotMemoryBlock,
+        goal: goalBlock,
+        skills: skillBlock,
+        lsp: lspBlock,
+      },
+      { stablePrefix: node.data.stablePrefix === true },
+    );
     // ──────────────────────────────────────────────────────────────────────────
 
     // ── Safety: check user input for injection ────────────────────────────
