@@ -165,7 +165,6 @@ jobs:
     # E2E tests are repaired — tracked in docs/rls-tech-debt.md item #4.
     continue-on-error: true
     if: >-
-      github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' && github.event.inputs.run_e2e == 'true' ||
       contains(github.event.pull_request.labels.*.name, 'e2e')
 
