@@ -17,6 +17,7 @@ import { logger } from "@/lib/logger";
 import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData, WebhookExecuteJobData, ManagedTaskRunJobData, McpFlowRunJobData, PipelineRunJobData, BudgetMonthlyResetJobData, HeartbeatRunJobData, GovernanceTimeoutJobData } from "./index";
 import type { TaskInput } from "@/lib/managed-tasks/manager";
 import { runWithOrgId } from "@/lib/context/org-context";
+import { trimStepMessages } from "@/lib/managed-tasks/step-trimmer";
 
 const QUEUE_NAME = "agent-studio";
 const CONCURRENCY = 5;
@@ -278,7 +279,7 @@ async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<u
   await markRunning(taskId, job.id ?? `managed-task-${taskId}`);
   await job.updateProgress(5);
 
-  const MAX_STEPS_UPPER_BOUND = 100;
+  const MAX_STEPS_UPPER_BOUND = 50; // N10: lowered from 100 to bound worst-case context accumulation
   const GENERATE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
   const modelId = input.model ?? "claude-sonnet-4-6";
@@ -286,7 +287,7 @@ async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<u
   const startedAt = Date.now();
 
   let currentStep = 0;
-  const rawMaxSteps = input.maxSteps ?? 50;
+  const rawMaxSteps = input.maxSteps ?? 25; // N10: lowered default from 50
   const maxSteps = Math.min(Math.max(1, rawMaxSteps), MAX_STEPS_UPPER_BOUND);
 
   try {
@@ -306,6 +307,13 @@ async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<u
         model,
         prompt: input.task,
         stopWhen: stepCountIs(maxSteps),
+        // N10: bound the per-step message window (preserving tool-call/result
+        // pairing) so a long tool-using run does not accumulate unbounded
+        // context inside this single generateText call.
+        prepareStep: ({ messages }) => {
+          const trimmed = trimStepMessages(messages);
+          return trimmed ? { messages: trimmed } : {};
+        },
         abortSignal: timeoutController.signal,
         onStepFinish: async ({ finishReason, usage }) => {
           currentStep++;
