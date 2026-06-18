@@ -13,7 +13,7 @@ test.describe("Agent Import/Export", () => {
     }
 
     const firstCard = page.getByTestId("agent-card").first();
-    const editLink = firstCard.getByRole("link", { name: /edit flow/i });
+    const editLink = firstCard.getByRole("link", { name: /builder/i });
     const href = await editLink.getAttribute("href");
     const agentId = href?.split("/builder/")[1];
 
@@ -92,7 +92,7 @@ test.describe("Agent Import/Export", () => {
 
     // Step 1: Export an agent (returns bare AgentExportData)
     const firstCard = page.getByTestId("agent-card").first();
-    const editLink = firstCard.getByRole("link", { name: /edit flow/i });
+    const editLink = firstCard.getByRole("link", { name: /builder/i });
     const href = await editLink.getAttribute("href");
     const agentId = href?.split("/builder/")[1];
 
