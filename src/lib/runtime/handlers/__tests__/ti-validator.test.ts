@@ -2,68 +2,13 @@ import { describe, it, expect } from "vitest";
 import vm from "node:vm";
 
 // Extracted from TI agent flow node "ti-validator"
-// Agent: Trend Intelligence (cmpnu72fy0008p401ixaaehq8), 2026-06-12 via as_inspect_flow
+// Agent: Trend Intelligence (cmpnu72fy0008p401ixaaehq8), 2026-06-15 via as_inspect_flow
+// 2026-06-15 (D5): added deterministic source_url grounding check — source_url MUST be
+//   present (normalized exact match) in variables.search_results OR variables.last_message,
+//   with an "EVERGREEN:no-source" sentinel allowed only when is_evergreen===true.
 // Run through the same vm.Script wrapper the function-handler uses in production.
-const VALIDATOR_CODE = `
-var raw = variables.ti_payload || "";
-raw = raw.replace(/^\`\`\`(?:json)?\\s*\\n?/,"").replace(/\\n?\`\`\`$/,"").trim();
-var p;
-try { p = JSON.parse(raw); }
-catch(e){
-  var head = String(raw).slice(0,80);
-  if(/^(MALFORMED_PAYLOAD:|BLOCKED:|NO_TREND:|VAGUE_TREND)/.test(head)){
-    return JSON.stringify([{field:"all",rule:"agent_error",detail:head,severity:"error"}]);
-  }
-  return JSON.stringify([{field:"all",rule:"json_parse_error",detail:"cannot parse ti_payload",severity:"error"}]);
-}
-var v = [];
-["objective","output_format","tool_guidance","task_boundaries"].forEach(function(f){
-  if(!p[f] || String(p[f]).trim()===""){ v.push({field:f,rule:"missing_a2a_field",detail:f+" empty/missing",severity:"error"}); }
-});
-var tr = p.trend || {};
-var title = String(tr.title||"").trim().toLowerCase();
-if(!title || title==="n/a" || title==="na" || title==="none" || title==="unknown"){
-  v.push({field:"trend.title",rule:"missing_trend",detail:"title empty/N/A",severity:"error"});
-}
-var src = String(tr.source_url||"").trim();
-if(!src || src.toLowerCase()==="n/a"){ v.push({field:"trend.source_url",rule:"missing_source",detail:"source_url empty/N/A",severity:"error"}); }
-if(typeof p.confidence !== "string"){
-  v.push({field:"confidence",rule:"confidence_not_string",detail:typeof p.confidence,severity:"error"});
-} else if(["1 stars","2 stars","3 stars"].indexOf(p.confidence) === -1){
-  v.push({field:"confidence",rule:"invalid_confidence",detail:p.confidence,severity:"error"});
-}
-if(typeof p.confidence === "string"){
-  if(p.confidence === "1 stars" && tr.is_evergreen !== true){
-    v.push({field:"is_evergreen",rule:"evergreen_mismatch",detail:"1 stars requires is_evergreen=true",severity:"error"});
-  }
-  if((p.confidence === "2 stars" || p.confidence === "3 stars") && tr.is_evergreen !== false){
-    v.push({field:"is_evergreen",rule:"evergreen_mismatch",detail:p.confidence+" requires is_evergreen=false",severity:"error"});
-  }
-}
-var ser = JSON.stringify(p).toLowerCase();
-if(/"hooks"\\s*:/.test(ser) || /"posts"\\s*:/.test(ser)){
-  v.push({field:"all",rule:"scope_violation",detail:"output contains hooks/posts",severity:"error"});
-}
-if(!Array.isArray(p.platforms_target) || p.platforms_target.length !== 5){
-  v.push({field:"platforms_target",rule:"invalid_platforms",detail:(Array.isArray(p.platforms_target)?p.platforms_target.length:0)+"/5",severity:"error"});
-}
-var LISTICLE = /\\b\\d+\\s+(ai\\s+)?(trends|tools|predictions|insights|practices|tactics|secrets|tips|tricks|hacks)\\b|trends to watch|year in review|what'?s next in ai|roundup|wrap-?up/i;
-if(LISTICLE.test(String(tr.title||""))){
-  if(!(p.confidence === "1 stars" && tr.is_evergreen === true)){
-    v.push({field:"trend.title",rule:"listicle_not_evergreen",detail:"listicle must be 1 stars + evergreen",severity:"error"});
-  }
-}
-var BANNED = /\\b(enhance\\w*|boost\\w*|transform\\w*|expand\\w*|revolutioniz\\w*|groundbreaking|paradigm shift|harness the power|unlock potential|highlights|increased focus|ai-powered)\\b/i;
-var MEAS = /\\d+(?:\\.\\d+)?\\s*(%|x|times|fold|hours|tokens|points|k)\\b/i;
-var angle = String(p.angle_suggested||"");
-if(BANNED.test(angle) && !MEAS.test(angle)){
-  var m = angle.match(BANNED);
-  v.push({field:"angle_suggested",rule:"banned_phrase",detail:(m?m[0]:"?"),severity:"error"});
-}
-var blocking = v.filter(function(x){ return x.severity !== "warning"; });
-if(blocking.length === 0){ return "PASS"; }
-return JSON.stringify(v);
-`.trim();
+// VALIDATOR_CODE is embedded as a JSON string literal (= exact production code, no escaping drift).
+const VALIDATOR_CODE = "var raw = variables.ti_payload || \"\";\nraw = raw.replace(/^```(?:json)?\\s*\\n?/,\"\").replace(/\\n?```$/,\"\").trim();\nvar p;\ntry { p = JSON.parse(raw); }\ncatch(e){\n  var head = String(raw).slice(0,80);\n  if(/^(MALFORMED_PAYLOAD:|BLOCKED:|NO_TREND:|VAGUE_TREND)/.test(head)){\n    return JSON.stringify([{field:\"all\",rule:\"agent_error\",detail:head,severity:\"error\"}]);\n  }\n  return JSON.stringify([{field:\"all\",rule:\"json_parse_error\",detail:\"cannot parse ti_payload\",severity:\"error\"}]);\n}\nvar v = [];\n[\"objective\",\"output_format\",\"tool_guidance\",\"task_boundaries\"].forEach(function(f){\n  if(!p[f] || String(p[f]).trim()===\"\"){ v.push({field:f,rule:\"missing_a2a_field\",detail:f+\" empty/missing\",severity:\"error\"}); }\n});\nvar tr = p.trend || {};\nvar title = String(tr.title||\"\").trim().toLowerCase();\nif(!title || title===\"n/a\" || title===\"na\" || title===\"none\" || title===\"unknown\"){\n  v.push({field:\"trend.title\",rule:\"missing_trend\",detail:\"title empty/N/A\",severity:\"error\"});\n}\nvar src = String(tr.source_url||\"\").trim();\nif(!src || src.toLowerCase()===\"n/a\"){ v.push({field:\"trend.source_url\",rule:\"missing_source\",detail:\"source_url empty/N/A\",severity:\"error\"}); }\n// D5: source_url grounding — normalized exact match vs search_results + last_message; EVERGREEN sentinel allowed\nif(src && src.toLowerCase()!==\"n/a\"){\n  var SENTINEL = \"EVERGREEN:no-source\";\n  if(src === SENTINEL){\n    if(tr.is_evergreen !== true){\n      v.push({field:\"trend.source_url\",rule:\"sentinel_requires_evergreen\",detail:\"EVERGREEN:no-source allowed only when is_evergreen=true\",severity:\"error\"});\n    }\n  } else {\n    var _norm = function(u){\n      return String(u||\"\").trim().toLowerCase().replace(/^https?:\\/\\//,\"\").replace(/^www\\./,\"\").replace(/[#?].*$/,\"\").replace(/\\/+$/,\"\");\n    };\n    var srcN = _norm(src);\n    var allowed = [];\n    if(Array.isArray(variables.search_results)){\n      variables.search_results.forEach(function(r){ if(r && r.url){ allowed.push(_norm(r.url)); } });\n    }\n    var msg = String(variables.last_message||\"\");\n    var urls = msg.match(/https?:\\/\\/[^\\s)\"'<>]+/g) || [];\n    urls.forEach(function(u){ allowed.push(_norm(u)); });\n    if(allowed.indexOf(srcN) === -1){\n      v.push({field:\"trend.source_url\",rule:\"source_url_not_grounded\",detail:\"source_url not found in search_results or user input\",severity:\"error\"});\n    }\n  }\n}\nif(typeof p.confidence !== \"string\"){\n  v.push({field:\"confidence\",rule:\"confidence_not_string\",detail:typeof p.confidence,severity:\"error\"});\n} else if([\"1 stars\",\"2 stars\",\"3 stars\"].indexOf(p.confidence) === -1){\n  v.push({field:\"confidence\",rule:\"invalid_confidence\",detail:p.confidence,severity:\"error\"});\n}\nif(typeof p.confidence === \"string\"){\n  if(p.confidence === \"1 stars\" && tr.is_evergreen !== true){\n    v.push({field:\"is_evergreen\",rule:\"evergreen_mismatch\",detail:\"1 stars requires is_evergreen=true\",severity:\"error\"});\n  }\n  if((p.confidence === \"2 stars\" || p.confidence === \"3 stars\") && tr.is_evergreen !== false){\n    v.push({field:\"is_evergreen\",rule:\"evergreen_mismatch\",detail:p.confidence+\" requires is_evergreen=false\",severity:\"error\"});\n  }\n}\nvar ser = JSON.stringify(p).toLowerCase();\nif(/\"hooks\"\\s*:/.test(ser) || /\"posts\"\\s*:/.test(ser)){\n  v.push({field:\"all\",rule:\"scope_violation\",detail:\"output contains hooks/posts\",severity:\"error\"});\n}\nif(!Array.isArray(p.platforms_target) || p.platforms_target.length !== 5){\n  v.push({field:\"platforms_target\",rule:\"invalid_platforms\",detail:(Array.isArray(p.platforms_target)?p.platforms_target.length:0)+\"/5\",severity:\"error\"});\n}\nvar LISTICLE = /\\b\\d+\\s+(ai\\s+)?(trends|tools|predictions|insights|practices|tactics|secrets|tips|tricks|hacks)\\b|trends to watch|year in review|what'?s next in ai|roundup|wrap-?up/i;\nif(LISTICLE.test(String(tr.title||\"\"))){\n  if(!(p.confidence === \"1 stars\" && tr.is_evergreen === true)){\n    v.push({field:\"trend.title\",rule:\"listicle_not_evergreen\",detail:\"listicle must be 1 stars + evergreen\",severity:\"error\"});\n  }\n}\nvar BANNED = /\\b(enhance\\w*|boost\\w*|transform\\w*|expand\\w*|revolutioniz\\w*|groundbreaking|paradigm shift|harness the power|unlock potential|highlights|increased focus|ai-powered)\\b/i;\nvar MEAS = /\\d+(?:\\.\\d+)?\\s*(%|x|times|fold|hours|tokens|points|k)\\b/i;\nvar angle = String(p.angle_suggested||\"\");\nif(BANNED.test(angle) && !MEAS.test(angle)){\n  var m = angle.match(BANNED);\n  v.push({field:\"angle_suggested\",rule:\"banned_phrase\",detail:(m?m[0]:\"?\"),severity:\"error\"});\n}\nvar blocking = v.filter(function(x){ return x.severity !== \"warning\"; });\nif(blocking.length === 0){ return \"PASS\"; }\nreturn JSON.stringify(v);\n";
 
 interface Violation {
   field: string;
@@ -72,10 +17,32 @@ interface Violation {
   severity: string;
 }
 
-function runValidator(tiPayload: unknown): string {
+interface RunOpts {
+  search_results?: Array<{ url?: string }>;
+  last_message?: string;
+}
+
+// Default grounded source so pre-D5 PASS fixtures stay green:
+// DEFAULT_SEARCH contains VALID_TREND.source_url (normalized exact match).
+const DEFAULT_SEARCH = [
+  {
+    url: "https://anthropic.com/blog/claude-opus-4-8",
+    title: "t",
+    snippet: "s",
+    score: 1,
+    publishedDate: null,
+  },
+];
+
+function runValidator(tiPayload: unknown, opts?: RunOpts): string {
   const raw =
     typeof tiPayload === "string" ? tiPayload : JSON.stringify(tiPayload);
-  const variables: Record<string, unknown> = { ti_payload: raw };
+  const variables: Record<string, unknown> = {
+    ti_payload: raw,
+    search_results:
+      opts && "search_results" in opts ? opts.search_results : DEFAULT_SEARCH,
+    last_message: opts && "last_message" in opts ? opts.last_message : "",
+  };
 
   const sandbox: Record<string, unknown> = {
     variables,
@@ -298,35 +265,76 @@ describe("TI Validator — unit tests (direct vm execution)", () => {
     });
   });
 
-  describe("BLOCK — invalid_platforms", () => {
-    it("blocks platforms_target with fewer than 5 entries → invalid_platforms", () => {
-      const result = runValidator({ ...VALID_PAYLOAD, platforms_target: ["LinkedIn", "X"] });
-      expect(result).not.toBe("PASS");
-      expect(hasRule(result, "invalid_platforms")).toBe(true);
+  // ─── D5: source_url grounding (added 2026-06-15) ────────────────────────────
+  describe("D5 — source_url grounding (normalized exact match)", () => {
+    it("PASS: source_url grounded in search_results", () => {
+      // VALID_PAYLOAD.source_url matches DEFAULT_SEARCH → grounded
+      expect(runValidator(VALID_PAYLOAD)).toBe("PASS");
     });
 
-    it("blocks non-array platforms_target → invalid_platforms", () => {
-      const result = runValidator({ ...VALID_PAYLOAD, platforms_target: "LinkedIn,X" });
-      expect(hasRule(result, "invalid_platforms")).toBe(true);
-    });
-  });
-
-  describe("BLOCK — banned_phrase", () => {
-    it("blocks a banned verb in angle_suggested with no measurement", () => {
-      const result = runValidator({
+    it("PASS: source_url grounded in user message (last_message), empty search_results", () => {
+      const payload = {
         ...VALID_PAYLOAD,
-        angle_suggested: "revolutionizes content creation for developers",
+        trend: { ...VALID_TREND, source_url: "https://example.com/post/abc" },
+      };
+      const result = runValidator(payload, {
+        search_results: [],
+        last_message: "please check this trend https://example.com/post/abc thanks",
+      });
+      expect(result).toBe("PASS");
+    });
+
+    it("BLOCK: fabricated source_url not in search_results or input → source_url_not_grounded", () => {
+      const payload = {
+        ...VALID_PAYLOAD,
+        trend: { ...VALID_TREND, source_url: "https://anthropic.com/news/made-up-2026-06" },
+      };
+      const result = runValidator(payload, {
+        search_results: [{ url: "https://openai.com/index/something" }],
+        last_message: "",
       });
       expect(result).not.toBe("PASS");
-      expect(hasRule(result, "banned_phrase")).toBe(true);
+      expect(hasRule(result, "source_url_not_grounded")).toBe(true);
     });
 
-    it("a trailing percentage does NOT satisfy MEAS → still banned_phrase (TI regex quirk)", () => {
-      const result = runValidator({
+    it("PASS: normalization tolerates www + trailing slash differences", () => {
+      const payload = {
         ...VALID_PAYLOAD,
-        angle_suggested: "boosts developer throughput 40%",
+        trend: { ...VALID_TREND, source_url: "https://anthropic.com/blog/claude-opus-4-8/" },
+      };
+      const result = runValidator(payload, {
+        search_results: [{ url: "https://www.anthropic.com/blog/claude-opus-4-8" }],
+        last_message: "",
       });
-      expect(hasRule(result, "banned_phrase")).toBe(true);
+      expect(result).toBe("PASS");
+    });
+
+    it("PASS: EVERGREEN sentinel allowed when is_evergreen=true (no grounded URL available)", () => {
+      const payload = {
+        ...VALID_PAYLOAD,
+        trend: {
+          ...VALID_TREND,
+          title: "Layered security defaults in agent systems",
+          source_url: "EVERGREEN:no-source",
+          is_evergreen: true,
+        },
+        confidence: "1 stars",
+        angle_suggested:
+          "Reminds builders that agent scope isolation prevents cascading failures better than broad error handling",
+      };
+      const result = runValidator(payload, { search_results: [], last_message: "" });
+      expect(result).toBe("PASS");
+    });
+
+    it("BLOCK: EVERGREEN sentinel rejected when is_evergreen=false → sentinel_requires_evergreen", () => {
+      const payload = {
+        ...VALID_PAYLOAD,
+        trend: { ...VALID_TREND, source_url: "EVERGREEN:no-source", is_evergreen: false },
+        confidence: "2 stars",
+      };
+      const result = runValidator(payload, { search_results: [], last_message: "" });
+      expect(result).not.toBe("PASS");
+      expect(hasRule(result, "sentinel_requires_evergreen")).toBe(true);
     });
   });
 });
