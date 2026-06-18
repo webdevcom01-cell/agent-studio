@@ -13,6 +13,7 @@ import type { NodeHandler } from "../types";
 import { resolveSchema, AVAILABLE_SCHEMAS } from "@/lib/sdlc/schemas";
 import { emitHook } from "../hooks";
 import { resolveTemplate } from "../template";
+import { resolveEffectiveTierOverride } from "../tier-override";
 import { checkInputSafety, checkOutputSafety } from "@/lib/safety/engine-safety-middleware";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { recordCost } from "@/lib/budget/cost-tracker";
@@ -71,11 +72,9 @@ export const aiResponseHandler: NodeHandler = async (node, context) => {
     context.variables
   );
   const explicitModel = node.data.model as string | undefined;
-  const tierOverride = context.variables.__model_tier_override as
-    | "fast"
-    | "balanced"
-    | "powerful"
-    | undefined;
+  // N4: a node may opt out of the cost-monitor tier downgrade via
+  // `ignoreTierOverride: true` (quality-critical generation).
+  const tierOverride = resolveEffectiveTierOverride(node.data, context.variables);
   const modelId = explicitModel ?? DEFAULT_MODEL;
   const temperature = (node.data.temperature as number) ?? 0.7;
   const maxTokens = (node.data.maxTokens as number) ?? 4000;
