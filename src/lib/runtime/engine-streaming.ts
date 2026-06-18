@@ -8,6 +8,7 @@ import {
 } from "./types";
 import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
+import { maybeCompactAndTruncate, MAX_HISTORY } from "./context-compaction";
 import { findStartNode, resolveNextNodeId } from "./engine";
 import { emitHook } from "./hooks";
 import { emitSessionEvent } from "./session-events";
@@ -492,6 +493,13 @@ export function executeFlowStreaming(
               role: msg.role,
               content: msg.content,
             });
+          }
+
+          // Mid-run safety net (N1): long-running streaming flows can grow
+          // messageHistory past the cap within a single run. Gated on the hard
+          // cap so compaction only fires when truncation is actually needed.
+          if (context.messageHistory.length > MAX_HISTORY) {
+            await maybeCompactAndTruncate(context);
           }
 
           if (result.waitForInput) {

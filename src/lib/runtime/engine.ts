@@ -1,6 +1,7 @@
 import type { RuntimeContext, ExecutionResult, OutputMessage } from "./types";
 import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
+import { maybeCompactAndTruncate, MAX_HISTORY } from "./context-compaction";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { emitHook } from "./hooks";
@@ -276,6 +277,14 @@ export async function executeFlow(
 
     for (const msg of result.messages) {
       context.messageHistory.push({ role: msg.role, content: msg.content });
+    }
+
+    // Mid-run safety net (N1): long-running flows (loop / reflexive_loop nodes
+    // revisiting many times) can grow messageHistory past the cap WITHIN a
+    // single run. Gated on the hard cap so the (LLM-backed) compaction only
+    // fires when truncation is actually needed — not on every node.
+    if (context.messageHistory.length > MAX_HISTORY) {
+      await maybeCompactAndTruncate(context);
     }
 
     if (result.waitForInput) {

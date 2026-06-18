@@ -13,6 +13,14 @@ import type { RuntimeContext } from "./types";
 export const COMPACTION_THRESHOLD = 80;
 
 /**
+ * Hard cap on messageHistory length. After compaction captures a summary,
+ * history is truncated to the most recent MAX_HISTORY messages. Set ABOVE
+ * COMPACTION_THRESHOLD so a summary is generated before truncation discards
+ * older messages.
+ */
+export const MAX_HISTORY = 100;
+
+/**
  * Maximum number of context summaries to keep per agent in AgentMemory.
  * Older summaries are deleted when this limit is exceeded.
  */
@@ -45,6 +53,30 @@ export const CONTEXT_SUMMARY_VAR = "__context_summary";
 export function shouldCompact(context: RuntimeContext): boolean {
   if (context.enableSmartCompaction === false) return false;
   return context.messageHistory.length > COMPACTION_THRESHOLD;
+}
+
+/**
+ * Shared "compact then hard-cap" step used by BOTH the pre-execution prelude
+ * (once per run, before the loop) and the engine execution loop (mid-run
+ * safety net for long-running flows such as loop / reflexive_loop nodes).
+ *
+ *   1. If smart compaction is enabled and history exceeds COMPACTION_THRESHOLD,
+ *      generate a summary (stored in __context_summary) BEFORE any messages are
+ *      discarded — so the model retains awareness of dropped context.
+ *   2. Hard-cap messageHistory to the most recent MAX_HISTORY messages.
+ *
+ * Never throws — compactContext swallows its own errors and falls back to
+ * plain truncation here.
+ */
+export async function maybeCompactAndTruncate(
+  context: RuntimeContext
+): Promise<void> {
+  if (shouldCompact(context)) {
+    await compactContext(context);
+  }
+  if (context.messageHistory.length > MAX_HISTORY) {
+    context.messageHistory = context.messageHistory.slice(-MAX_HISTORY);
+  }
 }
 
 /**

@@ -39,6 +39,8 @@ vi.mock("@/lib/runtime/context", () => ({
 vi.mock("@/lib/runtime/context-compaction", () => ({
   shouldCompact: vi.fn().mockReturnValue(false),
   compactContext: vi.fn().mockResolvedValue(undefined),
+  maybeCompactAndTruncate: vi.fn().mockResolvedValue(undefined),
+  MAX_HISTORY: 100,
 }));
 
 vi.mock("@/lib/memory/hot-cold-tier", () => ({

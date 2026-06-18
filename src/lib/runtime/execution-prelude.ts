@@ -1,13 +1,11 @@
 import type { RuntimeContext } from "./types";
-import { shouldCompact, compactContext } from "./context-compaction";
+import { maybeCompactAndTruncate } from "./context-compaction";
 import { createHooksFromFlowContent } from "./hooks";
 import { injectHotMemoryIntoContext } from "@/lib/memory/hot-cold-tier";
 import { injectGoalContextIntoContext } from "@/lib/goals/goal-context";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
 import { emitHook } from "./hooks";
 import { emitSessionEvent } from "./session-events";
-
-const MAX_HISTORY = 100;
 
 interface PreludeOptions {
   streaming: boolean;
@@ -29,12 +27,8 @@ export async function prepareContextForExecution(
   userMessage: string | null,
   options: PreludeOptions,
 ): Promise<void> {
-  if (shouldCompact(context)) {
-    await compactContext(context);
-  }
-  if (context.messageHistory.length > MAX_HISTORY) {
-    context.messageHistory = context.messageHistory.slice(-MAX_HISTORY);
-  }
+  // Compact (summarize) + hard-cap history once at the start of every run.
+  await maybeCompactAndTruncate(context);
 
   if (!context.hooks) {
     const registry = createHooksFromFlowContent(context.flowContent);

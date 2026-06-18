@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   shouldCompact,
   compactContext,
+  maybeCompactAndTruncate,
   COMPACTION_THRESHOLD,
+  MAX_HISTORY,
   CONTEXT_SUMMARY_VAR,
 } from "../context-compaction";
 import type { RuntimeContext } from "../types";
@@ -193,5 +195,51 @@ describe("compactContext", () => {
     const callArgs = mockedGenerateText.mock.calls[0]?.[0];
     expect(callArgs?.prompt).toContain("My name is Alice");
     expect(callArgs?.prompt).toContain("Hello Alice!");
+  });
+});
+
+describe("maybeCompactAndTruncate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("compacts then hard-caps history to MAX_HISTORY when over the cap", async () => {
+    const ctx = createContext({ messageHistory: buildHistory(MAX_HISTORY + 30) });
+
+    mockedGenerateText.mockResolvedValueOnce({
+      text: "Summary of earlier context.",
+    } as ReturnType<typeof generateText> extends Promise<infer T> ? T : never);
+
+    await maybeCompactAndTruncate(ctx);
+
+    // Summary generated BEFORE truncation discards older messages
+    expect(mockedGenerateText).toHaveBeenCalledTimes(1);
+    expect(ctx.variables[CONTEXT_SUMMARY_VAR]).toBe("Summary of earlier context.");
+    // History hard-capped to the most recent MAX_HISTORY messages
+    expect(ctx.messageHistory).toHaveLength(MAX_HISTORY);
+    // The MOST RECENT message is preserved (oldest are dropped)
+    expect(ctx.messageHistory.at(-1)?.content).toBe(`Message ${MAX_HISTORY + 30}`);
+  });
+
+  it("still hard-caps but skips summarization when smart compaction is disabled", async () => {
+    const ctx = createContext({
+      messageHistory: buildHistory(MAX_HISTORY + 30),
+      enableSmartCompaction: false,
+    });
+
+    await maybeCompactAndTruncate(ctx);
+
+    expect(mockedGenerateText).not.toHaveBeenCalled();
+    expect(ctx.messageHistory).toHaveLength(MAX_HISTORY);
+    expect(ctx.variables[CONTEXT_SUMMARY_VAR]).toBeUndefined();
+  });
+
+  it("is a no-op when history is under both the threshold and the cap", async () => {
+    const ctx = createContext({ messageHistory: buildHistory(50) });
+
+    await maybeCompactAndTruncate(ctx);
+
+    expect(mockedGenerateText).not.toHaveBeenCalled();
+    expect(ctx.messageHistory).toHaveLength(50);
   });
 });
