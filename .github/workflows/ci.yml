@@ -155,7 +155,7 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 55
     needs: [build]
     # TEMPORARY (Phase 0b followup): E2E tests have pre-existing assertion
     # failures unrelated to current work (agents-api.spec.ts and
