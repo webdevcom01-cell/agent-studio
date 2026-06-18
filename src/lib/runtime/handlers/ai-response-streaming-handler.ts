@@ -115,7 +115,11 @@ export async function aiResponseStreamingHandler(
     }
     const model = resolvedModel;
 
-    const historyMessages = context.messageHistory.slice(-20).map((m) => ({
+    // N2: history window is configurable (default 20). Raise it to surface more
+    // of the loaded conversation to the model and avoid silently dropping the
+    // 20–50 message range; trades a larger prompt for more context.
+    const historyWindow = Math.max(1, Number(node.data.historyWindow) || 20);
+    const historyMessages = context.messageHistory.slice(-historyWindow).map((m) => ({
       role: m.role as "user" | "assistant" | "system",
       content: m.content,
     }));

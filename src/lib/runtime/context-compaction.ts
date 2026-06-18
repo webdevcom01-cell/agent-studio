@@ -30,7 +30,7 @@ const MAX_SUMMARIES_PER_AGENT = 5;
  * The cheap model used for summarization. Chosen for speed and cost —
  * the summary prompt is straightforward and doesn't need a powerful model.
  */
-const COMPACTION_MODEL = "gpt-4.1-mini";
+const COMPACTION_MODEL = process.env.COMPACTION_MODEL || "gpt-4.1-mini";
 
 /**
  * Category used for all context compaction entries in AgentMemory.

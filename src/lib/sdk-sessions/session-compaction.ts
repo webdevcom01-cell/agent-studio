@@ -26,7 +26,7 @@ export const SDK_SESSION_COMPACTION_THRESHOLD = 60;
 export const SDK_SESSION_KEEP_RECENT = 30;
 
 /** Cheap model used for the summarization call. */
-const SUMMARY_MODEL = "gpt-4.1-mini";
+const SUMMARY_MODEL = process.env.COMPACTION_MODEL || "gpt-4.1-mini";
 
 export interface CompactSessionResult {
   /** Messages to persist (recent tail when compacted, original otherwise). */
