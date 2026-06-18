@@ -14,6 +14,7 @@ import { debugEmit } from "../types";
 import type { FlowNode } from "@/types";
 import { emitHook } from "../hooks";
 import { resolveTemplate } from "../template";
+import { resolveEffectiveTierOverride } from "../tier-override";
 import { checkInputSafety, checkOutputSafety } from "@/lib/safety/engine-safety-middleware";
 import { recordCost } from "@/lib/budget/cost-tracker";
 
@@ -74,11 +75,9 @@ export async function aiResponseStreamingHandler(
     context.variables
   );
   const explicitModel = node.data.model as string | undefined;
-  const tierOverride = context.variables.__model_tier_override as
-    | "fast"
-    | "balanced"
-    | "powerful"
-    | undefined;
+  // N4: a node may opt out of the cost-monitor tier downgrade via
+  // `ignoreTierOverride: true` (quality-critical generation).
+  const tierOverride = resolveEffectiveTierOverride(node.data, context.variables);
   const modelId = explicitModel ?? DEFAULT_MODEL;
   const temperature = (node.data.temperature as number) ?? 0.7;
   const maxTokens = (node.data.maxTokens as number) ?? 4000;
