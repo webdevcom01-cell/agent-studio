@@ -80,4 +80,43 @@ describe("loadContext ownership", () => {
     expect(ctx.conversationId).toBe("new-conv");
     expect(ctx.isNewConversation).toBe(true);
   });
+
+  it("loads the most recent messages and restores chronological order", async () => {
+    mockPrisma.agent.findUniqueOrThrow.mockResolvedValue({
+      id: "agent-1",
+      flow: {
+        content: { nodes: [], edges: [], variables: [] },
+        activeVersionId: null,
+      },
+    });
+    // The DB query returns NEWEST-first (orderBy desc); loadContext must
+    // reverse it so messageHistory is in chronological (oldest→newest) order.
+    mockPrisma.conversation.findUniqueOrThrow.mockResolvedValue({
+      id: "conv-1",
+      agentId: "agent-1",
+      currentNodeId: null,
+      variables: {},
+      messages: [
+        { role: "ASSISTANT", content: "newest" },
+        { role: "USER", content: "middle" },
+        { role: "ASSISTANT", content: "oldest" },
+      ],
+    });
+
+    const ctx = await loadContext("agent-1", "conv-1");
+
+    // Restored to chronological order (oldest first)
+    expect(ctx.messageHistory.map((m) => m.content)).toEqual([
+      "oldest",
+      "middle",
+      "newest",
+    ]);
+
+    // Must request the MOST RECENT 50 (desc), not the oldest 50 (asc)
+    expect(mockPrisma.conversation.findUniqueOrThrow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: { messages: { orderBy: { createdAt: "desc" }, take: 50 } },
+      }),
+    );
+  });
 });

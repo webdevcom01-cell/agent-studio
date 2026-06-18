@@ -24,12 +24,18 @@ export async function loadContext(
   const flowContent = parseFlowContent(agent.flow.content);
 
   if (conversationId) {
+    // Load the 50 MOST RECENT messages (desc + take), then restore chronological
+    // order for messageHistory. Previously this used `asc` which loaded the
+    // OLDEST 50 messages — silently dropping recent context when resuming a
+    // conversation longer than 50 messages.
     const conversation = await prisma.conversation.findUniqueOrThrow({
       where: { id: conversationId, agentId },
       include: {
-        messages: { orderBy: { createdAt: "asc" }, take: 50 },
+        messages: { orderBy: { createdAt: "desc" }, take: 50 },
       },
     });
+
+    const orderedMessages = [...conversation.messages].reverse();
 
     return {
       conversationId: conversation.id,
@@ -38,7 +44,7 @@ export async function loadContext(
       flowContent,
       currentNodeId: conversation.currentNodeId,
       variables: (conversation.variables as Record<string, unknown>) ?? {},
-      messageHistory: conversation.messages.map((m) => ({
+      messageHistory: orderedMessages.map((m) => ({
         role: m.role.toLowerCase() as "user" | "assistant" | "system",
         content: m.content,
       })),
