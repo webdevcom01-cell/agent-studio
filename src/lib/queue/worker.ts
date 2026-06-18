@@ -312,7 +312,15 @@ async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<u
         // context inside this single generateText call.
         prepareStep: ({ messages }) => {
           const trimmed = trimStepMessages(messages);
-          return trimmed ? { messages: trimmed } : {};
+          if (trimmed) {
+            logger.info("Managed task: step context trimmed (N10)", {
+              taskId,
+              fromMessages: messages.length,
+              toMessages: trimmed.length,
+            });
+            return { messages: trimmed };
+          }
+          return {};
         },
         abortSignal: timeoutController.signal,
         onStepFinish: async ({ finishReason, usage }) => {
