@@ -20,8 +20,8 @@ test-results
 playwright-report
 blob-report
 
-# Prisma migration history (schema.prisma is needed, migrations are not)
-prisma/migrations
+# NOTE: prisma/migrations is intentionally NOT ignored — the runner image bakes
+# the migration SQL in so `prisma migrate deploy` runs offline (no npm/CDN fetch).
 
 # IDE and OS
 .vscode
