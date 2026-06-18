@@ -12,6 +12,11 @@ import {
   type SessionMessage,
 } from "@/lib/sdk-sessions/persistence";
 import { fireSdkLearnHook } from "@/lib/ecc/sdk-learn-hook";
+import {
+  compactSessionMessages,
+  buildSessionSummaryPreamble,
+  readPriorSummary,
+} from "@/lib/sdk-sessions/session-compaction";
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 
@@ -114,6 +119,7 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
     // ── Session resume: load from DB or flow variables ─────────────────────
     let sessionMessages: SessionMessage[] = [];
     let activeDbSessionId: string | null = null;
+    let priorSessionSummary: string | undefined;
 
     if (enableSessionResume) {
       if (sdkSessionId) {
@@ -123,6 +129,7 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
           if (dbSession && dbSession.agentId === context.agentId) {
             sessionMessages = dbSession.messages;
             activeDbSessionId = dbSession.id;
+            priorSessionSummary = readPriorSummary(dbSession.metadata);
             logger.info("Claude Agent SDK: resuming DB session", {
               agentId: context.agentId,
               nodeId: node.id,
@@ -198,16 +205,26 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
     const allTools = { ...subAgentTools, ...mcpTools };
     const hasTools = Object.keys(allTools).length > 0;
 
+    // Re-inject the rolling session summary (from a prior compaction) into the
+    // SINGLE system prompt — keeps the model aware of dropped older messages
+    // without adding a second system message to the array (N9, format-safe).
+    const summaryPreamble = buildSessionSummaryPreamble(priorSessionSummary);
+    const effectiveSystemPrompt = summaryPreamble
+      ? systemPrompt
+        ? `${summaryPreamble}\n\n${systemPrompt}`
+        : summaryPreamble
+      : systemPrompt;
+
     if (hasTools && Object.keys(subAgentTools).length >= 2) {
       const parallelHint =
         "\n\n---\n**Parallel Execution:** When multiple subagents can work independently, " +
         "call them simultaneously in a single step rather than sequentially.";
       messages.unshift({
         role: "system",
-        content: (systemPrompt ? systemPrompt + parallelHint : parallelHint),
+        content: (effectiveSystemPrompt ? effectiveSystemPrompt + parallelHint : parallelHint),
       });
-    } else if (systemPrompt) {
-      messages.unshift({ role: "system", content: systemPrompt });
+    } else if (effectiveSystemPrompt) {
+      messages.unshift({ role: "system", content: effectiveSystemPrompt });
     }
 
     // ── Build generate options ─────────────────────────────────────────────
@@ -288,14 +305,28 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
         { role: "assistant", content: responseText },
       ];
 
+      // Compact (summarize oldest + cap) before persisting so the stored
+      // session — and every future resume — stay bounded (N9).
+      const compacted = await compactSessionMessages(
+        updatedMessages,
+        priorSessionSummary,
+      );
+      const messagesToPersist = compacted.messages;
+
       if (activeDbSessionId) {
         // Update existing DB session
         try {
           await updateSdkSession(activeDbSessionId, {
-            messages: updatedMessages,
+            messages: messagesToPersist,
             inputTokensDelta: inputTokens,
             outputTokensDelta: outputTokens,
-            metadata: { lastModel: modelId, lastDurationMs: durationMs },
+            metadata: {
+              lastModel: modelId,
+              lastDurationMs: durationMs,
+              ...(compacted.priorSummary
+                ? { priorSummary: compacted.priorSummary }
+                : {}),
+            },
           });
         } catch (err) {
           logger.warn("Claude Agent SDK: failed to update DB session", {
@@ -309,8 +340,14 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
           const newSession = await createSdkSession({
             agentId: context.agentId,
             userId: context.userId,
-            messages: updatedMessages,
-            metadata: { model: modelId, durationMs },
+            messages: messagesToPersist,
+            metadata: {
+              model: modelId,
+              durationMs,
+              ...(compacted.priorSummary
+                ? { priorSummary: compacted.priorSummary }
+                : {}),
+            },
           });
           // Expose the new session ID so downstream nodes / UI can reference it
           updatedVariables["__sdk_session_id"] = newSession.id;
@@ -325,9 +362,10 @@ export const claudeAgentSdkHandler: NodeHandler = async (node, context) => {
         }
       }
 
-      // Always keep the variable-based copy as fallback
+      // Always keep the variable-based copy as fallback (capped; the rolling
+      // summary lives in DB metadata, not in the variable mirror).
       if (sessionVarName) {
-        updatedVariables[sessionVarName] = updatedMessages;
+        updatedVariables[sessionVarName] = messagesToPersist;
       }
     }
 
