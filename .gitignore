@@ -179,3 +179,4 @@ __pycache__/
 
 # Security audit — interni dokument, nikad u git
 AUDIT-security.md
+.env.bak.*
