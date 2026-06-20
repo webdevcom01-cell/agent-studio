@@ -93,8 +93,7 @@ export async function POST(
     if (!config.enabled) {
       return makeResponse({ error: "Webhook is disabled" }, 404);
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (!(config as any).isPipelineTrigger) {
+    if (!(config as { isPipelineTrigger?: boolean }).isPipelineTrigger) {
       // This webhook is configured for flow execution, not pipeline triggering
       return makeResponse(
         { error: "This webhook is not configured as a pipeline trigger" },
@@ -115,8 +114,7 @@ export async function POST(
     const secret = decryptWebhookSecret(config.secret, config.secretEncrypted);
 
     // ── 5. Verify signature based on provider ────────────────────────────────
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const provider = (config as any).signatureProvider ?? "standard";
+    const provider = (config as { signatureProvider?: string }).signatureProvider ?? "standard";
     let verifyResult: { valid: boolean; error?: string };
 
     if (provider === "github") {

@@ -6,7 +6,6 @@
  * augmented system prompt with retrieved context wrapped in XML tags.
  */
 
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { hybridSearch, computeDynamicTopK, expandChunksWithContext, sanitizeChunkContent } from "./search";
 import type { SearchResult } from "./search";

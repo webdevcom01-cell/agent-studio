@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, isAuthError } from "@/lib/api/auth-guard";
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 

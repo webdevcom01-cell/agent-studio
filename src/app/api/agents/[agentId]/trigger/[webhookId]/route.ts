@@ -32,7 +32,6 @@ import { logger } from "@/lib/logger";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { executeWebhookTrigger } from "@/lib/webhooks/execute";
 import { withAdminBypass } from "@/lib/api/tenant-context";
-import { prisma } from "@/lib/prisma";
 
 // Allow longer execution for flows with AI steps or MCP tool calls
 export const maxDuration = 180;

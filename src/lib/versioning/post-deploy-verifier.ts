@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { getHandler } from "@/lib/runtime/handlers";
 import { logger } from "@/lib/logger";

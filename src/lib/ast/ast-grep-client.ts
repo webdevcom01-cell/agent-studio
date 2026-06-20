@@ -135,7 +135,6 @@ export async function astGrepSearch(
   // Dynamic import — avoids breaking the bundle when native addon is absent.
   let napi: NapiModule;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     napi = (await import("@ast-grep/napi")) as unknown as NapiModule;
   } catch {
     logger.warn("@ast-grep/napi unavailable — AST search disabled", { lang });

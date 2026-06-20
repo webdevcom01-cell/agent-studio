@@ -26,8 +26,7 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { execSync } from "node:child_process";
+import { resolve } from "node:path";
 
 type Tenancy =
   | "TENANT_DIRECT"

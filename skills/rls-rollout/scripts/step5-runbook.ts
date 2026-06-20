@@ -46,7 +46,7 @@ const PHASE_1_TABLES: TableSpec[] = [
   { name: "Template", classification: "TENANT_DIRECT (isPublic)" },
 ];
 
-function tableSection(table: TableSpec, phaseNum: number): string {
+function tableSection(table: TableSpec, _phaseNum: number): string {
   const lower = table.name.toLowerCase();
   return `
 ### ${table.name} (${table.classification})

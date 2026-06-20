@@ -12,7 +12,6 @@
  * WebhookConfigs created manually via API (nodeId = null) are never touched.
  */
 
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { generateWebhookSecret, encryptWebhookSecret } from "./verify";

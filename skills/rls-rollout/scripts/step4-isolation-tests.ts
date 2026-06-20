@@ -21,7 +21,6 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, "../../..");
 const OUT_DIR = resolve(__dirname, "../tests/generated");
 
 interface TableSpec {
@@ -48,7 +47,6 @@ const PHASE_1_TABLES: TableSpec[] = [
 
 function generateTestFile(table: TableSpec): string {
   const modelVar = table.name.charAt(0).toLowerCase() + table.name.slice(1);
-  const isOrgTenant = table.tenantCol === "organizationId";
 
   return `import { describe, it, beforeAll, afterAll, expect } from "vitest";
 import { getRLSClient } from "../_helpers/get-rls-client";
