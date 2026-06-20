@@ -35,7 +35,7 @@ export function BatchCard({ batch }: BatchCardProps): React.ReactElement {
               <span className="font-medium text-sm truncate">{batch.trendTitle}</span>
               <StatusBadge status={batch.status} />
               {batch.isEvergreen && (
-                <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                <span className="inline-flex items-center gap-1 text-xs text-success">
                   <Leaf className="size-3" />
                   evergreen
                 </span>

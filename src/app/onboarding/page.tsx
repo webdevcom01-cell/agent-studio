@@ -246,7 +246,7 @@ export default function OnboardingPage(): React.ReactElement {
                 <div className="text-center">
                   <div className="relative inline-flex mb-4">
                     <MessageSquare className="size-12 text-primary" />
-                    <CheckCircle2 className="size-5 text-green-500 absolute -bottom-1 -right-1 bg-background rounded-full" />
+                    <CheckCircle2 className="size-5 text-success absolute -bottom-1 -right-1 bg-background rounded-full" />
                   </div>
                   <h1 className="text-2xl font-bold mb-2">Your agent is ready!</h1>
                   <p className="text-muted-foreground">

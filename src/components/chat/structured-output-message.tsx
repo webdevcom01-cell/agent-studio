@@ -59,7 +59,7 @@ function CopyButton({ text }: { text: string }) {
       title="Copy to clipboard"
     >
       {copied
-        ? <Check className="size-3.5 text-green-400" />
+        ? <Check className="size-3.5 text-success" />
         : <Copy className="size-3.5" />
       }
     </button>
@@ -137,13 +137,13 @@ function CodeGenRenderer({ data }: { data: Record<string, unknown> }) {
                       {path}
                     </span>
                     {isNew && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 font-medium">
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-success/15 text-success font-medium">
                         NEW
                       </span>
                     )}
                     <CopyButton text={content} />
                   </div>
-                  <pre className="text-[11px] font-mono text-foreground/70 bg-zinc-950/60 rounded p-2 overflow-x-auto max-h-48 leading-relaxed">
+                  <pre className="text-[11px] font-mono text-foreground/70 bg-muted rounded p-2 overflow-x-auto max-h-48 leading-relaxed">
                     <code data-language={language}>{content}</code>
                   </pre>
                 </div>
@@ -173,7 +173,7 @@ function CodeGenRenderer({ data }: { data: Record<string, unknown> }) {
                     {asString(dep.version)}
                   </span>
                   {dep.isDev === true && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-700/60 text-zinc-400">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                       dev
                     </span>
                   )}
@@ -197,11 +197,11 @@ function CodeGenRenderer({ data }: { data: Record<string, unknown> }) {
               const env = asRecord(e);
               return (
                 <div key={i} className="flex items-start gap-2 text-xs">
-                  <span className="font-mono text-amber-400/80 shrink-0">
+                  <span className="font-mono text-warning/80 shrink-0">
                     {asString(env.key)}
                   </span>
                   {env.required === true && (
-                    <span className="text-[9px] px-1 py-0.5 rounded bg-red-500/15 text-red-400 shrink-0">
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-destructive/15 text-destructive shrink-0">
                       required
                     </span>
                   )}
@@ -226,7 +226,7 @@ function CodeGenRenderer({ data }: { data: Record<string, unknown> }) {
             <div className="flex justify-end mb-1">
               <CopyButton text={prismaChanges} />
             </div>
-            <pre className="text-[11px] font-mono text-foreground/70 bg-zinc-950/60 rounded p-2 overflow-x-auto max-h-48 leading-relaxed">
+            <pre className="text-[11px] font-mono text-foreground/70 bg-muted rounded p-2 overflow-x-auto max-h-48 leading-relaxed">
               <code>{prismaChanges}</code>
             </pre>
           </div>
@@ -239,17 +239,17 @@ function CodeGenRenderer({ data }: { data: Record<string, unknown> }) {
 // ─── PRGate renderer ──────────────────────────────────────────────────────────
 
 const SEVERITY_CONFIG: Record<string, { color: string; label: string }> = {
-  CRITICAL: { color: "text-red-400 bg-red-500/15 border-red-500/30", label: "CRITICAL" },
-  HIGH:     { color: "text-orange-400 bg-orange-500/15 border-orange-500/30", label: "HIGH" },
-  MEDIUM:   { color: "text-yellow-400 bg-yellow-500/15 border-yellow-500/30", label: "MEDIUM" },
-  LOW:      { color: "text-blue-400 bg-blue-500/15 border-blue-500/30", label: "LOW" },
+  CRITICAL: { color: "text-destructive bg-destructive/15 border-destructive/30", label: "CRITICAL" },
+  HIGH:     { color: "text-severity-high bg-severity-high/15 border-severity-high/30", label: "HIGH" },
+  MEDIUM:   { color: "text-warning bg-warning/15 border-warning/30", label: "MEDIUM" },
+  LOW:      { color: "text-info bg-info/15 border-info/30", label: "LOW" },
 };
 
 function ScoreBadge({ label, score }: { label: string; score: number }) {
   const color =
-    score >= 80 ? "text-green-400" :
-    score >= 60 ? "text-yellow-400" :
-    "text-red-400";
+    score >= 80 ? "text-success" :
+    score >= 60 ? "text-warning" :
+    "text-destructive";
 
   return (
     <div className="flex flex-col items-center gap-0.5">
@@ -272,26 +272,26 @@ function PRGateRenderer({ data }: { data: Record<string, unknown> }) {
   const decisionConfig = {
     APPROVE: {
       icon: <CheckCircle2 className="size-4" />,
-      bg: "bg-green-500/15 border-green-500/30",
-      text: "text-green-400",
+      bg: "bg-success/15 border-success/30",
+      text: "text-success",
       label: "APPROVED",
     },
     APPROVE_WITH_NOTES: {
       icon: <AlertTriangle className="size-4" />,
-      bg: "bg-yellow-500/15 border-yellow-500/30",
-      text: "text-yellow-400",
+      bg: "bg-warning/15 border-warning/30",
+      text: "text-warning",
       label: "APPROVED WITH NOTES",
     },
     BLOCK: {
       icon: <XCircle className="size-4" />,
-      bg: "bg-red-500/15 border-red-500/30",
-      text: "text-red-400",
+      bg: "bg-destructive/15 border-destructive/30",
+      text: "text-destructive",
       label: "BLOCKED",
     },
   }[decision] ?? {
     icon: <CheckCircle2 className="size-4" />,
-    bg: "bg-zinc-500/15 border-zinc-500/30",
-    text: "text-zinc-400",
+    bg: "bg-muted border-border",
+    text: "text-muted-foreground",
     label: decision,
   };
 
@@ -309,9 +309,9 @@ function PRGateRenderer({ data }: { data: Record<string, unknown> }) {
         </span>
         {(critical > 0 || high > 0) && (
           <span className="ml-auto text-[11px] text-muted-foreground/70">
-            {critical > 0 && <span className="text-red-400">{critical} critical</span>}
+            {critical > 0 && <span className="text-destructive">{critical} critical</span>}
             {critical > 0 && high > 0 && " · "}
-            {high > 0 && <span className="text-orange-400">{high} high</span>}
+            {high > 0 && <span className="text-severity-high">{high} high</span>}
           </span>
         )}
       </div>
@@ -441,7 +441,7 @@ function ArchitectureRenderer({ data }: { data: Record<string, unknown> }) {
             <div className="flex justify-end mb-1">
               <CopyButton text={databaseSchema} />
             </div>
-            <pre className="text-[11px] font-mono text-foreground/70 bg-zinc-950/60 rounded p-2 overflow-x-auto max-h-48 leading-relaxed">
+            <pre className="text-[11px] font-mono text-foreground/70 bg-muted rounded p-2 overflow-x-auto max-h-48 leading-relaxed">
               <code>{databaseSchema}</code>
             </pre>
           </div>
@@ -456,7 +456,7 @@ function ArchitectureRenderer({ data }: { data: Record<string, unknown> }) {
           defaultOpen={false}
         >
           <div className="px-3 py-2">
-            <pre className="text-[11px] font-mono text-foreground/70 bg-zinc-950/60 rounded p-2 overflow-x-auto max-h-48 leading-relaxed whitespace-pre-wrap">
+            <pre className="text-[11px] font-mono text-foreground/70 bg-muted rounded p-2 overflow-x-auto max-h-48 leading-relaxed whitespace-pre-wrap">
               <code>{apiDesign}</code>
             </pre>
           </div>

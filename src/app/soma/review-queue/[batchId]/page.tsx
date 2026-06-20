@@ -80,9 +80,9 @@ const PLATFORM_ABBR: Record<string, string> = {
 
 const POST_STATUS_STYLES: Record<PostStatus, string> = {
   PENDING: "bg-muted text-muted-foreground",
-  APPROVED: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  EDITED: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  REJECTED: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  APPROVED: "bg-success/10 text-success border-success/20",
+  EDITED: "bg-primary/10 text-primary border-primary/20",
+  REJECTED: "bg-destructive/10 text-destructive border-destructive/20",
 };
 
 async function patchPost(
@@ -229,7 +229,7 @@ function PostCard({
               {Array.isArray(post.qualityFlags) && post.qualityFlags.length > 0 && (
                 <Badge
                   variant="outline"
-                  className="text-[10px] border-yellow-500 text-yellow-600 dark:text-yellow-400"
+                  className="text-[10px] border-warning text-warning"
                   title={post.qualityFlags.map((f) => `${f.rule}: ${f.detail ?? ""}`).join("\n")}
                 >
                   ⚠ {post.qualityFlags.length}
@@ -260,7 +260,7 @@ function PostCard({
           <div className="flex gap-2 pt-1">
             <Button
               size="sm"
-              className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
+              className="h-7 text-xs gap-1 bg-success hover:bg-success/90 text-white"
               onClick={() => handleAction("APPROVED")}
               disabled={isDone}
             >
@@ -270,7 +270,7 @@ function PostCard({
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+              className="h-7 text-xs gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
               onClick={() => handleAction("REJECTED")}
               disabled={isDone}
             >
@@ -382,7 +382,7 @@ export default function BatchDetailPage({
                 </div>
                 <Button
                   size="sm"
-                  className="shrink-0 h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
+                  className="shrink-0 h-7 text-xs bg-success hover:bg-success/90 text-white"
                   onClick={handleApproveAll}
                   disabled={batch.posts.every((p) => p.status !== "PENDING")}
                 >

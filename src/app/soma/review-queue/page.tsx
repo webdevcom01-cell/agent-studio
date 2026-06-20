@@ -38,9 +38,9 @@ const fetcher = (url: string): Promise<QueueResponse> =>
 
 const STATUS_STYLES: Record<BatchSummary["status"], string> = {
   PENDING: "bg-muted text-muted-foreground",
-  IN_REVIEW: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  APPROVED: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  REJECTED: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  IN_REVIEW: "bg-info/10 text-info border-info/20",
+  APPROVED: "bg-success/10 text-success border-success/20",
+  REJECTED: "bg-destructive/10 text-destructive border-destructive/20",
 };
 
 // ─── Components ──────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ function BatchCard({ batch }: { batch: BatchSummary }): React.ReactElement {
               {batch.dateObserved}
             </Badge>
             {batch.isEvergreen && (
-              <Badge variant="outline" className="text-xs gap-1 text-green-600 border-green-300 dark:text-green-400 dark:border-green-700">
+              <Badge variant="outline" className="text-xs gap-1 text-success border-success/40">
                 <Leaf className="size-2.5" />
                 Evergreen
               </Badge>

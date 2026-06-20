@@ -36,6 +36,7 @@
   --color-warning-bg: hsl(var(--warning-bg));
   --color-info: hsl(var(--info));
   --color-info-bg: hsl(var(--info-bg));
+  --color-severity-high: hsl(var(--severity-high));
   --color-brand-subtle: hsl(var(--brand-subtle));
   --color-brand-subtle-foreground: hsl(var(--brand-subtle-foreground));
 }

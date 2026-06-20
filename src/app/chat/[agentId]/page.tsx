@@ -35,13 +35,13 @@ function ConvStatusDot({ status }: { status: string }) {
   if (status === "ACTIVE") {
     return (
       <span className="relative flex size-2 shrink-0" title="Interrupted — can be resumed">
-        <span className="absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75 animate-ping" />
-        <span className="relative inline-flex size-2 rounded-full bg-orange-500" />
+        <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-75 animate-ping" />
+        <span className="relative inline-flex size-2 rounded-full bg-primary" />
       </span>
     );
   }
   if (status === "COMPLETED") {
-    return <span className="size-2 shrink-0 rounded-full bg-emerald-500/60" title="Completed" />;
+    return <span className="size-2 shrink-0 rounded-full bg-success/60" title="Completed" />;
   }
   // ABANDONED or unknown
   return <span className="size-2 shrink-0 rounded-full bg-muted-foreground/20" title="Abandoned" />;
@@ -261,7 +261,7 @@ export default function ChatPage({
                             void handleResumeConversation(conv);
                           }}
                           disabled={isLoading || resumingId === conv.id}
-                          className="flex items-center gap-1 text-[10px] text-orange-400/70 transition-colors hover:text-orange-400 disabled:opacity-40"
+                          className="flex items-center gap-1 text-[10px] text-primary/70 transition-colors hover:text-primary disabled:opacity-40"
                         >
                           <RotateCcw
                             className={cn(

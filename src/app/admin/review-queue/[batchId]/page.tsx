@@ -63,7 +63,7 @@ export default async function ReviewQueueDetailPage({
                   <h1 className="text-base font-semibold">{batch.trendTitle}</h1>
                   <StatusBadge status={batch.status} />
                   {batch.isEvergreen && (
-                    <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                    <span className="inline-flex items-center gap-1 text-xs text-success">
                       <Leaf className="size-3" />
                       evergreen
                     </span>

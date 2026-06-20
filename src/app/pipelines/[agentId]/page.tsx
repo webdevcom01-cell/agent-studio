@@ -102,11 +102,11 @@ interface PipelineRun {
 }
 
 function StatusIcon({ status }: { status: string }) {
-  if (status === "COMPLETED") return <CheckCircle2 className="size-4 text-emerald-400" />;
-  if (status === "FAILED") return <XCircle className="size-4 text-red-400" />;
-  if (status === "RUNNING") return <Loader2 className="size-4 text-blue-400 animate-spin" />;
-  if (status === "AWAITING_APPROVAL") return <AlertCircle className="size-4 text-amber-400" />;
-  return <Clock className="size-4 text-zinc-400" />;
+  if (status === "COMPLETED") return <CheckCircle2 className="size-4 text-success" />;
+  if (status === "FAILED") return <XCircle className="size-4 text-destructive" />;
+  if (status === "RUNNING") return <Loader2 className="size-4 text-info animate-spin" />;
+  if (status === "AWAITING_APPROVAL") return <AlertCircle className="size-4 text-warning" />;
+  return <Clock className="size-4 text-muted-foreground" />;
 }
 
 /** Badge showing how a pipeline run was triggered (GitHub PR, GitLab MR, Manual, API). */
@@ -114,14 +114,14 @@ function TriggerBadge({ run }: { run: Pick<PipelineRun, "triggerSource" | "trigg
   const src = run.triggerSource;
   if (!src || src === "manual") {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
         🎮 Manual
       </span>
     );
   }
   if (src === "api") {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
         ⚙️ API
       </span>
     );
@@ -129,14 +129,14 @@ function TriggerBadge({ run }: { run: Pick<PipelineRun, "triggerSource" | "trigg
   if (src === "github") {
     const label = run.triggerPrNumber ? `PR #${run.triggerPrNumber}` : "GitHub";
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
         🐙{" "}
         {run.prUrl ? (
           <a
             href={run.prUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:text-zinc-200 transition-colors"
+            className="underline underline-offset-2 hover:text-foreground transition-colors"
           >
             {label}
           </a>
@@ -144,7 +144,7 @@ function TriggerBadge({ run }: { run: Pick<PipelineRun, "triggerSource" | "trigg
           label
         )}
         {run.triggerBranch && (
-          <span className="text-zinc-600 font-mono">{run.triggerBranch}</span>
+          <span className="text-muted-foreground font-mono">{run.triggerBranch}</span>
         )}
       </span>
     );
@@ -152,14 +152,14 @@ function TriggerBadge({ run }: { run: Pick<PipelineRun, "triggerSource" | "trigg
   if (src === "gitlab") {
     const label = run.triggerPrNumber ? `MR !${run.triggerPrNumber}` : "GitLab";
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
         🦊{" "}
         {run.prUrl ? (
           <a
             href={run.prUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:text-zinc-200 transition-colors"
+            className="underline underline-offset-2 hover:text-foreground transition-colors"
           >
             {label}
           </a>
@@ -167,7 +167,7 @@ function TriggerBadge({ run }: { run: Pick<PipelineRun, "triggerSource" | "trigg
           label
         )}
         {run.triggerBranch && (
-          <span className="text-zinc-600 font-mono">{run.triggerBranch}</span>
+          <span className="text-muted-foreground font-mono">{run.triggerBranch}</span>
         )}
       </span>
     );
@@ -229,10 +229,10 @@ function MetricsSummaryCard({
   }
 
   return (
-    <div className="border border-zinc-700 rounded-xl bg-zinc-900/60 p-4 space-y-4">
+    <div className="border border-border rounded-xl bg-card/60 p-4 space-y-4">
       <div className="flex items-center gap-2">
-        <BarChart3 className="size-4 text-zinc-400" />
-        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+        <BarChart3 className="size-4 text-muted-foreground" />
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Pipeline Statistike
         </h3>
       </div>
@@ -254,7 +254,7 @@ function MetricsSummaryCard({
 
       {modelStats.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
             Model Performanse (po koraku)
           </p>
           {phases.length > 2 && (
@@ -267,8 +267,8 @@ function MetricsSummaryCard({
                   className={cn(
                     "px-2 py-0.5 text-xs rounded border transition-colors",
                     selectedPhase === p
-                      ? "bg-indigo-600 border-indigo-500 text-white"
-                      : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300",
+                      ? "bg-primary border-primary text-white"
+                      : "border-border text-muted-foreground hover:border-border hover:text-foreground",
                   )}
                 >
                   {p === "all" ? "Sve faze" : p}
@@ -279,43 +279,43 @@ function MetricsSummaryCard({
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-zinc-800">
-                  <th className="text-left py-1.5 pr-3 text-zinc-500 font-medium">Model</th>
-                  <th className="text-left py-1.5 pr-3 text-zinc-500 font-medium">Faza</th>
-                  <th className="text-right py-1.5 pr-3 text-zinc-500 font-medium">Koraka</th>
-                  <th className="text-right py-1.5 pr-3 text-zinc-500 font-medium">Uspeh</th>
-                  <th className="text-right py-1.5 pr-3 text-zinc-500 font-medium">Avg/korak</th>
-                  <th className="text-right py-1.5 text-zinc-500 font-medium">Avg tokeni</th>
+                <tr className="border-b border-border">
+                  <th className="text-left py-1.5 pr-3 text-muted-foreground font-medium">Model</th>
+                  <th className="text-left py-1.5 pr-3 text-muted-foreground font-medium">Faza</th>
+                  <th className="text-right py-1.5 pr-3 text-muted-foreground font-medium">Koraka</th>
+                  <th className="text-right py-1.5 pr-3 text-muted-foreground font-medium">Uspeh</th>
+                  <th className="text-right py-1.5 pr-3 text-muted-foreground font-medium">Avg/korak</th>
+                  <th className="text-right py-1.5 text-muted-foreground font-medium">Avg tokeni</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/50">
                 {modelStats.map((s) => (
-                  <tr key={`${s.modelId}-${s.phase}`} className="hover:bg-zinc-800/20">
-                    <td className="py-1.5 pr-3 text-zinc-300 font-mono truncate max-w-[140px]">
+                  <tr key={`${s.modelId}-${s.phase}`} className="hover:bg-muted/20">
+                    <td className="py-1.5 pr-3 text-foreground font-mono truncate max-w-[140px]">
                       {s.modelId}
                     </td>
-                    <td className="py-1.5 pr-3 text-zinc-500 capitalize">{s.phase}</td>
-                    <td className="py-1.5 pr-3 text-right text-zinc-400 tabular-nums">
+                    <td className="py-1.5 pr-3 text-muted-foreground capitalize">{s.phase}</td>
+                    <td className="py-1.5 pr-3 text-right text-muted-foreground tabular-nums">
                       {s.runCount}
                     </td>
                     <td
                       className={cn(
                         "py-1.5 pr-3 text-right tabular-nums font-medium",
                         s.successRate >= 0.9
-                          ? "text-emerald-400"
+                          ? "text-success"
                           : s.successRate >= 0.7
-                          ? "text-amber-400"
-                          : "text-red-400",
+                          ? "text-warning"
+                          : "text-destructive",
                       )}
                     >
                       {Math.round(s.successRate * 100)}%
                     </td>
-                    <td className="py-1.5 pr-3 text-right text-zinc-400 tabular-nums">
+                    <td className="py-1.5 pr-3 text-right text-muted-foreground tabular-nums">
                       {s.avgDurationMs >= 1000
                         ? `${(s.avgDurationMs / 1000).toFixed(1)}s`
                         : `${s.avgDurationMs}ms`}
                     </td>
-                    <td className="py-1.5 text-right text-zinc-500 tabular-nums">
+                    <td className="py-1.5 text-right text-muted-foreground tabular-nums">
                       {(
                         ((s.avgInputTokens ?? 0) + (s.avgOutputTokens ?? 0)) /
                         1000
@@ -343,16 +343,16 @@ function StatPill({
   color: "zinc" | "emerald" | "red" | "amber" | "blue";
 }) {
   const colors = {
-    zinc:    "bg-zinc-800/50 text-zinc-300",
-    emerald: "bg-emerald-500/10 text-emerald-400",
-    red:     "bg-red-500/10 text-red-400",
-    amber:   "bg-amber-500/10 text-amber-400",
-    blue:    "bg-blue-500/10 text-blue-400",
+    zinc:    "bg-muted/50 text-foreground",
+    emerald: "bg-success/10 text-success",
+    red:     "bg-destructive/10 text-destructive",
+    amber:   "bg-warning/10 text-warning",
+    blue:    "bg-info/10 text-info",
   };
   return (
     <div className={cn("rounded-lg px-3 py-2 text-center", colors[color])}>
       <p className="text-sm font-bold tabular-nums">{value}</p>
-      <p className="text-xs text-zinc-500 mt-0.5">{label}</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
     </div>
   );
 }
@@ -419,14 +419,14 @@ function RunPipelineDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-100 max-w-md">
+      <DialogContent className="bg-card border-border text-foreground max-w-md">
         <DialogHeader>
           <DialogTitle className="text-sm font-semibold">Pokreni Pipeline Run</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="text-xs text-zinc-400 block mb-1">
-              Task opis <span className="text-red-400">*</span>
+            <label className="text-xs text-muted-foreground block mb-1">
+              Task opis <span className="text-destructive">*</span>
             </label>
             <textarea
               value={taskDescription}
@@ -434,33 +434,33 @@ function RunPipelineDialog({
               placeholder="Npr: Dodaj rate limiting u src/lib/auth.ts..."
               rows={3}
               required
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 resize-none focus:outline-none focus:ring-1 focus:ring-zinc-500"
+              className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
           <div>
-            <label className="text-xs text-zinc-400 block mb-1">
+            <label className="text-xs text-muted-foreground block mb-1">
               Target repo URL{" "}
-              <span className="text-zinc-600">(optional — gde se kreira PR)</span>
+              <span className="text-muted-foreground">(optional — gde se kreira PR)</span>
             </label>
             <input
               type="url"
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
               placeholder="https://github.com/owner/target-repo"
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+              className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
           <div>
-            <label className="text-xs text-zinc-400 block mb-1">
+            <label className="text-xs text-muted-foreground block mb-1">
               Source repo URL{" "}
-              <span className="text-zinc-600">(optional — za RAG kontekst)</span>
+              <span className="text-muted-foreground">(optional — za RAG kontekst)</span>
             </label>
             <input
               type="url"
               value={sourceRepoUrl}
               onChange={(e) => setSourceRepoUrl(e.target.value)}
               placeholder="https://github.com/owner/source-repo"
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+              className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
           {/* Advanced Options — collapsible */}
@@ -468,7 +468,7 @@ function RunPipelineDialog({
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="text-xs text-zinc-500 hover:text-zinc-300 flex items-center gap-1"
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
             >
               {showAdvanced
                 ? <ChevronDown className="size-3" />
@@ -476,22 +476,22 @@ function RunPipelineDialog({
               Napredne opcije
             </button>
             {showAdvanced && (
-              <div className="mt-2 space-y-2 pl-2 border-l border-zinc-700">
-                <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
+              <div className="mt-2 space-y-2 pl-2 border-l border-border">
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={requireApproval}
                     onChange={(e) => setRequireApproval(e.target.checked)}
-                    className="rounded border-zinc-600 bg-zinc-800"
+                    className="rounded border-border bg-muted"
                   />
                   Pauziraj za odobrenje (HITL)
                 </label>
-                <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer select-none">
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={useSmartRouting}
                     onChange={(e) => setUseSmartRouting(e.target.checked)}
-                    className="rounded border-zinc-600 bg-zinc-800"
+                    className="rounded border-border bg-muted"
                   />
                   Pametni model routing
                 </label>
@@ -500,12 +500,12 @@ function RunPipelineDialog({
                   value={modelId}
                   onChange={(e) => setModelId(e.target.value)}
                   placeholder="Model ID (npr. gpt-4o-mini)"
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                  className="w-full bg-muted border border-border rounded px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
             )}
           </div>
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-xs text-destructive">{error}</p>}
           <DialogFooter className="pt-1">
             <Button
               type="button"
@@ -513,7 +513,7 @@ function RunPipelineDialog({
               size="sm"
               onClick={() => onOpenChange(false)}
               disabled={running}
-              className="text-zinc-400"
+              className="text-muted-foreground"
             >
               Odustani
             </Button>
@@ -521,7 +521,7 @@ function RunPipelineDialog({
               type="submit"
               size="sm"
               disabled={running || !taskDescription.trim()}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-info hover:bg-info text-white"
             >
               {running ? (
                 <>
@@ -579,8 +579,8 @@ function ApproveCard({
   }
 
   return (
-    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-4">
-      <h4 className="text-sm font-semibold text-amber-400 flex items-center gap-2">
+    <div className="rounded-lg border border-warning/30 bg-warning/5 p-4 space-y-4">
+      <h4 className="text-sm font-semibold text-warning flex items-center gap-2">
         <AlertCircle className="size-4" /> Čeka vaše odobrenje
       </h4>
 
@@ -588,39 +588,39 @@ function ApproveCard({
         <div className="space-y-3">
           {planningOutputs.map(({ stepId, output }) => (
             <div key={stepId}>
-              <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                 {stepId}
               </p>
-              <pre className="bg-zinc-800/50 rounded-lg p-3 text-xs text-zinc-300 overflow-auto max-h-64 whitespace-pre-wrap leading-relaxed">
+              <pre className="bg-muted/50 rounded-lg p-3 text-xs text-foreground overflow-auto max-h-64 whitespace-pre-wrap leading-relaxed">
                 {output.length > 4000 ? output.slice(0, 4000) + "\n\n[... skraćeno ...]" : output}
               </pre>
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-xs text-zinc-500">Nema planiranja outputa za prikaz.</p>
+        <p className="text-xs text-muted-foreground">Nema planiranja outputa za prikaz.</p>
       )}
 
       <div>
-        <label className="text-xs text-zinc-400 mb-1 block">
+        <label className="text-xs text-muted-foreground mb-1 block">
           Feedback za implementaciju (opciono)
         </label>
         <textarea
           value={feedback}
           onChange={(e) => setFeedback(e.target.value)}
           placeholder="npr. Fokusiraj se na TypeScript tipove, koristi Zod za validaciju..."
-          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-2 text-xs text-zinc-200 placeholder:text-zinc-600 resize-none h-20 focus:outline-none focus:border-amber-500/50"
+          className="w-full bg-muted border border-border rounded-lg p-2 text-xs text-foreground placeholder:text-muted-foreground resize-none h-20 focus:outline-none focus:border-warning/50"
         />
       </div>
 
       {error && (
-        <p className="text-xs text-red-400">{error}</p>
+        <p className="text-xs text-destructive">{error}</p>
       )}
 
       <button
         onClick={handleApprove}
         disabled={approving}
-        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-900 text-sm font-semibold transition-colors"
+        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-warning hover:bg-warning disabled:opacity-50 text-foreground text-sm font-semibold transition-colors"
       >
         {approving ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
         {approving ? "Odobravanjem..." : "Odobri i nastavi"}
@@ -704,37 +704,37 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
   const entries = Object.entries(metrics);
 
   return (
-    <div className="border border-zinc-800 rounded-xl bg-zinc-900/40 overflow-hidden">
+    <div className="border border-border rounded-xl bg-card/40 overflow-hidden">
       {/* Header row */}
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-start gap-3 p-4 text-left hover:bg-zinc-800/30 transition-colors"
+        className="w-full flex items-start gap-3 p-4 text-left hover:bg-muted/30 transition-colors"
       >
         <StatusIcon status={run.status} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-100 font-medium leading-snug line-clamp-2">
+          <p className="text-sm text-foreground font-medium leading-snug line-clamp-2">
             {run.taskDescription}
           </p>
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             <span className={cn(
               "text-xs font-medium",
-              run.status === "COMPLETED" ? "text-emerald-400" :
-              run.status === "FAILED" ? "text-red-400" :
-              run.status === "RUNNING" ? "text-blue-400" :
-              run.status === "AWAITING_APPROVAL" ? "text-amber-400" : "text-zinc-400"
+              run.status === "COMPLETED" ? "text-success" :
+              run.status === "FAILED" ? "text-destructive" :
+              run.status === "RUNNING" ? "text-info" :
+              run.status === "AWAITING_APPROVAL" ? "text-warning" : "text-muted-foreground"
             )}>
               {statusLabel(run.status)}
             </span>
             {isStuck && (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-orange-400 border border-orange-500/30 bg-orange-500/10 px-1.5 py-0.5 rounded">
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-primary border border-primary/30 bg-primary/10 px-1.5 py-0.5 rounded">
                 <AlertTriangle className="size-3" />
                 Zaglavljen
               </span>
             )}
             {run.taskType && (
-              <span className="text-xs text-zinc-500 capitalize">{run.taskType.replace(/-/g, " ")}</span>
+              <span className="text-xs text-muted-foreground capitalize">{run.taskType.replace(/-/g, " ")}</span>
             )}
-            <span className="text-xs text-zinc-600">
+            <span className="text-xs text-muted-foreground">
               {new Date(run.createdAt).toLocaleString("sr-RS")}
             </span>
             <TriggerBadge run={run} />
@@ -747,10 +747,10 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
                 className={cn(
                   "text-xs px-1.5 py-0.5 rounded border",
                   i < run.currentStep
-                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                    ? "bg-success/10 text-success border-success/20"
                     : i === run.currentStep && run.status === "RUNNING"
-                    ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                    : "bg-zinc-800 text-zinc-500 border-zinc-700"
+                    ? "bg-info/10 text-info border-info/20"
+                    : "bg-muted text-muted-foreground border-border"
                 )}
               >
                 {step}
@@ -763,7 +763,7 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-1.5"
+              className="inline-flex items-center gap-1 text-xs text-info hover:text-info mt-1.5"
             >
               <GitBranch className="size-3" />
               View PR
@@ -776,7 +776,7 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
             <button
               onClick={(e) => { e.stopPropagation(); void handleCancel(); }}
               disabled={cancelling}
-              className="p-1 rounded text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
               title="Otkaži run"
             >
               {cancelling ? <Loader2 className="size-3 animate-spin" /> : <Ban className="size-3" />}
@@ -787,7 +787,7 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
             <button
               onClick={(e) => { e.stopPropagation(); void handleForceResume(); }}
               disabled={resuming}
-              className="p-1 rounded text-zinc-500 hover:text-orange-400 hover:bg-orange-500/10 transition-colors"
+              className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
               title="Nastavi zaglavljen run od poslednjeg koraka"
             >
               {resuming ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
@@ -798,30 +798,30 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
             <button
               onClick={(e) => { e.stopPropagation(); void handleRetry(); }}
               disabled={retrying}
-              className="p-1 rounded text-zinc-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+              className="p-1 rounded text-muted-foreground hover:text-info hover:bg-info/10 transition-colors"
               title="Ponovi run od poslednjeg koraka"
             >
               {retrying ? <Loader2 className="size-3 animate-spin" /> : <RotateCcw className="size-3" />}
             </button>
           )}
           {open ? (
-            <ChevronDown className="size-4 text-zinc-500 mt-0.5" />
+            <ChevronDown className="size-4 text-muted-foreground mt-0.5" />
           ) : (
-            <ChevronRight className="size-4 text-zinc-500 mt-0.5" />
+            <ChevronRight className="size-4 text-muted-foreground mt-0.5" />
           )}
         </div>
       </button>
 
       {/* Expanded detail */}
       {open && (
-        <div className="border-t border-zinc-800 p-4 space-y-4">
+        <div className="border-t border-border p-4 space-y-4">
           {actionError && (
-            <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-2">
-              <p className="text-xs text-red-400">{actionError}</p>
+            <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2">
+              <p className="text-xs text-destructive">{actionError}</p>
             </div>
           )}
           {isLoading && (
-            <div className="flex items-center gap-2 text-sm text-zinc-500">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" /> Učitavam detalje...
             </div>
           )}
@@ -839,18 +839,18 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
               {/* Step metrics */}
               {entries.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <BarChart3 className="size-3" /> Step Metrikes
                   </h4>
                   <div className="space-y-1.5">
                     {entries.map(([idx, m]) => (
                       <div
                         key={idx}
-                        className="flex items-center gap-2 text-xs bg-zinc-800/50 rounded-lg px-3 py-2"
+                        className="flex items-center gap-2 text-xs bg-muted/50 rounded-lg px-3 py-2"
                       >
-                        <span className="text-zinc-300 font-mono w-40 truncate">{m.stepId}</span>
-                        <span className="text-zinc-600">{m.phase}</span>
-                        <span className="ml-auto flex items-center gap-3 text-zinc-400">
+                        <span className="text-foreground font-mono w-40 truncate">{m.stepId}</span>
+                        <span className="text-muted-foreground">{m.phase}</span>
+                        <span className="ml-auto flex items-center gap-3 text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Cpu className="size-3" />{m.modelId}
                           </span>
@@ -859,9 +859,9 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
                           </span>
                           <span>{((m.inputTokens ?? 0) + (m.outputTokens ?? 0)).toLocaleString()} tok</span>
                           {m.feedbackAttempts > 0 && (
-                            <span className="text-amber-400">↺{m.feedbackAttempts}</span>
+                            <span className="text-warning">↺{m.feedbackAttempts}</span>
                           )}
-                          <span className={m.outcome === "success" ? "text-emerald-400" : "text-red-400"}>
+                          <span className={m.outcome === "success" ? "text-success" : "text-destructive"}>
                             {m.outcome === "success" ? "✓" : "✗"}
                           </span>
                         </span>
@@ -873,9 +873,9 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
 
               {/* Error */}
               {detail.error && (
-                <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
-                  <p className="text-xs font-semibold text-red-400 mb-1">Greška</p>
-                  <p className="text-xs text-red-300 font-mono">{detail.error}</p>
+                <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3">
+                  <p className="text-xs font-semibold text-destructive mb-1">Greška</p>
+                  <p className="text-xs text-destructive font-mono">{detail.error}</p>
                 </div>
               )}
 
@@ -884,7 +884,7 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
                 detail.stepResults &&
                 Object.keys(detail.stepResults as Record<string, string>).length > 0 && (
                   <div className="space-y-3">
-                    <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                       <BarChart3 className="size-3" /> Outputi koraka
                     </h4>
                     {(detail.pipeline as string[]).map((stepId: string, i: number) => {
@@ -897,17 +897,17 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
                           <p
                             className={cn(
                               "text-xs font-semibold uppercase tracking-wider",
-                              isGate ? "text-amber-400" : "text-zinc-500",
+                              isGate ? "text-warning" : "text-muted-foreground",
                             )}
                           >
                             {stepId}
                             {isGate && (
-                              <span className="ml-2 normal-case font-normal text-amber-500/70">
+                              <span className="ml-2 normal-case font-normal text-warning/70">
                                 (reviewer output)
                               </span>
                             )}
                           </p>
-                          <pre className="bg-zinc-800/50 rounded-lg p-3 text-xs text-zinc-300 overflow-auto max-h-64 whitespace-pre-wrap leading-relaxed">
+                          <pre className="bg-muted/50 rounded-lg p-3 text-xs text-foreground overflow-auto max-h-64 whitespace-pre-wrap leading-relaxed">
                             {output.length > 4000
                               ? output.slice(0, 4000) + "\n\n[... skraćeno ...]"
                               : output}
@@ -921,10 +921,10 @@ function RunRow({ run, agentId, onMutate }: { run: PipelineRun; agentId: string;
               {/* Final output */}
               {detail.finalOutput && (
                 <div>
-                  <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                     Rezultat
                   </h4>
-                  <pre className="bg-zinc-800/30 rounded-lg p-3 text-xs text-zinc-300 overflow-auto max-h-80 whitespace-pre-wrap leading-relaxed">
+                  <pre className="bg-muted/30 rounded-lg p-3 text-xs text-foreground overflow-auto max-h-80 whitespace-pre-wrap leading-relaxed">
                     {detail.finalOutput}
                   </pre>
                 </div>
@@ -954,22 +954,22 @@ export default function PipelinesPage({
   const [showRunDialog, setShowRunDialog] = useState(false);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <div className="border-b border-zinc-800 bg-zinc-900/60 sticky top-0 z-10 backdrop-blur">
+      <div className="border-b border-border bg-card/60 sticky top-0 z-10 backdrop-blur">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Button variant="ghost" size="icon-sm" asChild className="text-zinc-400">
+          <Button variant="ghost" size="icon-sm" asChild className="text-muted-foreground">
             <Link href={`/chat/${agentId}`}>
               <ArrowLeft className="size-4" />
             </Link>
           </Button>
-          <GitBranch className="size-4 text-blue-400" />
+          <GitBranch className="size-4 text-info" />
           <h1 className="font-semibold text-sm">SDLC Pipelines</h1>
           <div className="ml-auto flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon-sm"
-              className="text-zinc-400"
+              className="text-muted-foreground"
               onClick={() => {
                 mutate();
                 setMetricsKey((k) => k + 1);
@@ -981,13 +981,13 @@ export default function PipelinesPage({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="text-zinc-400"
+              className="text-muted-foreground"
               onClick={() => setShowRunDialog(true)}
               title="Pokreni novi pipeline run"
             >
               <Plus className="size-4" />
             </Button>
-            <span className="text-xs text-zinc-500">{runs.length} runova</span>
+            <span className="text-xs text-muted-foreground">{runs.length} runova</span>
           </div>
         </div>
       </div>
@@ -995,19 +995,19 @@ export default function PipelinesPage({
       {/* List */}
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-3">
         {isLoading ? (
-          <div className="flex items-center justify-center py-20 text-zinc-500 gap-2">
+          <div className="flex items-center justify-center py-20 text-muted-foreground gap-2">
             <Loader2 className="size-5 animate-spin" />
             <span className="text-sm">Učitavam pipeline runove...</span>
           </div>
         ) : runs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
-            <Play className="size-10 text-zinc-700" />
-            <p className="text-zinc-400 font-medium text-sm">Nema pipeline runova</p>
+            <Play className="size-10 text-foreground" />
+            <p className="text-muted-foreground font-medium text-sm">Nema pipeline runova</p>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setShowRunDialog(true)}
-              className="border-zinc-700 text-zinc-400 hover:text-zinc-100 mt-1"
+              className="border-border text-muted-foreground hover:text-foreground mt-1"
             >
               <Plus className="size-3 mr-1.5" />
               Pokreni prvi pipeline run

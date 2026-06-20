@@ -66,7 +66,7 @@ export default function EccIndexPage(): React.JSX.Element {
               {enabledCount} / {total} agents with ECC enabled
             </span>
             <span className="flex items-center gap-1.5 text-muted-foreground">
-              <TrendingUp className="size-3.5 text-emerald-400" />
+              <TrendingUp className="size-3.5 text-success" />
               Select an agent to view its instincts
             </span>
           </div>
@@ -124,8 +124,8 @@ export default function EccIndexPage(): React.JSX.Element {
                   className={cn(
                     "shrink-0 text-xs",
                     agent.eccEnabled
-                      ? "border-emerald-700 bg-emerald-900/30 text-emerald-300"
-                      : "border-zinc-700 text-zinc-500",
+                      ? "border-success/50 bg-success/15 text-success"
+                      : "border-border text-muted-foreground",
                   )}
                 >
                   {agent.eccEnabled ? (

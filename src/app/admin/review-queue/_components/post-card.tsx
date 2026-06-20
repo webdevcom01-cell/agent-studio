@@ -174,7 +174,7 @@ function CopyButton({ text, label }: { text: string; label: string }): React.Rea
       disabled={!text}
       className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
     >
-      {copied ? <Check className="size-3 text-green-400" /> : <Copy className="size-3" />}
+      {copied ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
       {copied ? "Copied" : label}
     </button>
   );
@@ -230,8 +230,8 @@ export function PostCard({ post }: PostCardProps): React.ReactElement {
         </div>
 
         {post.reviewNote && (
-          <div className="rounded-md border border-yellow-500/20 bg-yellow-500/5 px-3 py-2">
-            <p className="text-xs text-yellow-400">{post.reviewNote}</p>
+          <div className="rounded-md border border-warning/20 bg-warning/5 px-3 py-2">
+            <p className="text-xs text-warning">{post.reviewNote}</p>
           </div>
         )}
       </CardContent>

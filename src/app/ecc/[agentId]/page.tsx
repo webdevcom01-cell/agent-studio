@@ -82,15 +82,15 @@ async function fetcher<T>(url: string): Promise<T> {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function confidenceColor(c: number): string {
-  if (c >= 0.85) return "text-emerald-400";
-  if (c >= 0.6) return "text-yellow-400";
-  return "text-zinc-400";
+  if (c >= 0.85) return "text-success";
+  if (c >= 0.6) return "text-warning";
+  return "text-muted-foreground";
 }
 
 function confidenceBg(c: number): string {
-  if (c >= 0.85) return "bg-emerald-400";
-  if (c >= 0.6) return "bg-yellow-400";
-  return "bg-zinc-500";
+  if (c >= 0.85) return "bg-success";
+  if (c >= 0.6) return "bg-warning";
+  return "bg-muted-foreground";
 }
 
 function pct(n: number): string {
@@ -183,7 +183,7 @@ export default function EccPage({
                   className={cn(
                     "min-w-[100px] transition-colors",
                     instinctsData?.eccEnabled &&
-                      "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600",
+                      "bg-success hover:bg-success/90 text-white border-success",
                   )}
                 >
                   {isTogglingEcc ? (
@@ -214,7 +214,7 @@ export default function EccPage({
               icon: Brain,
               label: "Total Instincts",
               value: isLoading ? null : (instinctsData?.stats.total ?? 0),
-              color: "text-blue-400",
+              color: "text-info",
             },
             {
               icon: TrendingUp,
@@ -222,7 +222,7 @@ export default function EccPage({
               value: isLoading
                 ? null
                 : pct(instinctsData?.stats.averageConfidence ?? 0),
-              color: "text-yellow-400",
+              color: "text-warning",
             },
             {
               icon: Award,
@@ -230,7 +230,7 @@ export default function EccPage({
               value: isLoading
                 ? null
                 : (instinctsData?.stats.promotionReady ?? 0),
-              color: "text-emerald-400",
+              color: "text-success",
             },
             {
               icon: CheckCircle2,
@@ -294,8 +294,8 @@ export default function EccPage({
         {!isLoading &&
           instinctsData &&
           instinctsData.promotionCandidates.length > 0 && (
-            <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-5">
-              <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-emerald-400">
+            <div className="rounded-lg border border-success/40 bg-success/10 p-5">
+              <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-success">
                 <Award className="size-4" />
                 Promotion Candidates
               </h3>
@@ -308,7 +308,7 @@ export default function EccPage({
                 {instinctsData.promotionCandidates.map(({ instinct }) => (
                   <div
                     key={instinct.id}
-                    className="flex items-center gap-3 rounded-md border border-emerald-800/30 bg-emerald-950/30 px-3 py-2"
+                    className="flex items-center gap-3 rounded-md border border-success/30 bg-success/10 px-3 py-2"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-sm font-medium">
@@ -324,7 +324,7 @@ export default function EccPage({
                       </span>
                       <Badge
                         variant="outline"
-                        className="border-emerald-700 bg-emerald-900/40 text-emerald-300 tabular-nums"
+                        className="border-success/50 bg-success/15 text-success tabular-nums"
                       >
                         {pct(instinct.confidence)}
                       </Badge>
