@@ -18,7 +18,7 @@ export function EmailSendNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-muted-foreground">
           <Mail className="size-4" />
         </div>
         <span className="text-sm font-medium">{(data.label as string) || "Email Send"}</span>
