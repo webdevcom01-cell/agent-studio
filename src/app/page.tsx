@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { MCPServerManager } from "@/components/mcp/mcp-server-manager";
+import { KpiRow } from "@/components/dashboard/kpi-row";
+import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { AgentCallMonitor } from "@/components/a2a/agent-call-monitor";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { AgentWizard, type WizardResult } from "@/components/dashboard/agent-wizard";
@@ -218,7 +220,7 @@ export default function DashboardPage(): React.ReactElement {
       {/* Page header */}
       <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border px-6">
         <div className="flex flex-1 items-baseline gap-2">
-          <h1 className="text-sm font-medium tracking-tight text-foreground">My Agents</h1>
+          <h1 className="text-sm font-medium tracking-tight text-foreground">Dashboard</h1>
           {!isLoading && (
             <span className="text-xs text-muted-foreground/40" aria-live="polite">
               {agents.length}
@@ -299,8 +301,12 @@ export default function DashboardPage(): React.ReactElement {
 
       {/* Content */}
       <main id="main-content" className="flex-1 overflow-y-auto px-6 py-6">
-        {isLoading ? (
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <KpiRow />
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <h2 className="mb-3 text-sm font-medium text-foreground">My Agents</h2>
+            {isLoading ? (
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             {[1, 2, 3].map((i) => (
               <div key={i} className="animate-pulse space-y-3 rounded-lg border border-border bg-card p-4">
                 <div className="h-3.5 w-32 rounded bg-muted" />
@@ -324,7 +330,7 @@ export default function DashboardPage(): React.ReactElement {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             {agents.map((agent) => (
               <div
                 key={agent.id}
@@ -440,6 +446,11 @@ export default function DashboardPage(): React.ReactElement {
             ))}
           </div>
         )}
+          </div>
+          <div className="lg:col-span-1">
+            <RecentActivity />
+          </div>
+        </div>
       </main>
 
       <AgentWizard
