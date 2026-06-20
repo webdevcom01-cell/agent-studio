@@ -7,6 +7,7 @@ import { Bot, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { toast } from "sonner";
 
 export default function RegisterPage(): React.ReactElement {
@@ -50,8 +51,8 @@ export default function RegisterPage(): React.ReactElement {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-sm">
+    <AuthShell>
+      <Card className="w-full max-w-sm border-0 bg-transparent shadow-none">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-primary/10">
             <Bot className="size-6 text-primary" />
@@ -139,6 +140,6 @@ export default function RegisterPage(): React.ReactElement {
           </p>
         </CardContent>
       </Card>
-    </div>
+    </AuthShell>
   );
 }
