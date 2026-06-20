@@ -11,6 +11,7 @@
 1. **Success rate — pogrešan imenilac.** Računao se `SUCCESS / svi_run-ovi`, gde „svi" uključuje `PENDING`/`RUNNING` (u toku) → lažno obarao stopu. **Ispravljeno:** sada `SUCCESS / završeni` (`SUCCESS+FAILED+TIMEOUT`).
 2. **Zbijene kartice u 2-col rasporedu.** Agent grid je bio `lg:grid-cols-3`, a u 2/3 širine (pored activity panela) kartice sa 5 dugmadi bi bile pretrpane. **Ispravljeno:** max 2 kolone (`sm:grid-cols-2`).
 3. **RLS coverage guard (CI fail).** Rute su zvale `prismaRead.agent.findMany` direktno → `scripts/check-rls-coverage.sh` obara „Lint" job jer upit nad tenant-modelom `agent` mora kroz wrapper. **Ispravljeno:** `withOrgContext(prisma, auth.organizationId, (tx) => tx.agent.findMany(...))` — isti obrazac kao `/api/agents`. Aggregати (executions/cost/approvals) ostaju na `prismaRead` (nisu RLS modeli; scope-ovani preko `agentIds`).
+4. **Activity endpoint 500 na prod-u (panel se nije prikazivao).** `/api/analytics/activity` je birao ugnježdenu relaciju `agent.name` preko `prismaRead` BEZ org konteksta. Na prod-u je `prismaRead` vezan za RLS → red `agent` sakriven → obavezna relacija = `null` → Prisma 500. (Potvrda da je RLS živ na read putanji.) **Ispravljeno:** imena agenata se razrešavaju iz već org-context-ovanog `agent` upita (`Map<id,name>`); `agentExecution` se čita bez relacije (`agentId` umesto `agent`). Pravilo naučeno: **nikad ne biraj RLS-relaciju preko `prismaRead` bez org konteksta** — ili koristi `withOrgContext`, ili razreši iz konteksta.
 
 ## ✅ Kompletno (po odobrenom mockup-u)
 

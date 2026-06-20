@@ -19,10 +19,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const ownAgents = await withOrgContext(prisma, auth.organizationId, (tx) =>
       tx.agent.findMany({
         where: { OR: [{ userId: auth.userId }, { userId: null }] },
-        select: { id: true },
+        select: { id: true, name: true },
       }),
     );
     const agentIds = ownAgents.map((a) => a.id);
+    const nameById = new Map(ownAgents.map((a) => [a.id, a.name]));
 
     const rows = await prismaRead.agentExecution.findMany({
       where: { agentId: { in: agentIds } },
@@ -34,14 +35,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         durationMs: true,
         createdAt: true,
         error: true,
-        agent: { select: { name: true } },
+        agentId: true,
       },
     });
 
     return NextResponse.json({
       items: rows.map((r) => ({
         id: r.id,
-        agentName: r.agent?.name ?? "Agent",
+        agentName: nameById.get(r.agentId) ?? "Agent",
         status: r.status,
         durationMs: r.durationMs,
         error: r.error,
