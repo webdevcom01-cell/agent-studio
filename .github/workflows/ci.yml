@@ -56,6 +56,9 @@ jobs:
       - name: RLS coverage guard
         run: bash scripts/check-rls-coverage.sh src
 
+      - name: Color-token guard
+        run: bash scripts/check-color-tokens.sh src
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest

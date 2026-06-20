@@ -345,7 +345,7 @@ export default function KnowledgePage({
                         <div className="flex shrink-0 items-center gap-2">
                           <Badge
                             variant={
-                              source.status === "READY" ? "default"
+                              source.status === "READY" ? "success"
                               : source.status === "FAILED" ? "destructive"
                               : "secondary"
                             }

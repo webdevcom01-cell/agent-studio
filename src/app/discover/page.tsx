@@ -186,8 +186,8 @@ export default function DiscoverPage(): React.ReactElement {
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors",
                   !activeCategory
-                    ? "bg-white/[0.06] font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-white/[0.03] hover:text-foreground"
+                    ? "bg-foreground/[0.06] font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-foreground/[0.03] hover:text-foreground"
                 )}
               >
                 <Layers className="size-3.5 shrink-0" />
@@ -207,8 +207,8 @@ export default function DiscoverPage(): React.ReactElement {
                   className={cn(
                     "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors",
                     activeCategory === cat.name
-                      ? "bg-white/[0.06] font-medium text-foreground"
-                      : "text-muted-foreground hover:bg-white/[0.03] hover:text-foreground"
+                      ? "bg-foreground/[0.06] font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-foreground/[0.03] hover:text-foreground"
                   )}
                 >
                   <Tag className="size-3.5 shrink-0" />
@@ -236,7 +236,7 @@ export default function DiscoverPage(): React.ReactElement {
                     className={cn(
                       "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] transition-colors",
                       activeTags.includes(tag.name)
-                        ? "border-border bg-white/[0.08] text-foreground"
+                        ? "border-border bg-foreground/[0.08] text-foreground"
                         : "border-transparent text-muted-foreground/40 hover:border-border hover:text-muted-foreground"
                     )}
                   >
@@ -274,7 +274,7 @@ export default function DiscoverPage(): React.ReactElement {
             {(activeCategory ?? activeTags.length > 0) && (
               <div className="flex items-center gap-1">
                 {activeCategory && (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-border bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-border bg-foreground/[0.04] px-1.5 py-0.5 text-[10px] text-muted-foreground">
                     {activeCategory}
                     <button type="button" onClick={() => setActiveCategory(null)}>
                       <X className="size-2.5" />
@@ -284,7 +284,7 @@ export default function DiscoverPage(): React.ReactElement {
                 {activeTags.map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center gap-1 rounded-md border border-border bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                    className="inline-flex items-center gap-1 rounded-md border border-border bg-foreground/[0.04] px-1.5 py-0.5 text-[10px] text-muted-foreground"
                   >
                     {tag}
                     <button type="button" onClick={() => toggleTag(tag)}>
