@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireOrgMember, isAuthError } from "@/lib/api/auth-guard";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
-import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { importTemplate, validateTemplatePayload } from "@/lib/templates/template-engine";
 import type { TemplatePayload } from "@/lib/templates/template-engine";

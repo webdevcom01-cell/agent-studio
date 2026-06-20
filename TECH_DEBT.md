@@ -43,20 +43,19 @@ paths use `prismaAdmin` (BYPASSRLS / `admin_user`).
 
 ## Current State
 
-### ESLint Suppressions — 15 (was 11; budget exceeded ⚠️)
+### ESLint Suppressions — 11 (back to baseline ✅, cleaned 2026-06-21)
 
 | Rule | Count | Notable locations | Note |
 |------|-------|-------------------|------|
 | `react-hooks/exhaustive-deps` | 9 | evals, cli-generator, webhooks (3×), flow-builder (2×), debug-timeline, **theme-provider** | mostly intentional (re-render guards); theme-provider = mount-once effect |
-| `@typescript-eslint/no-explicit-any` | 4 | webhook-trigger route (2×), `queue/events.ts`, `ast/ast-grep-client.ts` | ⚠️ **NEW** — violates "no new `any`" rule; resolve or justify |
 | `@next/next/no-img-element` | 1 | settings/profile | NEW |
 | `no-constant-condition` | 1 | chat/route.ts | intentional streaming loop |
 
-**Action:** the 4 new `no-explicit-any` suppressions should be typed properly or documented. Budget baseline reset to **15** pending cleanup.
+**Resolved 2026-06-21:** the 4 `no-explicit-any` suppressions were typed properly (narrow casts / `unknown` / stale-comment removal). Baseline back to **11**.
 
-### TypeScript Unused (strict) — 20 (was 0)
+### TypeScript Unused (strict) — 0 ✅ (cleaned 2026-06-21)
 
-`tsc --noEmit --noUnusedLocals --noUnusedParameters` → **20** `TS6133` (normal build = 0; these only surface under the strict flags). 6 are in `skills/rls-rollout/scripts/`; rest in `src/lib`, `src/app/api`. Latent debt — clean or prefix with `_`.
+`tsc --noEmit --noUnusedLocals --noUnusedParameters` → **0** `TS6133`. Cleaned 2026-06-21: removed 14 unused `prisma` imports (routes migrated to `prismaAdmin`/`withOrgContext`) + 6 unused locals in `skills/rls-rollout/scripts/`.
 
 ### Dead Code (Knip) — NOT re-scanned ⏳
 
@@ -108,8 +107,8 @@ Baseline 2026-04-27: 87 unused exports, 18 unused deps (see below). **Not re-mea
 
 ```bash
 pnpm knip:ci                                                    # dead code (needs pnpm install)
-npx tsc --noEmit --noUnusedLocals --noUnusedParameters | grep TS6133   # strict unused (baseline 20)
-grep -rn "eslint-disable" src --include="*.tsx" --include="*.ts" | grep -v node_modules | wc -l  # baseline 15
+npx tsc --noEmit --noUnusedLocals --noUnusedParameters | grep TS6133   # strict unused (baseline 0)
+grep -rn "eslint-disable" src --include="*.tsx" --include="*.ts" | grep -v node_modules | wc -l  # baseline 11
 bash scripts/check-rls-coverage.sh src                          # RLS coverage guard
 bash scripts/check-color-tokens.sh src                          # color-token guard
 pnpm test -- --coverage | tail -5
@@ -119,7 +118,7 @@ pnpm test -- --coverage | tail -5
 
 ## Governance Rules
 
-1. **No new `any`** — use proper types/`unknown`/generics. (Currently 4 violations to clean up.)
+1. **No new `any`** — use proper types/`unknown`/generics. (0 — clean.)
 2. **No new `eslint-disable` without justification comment.**
 3. **Error boundary + loading coverage** — every new route dir needs `error.tsx` / `loading.tsx`.
 4. **RLS coverage guard** — every tenant-model query must go through `withOrgContext`/`withTenant`/`withAdminBypass` (CI-enforced).

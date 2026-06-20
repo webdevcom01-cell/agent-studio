@@ -68,8 +68,7 @@ export function createJobEventStream(jobId: string): ReadableStream<Uint8Array> 
         });
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const onProgress = (args: { jobId: string; data: any }, _id: string) => {
+      const onProgress = (args: { jobId: string; data: unknown }, _id: string) => {
         if (args.jobId !== jobId) return;
         send({
           type: "progress",

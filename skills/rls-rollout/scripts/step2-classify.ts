@@ -20,7 +20,6 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, "../../..");
 const JSON_PATH = resolve(__dirname, "../reference/model-classifications.json");
 const MD_PATH = resolve(__dirname, "../reference/model-classifications.md");
 
