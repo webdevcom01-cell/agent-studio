@@ -1,139 +1,128 @@
 # Tech Debt Baseline — agent-studio
 
-Last updated: 2026-05-04
-Baseline established after Phases 1–6 cleanup. Knip baseline added 2026-04-27.
+Last updated: 2026-06-20 (forensic re-measure)
+Previous baseline: 2026-05-04 (Phases 1–6 cleanup; Knip baseline 2026-04-27).
+
+> This file was forensically re-measured on 2026-06-20. The RLS section in
+> particular was badly stale: it predated the entire phased RLS rollout.
 
 ---
 
-## RLS Rollout Status (F0.8)
+## RLS Rollout Status — RE-MEASURED 2026-06-20
 
-| Item | Status |
-|------|--------|
-| Migration file (`20240108000000_enable_rls`) | ✅ Created |
-| `withOrgContext` helper (`src/lib/db/rls-middleware.ts`) | ✅ Created + tested (8 tests) |
-| RLS note in `src/lib/prisma.ts` | ✅ Added |
-| API routes wired with `withOrgContext` | ❌ TODO — each route needs to wrap prisma calls |
-| Schema: `organizationId` column on non-Agent tables | ❌ TODO — needed before RLS can cover those tables |
+The rollout is now **largely implemented** (~85%), not "TODO". Previous baseline
+showed `Agent only / routes TODO`; that snapshot predated all of the work below.
 
-**Priority routes to migrate first:**
-1. `/api/agents` — direct Agent queries, highest tenant-leakage risk
-2. `/api/flows` — child of Agent, leaks flow content
-3. `/api/knowledge-bases` — child of Agent, leaks KB documents
+| Item | Status (2026-06-20) |
+|------|---------------------|
+| `ENABLE ROW LEVEL SECURITY` statements | ✅ **27** across **14** phased migrations |
+| Tables with RLS policies | ✅ Agent + cascaded children (Flow, Eval*, Department, ApprovalPolicy, CompanyMission, AgentPermissionGrant, AgentSkillPermission, PolicyDecision, Heartbeat*, …) |
+| `organizationId` columns | ✅ **7** tables: Agent, ApiKey, Template, Goal, Department, OrganizationMember, Invitation |
+| Child tables (Flow, KnowledgeBase, Eval*, MCPServer…) | ✅ protected via **cascade** through Agent (no own column needed) |
+| DB roles | ✅ `app_user` (NOBYPASSRLS) + `admin_user` (BYPASSRLS) — migration `20260519000000_create_app_admin_db_roles` |
+| `withOrgContext()` wiring in API routes | ✅ **56** API files use `withOrgContext`/`withTenant` |
+| CI enforcement | ✅ `scripts/check-rls-coverage.sh` (CI Lint job) — protects **20** models, blocks merges |
+| Rollout toolkit | ✅ `skills/rls-rollout/` (audit, generate-migration, rollback, isolation tests, runbook, verify-staging) + tests |
+| Runtime enforcement | 🔴 **gated by feature flag `rls-enforcement`** (read in `rls-middleware.ts` via `isFeatureEnabled`) |
 
-**Tables currently covered by RLS:** `Agent` only (only table with real `organizationId` column in schema).
+**Mechanism:** `withOrgContext(prisma, orgId, fn)` opens a `$transaction` and runs
+`SELECT set_config('app.current_org_id', <orgId>, true)` so RLS policies filter by
+org — **only if** the `rls-enforcement` flag is on AND an org is resolved. Admin/cron
+paths use `prismaAdmin` (BYPASSRLS / `admin_user`).
 
-**Tables pending schema migration before RLS can be added:**
-Flow, KnowledgeBase, WebhookConfig, EvalSuite, EvalRun, EvalResult, AuditLog, ApiKey, MCPServer, AgentSkillPermission
+### 🔴 Remaining for FULL cutover (the real open work)
+1. Flip the **`rls-enforcement`** feature flag ON in production.
+2. Point the app's runtime connection at **`app_user`** (`DATABASE_URL_APP_USER` — currently commented out in `.env.example`; primary `DATABASE_URL` likely still a bypass role).
+3. Run **cross-tenant isolation tests** in staging (`skills/rls-rollout/` + `docs/rls-phase-0d-test-plan.md`) and verify no read breakage.
+4. Confirm cascade policies fully cover standalone child tables, or add `organizationId` where a direct column is needed.
+5. Staged enable → monitor → rollback plan ready (`skills/rls-rollout/rollback.sh`).
 
-**Note on Prisma v6 middleware:** `$use()` was removed in Prisma v6. `registerRLSMiddleware()` in rls-middleware.ts only activates when a client exposes `$use` (test mocks). Production routes must call `withOrgContext()` per-request.
+**Note on Prisma v6:** `$use()` removed in v6; `withOrgContext()` is per-request (no global middleware hook).
 
 ---
 
 ## Current State
 
-### ESLint Suppressions (11 total — all intentional)
+### ESLint Suppressions — 15 (was 11; budget exceeded ⚠️)
 
-| Rule | Count | Location | Reason |
-|------|-------|----------|--------|
-| `react-hooks/exhaustive-deps` | 8 | evals/page, cli-generator/page, webhooks/page (3×), flow-builder (2×), debug-timeline | Intentional — prevents infinite re-render loops |
-| `no-console` | 2 | error-display.tsx, flow-builder.tsx | Dev-only `console.error` guards |
-| `no-constant-condition` | 1 | chat/route.ts | Infinite streaming loop (by design) |
+| Rule | Count | Notable locations | Note |
+|------|-------|-------------------|------|
+| `react-hooks/exhaustive-deps` | 9 | evals, cli-generator, webhooks (3×), flow-builder (2×), debug-timeline, **theme-provider** | mostly intentional (re-render guards); theme-provider = mount-once effect |
+| `@typescript-eslint/no-explicit-any` | 4 | webhook-trigger route (2×), `queue/events.ts`, `ast/ast-grep-client.ts` | ⚠️ **NEW** — violates "no new `any`" rule; resolve or justify |
+| `@next/next/no-img-element` | 1 | settings/profile | NEW |
+| `no-constant-condition` | 1 | chat/route.ts | intentional streaming loop |
 
-**Budget rule:** Any new `eslint-disable` comment requires a code review comment explaining why it cannot be fixed properly.
+**Action:** the 4 new `no-explicit-any` suppressions should be typed properly or documented. Budget baseline reset to **15** pending cleanup.
 
----
+### TypeScript Unused (strict) — 20 (was 0)
 
-### TypeScript Unused Locals (0 errors)
+`tsc --noEmit --noUnusedLocals --noUnusedParameters` → **20** `TS6133` (normal build = 0; these only surface under the strict flags). 6 are in `skills/rls-rollout/scripts/`; rest in `src/lib`, `src/app/api`. Latent debt — clean or prefix with `_`.
 
-Run: `tsc --noEmit --noUnusedLocals --noUnusedParameters`
-Result: **0 errors** (baseline established 2026-03-27, confirmed after full cleanup)
+### Dead Code (Knip) — NOT re-scanned ⏳
 
-**Budget rule:** This count must not grow. New unused vars should be prefixed with `_`.
-
----
-
-### Dead Code (Knip)
-
-Run: `pnpm knip:ci`
-Requires: `pnpm install` (knip v5 added as devDependency)
-
-See baseline section below for current numbers.
+Baseline 2026-04-27: 87 unused exports, 18 unused deps (see below). **Not re-measured 2026-06-20** — `knip` is not installed in the working environment (`pnpm install` required). Re-run before next release.
 
 ---
 
-## Knip Baseline (2026-04-27)
+## Design-System / UI Debt — NEW (2026-06-20)
 
-Run: `pnpm knip` | knip v5.88.1
+| Item | Status |
+|------|--------|
+| Color tokens standardized across app | ✅ ~440 off-token colors → semantic tokens |
+| `scripts/check-color-tokens.sh` (CI Lint job) | ✅ blocks off-token palette/hex/dark-only-overlay outside allowlist |
+| Allowlist (intentional) | devsecops SVG diagram, auth-shell brand panel, login Google OAuth, soma `PLATFORM_COLORS`, template-gallery decorative |
+| `@tailwindcss/typography` | 🟡 **NOT installed** — `prose` classes are inert; markdown styled via `.markdown-body` (chat wired to it) |
+| Chat per-message timestamps | 🟡 deferred — needs `ChatMessage` type + streaming-hook change |
+| K4 (on-primary text) | ✅ resolved → white, token-driven (`--primary-foreground`) |
+| Theme toggle | ✅ added to sidebar (Sun/Moon → `toggleTheme`); token parity 27/27 verified in dark |
+
+---
+
+## Knip Baseline (2026-04-27 — stale, pending re-scan)
 
 | Category | Count |
 |----------|-------|
-| Unused exports (values + functions) | 44 |
-| Unused exported types | 43 |
-| **Total unused exports** | **87** |
+| Total unused exports | 87 |
 | Unused files | 8 |
-| Unused dependencies (prod) | 12 |
-| Unused devDependencies | 6 |
-| **Total unused dependencies** | **18** |
+| Total unused dependencies | 18 |
 
-### Known False Positives — do not act on these
-
-- **`@radix-ui/*` (7 packages)** — consumed through `src/components/ui/` barrel re-exports; knip cannot trace through them. The associated unused export warnings (`DialogClose`, `DropdownMenuGroup`, `CardFooter`, etc.) are the same root cause.
-- **`tailwindcss`** — consumed by PostCSS/build config, not imported in JS files.
-- **`eslint` + `eslint-config-next`** — used by the editor and build pipeline, not by `import` statements.
-
-### Budget Rule
-
-Knip count must not grow between quarterly scans. New dead code findings must be resolved or explicitly documented here with a justification.
+**Known false positives:** `@radix-ui/*` (barrel re-exports), `tailwindcss` (PostCSS), `eslint`/`eslint-config-next` (build pipeline).
 
 ---
 
-## Completed Cleanup Phases
+## Completed Phases
 
-| Phase | Description | Date | Commit |
-|-------|-------------|------|--------|
-| 1 | ESLint suppression audit — identified all pre-existing `eslint-disable` comments | 2026-03-27 | — |
-| 2 | Removed all 12 `@typescript-eslint/no-explicit-any` suppressions | 2026-03-27 | `29c6379` |
-| 3 | Added `error.tsx` to 7 routes + `loading.tsx` to 5 routes (Skeleton UI) | 2026-03-27 | `e87b3ff` |
-| 4 | Unused import cleanup — StarOff, Button, unused loop var `c` | 2026-03-27 | `e87b3ff` |
-| 5 | ESLint modernization — `no-console` + `no-unused-vars` rules, ESLint step in precheck | 2026-03-27 | `e87b3ff` |
-| 6 | Ongoing governance — Knip config, warning budget baseline, quarterly scan script | 2026-03-27 | current |
-| 7 | Dead file cleanup — deleted `cache/index.ts` (MemoryCache barrel, 0 importers) and `security/index.ts` (re-export barrel, 0 importers); kept `session/session-tracker.ts` with TODO F3; confirmed `schema-drift` import was never broken (`../../types` resolves correctly) | 2026-05-04 | — |
-| 8 | F1 cost tracking wired — `recordCost()` added fire-and-forget to `ai-response-handler.ts` and `ai-response-streaming-handler.ts` after token usage recording | 2026-05-04 | — |
-| 9 | F6 KEYS→SCAN — replaced `redis.keys()` with SCAN cursor loop in `getAgentCheckouts`; added `scan` to `RedisClient` interface; updated tests to mock `scan` instead of `keys` | 2026-05-04 | — |
+| Phase | Description | Date |
+|-------|-------------|------|
+| 1–6 | ESLint/any/error+loading/governance baseline | 2026-03-27 |
+| 7–9 | Dead file cleanup, F1 cost tracking, F6 KEYS→SCAN | 2026-05-04 |
+| 10 | RLS phased rollout — 14 migrations, 27 RLS tables, app_user/admin_user roles, withOrgContext + `rls-enforcement` flag, 56 routes wired, CI RLS coverage guard, rollout toolkit | through 2026-06 |
+| 11 | UI/UX overhaul — Ember design system; landing, login, dashboard, builder, chat redesigned; dashboard KPI + activity endpoints | 2026-06 |
+| 12 | Color standardization — ~440 off-token colors → semantic tokens + `check-color-tokens.sh` CI guard | 2026-06-20 |
+| 13 | Chat readability — markdown-body wiring, generic human renderer for structured output, message copy, richer empty state | 2026-06-20 |
+| 14 | Dark-mode pass + K4 (white-on-primary) + sidebar theme toggle; token parity 27/27 verified | 2026-06-20 |
 
 ---
 
 ## Quarterly Scan Checklist
 
-Run every quarter (or before major releases):
-
 ```bash
-# 1. Dead code detection
-pnpm knip:ci
-
-# 2. Unused locals (strict)
-npx tsc --noEmit --noUnusedLocals --noUnusedParameters 2>&1 | grep "error TS6133"
-
-# 3. ESLint suppression count
-grep -rn "eslint-disable" src --include="*.tsx" --include="*.ts" | grep -v "node_modules" | wc -l
-# Current baseline: 11
-
-# 4. Test coverage trend
-pnpm test -- --coverage 2>&1 | tail -5
-
-# 5. Bundle size (production build)
-pnpm build 2>&1 | grep "Route\|Size\|First Load"
+pnpm knip:ci                                                    # dead code (needs pnpm install)
+npx tsc --noEmit --noUnusedLocals --noUnusedParameters | grep TS6133   # strict unused (baseline 20)
+grep -rn "eslint-disable" src --include="*.tsx" --include="*.ts" | grep -v node_modules | wc -l  # baseline 15
+bash scripts/check-rls-coverage.sh src                          # RLS coverage guard
+bash scripts/check-color-tokens.sh src                          # color-token guard
+pnpm test -- --coverage | tail -5
 ```
-
-Update this file with new baseline numbers after each quarterly scan.
 
 ---
 
 ## Governance Rules
 
-1. **No new `any` types** — use proper Prisma/AI SDK types, `unknown`, or generics
-2. **No new `eslint-disable` without justification comment** — explain why it can't be fixed
-3. **Error boundary coverage** — every new route directory needs `error.tsx`
-4. **Loading state coverage** — every new high-traffic route needs `loading.tsx`
-5. **Run `pnpm precheck` before every push** — 4 checks must pass
-6. **Run `pnpm knip:ci` quarterly** — resolve or document new dead code findings
+1. **No new `any`** — use proper types/`unknown`/generics. (Currently 4 violations to clean up.)
+2. **No new `eslint-disable` without justification comment.**
+3. **Error boundary + loading coverage** — every new route dir needs `error.tsx` / `loading.tsx`.
+4. **RLS coverage guard** — every tenant-model query must go through `withOrgContext`/`withTenant`/`withAdminBypass` (CI-enforced).
+5. **Color-token guard** — no off-token palette/hex/dark-only-overlay outside the documented allowlist (CI-enforced).
+6. **Run `pnpm precheck` before every push.**
+7. **Run `pnpm knip:ci` quarterly.**
