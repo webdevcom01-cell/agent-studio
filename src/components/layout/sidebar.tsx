@@ -19,12 +19,15 @@ import {
   Brain,
   ChevronRight,
   LogOut,
+  Sun,
+  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
   CheckSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/components/theme-provider";
 
 interface NavItem {
   icon: React.ElementType;
@@ -125,6 +128,8 @@ function NavItemButton({ item, collapsed, isActive }: NavItemButtonProps): React
 export function Sidebar({ collapsed, onCollapsedChange, onOpenCommand }: SidebarProps): React.ReactElement {
   const pathname = usePathname();
   const { data: session } = useSession();
+
+  const { theme, toggleTheme } = useTheme();
 
   const toggleCollapse = useCallback(() => {
     onCollapsedChange(!collapsed);
@@ -277,6 +282,32 @@ export function Sidebar({ collapsed, onCollapsedChange, onOpenCommand }: Sidebar
             )}
           </AnimatePresence>
         </div>
+
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          aria-label="Toggle theme"
+          className={cn(
+            "flex items-center rounded-md px-2 py-1.5 text-xs text-muted-foreground/40 transition-colors hover:text-muted-foreground",
+            collapsed ? "justify-center" : "gap-2"
+          )}
+        >
+          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+          <AnimatePresence initial={false}>
+            {!collapsed && (
+              <motion.span
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: "auto" }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ duration: 0.15 }}
+                className="overflow-hidden whitespace-nowrap"
+              >
+                {theme === "dark" ? "Light mode" : "Dark mode"}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
 
         {/* Collapse toggle */}
         <button
