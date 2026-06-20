@@ -30,51 +30,75 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
+  --color-success: hsl(var(--success));
+  --color-success-bg: hsl(var(--success-bg));
+  --color-warning: hsl(var(--warning));
+  --color-warning-bg: hsl(var(--warning-bg));
+  --color-info: hsl(var(--info));
+  --color-info-bg: hsl(var(--info-bg));
+  --color-brand-subtle: hsl(var(--brand-subtle));
+  --color-brand-subtle-foreground: hsl(var(--brand-subtle-foreground));
 }
 
-/* ── MONOCHROME MINIMALISM — token scale ─────────────────────────────── */
+/* ── EMBER on warm matte-black — token scale (light) ─────────────────── */
 :root {
-  --background: 0 0% 98%;          /* #FAFAFA — off-white canvas */
-  --foreground: 0 0% 5%;           /* #0D0D0D — near-black text */
+  --background: 40 27% 98%;        /* #FBFAF8 — warm paper canvas */
+  --foreground: 30 12% 10%;        /* #1C1916 — warm near-black text */
   --card: 0 0% 100%;               /* #FFFFFF — card surface */
-  --card-foreground: 0 0% 5%;
+  --card-foreground: 30 12% 10%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 5%;
-  --primary: 0 0% 5%;              /* near-black — primary actions */
-  --primary-foreground: 0 0% 98%;
-  --secondary: 0 0% 95%;
-  --secondary-foreground: 0 0% 35%;
-  --muted: 0 0% 94%;
-  --muted-foreground: 0 0% 42%;    /* #6B6B6B */
-  --accent: 0 0% 94%;
-  --accent-foreground: 0 0% 5%;
-  --destructive: 0 72% 51%;        /* #D93025 — red */
-  --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 89%;              /* #E3E3E3 */
-  --input: 0 0% 89%;
-  --ring: 0 0% 5%;
+  --popover-foreground: 30 12% 10%;
+  --primary: 20 89% 53%;           /* #F2641E — Ember brand */
+  --primary-foreground: 20 86% 5%; /* #1A0A02 — ink on ember */
+  --secondary: 38 33% 95%;         /* #F7F4EF */
+  --secondary-foreground: 36 9% 32%;
+  --muted: 38 33% 95%;
+  --muted-foreground: 36 9% 32%;   /* #5A544B */
+  --accent: 38 22% 90%;            /* #ECE8E1 — neutral hover */
+  --accent-foreground: 30 12% 10%;
+  --destructive: 0 72% 51%;        /* #DC2626 — red */
+  --destructive-foreground: 0 0% 100%;
+  --border: 37 21% 85%;            /* #E0DAD0 */
+  --input: 36 15% 75%;             /* #C8C0B4 */
+  --ring: 20 89% 53%;              /* Ember focus ring */
+  --success: 142 72% 29%;          /* #15803D */
+  --success-bg: 140 45% 94%;       /* #E7F6EC */
+  --warning: 26 90% 37%;           /* #B45309 */
+  --warning-bg: 37 78% 93%;        /* #FBF0DE */
+  --info: 224 76% 48%;             /* #1D4ED8 */
+  --info-bg: 220 84% 95%;          /* #E8EFFD */
+  --brand-subtle: 23 76% 93%;      /* #FBEBE1 — ember tint */
+  --brand-subtle-foreground: 18 85% 39%; /* #B8430F — ember text on tint */
 }
 
 .dark {
-  --background: 0 0% 5%;           /* #0D0D0D — near-black canvas */
-  --foreground: 0 0% 94%;          /* #F0F0F0 — near-white text */
-  --card: 0 0% 8%;                 /* #141414 — card surface */
-  --card-foreground: 0 0% 94%;
-  --popover: 0 0% 9%;              /* #171717 — slightly lifted */
-  --popover-foreground: 0 0% 94%;
-  --primary: 0 0% 94%;             /* near-white — primary actions */
-  --primary-foreground: 0 0% 5%;
-  --secondary: 0 0% 13%;
-  --secondary-foreground: 0 0% 62%;
-  --muted: 0 0% 13%;
-  --muted-foreground: 0 0% 54%;    /* #8A8A8A — slightly brighter for legibility */
-  --accent: 0 0% 13%;
-  --accent-foreground: 0 0% 94%;
-  --destructive: 0 84% 60%;        /* #F04040 — bright red, legible on dark */
-  --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 15%;              /* #262626 — subtle dark border */
-  --input: 0 0% 16%;               /* #292929 — slightly lighter than border */
-  --ring: 0 0% 94%;
+  --background: 20 14% 4%;         /* #0C0A09 — warm matte black */
+  --foreground: 32 22% 88%;        /* #E8E2DB — warm off-white text */
+  --card: 24 13% 8%;               /* #161311 — card surface */
+  --card-foreground: 32 22% 88%;
+  --popover: 26 14% 10%;           /* #1C1815 — slightly lifted */
+  --popover-foreground: 32 22% 88%;
+  --primary: 20 89% 53%;           /* #F2641E — Ember brand */
+  --primary-foreground: 20 86% 5%; /* #1A0A02 — ink on ember */
+  --secondary: 26 14% 10%;         /* #1C1815 */
+  --secondary-foreground: 33 10% 60%;
+  --muted: 26 14% 10%;
+  --muted-foreground: 33 10% 60%;  /* #A39A8F */
+  --accent: 27 15% 12%;            /* #221D19 — neutral hover */
+  --accent-foreground: 32 22% 88%;
+  --destructive: 0 100% 71%;       /* #FF6B6B — legible on dark */
+  --destructive-foreground: 0 0% 100%;
+  --border: 27 14% 15%;            /* #2C2621 */
+  --input: 28 15% 20%;             /* #3A322B */
+  --ring: 20 89% 53%;              /* Ember focus ring */
+  --success: 151 65% 54%;          /* #3DD68C */
+  --success-bg: 153 51% 11%;       /* #0E2B1E */
+  --warning: 44 89% 63%;           /* #F5C84B */
+  --warning-bg: 44 76% 10%;        /* #2C2206 */
+  --info: 214 89% 66%;             /* #5B9DF5 */
+  --info-bg: 211 60% 14%;          /* #0E2238 */
+  --brand-subtle: 20 75% 9%;       /* #2A1206 — ember tint */
+  --brand-subtle-foreground: 20 89% 60%; /* #F47C3F — ember text on dark tint */
 }
 
 @layer base {
