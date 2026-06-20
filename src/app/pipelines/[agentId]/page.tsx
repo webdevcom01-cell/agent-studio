@@ -267,7 +267,7 @@ function MetricsSummaryCard({
                   className={cn(
                     "px-2 py-0.5 text-xs rounded border transition-colors",
                     selectedPhase === p
-                      ? "bg-primary border-primary text-white"
+                      ? "bg-primary border-primary text-primary-foreground"
                       : "border-border text-muted-foreground hover:border-border hover:text-foreground",
                   )}
                 >

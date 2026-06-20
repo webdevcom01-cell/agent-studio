@@ -50,7 +50,7 @@
   --popover: 0 0% 100%;
   --popover-foreground: 30 12% 10%;
   --primary: 20 89% 53%;           /* #F2641E — Ember brand */
-  --primary-foreground: 20 86% 5%; /* #1A0A02 — ink on ember */
+  --primary-foreground: 0 0% 100%;     /* white on ember (K4) */
   --secondary: 38 33% 95%;         /* #F7F4EF */
   --secondary-foreground: 36 9% 32%;
   --muted: 38 33% 95%;
@@ -80,7 +80,7 @@
   --popover: 26 14% 10%;           /* #1C1815 — slightly lifted */
   --popover-foreground: 32 22% 88%;
   --primary: 20 89% 53%;           /* #F2641E — Ember brand */
-  --primary-foreground: 20 86% 5%; /* #1A0A02 — ink on ember */
+  --primary-foreground: 0 0% 100%;     /* white on ember (K4) */
   --secondary: 26 14% 10%;         /* #1C1815 */
   --secondary-foreground: 33 10% 60%;
   --muted: 26 14% 10%;
