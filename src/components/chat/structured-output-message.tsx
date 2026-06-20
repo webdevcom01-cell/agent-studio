@@ -502,6 +502,100 @@ function ArchitectureRenderer({ data }: { data: Record<string, unknown> }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+// ─── Generic human-readable renderer (fallback for any schema) ───────────────
+
+/** camelCase / snake_case / SCREAMING_CASE → "Title Case" */
+function humanizeKey(key: string): string {
+  const spaced = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function isUrl(s: string): boolean {
+  return /^https?:\/\/\S+$/i.test(s.trim());
+}
+
+function GenericValue({ value }: { value: unknown }) {
+  if (value === null || value === undefined || value === "") {
+    return <span className="text-muted-foreground/50 italic">—</span>;
+  }
+  if (typeof value === "boolean") {
+    return <span className="text-foreground">{value ? "Yes" : "No"}</span>;
+  }
+  if (typeof value === "number") {
+    return <span className="text-foreground tabular-nums">{value}</span>;
+  }
+  if (typeof value === "string") {
+    if (isUrl(value)) {
+      return (
+        <a href={value} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 break-all">
+          {value}
+        </a>
+      );
+    }
+    return <span className="text-foreground whitespace-pre-wrap break-words">{value}</span>;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="text-muted-foreground/50 italic">—</span>;
+    const allPrimitive = value.every((v) => v === null || ["string", "number", "boolean"].includes(typeof v));
+    if (allPrimitive) {
+      return (
+        <ul className="list-disc pl-4 space-y-0.5">
+          {value.map((v, i) => (
+            <li key={i} className="text-foreground"><GenericValue value={v} /></li>
+          ))}
+        </ul>
+      );
+    }
+    return (
+      <div className="flex flex-col gap-2">
+        {value.map((v, i) => (
+          <div key={i} className="rounded-md border border-border/60 bg-background/40 p-2">
+            <GenericValue value={v} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (typeof value === "object") {
+    return <GenericObject data={value as Record<string, unknown>} />;
+  }
+  return <span className="text-foreground">{String(value)}</span>;
+}
+
+function GenericObject({ data }: { data: Record<string, unknown> }) {
+  const entries = Object.entries(data).filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (entries.length === 0) return <span className="text-muted-foreground/50 italic">—</span>;
+  return (
+    <dl className="flex flex-col gap-2">
+      {entries.map(([k, v]) => {
+        const nested = typeof v === "object" && v !== null;
+        return (
+          <div key={k} className={nested ? "flex flex-col gap-1" : "flex gap-2 items-baseline"}>
+            <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground shrink-0 min-w-[88px]">
+              {humanizeKey(k)}
+            </dt>
+            <dd className="text-sm flex-1 min-w-0 leading-relaxed"><GenericValue value={v} /></dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+
+function GenericRenderer({ data }: { data: Record<string, unknown> }) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-card/40 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1"><GenericObject data={data} /></div>
+        <CopyButton text={JSON.stringify(data, null, 2)} />
+      </div>
+    </div>
+  );
+}
+
 const SCHEMA_LABELS: Record<string, string> = {
   CodeGenOutput: "Code Generation",
   PRGateOutput: "PR Review Gate",
@@ -531,6 +625,9 @@ export function StructuredOutputMessage({ schemaName, data }: StructuredOutputMe
       {schemaName === "CodeGenOutput" && <CodeGenRenderer data={data} />}
       {schemaName === "PRGateOutput" && <PRGateRenderer data={data} />}
       {schemaName === "ArchitectureOutput" && <ArchitectureRenderer data={data} />}
+      {!["CodeGenOutput", "PRGateOutput", "ArchitectureOutput"].includes(schemaName) && (
+        <GenericRenderer data={data} />
+      )}
     </div>
   );
 }
