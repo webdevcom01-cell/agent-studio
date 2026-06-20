@@ -15,6 +15,8 @@ import {
   Workflow,
   GitBranch,
   RotateCcw,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -47,6 +49,26 @@ function ConvStatusDot({ status }: { status: string }) {
   return <span className="size-2 shrink-0 rounded-full bg-muted-foreground/20" title="Abandoned" />;
 }
 
+function MessageCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }).catch(() => {});
+      }}
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+      title="Copy message"
+    >
+      {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
 export default function ChatPage({
   params,
 }: {
@@ -54,6 +76,7 @@ export default function ChatPage({
 }): React.ReactElement {
   const { agentId } = use(params);
   const [agentName, setAgentName] = useState("Agent");
+  const [agentDescription, setAgentDescription] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -81,7 +104,7 @@ export default function ChatPage({
   useEffect(() => {
     fetch(`/api/agents/${agentId}`)
       .then((r) => r.json())
-      .then((json) => { if (json.success) setAgentName(json.data.name); })
+      .then((json) => { if (json.success) { setAgentName(json.data.name); setAgentDescription(json.data.description ?? ""); } })
       .catch(() => {});
   }, [agentId]);
 
@@ -294,12 +317,16 @@ export default function ChatPage({
             <div className="mx-auto flex max-w-2xl flex-col gap-5">
               {messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <div className="mb-4 rounded-full border border-border p-4">
-                    <Bot className="size-5 text-muted-foreground/40" />
+                  <div className="mb-4 flex size-12 items-center justify-center rounded-full border border-border bg-card">
+                    <Bot className="size-5 text-muted-foreground" />
                   </div>
-                  <p className="text-sm text-muted-foreground/40">
-                    Start a conversation with {agentName}
-                  </p>
+                  <p className="text-sm font-medium text-foreground">{agentName}</p>
+                  {agentDescription && (
+                    <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-muted-foreground">
+                      {agentDescription}
+                    </p>
+                  )}
+                  <p className="mt-3 text-xs text-muted-foreground/50">Type a message below to start.</p>
                 </div>
               )}
 
@@ -308,7 +335,7 @@ export default function ChatPage({
                   key={i}
                   data-testid={`chat-message-${msg.role}`}
                   className={cn(
-                    "flex gap-3",
+                    "group flex gap-3",
                     msg.role === "user" && "flex-row-reverse"
                   )}
                 >
@@ -332,7 +359,7 @@ export default function ChatPage({
                     {msg.role === "assistant" ? (
                       <>
                         {msg.content ? (
-                          <div className="prose prose-sm prose-invert max-w-none">
+                          <div className="markdown-body">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                           </div>
                         ) : (
@@ -370,6 +397,11 @@ export default function ChatPage({
                           }
                           return null;
                         })()}
+                        {msg.content && (
+                          <div className="mt-1.5 flex opacity-0 transition-opacity group-hover:opacity-100">
+                            <MessageCopyButton text={msg.content} />
+                          </div>
+                        )}
                       </>
                     ) : (
                       msg.content
