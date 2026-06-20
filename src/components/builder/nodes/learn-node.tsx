@@ -18,7 +18,7 @@ export function LearnNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-fuchsia-700 dark:bg-muted/20 dark:text-muted-foreground">
+        <div className="flex size-7 items-center justify-center rounded-md bg-muted/20 text-muted-foreground">
           <Lightbulb className="size-4" />
         </div>
         <span className="text-sm font-medium">{(data.label as string) || "Learn"}</span>

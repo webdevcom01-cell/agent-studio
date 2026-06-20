@@ -32,7 +32,7 @@ function DeployTriggerNodeComponent({ data, selected }: NodeProps) {
           <span
             className={cn(
               "font-mono text-[10px]",
-              target === "production" ? "text-orange-400" : "text-blue-400",
+              target === "production" ? "text-foreground" : "text-muted-foreground",
             )}
           >
             {target}

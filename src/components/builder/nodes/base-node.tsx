@@ -50,7 +50,7 @@ export function BaseNode({
   return (
     <div
       className={cn(
-        "min-w-[200px] max-w-[280px] rounded-lg border bg-background shadow-sm transition-shadow",
+        "min-w-[200px] max-w-[280px] rounded-lg border bg-background shadow-sm transition-all hover:shadow-md",
         colors.border,
         selected && "ring-2 ring-primary ring-offset-2"
       )}
