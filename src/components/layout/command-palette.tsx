@@ -140,11 +140,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): React.Re
       onClick={onClose}
     >
       <div
-        className="w-[520px] overflow-hidden rounded-xl border border-white/[0.06] bg-[#111] shadow-[0_25px_60px_rgba(0,0,0,0.7)]"
+        className="w-[520px] overflow-hidden rounded-xl border border-border bg-popover shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Input */}
-        <div className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3">
+        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
           <Search size={15} className="shrink-0 text-muted-foreground/30" />
           <input
             ref={inputRef}
@@ -183,14 +183,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): React.Re
                       onClick={() => handleSelect(item)}
                       className={cn(
                         "flex w-full items-center gap-3 px-4 py-2 text-left transition-colors duration-75",
-                        isActive ? "bg-white/[0.04]" : "bg-transparent"
+                        isActive ? "bg-foreground/[0.04]" : "bg-transparent"
                       )}
                     >
                       <span className={cn(
                         "flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-[11px] transition-colors duration-75",
                         isActive
                           ? "border-border bg-card text-muted-foreground"
-                          : "border-white/[0.04] bg-white/[0.02] text-muted-foreground/30"
+                          : "border-border bg-foreground/[0.02] text-muted-foreground/30"
                       )}>
                         <Icon size={12} />
                       </span>
@@ -216,7 +216,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): React.Re
         </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-3 border-t border-white/[0.04] px-4 py-2">
+        <div className="flex items-center gap-3 border-t border-border px-4 py-2">
           {(
             [
               ["↑↓", "navigate"],

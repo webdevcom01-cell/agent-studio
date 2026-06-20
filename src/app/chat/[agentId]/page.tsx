@@ -234,8 +234,8 @@ export default function ChatPage({
                     <button
                       onClick={() => handleSelectConversation(conv)}
                       className={cn(
-                        "group w-full px-3 py-2.5 text-left transition-colors hover:bg-white/[0.02]",
-                        activeConvId === conv.id && "bg-white/[0.04]"
+                        "group w-full px-3 py-2.5 text-left transition-colors hover:bg-foreground/[0.02]",
+                        activeConvId === conv.id && "bg-foreground/[0.04]"
                       )}
                     >
                       <div className="mb-0.5 flex items-center gap-1.5">

@@ -55,7 +55,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="p-1 rounded hover:bg-white/10 transition-colors text-muted-foreground hover:text-foreground"
+      className="p-1 rounded hover:bg-foreground/10 transition-colors text-muted-foreground hover:text-foreground"
       title="Copy to clipboard"
     >
       {copied

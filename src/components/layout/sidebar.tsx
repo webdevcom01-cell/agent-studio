@@ -93,8 +93,8 @@ function NavItemButton({ item, collapsed, isActive }: NavItemButtonProps): React
         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
         collapsed && "justify-center px-0",
         isActive
-          ? "bg-white/5 text-foreground font-medium"
-          : "text-muted-foreground hover:bg-white/[0.03] hover:text-foreground"
+          ? "bg-foreground/5 text-foreground font-medium"
+          : "text-muted-foreground hover:bg-foreground/[0.03] hover:text-foreground"
       )}
     >
       <Icon size={15} className="shrink-0" />
