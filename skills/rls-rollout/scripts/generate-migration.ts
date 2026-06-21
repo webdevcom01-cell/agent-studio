@@ -113,8 +113,8 @@ function generateForModel(model: ModelInfo): { sql: string; note: string } {
   switch (model.classification) {
     case "TENANT_DIRECT": {
       const tmpl = model.hasIsPublic
-        ? loadTemplate("policy-tenant-direct-with-public.sql.tpl")
-        : loadTemplate("policy-tenant-direct.sql.tpl");
+        ? loadTemplate("tenant-direct-public.sql.template")
+        : loadTemplate("tenant-direct.sql.template");
       return {
         sql: substitute(tmpl, vars),
         note: model.hasIsPublic ? "with isPublic clause" : "standard",
@@ -129,7 +129,7 @@ function generateForModel(model: ModelInfo): { sql: string; note: string } {
       const parentTable = model.fkRelations[0] ?? "Agent";
       const parentTenantCol = "organizationId";
 
-      const tmpl = loadTemplate("policy-tenant-indirect.sql.tpl");
+      const tmpl = loadTemplate("tenant-indirect.sql.template");
       return {
         sql: substitute(tmpl, {
           ...vars,
@@ -142,7 +142,7 @@ function generateForModel(model: ModelInfo): { sql: string; note: string } {
     }
 
     case "USER_OWNED": {
-      const tmpl = loadTemplate("policy-user-owned.sql.tpl");
+      const tmpl = loadTemplate("user-owned.sql.template");
       return { sql: substitute(tmpl, vars), note: "user-scoped" };
     }
 
@@ -300,6 +300,33 @@ function generateDraft(
 // Main
 // -----------------------------------------------------------------------------
 
+// step1-inventory.ts (v1.1.0) emits notes as a string and FK columns under
+// `fkColumns`, while this consumer expects notes: string[] and `fkRelations`.
+// Normalize the loaded JSON into the ModelInfo shape so both legacy and v1.1.0
+// inventories work.
+function normalizeModels(raw: Array<Record<string, unknown>>): ModelInfo[] {
+  return raw.map((m) => ({
+    name: String(m.name ?? ""),
+    line: typeof m.line === "number" ? m.line : 0,
+    hasOrganizationId: Boolean(m.hasOrganizationId),
+    hasUserId: Boolean(m.hasUserId),
+    hasIsPublic: Boolean(m.hasIsPublic),
+    organizationIdNullable: Boolean(m.organizationIdNullable),
+    userIdNullable: Boolean(m.userIdNullable),
+    fkRelations: Array.isArray(m.fkRelations)
+      ? (m.fkRelations as string[])
+      : Array.isArray(m.fkColumns)
+        ? (m.fkColumns as string[])
+        : [],
+    classification: m.classification as Tenancy,
+    notes: Array.isArray(m.notes)
+      ? (m.notes as string[])
+      : m.notes
+        ? [String(m.notes)]
+        : [],
+  }));
+}
+
 function main() {
   const { phase, classification, mode } = parseArgs(process.argv.slice(2));
   const cwd = process.cwd();
@@ -315,17 +342,22 @@ function main() {
     process.exit(1);
   }
 
-  const data: Classifications = JSON.parse(
-    readFileSync(classificationsPath, "utf8")
-  );
+  const parsed = JSON.parse(readFileSync(classificationsPath, "utf8")) as {
+    models: Array<Record<string, unknown>>;
+    counts: Record<Tenancy, number>;
+  };
+  const models = normalizeModels(parsed.models);
+  const counts =
+    parsed.counts ??
+    ({} as Record<Tenancy, number>);
 
-  console.error(`Loaded ${data.models.length} models`);
+  console.error(`Loaded ${models.length} models`);
   console.error(
-    `Phase ${phase} (${classification}): ${data.counts[classification]} models`
+    `Phase ${phase} (${classification}): ${counts[classification] ?? models.filter((m) => m.classification === classification).length} models`
   );
 
   if (mode === "plan") {
-    const plan = generatePlan(data.models, phase, classification);
+    const plan = generatePlan(models, phase, classification);
     const outFile = resolve(
       cwd,
       `skills/rls-rollout/reference/migration-plan-phase${phase}.md`
@@ -335,7 +367,7 @@ function main() {
     console.error(`  Review, then re-run with --draft to generate SQL`);
   } else {
     const { content, outDir, outFile } = generateDraft(
-      data.models,
+      models,
       phase,
       classification
     );
