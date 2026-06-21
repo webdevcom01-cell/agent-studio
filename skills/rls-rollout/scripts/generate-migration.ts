@@ -44,16 +44,9 @@ type ModelInfo = {
   organizationIdNullable: boolean;
   userIdNullable: boolean;
   fkRelations: string[];
+  tenantPath: string;
   classification: Tenancy;
   notes: string[];
-};
-
-type Classifications = {
-  generated: string;
-  schema_path: string;
-  total_models: number;
-  counts: Record<Tenancy, number>;
-  models: ModelInfo[];
 };
 
 // -----------------------------------------------------------------------------
@@ -122,22 +115,30 @@ function generateForModel(model: ModelInfo): { sql: string; note: string } {
     }
 
     case "TENANT_INDIRECT": {
-      // Best-effort: first FK that reaches a tenant
-      // For full accuracy, we'd parse the FK column name from schema.
-      // Here we use a heuristic — most TENANT_INDIRECT in this schema use agentId.
-      const fkColumn = guessFkColumn(model);
-      const parentTable = model.fkRelations[0] ?? "Agent";
-      const parentTenantCol = "organizationId";
+      // The authoritative FK chain is step1-inventory.ts's tenantPath, e.g.
+      // "agentId → Agent.organizationId". The single-hop template can only
+      // express a one-level chain; multi-hop chains (e.g. KBChunk:
+      // "sourceId → KBSource → … → Agent.organizationId") must be hand-authored.
+      const hop = parseSingleHop(model.tenantPath);
+      if (!hop) {
+        return {
+          sql:
+            `-- ${model.name}: TENANT_INDIRECT multi-hop chain — policy must be ` +
+            `hand-authored with a nested EXISTS subquery.\n` +
+            `-- Tenant path: ${model.tenantPath || "unknown"}\n`,
+          note: `MANUAL (multi-hop): ${model.tenantPath || "unknown"}`,
+        };
+      }
 
       const tmpl = loadTemplate("tenant-indirect.sql.template");
       return {
         sql: substitute(tmpl, {
           ...vars,
-          FK_COLUMN: fkColumn,
-          PARENT_TABLE: parentTable,
-          PARENT_TENANT_COL: parentTenantCol,
+          FK_COLUMN: hop.fkColumn,
+          PARENT_TABLE: hop.parentTable,
+          PARENT_TENANT_COL: hop.parentTenantCol,
         }),
-        note: `via ${fkColumn} → ${parentTable}.${parentTenantCol}`,
+        note: `via ${hop.fkColumn} → ${hop.parentTable}.${hop.parentTenantCol}`,
       };
     }
 
@@ -162,15 +163,17 @@ function generateForModel(model: ModelInfo): { sql: string; note: string } {
   }
 }
 
-function guessFkColumn(model: ModelInfo): string {
-  // Most TENANT_INDIRECT in this schema use lowercase parent name + "Id"
-  // E.g., Flow has agentId, KBSource has knowledgeBaseId
-  // For accuracy, the next iteration should parse schema for actual FK column.
-  const firstFk = model.fkRelations[0];
-  if (!firstFk) return "agentId";
-
-  // Lowercase first letter
-  return firstFk.charAt(0).toLowerCase() + firstFk.slice(1) + "Id";
+// Parse a single-hop tenant path "<fkColumn> → <ParentTable>.organizationId".
+// Returns null for multi-hop chains (2+ arrows) or paths that don't terminate
+// directly at a parent's organizationId — those need hand-authored policies.
+function parseSingleHop(
+  tenantPath: string
+): { fkColumn: string; parentTable: string; parentTenantCol: string } | null {
+  const hops = tenantPath.split("→").map((s) => s.trim());
+  if (hops.length !== 2) return null;
+  const target = hops[1].match(/^(\w+)\.(\w+)$/);
+  if (!target || target[2] !== "organizationId") return null;
+  return { fkColumn: hops[0], parentTable: target[1], parentTenantCol: target[2] };
 }
 
 // -----------------------------------------------------------------------------
@@ -318,6 +321,7 @@ function normalizeModels(raw: Array<Record<string, unknown>>): ModelInfo[] {
       : Array.isArray(m.fkColumns)
         ? (m.fkColumns as string[])
         : [],
+    tenantPath: typeof m.tenantPath === "string" ? m.tenantPath : "",
     classification: m.classification as Tenancy,
     notes: Array.isArray(m.notes)
       ? (m.notes as string[])
