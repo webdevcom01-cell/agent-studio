@@ -346,17 +346,22 @@ inventory() {
 
   section "Querying current RLS state"
 
-  # RLS state per table
+  # RLS state per table. forcerowsecurity is NOT a pg_tables column — both the
+  # enabled and forced flags live on pg_class (relrowsecurity/relforcerowsecurity).
+  # No ::text cast: psql -At renders an uncast boolean as t/f, which the summary
+  # awk ($2=="t") counts. A ::text cast would emit true/false and silently break
+  # the count.
   psql_exec -At -F$'\t' -c "
     SELECT
-      tablename,
-      rowsecurity::text AS rls_enabled,
-      forcerowsecurity::text AS rls_forced
-    FROM pg_tables
-    WHERE schemaname = 'public'
-    ORDER BY tablename;
+      c.relname AS tablename,
+      c.relrowsecurity AS rls_enabled,
+      c.relforcerowsecurity AS rls_forced
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind = 'r'
+    ORDER BY c.relname;
   " > "$REFERENCE_DIR/existing-rls-state.tsv" 2>/dev/null || {
-    warn "Could not query pg_tables; writing empty file"
+    warn "Could not query pg_class; writing empty file"
     : > "$REFERENCE_DIR/existing-rls-state.tsv"
   }
   pass "Wrote existing-rls-state.tsv ($(wc -l < "$REFERENCE_DIR/existing-rls-state.tsv") tables)"
