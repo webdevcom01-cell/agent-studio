@@ -25,6 +25,7 @@ model User {
   deletionRequestedAt  DateTime?
   deletionScheduledFor DateTime?
   onboardingCompletedAt DateTime?
+  currentOrgId  String?
   agents           Agent[]
   accounts         Account[]
   sessions         Session[]

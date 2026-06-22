@@ -168,26 +168,44 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (userId && (user || trigger === "update")) {
         const dbUser = await prisma.user.findUnique({
           where: { id: userId },
-          select: { onboardingCompletedAt: true, name: true, email: true },
+          select: { onboardingCompletedAt: true, name: true, email: true, currentOrgId: true },
         });
         token.onboardingCompleted = !!dbUser?.onboardingCompletedAt;
-        // Resolve the user's org via the SECURITY DEFINER fn user_primary_org() so it
-        // works even when OrganizationMember is RLS-protected for the app_user role.
-        // Falls back to a direct read if the function isn't deployed yet (keeps login
-        // working pre-migration).
-        try {
-          const orgRows = await prisma.$queryRaw<Array<{ org: string | null }>>`
-            SELECT user_primary_org(${userId}) AS org
-          `;
-          token.currentOrgId = orgRows[0]?.org ?? null;
-        } catch {
-          const membership = await withAdminBypass((db) => db.organizationMember.findFirst({
-            where: { userId },
+
+        // Honor an explicitly selected org (POST /api/users/switch-org), but only
+        // if the user is STILL a member — guards a stale choice after removal.
+        // SECURITY: this re-validation is mandatory because session.update() is
+        // client-callable; the token alone cannot be trusted.
+        let resolvedOrgId: string | null = null;
+        const selectedOrgId = dbUser?.currentOrgId ?? null;
+        if (selectedOrgId) {
+          const stillMember = await withAdminBypass((db) => db.organizationMember.findUnique({
+            where: { userId_organizationId: { userId, organizationId: selectedOrgId } },
             select: { organizationId: true },
-            orderBy: { joinedAt: "asc" },
           }));
-          token.currentOrgId = membership?.organizationId ?? null;
+          resolvedOrgId = stillMember ? selectedOrgId : null;
         }
+
+        // No valid explicit choice → fall back to the user's primary org via the
+        // SECURITY DEFINER fn user_primary_org() so it works even when
+        // OrganizationMember is RLS-protected for the app_user role. Falls back to a
+        // direct read if the function isn't deployed yet (keeps login working).
+        if (!resolvedOrgId) {
+          try {
+            const orgRows = await prisma.$queryRaw<Array<{ org: string | null }>>`
+              SELECT user_primary_org(${userId}) AS org
+            `;
+            resolvedOrgId = orgRows[0]?.org ?? null;
+          } catch {
+            const membership = await withAdminBypass((db) => db.organizationMember.findFirst({
+              where: { userId },
+              select: { organizationId: true },
+              orderBy: { joinedAt: "asc" },
+            }));
+            resolvedOrgId = membership?.organizationId ?? null;
+          }
+        }
+        token.currentOrgId = resolvedOrgId;
         // Auto-provision a personal org on first login so brand-new users work
         // under RLS (no org -> currentOrgId null -> they'd see nothing / create
         // org-less, invisible rows). Best-effort: login still succeeds if it fails.

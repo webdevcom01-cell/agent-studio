@@ -30,6 +30,13 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON "{{TABLE_NAME}}" TO app_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON "{{TABLE_NAME}}" TO admin_user;
 
 -- 4. Policies
+-- Idempotent: drop existing same-named policies first so this migration is
+-- safe to re-run and safe on partially-migrated tables.
+DROP POLICY IF EXISTS {{table_lower}}_select ON "{{TABLE_NAME}}";
+DROP POLICY IF EXISTS {{table_lower}}_insert ON "{{TABLE_NAME}}";
+DROP POLICY IF EXISTS {{table_lower}}_update ON "{{TABLE_NAME}}";
+DROP POLICY IF EXISTS {{table_lower}}_delete ON "{{TABLE_NAME}}";
+
 -- SELECT — own org OR public
 CREATE POLICY {{table_lower}}_select ON "{{TABLE_NAME}}"
   FOR SELECT TO app_user
