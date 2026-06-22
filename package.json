@@ -16,6 +16,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:rls": "vitest run --config vitest.rls.config.ts skills/rls-rollout/tests/cross-tenant.test.ts",
     "test:load": "k6 run load-tests/agent-studio.js",
     "changelog": "git log --pretty=format:'- %s (%ad)' --date=short >> CHANGELOG.md",
     "test:watch": "vitest",
