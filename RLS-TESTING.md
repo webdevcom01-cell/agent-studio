@@ -72,6 +72,12 @@ DELETE FROM "Organization"       WHERE id   LIKE 'test-rls-%';
 | `P1000: credentials for 'postgres' are not valid` | placeholder password / wrong role | use the real `postgres` password from `.env` |
 | `migrate status` says "up to date" but test still fails | migrations applied to a **different DB** (`railway` vs `XB1Dp83…`) | point migrations and test at the same database |
 
+## Verification log
+
+| Date | DB | Role | Result | Notes |
+|---|---|---|---|---|
+| 2026-06-22 | `railway` (`tramway.proxy.rlwy.net:54364`) | `app_user` (RLS-enforced) | **10/10 pass** (~11s) | Live DB with real data (5 users / 23 agents / 5 orgs). No real data touched — only self-cleaned `test-rls-*` scratch rows; `afterAll` left no leftovers. Covered SELECT, UPDATE, DELETE, INSERT, TENANT_INDIRECT (Flow→Agent), admin bypass. |
+
 ## CI (optional, future)
 
 To run this in CI, add a job that sets `DATABASE_URL_APP_USER` / `DATABASE_URL_ADMIN_USER`
