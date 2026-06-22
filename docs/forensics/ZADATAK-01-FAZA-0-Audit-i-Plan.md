@@ -63,7 +63,7 @@ Zaključak dela 2: **ne treba redizajn baze.** Neko je ovde radio pažljivo i u 
 
 ## 4. Šta SAMO TI možeš proveriti [ZAHTEVA ŽIVU BAZU] — sa tačnim upitima
 
-Pokreni ove u Railway → Postgres → Query tab (ili `psql "$DATABASE_PUBLIC_URL"`). Ja ti dajem upit i šta je „ispravan" odgovor. Ne moraš deliti rezultate ako ne želiš — bitno je da ih ti vidiš.
+⚠️ **Gađaj bazu `railway`, NE `XB1Dp83…`.** Railway → Postgres → "Query tab" i `DATABASE_PUBLIC_URL` (Postgres servis, "Connect") pokazuju na default bazu servisa `XB1Dp83…` — ona je PRAZNA i nije baza koju app koristi (poznat footgun, vidi `RLS-TESTING.md`). Živa aplikativna baza je `railway`. Pokreni ove upite preko connection stringa koji se završava na `/railway` (isti koji koristi produkcija — `DATABASE_URL`/`DIRECT_URL` iz `.env`), npr. `psql "postgresql://postgres:<LOZINKA>@tramway.proxy.rlwy.net:54364/railway"`. Ja ti dajem upit i šta je „ispravan" odgovor. Ne moraš deliti rezultate ako ne želiš — bitno je da ih ti vidiš.
 
 **P0-A · Kao koja uloga radi aplikacija?**
 ```sql
