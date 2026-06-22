@@ -181,3 +181,32 @@ __pycache__/
 # Security audit — interni dokument, nikad u git
 AUDIT-security.md
 .env.bak.*
+
+# --- Local scratch / working files (added 2026-06-22) ---
+# Prompt/validator backups
+*-backup-*.js
+*-backup-*.txt
+*-backup-*.json
+
+# Ad-hoc audit / plan / handoff notes (root-level one-offs)
+/AUDIT-agentshield-2026-06-13.md
+/AUDIT-type-safety.md
+/CLI-Promptovi-Fix-Plan-2026-06-12.md
+/D5-implementation-plan-2026-06-15.md
+/Forenzicka-Analiza-Agenata-i-Toolova-2026-06-12.md
+/HANDOFF-2026-06-15.md
+/OQ4-dual-mode-implementation-plan-2026-06-15.md
+/forensic-audit-phase-1.md
+/mcp-terminal-integration-plan.md
+/mcp-terminal-integration-plan-v2.md
+/soma-dogfood-review-2026-06-01.md
+/sprint3-part-a-quick-wins.md
+/sprint3-part-b-duplicate-bug.md
+/tool-access-design-spec-2026-06-15.md
+
+# Quarantine / scratch dirs & files
+/_cleanup-quarantine-2026-06-14/
+/data/
+/dependabot-prs.json
+/soma-agent-debugger/
+/soma-agent-debugger-install.sh
