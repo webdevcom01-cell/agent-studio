@@ -1,0 +1,86 @@
+name: RLS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: rls-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rls-cross-tenant:
+    name: RLS cross-tenant
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agent_studio_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agent_studio_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/agent_studio_test
+      DATABASE_URL_APP_USER: postgresql://app_user:app_user_pw@localhost:5432/agent_studio_test
+      DATABASE_URL_ADMIN_USER: postgresql://admin_user:admin_user_pw@localhost:5432/agent_studio_test
+      RLS_ENFORCEMENT_ENABLED: "true"
+      CI: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: "10"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      # The role-creation migration runs `GRANT CONNECT ON DATABASE railway`,
+      # so the `railway` database must exist even though the schema lives in
+      # agent_studio_test (where migrate deploy runs).
+      - name: Create railway database (for role GRANTs)
+        run: psql postgresql://postgres:postgres@localhost:5432/postgres -c "CREATE DATABASE railway;"
+
+      - name: Run Prisma migrations
+        run: pnpm prisma migrate deploy
+
+      # The role-creation migration sets a placeholder password; CI must set the
+      # real ones (read from the *_USER URLs) so the test can authenticate as
+      # app_user / admin_user, and grant them CONNECT on the schema database.
+      - name: Set RLS role passwords for CI
+        run: |
+          APP_PW=$(printf '%s' "$DATABASE_URL_APP_USER" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')
+          ADMIN_PW=$(printf '%s' "$DATABASE_URL_ADMIN_USER" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "ALTER ROLE app_user WITH LOGIN PASSWORD '${APP_PW}';" \
+            -c "ALTER ROLE admin_user WITH LOGIN PASSWORD '${ADMIN_PW}';" \
+            -c "GRANT CONNECT ON DATABASE agent_studio_test TO app_user, admin_user;"
+
+      - name: Run RLS cross-tenant test
+        run: pnpm test:rls
