@@ -33,8 +33,8 @@ type Classification =
 const EXPECTED_COUNTS: Record<Classification, number> = {
   TENANT_DIRECT: 13,
   TENANT_INDIRECT: 36,
-  USER_OWNED: 4,
-  GLOBAL: 7,
+  USER_OWNED: 1,
+  GLOBAL: 10,
   AMBIGUOUS: 1,
 };
 
@@ -42,7 +42,7 @@ const EXPECTED_TOTAL = Object.values(EXPECTED_COUNTS).reduce((a, b) => a + b, 0)
 
 // Ground-truth classification from schema analysis + master plan
 const KNOWN_CLASSIFICATIONS: Record<string, Classification> = {
-  // GLOBAL (7)
+  // GLOBAL (10) — includes 3 BYPASSRLS capability-isolated tables
   User: "GLOBAL",
   VerificationToken: "GLOBAL",
   Skill: "GLOBAL",
@@ -50,6 +50,9 @@ const KNOWN_CLASSIFICATIONS: Record<string, Classification> = {
   PipelineTemplate: "GLOBAL",
   Account: "GLOBAL",
   Session: "GLOBAL",
+  ApiKey: "GLOBAL",
+  MCPServer: "GLOBAL",
+  GoogleOAuthToken: "GLOBAL",
   // TENANT_DIRECT (13)
   Agent: "TENANT_DIRECT",
   AgentPermissionGrant: "TENANT_DIRECT",
@@ -64,11 +67,8 @@ const KNOWN_CLASSIFICATIONS: Record<string, Classification> = {
   OrganizationMember: "TENANT_DIRECT",
   PolicyDecision: "TENANT_DIRECT",
   Template: "TENANT_DIRECT",
-  // USER_OWNED (4)
-  ApiKey: "USER_OWNED",
+  // USER_OWNED (1) — RLS-enforced via app.current_user_id
   CLIGeneration: "USER_OWNED",
-  GoogleOAuthToken: "USER_OWNED",
-  MCPServer: "USER_OWNED",
   // AMBIGUOUS (1)
   AuditLog: "AMBIGUOUS",
 };
