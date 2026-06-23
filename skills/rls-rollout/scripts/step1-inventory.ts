@@ -9,9 +9,12 @@
  * Classification rules:
  *   GLOBAL         — No tenant linkage (User, VerificationToken, Skill, Organization, PipelineTemplate)
  *                    + NextAuth tables (Account, Session) treated as GLOBAL
+ *                    + BYPASSRLS capability-isolated tables (ApiKey, MCPServer, GoogleOAuthToken):
+ *                      read by opaque id/keyHash in pre-auth or worker contexts where no
+ *                      app.current_user_id exists, so a USER_OWNED policy would break auth/runtime
  *   TENANT_DIRECT  — Has organizationId column directly
  *   TENANT_INDIRECT — Reaches organizationId via FK chain (agentId → Agent → organizationId)
- *   USER_OWNED     — Has userId but no organizationId (ApiKey, MCPServer, GoogleOAuthToken, CLIGeneration)
+ *   USER_OWNED     — Has userId but no organizationId, RLS-enforced via app.current_user_id (CLIGeneration)
  *   AMBIGUOUS      — Needs schema change before RLS can be applied (AuditLog)
  *
  * Usage:
@@ -59,14 +62,25 @@ const GLOBAL_MODELS = new Set([
   "PipelineTemplate",
   "Account",
   "Session",
-]);
-
-const USER_OWNED_MODELS = new Set([
+  // BYPASSRLS — capability-isolated, not under RLS (see BYPASSRLS_NOTES)
   "ApiKey",
   "MCPServer",
   "GoogleOAuthToken",
+]);
+
+const USER_OWNED_MODELS = new Set([
   "CLIGeneration",
 ]);
+
+// Capability-isolated GLOBAL models — not under RLS (admin/BYPASSRLS DB role).
+// Read by opaque id/keyHash in pre-auth or worker contexts where no
+// app.current_user_id session variable exists, so a USER_OWNED RLS policy
+// would hide the row and break authentication / flow runtime.
+const BYPASSRLS_NOTES: Record<string, string> = {
+  ApiKey: "BYPASSRLS — capability-based isolation via keyHash (read pre-auth, not under RLS)",
+  MCPServer: "BYPASSRLS — capability-based isolation, worker hot-path (5 runtime reads by id, no userId)",
+  GoogleOAuthToken: "BYPASSRLS — intentionally unauthenticated proxy/refresh (tokenId is the capability)",
+};
 
 const AMBIGUOUS_MODELS = new Set(["AuditLog", "ModelPerformanceStat"]);
 
@@ -121,6 +135,10 @@ function classify(
   fks: string[]
 ): { classification: Classification; tenantPath: string; notes: string } {
   if (GLOBAL_MODELS.has(name)) {
+    const bypassNote = BYPASSRLS_NOTES[name];
+    if (bypassNote) {
+      return { classification: "GLOBAL", tenantPath: "userId → User", notes: bypassNote };
+    }
     const isNextAuth = name === "Account" || name === "Session";
     return {
       classification: "GLOBAL",
