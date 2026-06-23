@@ -9,13 +9,14 @@
  * Classification rules:
  *   GLOBAL         — No tenant linkage (User, VerificationToken, Skill, Organization, PipelineTemplate)
  *                    + NextAuth tables (Account, Session) treated as GLOBAL
- *                    + BYPASSRLS capability-isolated tables (ApiKey, MCPServer, GoogleOAuthToken):
- *                      read by opaque id/keyHash in pre-auth or worker contexts where no
- *                      app.current_user_id exists, so a USER_OWNED policy would break auth/runtime
+ *                    + BYPASSRLS / no-anchor tables (ApiKey, MCPServer, GoogleOAuthToken,
+ *                      AuditLog, ModelPerformanceStat, SomaReviewBatch, SomaReviewPost):
+ *                      written without tenant context or read cross-tenant by design, so a
+ *                      USER_OWNED/tenant policy would break auth, runtime, or the audit pipeline
  *   TENANT_DIRECT  — Has organizationId column directly
  *   TENANT_INDIRECT — Reaches organizationId via FK chain (agentId → Agent → organizationId)
  *   USER_OWNED     — Has userId but no organizationId, RLS-enforced via app.current_user_id (CLIGeneration)
- *   AMBIGUOUS      — Needs schema change before RLS can be applied (AuditLog)
+ *   AMBIGUOUS      — Fallthrough only; no models currently pinned (Phase 4 reclassified the last 4)
  *
  * Usage:
  *   pnpm tsx skills/rls-rollout/scripts/step1-inventory.ts
@@ -66,23 +67,54 @@ const GLOBAL_MODELS = new Set([
   "ApiKey",
   "MCPServer",
   "GoogleOAuthToken",
+  // Phase 4 — reclassified from AMBIGUOUS (no safe tenant anchor; see BYPASSRLS_NOTES)
+  "AuditLog",
+  "ModelPerformanceStat",
+  "SomaReviewBatch",
+  "SomaReviewPost",
 ]);
 
 const USER_OWNED_MODELS = new Set([
   "CLIGeneration",
 ]);
 
-// Capability-isolated GLOBAL models — not under RLS (admin/BYPASSRLS DB role).
-// Read by opaque id/keyHash in pre-auth or worker contexts where no
-// app.current_user_id session variable exists, so a USER_OWNED RLS policy
-// would hide the row and break authentication / flow runtime.
-const BYPASSRLS_NOTES: Record<string, string> = {
-  ApiKey: "BYPASSRLS — capability-based isolation via keyHash (read pre-auth, not under RLS)",
-  MCPServer: "BYPASSRLS — capability-based isolation, worker hot-path (5 runtime reads by id, no userId)",
-  GoogleOAuthToken: "BYPASSRLS — intentionally unauthenticated proxy/refresh (tokenId is the capability)",
+// Capability-isolated / no-safe-anchor GLOBAL models — not under RLS (admin/BYPASSRLS DB role).
+// Capability tables (ApiKey, MCPServer, GoogleOAuthToken) are read by opaque id/keyHash in
+// pre-auth or worker contexts where no app.current_user_id exists. Phase 4 adds AuditLog,
+// ModelPerformanceStat, and the SomaReview* pair: each is written without tenant context or
+// read cross-tenant by design, so a USER_OWNED/tenant RLS policy would hide rows and break
+// auth, runtime, the SDLC model-router, or the compliance/audit pipeline.
+const BYPASSRLS_NOTES: Record<string, { note: string; tenantPath: string }> = {
+  ApiKey: {
+    note: "BYPASSRLS — capability-based isolation via keyHash (read pre-auth, not under RLS)",
+    tenantPath: "userId → User",
+  },
+  MCPServer: {
+    note: "BYPASSRLS — capability-based isolation, worker hot-path (5 runtime reads by id, no userId)",
+    tenantPath: "userId → User",
+  },
+  GoogleOAuthToken: {
+    note: "BYPASSRLS — intentionally unauthenticated proxy/refresh (tokenId is the capability)",
+    tenantPath: "userId → User",
+  },
+  // Phase 4 — reclassified from AMBIGUOUS (verified against live prod row counts)
+  AuditLog: {
+    note: "BYPASSRLS — compliance log; 3349 prod system events have no userId (webhook/background write pattern)",
+    tenantPath: "userId → User (nullable)",
+  },
+  ModelPerformanceStat: {
+    note: "BYPASSRLS — cross-tenant telemetry by design; model-router reads cross-agent by phase",
+    tenantPath: "none (cross-agent aggregate)",
+  },
+  SomaReviewBatch: {
+    note: "BYPASSRLS — content pipeline output, not a user asset; 121/123 prod rows orphaned (userId NULL)",
+    tenantPath: "userId → User (nullable)",
+  },
+  SomaReviewPost: {
+    note: "BYPASSRLS — inherits parent SomaReviewBatch decision; no own tenant anchor",
+    tenantPath: "batchId → SomaReviewBatch",
+  },
 };
-
-const AMBIGUOUS_MODELS = new Set(["AuditLog", "ModelPerformanceStat"]);
 
 function parseSchemaModels(
   content: string
@@ -135,23 +167,15 @@ function classify(
   fks: string[]
 ): { classification: Classification; tenantPath: string; notes: string } {
   if (GLOBAL_MODELS.has(name)) {
-    const bypassNote = BYPASSRLS_NOTES[name];
-    if (bypassNote) {
-      return { classification: "GLOBAL", tenantPath: "userId → User", notes: bypassNote };
+    const bypass = BYPASSRLS_NOTES[name];
+    if (bypass) {
+      return { classification: "GLOBAL", tenantPath: bypass.tenantPath, notes: bypass.note };
     }
     const isNextAuth = name === "Account" || name === "Session";
     return {
       classification: "GLOBAL",
       tenantPath: "none",
       notes: isNextAuth ? "NextAuth-managed; query via admin_user client" : "",
-    };
-  }
-
-  if (AMBIGUOUS_MODELS.has(name)) {
-    return {
-      classification: "AMBIGUOUS",
-      tenantPath: "requires schema addition",
-      notes: "Add organizationId column before enabling RLS",
     };
   }
 

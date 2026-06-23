@@ -67,26 +67,26 @@ Last updated: 2026-06-23
 |-------|-------------|-------|
 | CLIGeneration | userId → User | Policy uses app.current_user_id session variable |
 
-## GLOBAL (10)
+## GLOBAL (14)
 
 | Model | Tenant Path | Notes |
 |-------|-------------|-------|
 | Account | none | NextAuth-managed; query via admin_user client |
 | ApiKey | userId → User | BYPASSRLS — capability-based isolation via keyHash (read pre-auth, not under RLS) |
+| AuditLog | userId → User (nullable) | BYPASSRLS — compliance log; 3349 prod system events have no userId (webhook/background write pattern) |
 | GoogleOAuthToken | userId → User | BYPASSRLS — intentionally unauthenticated proxy/refresh (tokenId is the capability) |
 | MCPServer | userId → User | BYPASSRLS — capability-based isolation, worker hot-path (5 runtime reads by id, no userId) |
+| ModelPerformanceStat | none (cross-agent aggregate) | BYPASSRLS — cross-tenant telemetry by design; model-router reads cross-agent by phase |
 | Organization | none |  |
 | PipelineTemplate | none |  |
 | Session | none | NextAuth-managed; query via admin_user client |
 | Skill | none |  |
+| SomaReviewBatch | userId → User (nullable) | BYPASSRLS — content pipeline output, not a user asset; 121/123 prod rows orphaned (userId NULL) |
+| SomaReviewPost | batchId → SomaReviewBatch | BYPASSRLS — inherits parent SomaReviewBatch decision; no own tenant anchor |
 | User | none |  |
 | VerificationToken | none |  |
 
-## AMBIGUOUS (4)
+## AMBIGUOUS (0)
 
 | Model | Tenant Path | Notes |
 |-------|-------------|-------|
-| AuditLog | requires schema addition | Add organizationId column before enabling RLS |
-| ModelPerformanceStat | requires schema addition | Add organizationId column before enabling RLS |
-| SomaReviewBatch | unknown | No clear tenant path — review manually |
-| SomaReviewPost | unknown | No clear tenant path — review manually |
