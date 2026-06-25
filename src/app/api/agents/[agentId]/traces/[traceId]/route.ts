@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
@@ -17,9 +18,11 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const trace = await prisma.flowTrace.findFirst({
-      where: { id: traceId, agentId },
-    });
+    const trace = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowTrace.findFirst({
+        where: { id: traceId, agentId },
+      }),
+    );
 
     if (!trace) {
       return NextResponse.json(
@@ -51,10 +54,12 @@ export async function DELETE(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const existing = await prisma.flowTrace.findFirst({
-      where: { id: traceId, agentId },
-      select: { id: true },
-    });
+    const existing = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowTrace.findFirst({
+        where: { id: traceId, agentId },
+        select: { id: true },
+      }),
+    );
 
     if (!existing) {
       return NextResponse.json(
@@ -63,7 +68,9 @@ export async function DELETE(
       );
     }
 
-    await prisma.flowTrace.delete({ where: { id: traceId } });
+    await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowTrace.delete({ where: { id: traceId } }),
+    );
 
     return NextResponse.json({ success: true, data: { deleted: true } });
   } catch (error) {

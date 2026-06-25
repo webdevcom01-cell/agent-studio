@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 
 interface RouteParams {
@@ -16,7 +17,7 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const conversations = await prisma.conversation.findMany({
+    const conversations = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.conversation.findMany({
       where: { agentId },
       orderBy: { updatedAt: "desc" },
       take: 50,
@@ -31,7 +32,7 @@ export async function GET(
           select: { content: true, role: true },
         },
       },
-    });
+    }));
 
     const data = conversations.map((c) => ({
       id: c.id,

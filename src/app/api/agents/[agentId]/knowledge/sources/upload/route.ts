@@ -129,15 +129,16 @@ export async function POST(
       ? nameField.trim()
       : fileName;
 
-    const source = await prisma.kBSource.create({
+    const knowledgeBaseId = agent.knowledgeBase.id;
+    const source = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.kBSource.create({
       data: {
         name,
         type: "FILE",
         rawContent: extractedText.length < 1_000_000 ? extractedText : null,
-        knowledgeBaseId: agent.knowledgeBase.id,
+        knowledgeBaseId,
         status: "PENDING",
       },
-    });
+    }));
 
     // Enqueue KB ingest — falls back to in-process if Redis unavailable
     addKBIngestJob({ sourceId: source.id, content: extractedText }).catch(() => {

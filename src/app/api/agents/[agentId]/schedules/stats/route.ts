@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
@@ -35,33 +36,39 @@ export async function GET(
     // Run all queries in parallel for speed
     const [schedules, execStats, nextDueRow] = await Promise.all([
       // All schedule records (lightweight — only status fields)
-      prisma.flowSchedule.findMany({
-        where: { agentId },
-        select: {
-          id: true,
-          enabled: true,
-          failureCount: true,
-          maxRetries: true,
-        },
-      }),
+      withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.flowSchedule.findMany({
+          where: { agentId },
+          select: {
+            id: true,
+            enabled: true,
+            failureCount: true,
+            maxRetries: true,
+          },
+        }),
+      ),
 
       // Aggregate execution stats across all schedules for this agent
-      prisma.scheduledExecution.aggregate({
-        where: {
-          flowSchedule: { agentId },
-        },
-        _count: { id: true },
-        _avg: {
-          durationMs: true,
-        },
-      }),
+      withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.scheduledExecution.aggregate({
+          where: {
+            flowSchedule: { agentId },
+          },
+          _count: { id: true },
+          _avg: {
+            durationMs: true,
+          },
+        }),
+      ),
 
       // Earliest nextRunAt among enabled schedules
-      prisma.flowSchedule.findFirst({
-        where: { agentId, enabled: true, scheduleType: { not: "MANUAL" } },
-        orderBy: { nextRunAt: "asc" },
-        select: { nextRunAt: true },
-      }),
+      withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.flowSchedule.findFirst({
+          where: { agentId, enabled: true, scheduleType: { not: "MANUAL" } },
+          orderBy: { nextRunAt: "asc" },
+          select: { nextRunAt: true },
+        }),
+      ),
     ]);
 
     // Compute per-schedule counts
@@ -74,15 +81,19 @@ export async function GET(
 
     // Success rate: count COMPLETED vs all terminal statuses
     const [completedCount, terminalCount] = await Promise.all([
-      prisma.scheduledExecution.count({
-        where: { flowSchedule: { agentId }, status: "COMPLETED" },
-      }),
-      prisma.scheduledExecution.count({
-        where: {
-          flowSchedule: { agentId },
-          status: { in: ["COMPLETED", "FAILED"] },
-        },
-      }),
+      withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.scheduledExecution.count({
+          where: { flowSchedule: { agentId }, status: "COMPLETED" },
+        }),
+      ),
+      withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.scheduledExecution.count({
+          where: {
+            flowSchedule: { agentId },
+            status: { in: ["COMPLETED", "FAILED"] },
+          },
+        }),
+      ),
     ]);
 
     const successRate =

@@ -86,8 +86,8 @@ export async function GET(
     const where = { webhookConfigId: webhookId, ...statusWhere };
 
     const [total, rows] = await Promise.all([
-      prisma.webhookExecution.count({ where }),
-      prisma.webhookExecution.findMany({
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.webhookExecution.count({ where })),
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.webhookExecution.findMany({
         where: cursor
           ? { ...where, id: { lt: cursor } } // cursor = last seen id; IDs are cuid (lexicographic DESC)
           : where,
@@ -108,7 +108,7 @@ export async function GET(
           replayOf: true,
           createdAt: true,
         },
-      }),
+      })),
     ]);
 
     const hasMore = rows.length > limit;

@@ -37,7 +37,7 @@ export async function POST(
     if (isAuthError(authResult)) return authResult;
 
     // Enforce suite limit
-    const suiteCount = await prisma.evalSuite.count({ where: { agentId } });
+    const suiteCount = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.evalSuite.count({ where: { agentId } }));
     if (suiteCount >= MAX_SUITES_PER_AGENT) {
       return NextResponse.json(
         { success: false, error: `Maximum of ${MAX_SUITES_PER_AGENT} eval suites per agent reached` },

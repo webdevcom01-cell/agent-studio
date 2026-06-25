@@ -48,7 +48,7 @@ export async function GET(
     const [stats, candidates, instincts] = await Promise.all([
       getLifecycleStats(agentId),
       getPromotionCandidates(agentId),
-      prisma.instinct.findMany({
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.instinct.findMany({
         where: { agentId },
         orderBy: { confidence: "desc" },
         select: {
@@ -61,7 +61,7 @@ export async function GET(
           createdAt: true,
           updatedAt: true,
         },
-      }),
+      })),
     ]);
 
     logger.info("Fetched instinct data for agent", {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { Prisma } from "@/generated/prisma";
 
@@ -94,21 +95,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       percentiles,
     ] = await Promise.all([
       // 1. Total calls
-      prisma.agentCallLog.count({ where: userAgentFilter }),
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.agentCallLog.count({ where: userAgentFilter })),
 
       // 2. Aggregates
-      prisma.agentCallLog.aggregate({
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.agentCallLog.aggregate({
         _avg: { durationMs: true },
         _sum: { tokensUsed: true, estimatedCostUsd: true },
         where: userAgentFilter,
-      }),
+      })),
 
       // 3. Status breakdown
-      prisma.agentCallLog.groupBy({
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.agentCallLog.groupBy({
         by: ["status"],
         _count: true,
         where: userAgentFilter,
-      }),
+      })),
 
       // 4. Top callers
       prisma.$queryRaw<TopAgentRow[]>(Prisma.sql`

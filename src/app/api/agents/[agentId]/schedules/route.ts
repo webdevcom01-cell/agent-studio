@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -31,25 +32,27 @@ export async function GET(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const schedules = await prisma.flowSchedule.findMany({
-      where: { agentId },
-      orderBy: { createdAt: "asc" },
-      include: {
-        _count: { select: { executions: true } },
-        executions: {
-          orderBy: { triggeredAt: "desc" },
-          take: 1,
-          select: {
-            id: true,
-            status: true,
-            triggeredAt: true,
-            completedAt: true,
-            durationMs: true,
-            errorMessage: true,
+    const schedules = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowSchedule.findMany({
+        where: { agentId },
+        orderBy: { createdAt: "asc" },
+        include: {
+          _count: { select: { executions: true } },
+          executions: {
+            orderBy: { triggeredAt: "desc" },
+            take: 1,
+            select: {
+              id: true,
+              status: true,
+              triggeredAt: true,
+              completedAt: true,
+              durationMs: true,
+              errorMessage: true,
+            },
           },
         },
-      },
-    });
+      }),
+    );
 
     return NextResponse.json({ success: true, data: schedules });
   } catch (err) {
@@ -82,7 +85,9 @@ export async function POST(
     }
 
     // Enforce schedule limit
-    const count = await prisma.flowSchedule.count({ where: { agentId } });
+    const count = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowSchedule.count({ where: { agentId } }),
+    );
     if (count >= MAX_SCHEDULES_PER_AGENT) {
       return NextResponse.json(
         {
@@ -116,19 +121,21 @@ export async function POST(
       timezone: data.timezone,
     });
 
-    const schedule = await prisma.flowSchedule.create({
-      data: {
-        agentId,
-        scheduleType: data.scheduleType,
-        cronExpression: data.cronExpression ?? null,
-        intervalMinutes: data.intervalMinutes ?? null,
-        timezone: data.timezone,
-        enabled: data.enabled,
-        label: data.label ?? null,
-        maxRetries: data.maxRetries,
-        nextRunAt,
-      },
-    });
+    const schedule = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowSchedule.create({
+        data: {
+          agentId,
+          scheduleType: data.scheduleType,
+          cronExpression: data.cronExpression ?? null,
+          intervalMinutes: data.intervalMinutes ?? null,
+          timezone: data.timezone,
+          enabled: data.enabled,
+          label: data.label ?? null,
+          maxRetries: data.maxRetries,
+          nextRunAt,
+        },
+      }),
+    );
 
     logger.info("schedule_created", {
       agentId,

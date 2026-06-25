@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { getAgentGoals } from "@/lib/goals/goal-context";
@@ -69,11 +70,13 @@ export async function POST(
       return NextResponse.json({ success: false, error: "Goal not found" }, { status: 404 });
     }
 
-    const link = await prisma.agentGoalLink.upsert({
-      where: { agentId_goalId: { agentId, goalId } },
-      update: { role },
-      create: { agentId, goalId, role },
-    });
+    const link = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentGoalLink.upsert({
+        where: { agentId_goalId: { agentId, goalId } },
+        update: { role },
+        create: { agentId, goalId, role },
+      }),
+    );
 
     return NextResponse.json({ success: true, data: link }, { status: 201 });
   } catch (error) {
@@ -106,9 +109,11 @@ export async function DELETE(
   const { goalId } = parsed.data;
 
   try {
-    await prisma.agentGoalLink.delete({
-      where: { agentId_goalId: { agentId, goalId } },
-    });
+    await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentGoalLink.delete({
+        where: { agentId_goalId: { agentId, goalId } },
+      }),
+    );
     return NextResponse.json({ success: true, data: null });
   } catch (error) {
     logger.error("DELETE /api/agents/[agentId]/goals error", { agentId, goalId, error });

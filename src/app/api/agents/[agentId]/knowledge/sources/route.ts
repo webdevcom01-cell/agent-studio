@@ -52,14 +52,16 @@ export async function GET(
     const where = { knowledgeBaseId: agent.knowledgeBase.id };
 
     const [sources, total] = await Promise.all([
-      prisma.kBSource.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        include: { _count: { select: { chunks: true } } },
-        skip,
-        take: limit,
-      }),
-      prisma.kBSource.count({ where }),
+      withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.kBSource.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          include: { _count: { select: { chunks: true } } },
+          skip,
+          take: limit,
+        }),
+      ),
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.kBSource.count({ where })),
     ]);
 
     return NextResponse.json({
@@ -140,16 +142,19 @@ export async function POST(
       }
     }
 
-    const source = await prisma.kBSource.create({
-      data: {
-        name,
-        type: type as ValidType,
-        url: type === "URL" || type === "SITEMAP" ? body.url : null,
-        rawContent: type === "TEXT" ? body.content : null,
-        knowledgeBaseId: agent.knowledgeBase.id,
-        status: "PENDING",
-      },
-    });
+    const knowledgeBaseId = agent.knowledgeBase.id;
+    const source = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.kBSource.create({
+        data: {
+          name,
+          type: type as ValidType,
+          url: type === "URL" || type === "SITEMAP" ? body.url : null,
+          rawContent: type === "TEXT" ? body.content : null,
+          knowledgeBaseId,
+          status: "PENDING",
+        },
+      }),
+    );
 
     // Enqueue KB ingest — falls back to in-process if Redis unavailable
     addKBIngestJob({

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ? DEFAULT_LIMIT
       : Math.min(Math.max(limitParam, 1), MAX_LIMIT);
 
-    const logs = await prisma.agentCallLog.findMany({
+    const logs = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.agentCallLog.findMany({
       where: {
         callerAgent: { userId: authResult.userId },
         ...(agentId ? { callerAgentId: agentId } : {}),
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         callerAgent: { select: { id: true, name: true } },
         calleeAgent: { select: { id: true, name: true } },
       },
-    });
+    }));
 
     return NextResponse.json({ success: true, data: logs });
   } catch (err) {

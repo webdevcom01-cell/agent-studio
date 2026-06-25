@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { executeFlow } from "@/lib/runtime/engine";
 import { parseFlowContent } from "@/lib/validators/flow-content";
@@ -27,9 +28,9 @@ export async function POST(
     );
   }
 
-  const version = await prisma.flowVersion.findUnique({
+  const version = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.flowVersion.findUnique({
     where: { id: versionId },
-  });
+  }));
 
   if (!version) {
     return NextResponse.json(
@@ -40,14 +41,14 @@ export async function POST(
 
   const flowContent = parseFlowContent(version.content);
 
-  const sandboxConversation = await prisma.conversation.create({
+  const sandboxConversation = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.conversation.create({
     data: {
       agentId,
       status: "COMPLETED",
       variables: {},
       flowVersionId: versionId,
     },
-  });
+  }));
 
   try {
     const context: RuntimeContext = {

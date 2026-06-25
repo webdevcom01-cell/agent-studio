@@ -14,7 +14,7 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
   const authResult = await requireAgentOwner(agentId, request);
   if (isAuthError(authResult)) return authResult;
 
-  const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { organizationId: true } });
+  const agent = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.agent.findUnique({ where: { id: agentId }, select: { organizationId: true } }));
   const orgId = agent?.organizationId ?? null;
 
   try {

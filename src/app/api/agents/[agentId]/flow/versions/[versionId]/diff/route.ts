@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { VersionService } from "@/lib/versioning/version-service";
 import { logger } from "@/lib/logger";
@@ -19,9 +20,9 @@ export async function GET(
 
     const compareWith = request.nextUrl.searchParams.get("compareWith");
 
-    const currentVersion = await prisma.flowVersion.findUnique({
+    const currentVersion = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.flowVersion.findUnique({
       where: { id: versionId },
-    });
+    }));
 
     if (!currentVersion) {
       return NextResponse.json(
@@ -33,12 +34,12 @@ export async function GET(
     let compareVersionId = compareWith;
 
     if (!compareVersionId) {
-      const previousVersion = await prisma.flowVersion.findFirst({
+      const previousVersion = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.flowVersion.findFirst({
         where: {
           flowId: currentVersion.flowId,
           version: currentVersion.version - 1,
         },
-      });
+      }));
 
       if (!previousVersion) {
         return NextResponse.json(

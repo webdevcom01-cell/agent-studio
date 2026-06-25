@@ -10,6 +10,7 @@ import {
 import { IMPLEMENTATION_STEPS, GATE_STEPS } from "@/lib/sdlc/orchestrator";
 import { addPipelineRunJob } from "@/lib/queue";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 
 const RetryBodySchema = z.object({
   modelId: z.string().optional(),
@@ -176,14 +177,14 @@ export async function POST(
       sourceRepoUrl: run.sourceRepoUrl ?? undefined,
     });
 
-    await prisma.pipelineRun.update({
+    await withOrgContext(prisma, authResult.organizationId, (tx) => tx.pipelineRun.update({
       where: { id: runId },
       data: {
         status: "PENDING",
         error: null,
         jobId,
       },
-    });
+    }));
 
     logger.info("Pipeline run retry enqueued", {
       runId,

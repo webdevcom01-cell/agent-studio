@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 interface RouteParams {
@@ -23,10 +24,12 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const budget = await prisma.agentBudget.findUnique({
-      where: { agentId },
-      include: { _count: { select: { costEvents: true, alerts: true } } },
-    });
+    const budget = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentBudget.findUnique({
+        where: { agentId },
+        include: { _count: { select: { costEvents: true, alerts: true } } },
+      }),
+    );
     return NextResponse.json({ success: true, data: budget });
   } catch (error) {
     logger.error("GET /api/agents/[agentId]/budget error", { agentId, error });
@@ -55,22 +58,24 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
   const { hardLimitUsd, softLimitUsd, alertThreshold, isHardStop } = parsed.data;
 
   try {
-    const budget = await prisma.agentBudget.upsert({
-      where: { agentId },
-      create: {
-        agentId,
-        hardLimitUsd: hardLimitUsd ?? 0,
-        softLimitUsd: softLimitUsd ?? 0,
-        alertThreshold: alertThreshold ?? 0.8,
-        isHardStop: isHardStop ?? true,
-      },
-      update: {
-        ...(hardLimitUsd !== undefined && { hardLimitUsd }),
-        ...(softLimitUsd !== undefined && { softLimitUsd }),
-        ...(alertThreshold !== undefined && { alertThreshold }),
-        ...(isHardStop !== undefined && { isHardStop }),
-      },
-    });
+    const budget = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentBudget.upsert({
+        where: { agentId },
+        create: {
+          agentId,
+          hardLimitUsd: hardLimitUsd ?? 0,
+          softLimitUsd: softLimitUsd ?? 0,
+          alertThreshold: alertThreshold ?? 0.8,
+          isHardStop: isHardStop ?? true,
+        },
+        update: {
+          ...(hardLimitUsd !== undefined && { hardLimitUsd }),
+          ...(softLimitUsd !== undefined && { softLimitUsd }),
+          ...(alertThreshold !== undefined && { alertThreshold }),
+          ...(isHardStop !== undefined && { isHardStop }),
+        },
+      }),
+    );
     return NextResponse.json({ success: true, data: budget }, { status: 200 });
   } catch (error) {
     logger.error("POST /api/agents/[agentId]/budget error", { agentId, error });
@@ -85,7 +90,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
   if (isAuthError(authResult)) return authResult;
 
   try {
-    await prisma.agentBudget.delete({ where: { agentId } });
+    await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentBudget.delete({ where: { agentId } }),
+    );
     return NextResponse.json({ success: true, data: null });
   } catch (error) {
     logger.error("DELETE /api/agents/[agentId]/budget error", { agentId, error });

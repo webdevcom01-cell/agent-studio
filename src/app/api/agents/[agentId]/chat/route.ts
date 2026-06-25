@@ -4,6 +4,7 @@ import { executeFlowStreaming } from "@/lib/runtime/engine-streaming";
 import { loadContext } from "@/lib/runtime/context";
 import { trackChatResponse, trackError } from "@/lib/analytics";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { checkRateLimit, checkRateLimitAsync } from "@/lib/rate-limit";
 import { parseBodyWithLimit, BodyTooLargeError } from "@/lib/api/body-limit";
@@ -239,10 +240,10 @@ export async function POST(
 
     // Head-to-head eval compare: override flow content with a specific version
     if (evalFlowVersionId) {
-      const version = await prisma.flowVersion.findFirst({
+      const version = await withOrgContext(prisma, execOrgId, (tx) => tx.flowVersion.findFirst({
         where: { id: evalFlowVersionId, flow: { agentId } },
         select: { content: true },
-      });
+      }));
       if (version?.content) {
         // Replace the flow content in context with the versioned snapshot
         context.flowContent = version.content as unknown as typeof context.flowContent;
