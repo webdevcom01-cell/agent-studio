@@ -1,6 +1,17 @@
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { recordMetric } from "@/lib/observability/metrics";
+
+/**
+ * RLS note: the instinct lifecycle is a system/learning subsystem. It is driven
+ * by cross-tenant flows (cron evolve sweeps all agents, decayStaleInstincts
+ * spans every org, the Learn hook runs without a request org) and its admin/ECC
+ * API readers (agents/[agentId]/instincts) are already tenant-scoped at the
+ * route via requireAgentOwner + an explicit agentId filter. These queries
+ * therefore run via withAdminBypass (admin_user, BYPASSRLS) rather than a
+ * single-org context. Skill is a GLOBAL table and stays on the bare client.
+ */
 
 const PROMOTION_CONFIDENCE_THRESHOLD = 0.85;
 const PROMOTION_FREQUENCY_THRESHOLD = 10;
@@ -64,20 +75,22 @@ export async function getPromotionCandidates(
     where.agentId = agentId;
   }
 
-  const instincts = await prisma.instinct.findMany({
-    where,
-    orderBy: { confidence: "desc" },
-    take: MAX_INSTINCTS_PER_EVOLVE,
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      confidence: true,
-      frequency: true,
-      agentId: true,
-      promotedToSkillId: true,
-    },
-  });
+  const instincts = await withAdminBypass((db) =>
+    db.instinct.findMany({
+      where,
+      orderBy: { confidence: "desc" },
+      take: MAX_INSTINCTS_PER_EVOLVE,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        confidence: true,
+        frequency: true,
+        agentId: true,
+        promotedToSkillId: true,
+      },
+    }),
+  );
 
   return instincts.map((inst) => ({
     instinct: inst,
@@ -89,9 +102,11 @@ export async function promoteInstinctToSkill(
   instinctId: string,
   skillContent: string
 ): Promise<{ skillId: string }> {
-  const instinct = await prisma.instinct.findUniqueOrThrow({
-    where: { id: instinctId },
-  });
+  const instinct = await withAdminBypass((db) =>
+    db.instinct.findUniqueOrThrow({
+      where: { id: instinctId },
+    }),
+  );
 
   if (instinct.promotedToSkillId) {
     return { skillId: instinct.promotedToSkillId };
@@ -118,10 +133,12 @@ export async function promoteInstinctToSkill(
     },
   });
 
-  await prisma.instinct.update({
-    where: { id: instinctId },
-    data: { promotedToSkillId: skill.id },
-  });
+  await withAdminBypass((db) =>
+    db.instinct.update({
+      where: { id: instinctId },
+      data: { promotedToSkillId: skill.id },
+    }),
+  );
 
   recordMetric("ecc.instinct.promotion", 1, "count", {
     agentId: instinct.agentId,
@@ -150,31 +167,35 @@ export async function requestInstinctPromotion(
   instinctId: string,
   skillContent: string,
 ): Promise<{ approvalRequestId: string }> {
-  const instinct = await prisma.instinct.findUniqueOrThrow({
-    where: { id: instinctId },
-    select: { id: true, name: true, description: true, confidence: true, agentId: true },
-  });
+  const instinct = await withAdminBypass((db) =>
+    db.instinct.findUniqueOrThrow({
+      where: { id: instinctId },
+      select: { id: true, name: true, description: true, confidence: true, agentId: true },
+    }),
+  );
 
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-  const request = await prisma.humanApprovalRequest.create({
-    data: {
-      agentId: instinct.agentId,
-      executionId: instinctId, // reuse instinctId as the execution context identifier
-      prompt:
-        `Promote instinct to skill: "${instinct.name}"\n\n` +
-        `Instinct reached confidence ${instinct.confidence.toFixed(2)} ≥ 0.85. ` +
-        `Approve to create a reusable Skill in the knowledge base.\n\n` +
-        `**Generated skill content preview:**\n\n${skillContent.slice(0, 500)}${skillContent.length > 500 ? "…" : ""}`,
-      contextData: {
-        instinctId,
-        skillContent,
-        confidence: instinct.confidence,
-        type: "instinct_promotion",
+  const request = await withAdminBypass((db) =>
+    db.humanApprovalRequest.create({
+      data: {
+        agentId: instinct.agentId,
+        executionId: instinctId, // reuse instinctId as the execution context identifier
+        prompt:
+          `Promote instinct to skill: "${instinct.name}"\n\n` +
+          `Instinct reached confidence ${instinct.confidence.toFixed(2)} ≥ 0.85. ` +
+          `Approve to create a reusable Skill in the knowledge base.\n\n` +
+          `**Generated skill content preview:**\n\n${skillContent.slice(0, 500)}${skillContent.length > 500 ? "…" : ""}`,
+        contextData: {
+          instinctId,
+          skillContent,
+          confidence: instinct.confidence,
+          type: "instinct_promotion",
+        },
+        expiresAt,
       },
-      expiresAt,
-    },
-  });
+    }),
+  );
 
   recordMetric("ecc.instinct.approval_requested", 1, "count", {
     agentId: instinct.agentId,
@@ -199,22 +220,26 @@ export async function decayStaleInstincts(
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - intervalDays);
 
-  const stale = await prisma.instinct.findMany({
-    where: {
-      updatedAt: { lt: cutoff },
-      promotedToSkillId: null,
-      confidence: { gt: 0 },
-    },
-    select: { id: true, confidence: true },
-  });
+  const stale = await withAdminBypass((db) =>
+    db.instinct.findMany({
+      where: {
+        updatedAt: { lt: cutoff },
+        promotedToSkillId: null,
+        confidence: { gt: 0 },
+      },
+      select: { id: true, confidence: true },
+    }),
+  );
 
   let decayed = 0;
   for (const inst of stale) {
     const newConfidence = Math.max(0, inst.confidence - DECAY_AMOUNT);
-    await prisma.instinct.update({
-      where: { id: inst.id },
-      data: { confidence: newConfidence },
-    });
+    await withAdminBypass((db) =>
+      db.instinct.update({
+        where: { id: inst.id },
+        data: { confidence: newConfidence },
+      }),
+    );
     decayed++;
   }
 
@@ -286,18 +311,22 @@ export function clusterSimilarInstincts(
 export async function mergeCluster(cluster: ClusterGroup): Promise<void> {
   if (cluster.members.length === 0) return;
 
-  await prisma.instinct.update({
-    where: { id: cluster.representative.id },
-    data: {
-      confidence: cluster.mergedConfidence,
-      frequency: cluster.mergedFrequency,
-    },
-  });
+  await withAdminBypass((db) =>
+    db.instinct.update({
+      where: { id: cluster.representative.id },
+      data: {
+        confidence: cluster.mergedConfidence,
+        frequency: cluster.mergedFrequency,
+      },
+    }),
+  );
 
   const memberIds = cluster.members.map((m) => m.id);
-  await prisma.instinct.deleteMany({
-    where: { id: { in: memberIds } },
-  });
+  await withAdminBypass((db) =>
+    db.instinct.deleteMany({
+      where: { id: { in: memberIds } },
+    }),
+  );
 
   logger.info("Merged instinct cluster", {
     representativeId: cluster.representative.id,
@@ -317,18 +346,20 @@ export async function mergeCluster(cluster: ClusterGroup): Promise<void> {
 export async function evolveAgentInstincts(
   agentId: string
 ): Promise<{ clusters: ClusterGroup[]; candidates: PromotionCandidate[] }> {
-  const instincts = await prisma.instinct.findMany({
-    where: { agentId, promotedToSkillId: null },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      confidence: true,
-      frequency: true,
-      agentId: true,
-      promotedToSkillId: true,
-    },
-  });
+  const instincts = await withAdminBypass((db) =>
+    db.instinct.findMany({
+      where: { agentId, promotedToSkillId: null },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        confidence: true,
+        frequency: true,
+        agentId: true,
+        promotedToSkillId: true,
+      },
+    }),
+  );
 
   const clusters = clusterSimilarInstincts(instincts);
 
@@ -351,15 +382,17 @@ export async function getLifecycleStats(
 ): Promise<LifecycleStats> {
   const where = agentId ? { agentId } : {};
 
-  const instincts = await prisma.instinct.findMany({
-    where,
-    select: {
-      confidence: true,
-      frequency: true,
-      promotedToSkillId: true,
-      updatedAt: true,
-    },
-  });
+  const instincts = await withAdminBypass((db) =>
+    db.instinct.findMany({
+      where,
+      select: {
+        confidence: true,
+        frequency: true,
+        promotedToSkillId: true,
+        updatedAt: true,
+      },
+    }),
+  );
 
   const total = instincts.length;
   if (total === 0) {

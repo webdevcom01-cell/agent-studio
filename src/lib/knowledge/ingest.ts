@@ -1,5 +1,17 @@
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
+
+/**
+ * RLS note: KB ingestion is a system data pipeline. It is driven by the
+ * kb.ingest BullMQ worker, KB maintenance, and the SDLC codebase-RAG flow, and
+ * the API routes that trigger it do so fire-and-forget (outside the request's
+ * org context) after enforcing requireAgentOwner. All queries are scoped by
+ * sourceId, so they run via withAdminBypass (admin_user, BYPASSRLS) rather than
+ * a single-org context. NOTE: the raw $queryRaw/$executeRaw calls below still
+ * run on the primary client — routing those through the admin client is a
+ * separate raw-SQL follow-up tracked for the enforcement-prep phase.
+ */
 import { createHash } from "crypto";
 import { parseSource } from "./parsers";
 import { chunkText, estimateTokens, chunkByStrategy } from "./chunker";
@@ -16,16 +28,18 @@ const MAX_RETRIES = 3;
 
 async function updateProgress(sourceId: string, stage: string, progress: number): Promise<void> {
   try {
-    await prisma.kBSource.update({
-      where: { id: sourceId },
-      data: {
-        processingProgress: {
-          stage,
-          progress: Math.round(progress),
-          updatedAt: new Date().toISOString(),
+    await withAdminBypass((db) =>
+      db.kBSource.update({
+        where: { id: sourceId },
+        data: {
+          processingProgress: {
+            stage,
+            progress: Math.round(progress),
+            updatedAt: new Date().toISOString(),
+          },
         },
-      },
-    });
+      }),
+    );
   } catch {
     // Fire-and-forget
   }
@@ -41,19 +55,21 @@ interface KBConfig {
 
 async function loadKBConfig(sourceId: string): Promise<KBConfig | null> {
   try {
-    const source = await prisma.kBSource.findUnique({
-      where: { id: sourceId },
-      select: {
-        knowledgeBase: {
-          select: {
-            id: true,
-            chunkingStrategy: true,
-            embeddingModel: true,
-            maxChunks: true,
+    const source = await withAdminBypass((db) =>
+      db.kBSource.findUnique({
+        where: { id: sourceId },
+        select: {
+          knowledgeBase: {
+            select: {
+              id: true,
+              chunkingStrategy: true,
+              embeddingModel: true,
+              maxChunks: true,
+            },
           },
         },
-      },
-    });
+      }),
+    );
     if (!source?.knowledgeBase) return null;
 
     // contextualEnrichment is in schema.prisma + DB but not in generated types yet
@@ -87,9 +103,11 @@ export async function ingestSource(
   sourceId: string,
   textContent?: string
 ): Promise<{ chunksCreated: number }> {
-  const source = await prisma.kBSource.findUniqueOrThrow({
-    where: { id: sourceId },
-  });
+  const source = await withAdminBypass((db) =>
+    db.kBSource.findUniqueOrThrow({
+      where: { id: sourceId },
+    }),
+  );
 
   if (source.retryCount >= MAX_RETRIES) {
     logger.warn("Source exceeded max retry limit, skipping", {
@@ -99,10 +117,12 @@ export async function ingestSource(
     return { chunksCreated: 0 };
   }
 
-  await prisma.kBSource.update({
-    where: { id: sourceId },
-    data: { status: "PROCESSING", retryCount: { increment: 1 } },
-  });
+  await withAdminBypass((db) =>
+    db.kBSource.update({
+      where: { id: sourceId },
+      data: { status: "PROCESSING", retryCount: { increment: 1 } },
+    }),
+  );
 
   try {
     updateProgress(sourceId, "parsing", 0).catch(() => {});
@@ -169,10 +189,12 @@ export async function ingestSource(
     }
 
     if (dedupedChunks.length === 0) {
-      await prisma.kBSource.update({
-        where: { id: sourceId },
-        data: { status: "READY", charCount: finalText.length, errorMsg: null },
-      });
+      await withAdminBypass((db) =>
+        db.kBSource.update({
+          where: { id: sourceId },
+          data: { status: "READY", charCount: finalText.length, errorMsg: null },
+        }),
+      );
       return { chunksCreated: 0 };
     }
 
@@ -207,7 +229,7 @@ export async function ingestSource(
 
     updateProgress(sourceId, "storing", 90).catch(() => {});
 
-    await prisma.kBChunk.deleteMany({ where: { sourceId } });
+    await withAdminBypass((db) => db.kBChunk.deleteMany({ where: { sourceId } }));
 
     for (let batchStart = 0; batchStart < chunksToEmbed.length; batchStart += BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + BATCH_SIZE, chunksToEmbed.length);
@@ -236,17 +258,19 @@ export async function ingestSource(
 
     updateProgress(sourceId, "storing", 100).catch(() => {});
 
-    await prisma.kBSource.update({
-      where: { id: sourceId },
-      data: {
-        status: "READY",
-        charCount: finalText.length,
-        errorMsg: null,
-        contentHash,
-        lastIngestedAt: new Date(),
-        processingProgress: { stage: "complete", progress: 100, updatedAt: new Date().toISOString() },
-      },
-    });
+    await withAdminBypass((db) =>
+      db.kBSource.update({
+        where: { id: sourceId },
+        data: {
+          status: "READY",
+          charCount: finalText.length,
+          errorMsg: null,
+          contentHash,
+          lastIngestedAt: new Date(),
+          processingProgress: { stage: "complete", progress: 100, updatedAt: new Date().toISOString() },
+        },
+      }),
+    );
 
     // Mark chunks with the embedding model used (for drift detection)
     if (embeddingModel) {
@@ -257,14 +281,16 @@ export async function ingestSource(
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
     logger.error("Source ingestion failed", err, { sourceId });
-    await prisma.kBSource.update({
-      where: { id: sourceId },
-      data: { status: "FAILED", errorMsg: err.message },
-    });
+    await withAdminBypass((db) =>
+      db.kBSource.update({
+        where: { id: sourceId },
+        data: { status: "FAILED", errorMsg: err.message },
+      }),
+    );
     throw error;
   }
 }
 
 export async function deleteSourceChunks(sourceId: string): Promise<void> {
-  await prisma.kBChunk.deleteMany({ where: { sourceId } });
+  await withAdminBypass((db) => db.kBChunk.deleteMany({ where: { sourceId } }));
 }

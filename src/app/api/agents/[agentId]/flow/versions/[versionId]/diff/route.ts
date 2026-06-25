@@ -53,7 +53,8 @@ export async function GET(
 
     const diff = await VersionService.diffVersions(
       compareVersionId,
-      versionId
+      versionId,
+      authResult.organizationId
     );
 
     return NextResponse.json({ success: true, data: diff });

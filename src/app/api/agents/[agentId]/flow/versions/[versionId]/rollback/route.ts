@@ -38,14 +38,16 @@ export async function POST(
     const newVersion = await VersionService.rollbackToVersion(
       flow.id,
       versionId,
-      authResult.userId
+      authResult.userId,
+      authResult.organizationId
     );
 
     const deployment = await VersionService.deployVersion(
       agentId,
       newVersion.id,
       authResult.userId,
-      `Rollback to v${newVersion.label?.replace("Rollback to v", "") ?? "?"}`
+      `Rollback to v${newVersion.label?.replace("Rollback to v", "") ?? "?"}`,
+      authResult.organizationId
     );
 
     return NextResponse.json(

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { withTenant } from "@/lib/api/tenant-context";
+import { withTenant, withAdminBypass } from "@/lib/api/tenant-context";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { PrismaClient } from "@/generated/prisma";
 import { generateChangesSummary, computeFlowDiff } from "./diff-engine";
 import type { FlowContent } from "@/types";
@@ -71,30 +72,43 @@ export class VersionService {
     });
   }
 
-  static async listVersions(flowId: string): Promise<FlowVersion[]> {
-    return prisma.flowVersion.findMany({
-      where: { flowId },
-      orderBy: { version: "desc" },
-      include: {
-        _count: { select: { deployments: true, conversations: true } },
-      },
-    });
+  static async listVersions(
+    flowId: string,
+    organizationId: string | null = null
+  ): Promise<FlowVersion[]> {
+    return withOrgContext(prisma, organizationId, (tx) =>
+      tx.flowVersion.findMany({
+        where: { flowId },
+        orderBy: { version: "desc" },
+        include: {
+          _count: { select: { deployments: true, conversations: true } },
+        },
+      }),
+    );
   }
 
-  static async getVersion(versionId: string): Promise<FlowVersion | null> {
-    return prisma.flowVersion.findUnique({
-      where: { id: versionId },
-    });
+  static async getVersion(
+    versionId: string,
+    organizationId: string | null = null
+  ): Promise<FlowVersion | null> {
+    return withOrgContext(prisma, organizationId, (tx) =>
+      tx.flowVersion.findUnique({
+        where: { id: versionId },
+      }),
+    );
   }
 
   static async diffVersions(
     versionId1: string,
-    versionId2: string
+    versionId2: string,
+    organizationId: string | null = null
   ): Promise<FlowDiff> {
-    const [v1, v2] = await Promise.all([
-      prisma.flowVersion.findUniqueOrThrow({ where: { id: versionId1 } }),
-      prisma.flowVersion.findUniqueOrThrow({ where: { id: versionId2 } }),
-    ]);
+    const [v1, v2] = await withOrgContext(prisma, organizationId, (tx) =>
+      Promise.all([
+        tx.flowVersion.findUniqueOrThrow({ where: { id: versionId1 } }),
+        tx.flowVersion.findUniqueOrThrow({ where: { id: versionId2 } }),
+      ]),
+    );
 
     return computeFlowDiff(
       parseFlowContent(v1.content),
@@ -105,11 +119,14 @@ export class VersionService {
   static async rollbackToVersion(
     flowId: string,
     targetVersionId: string,
-    userId?: string
+    userId?: string,
+    organizationId: string | null = null
   ): Promise<FlowVersion> {
-    const targetVersion = await prisma.flowVersion.findUniqueOrThrow({
-      where: { id: targetVersionId },
-    });
+    const targetVersion = await withOrgContext(prisma, organizationId, (tx) =>
+      tx.flowVersion.findUniqueOrThrow({
+        where: { id: targetVersionId },
+      }),
+    );
 
     const content = parseFlowContent(targetVersion.content);
 
@@ -125,12 +142,15 @@ export class VersionService {
     agentId: string,
     versionId: string,
     userId?: string,
-    note?: string
+    note?: string,
+    organizationId: string | null = null
   ): Promise<FlowDeployment> {
-    const version = await prisma.flowVersion.findUniqueOrThrow({
-      where: { id: versionId },
-      include: { flow: true },
-    });
+    const version = await withOrgContext(prisma, organizationId, (tx) =>
+      tx.flowVersion.findUniqueOrThrow({
+        where: { id: versionId },
+        include: { flow: true },
+      }),
+    );
 
     const content = parseFlowContent(version.content);
 
@@ -164,7 +184,7 @@ export class VersionService {
           note: note ?? null,
         },
       });
-    }).then((deployment) => {
+    }, organizationId).then((deployment) => {
       // Fire-and-forget: sync FlowSchedule records from deployed flow nodes.
       // Runs after the transaction commits so it never blocks the deploy response.
       syncSchedulesFromFlow(agentId, content).catch((err) =>
@@ -192,13 +212,17 @@ export class VersionService {
   ): Promise<{ deleted: number; dryRun: boolean }> {
     const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
 
-    const candidates = await prisma.flowVersion.findMany({
-      where: {
-        status: "ARCHIVED" as FlowVersionStatus,
-        createdAt: { lt: cutoff },
-      },
-      select: { id: true, flowId: true, version: true, createdAt: true },
-    });
+    // Cross-tenant system sweep (cron/cleanup) — spans all orgs, so it runs
+    // on the admin (BYPASSRLS) client rather than a single-org context.
+    const candidates = await withAdminBypass((db) =>
+      db.flowVersion.findMany({
+        where: {
+          status: "ARCHIVED" as FlowVersionStatus,
+          createdAt: { lt: cutoff },
+        },
+        select: { id: true, flowId: true, version: true, createdAt: true },
+      }),
+    );
 
     if (dryRun || candidates.length === 0) {
       return { deleted: candidates.length, dryRun };
@@ -206,9 +230,11 @@ export class VersionService {
 
     const candidateIds = candidates.map((v) => v.id);
 
-    const result = await prisma.flowVersion.deleteMany({
-      where: { id: { in: candidateIds } },
-    });
+    const result = await withAdminBypass((db) =>
+      db.flowVersion.deleteMany({
+        where: { id: { in: candidateIds } },
+      }),
+    );
 
     logger.info("FlowVersion cleanup complete", {
       deleted: result.count,
@@ -220,17 +246,22 @@ export class VersionService {
   }
 
   static async getActiveVersion(
-    agentId: string
+    agentId: string,
+    organizationId: string | null = null
   ): Promise<FlowVersion | null> {
-    const flow = await prisma.flow.findUnique({
-      where: { agentId },
-      select: { activeVersionId: true },
-    });
+    const flow = await withOrgContext(prisma, organizationId, (tx) =>
+      tx.flow.findUnique({
+        where: { agentId },
+        select: { activeVersionId: true },
+      }),
+    );
 
     if (!flow?.activeVersionId) return null;
 
-    return prisma.flowVersion.findUnique({
-      where: { id: flow.activeVersionId },
-    });
+    return withOrgContext(prisma, organizationId, (tx) =>
+      tx.flowVersion.findUnique({
+        where: { id: flow.activeVersionId as string },
+      }),
+    );
   }
 }

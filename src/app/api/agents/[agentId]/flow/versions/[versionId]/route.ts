@@ -16,7 +16,7 @@ export async function GET(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const version = await VersionService.getVersion(versionId);
+    const version = await VersionService.getVersion(versionId, authResult.organizationId);
     if (!version) {
       return NextResponse.json(
         { success: false, error: "Version not found" },
