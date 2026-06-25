@@ -13,7 +13,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { withTenant } from "@/lib/api/tenant-context";
+import { withTenant, withAdminBypass } from "@/lib/api/tenant-context";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import type { PipelineRunStatus, Prisma } from "@/generated/prisma";
 
@@ -71,6 +72,12 @@ export interface CreatePipelineRunInput {
   triggerSource?: string;
   triggerBranch?: string;
   triggerPrNumber?: number;
+  /**
+   * Owning organization (for RLS tenant context). Derived from the caller's
+   * auth/session (API) or the agent record (webhook ingress). Nullable for
+   * legacy/personal agents without an org; null → RLS context skipped (safe).
+   */
+  organizationId: string | null;
 }
 
 export interface ListPipelineRunsOptions {
@@ -142,28 +149,30 @@ function toRun(row: {
 export async function createPipelineRun(
   input: CreatePipelineRunInput,
 ): Promise<PipelineRun> {
-  const row = await prisma.pipelineRun.create({
-    data: {
-      taskDescription: input.taskDescription,
-      taskType: input.taskType,
-      complexity: input.complexity,
-      pipeline: input.pipeline,
-      agentId: input.agentId,
-      userId: input.userId ?? null,
-      repoUrl: input.repoUrl ?? null,
-      sourceRepoUrl: input.sourceRepoUrl,
-      status: "PENDING",
-      modelId: input.modelId ?? null,
-      useSmartRouting: input.useSmartRouting ?? false,
-      requireApproval: input.requireApproval ?? false,
-      prUrl: input.prUrl ?? null,
-      webhookIdempotencyKey: input.webhookIdempotencyKey ?? null,
-      webhookExecutionId: input.webhookExecutionId ?? null,
-      triggerSource: input.triggerSource ?? "manual",
-      triggerBranch: input.triggerBranch ?? null,
-      triggerPrNumber: input.triggerPrNumber ?? null,
-    },
-  });
+  const row = await withOrgContext(prisma, input.organizationId, (tx) =>
+    tx.pipelineRun.create({
+      data: {
+        taskDescription: input.taskDescription,
+        taskType: input.taskType,
+        complexity: input.complexity,
+        pipeline: input.pipeline,
+        agentId: input.agentId,
+        userId: input.userId ?? null,
+        repoUrl: input.repoUrl ?? null,
+        sourceRepoUrl: input.sourceRepoUrl,
+        status: "PENDING",
+        modelId: input.modelId ?? null,
+        useSmartRouting: input.useSmartRouting ?? false,
+        requireApproval: input.requireApproval ?? false,
+        prUrl: input.prUrl ?? null,
+        webhookIdempotencyKey: input.webhookIdempotencyKey ?? null,
+        webhookExecutionId: input.webhookExecutionId ?? null,
+        triggerSource: input.triggerSource ?? "manual",
+        triggerBranch: input.triggerBranch ?? null,
+        triggerPrNumber: input.triggerPrNumber ?? null,
+      },
+    }),
+  );
 
   logger.info("Pipeline run created", {
     runId: row.id,
@@ -175,10 +184,15 @@ export async function createPipelineRun(
   return toRun(row);
 }
 
-export async function getPipelineRun(runId: string): Promise<PipelineRun | null> {
-  const row = await prisma.pipelineRun.findUnique({
-    where: { id: runId },
-  });
+export async function getPipelineRun(
+  runId: string,
+  organizationId: string | null = null,
+): Promise<PipelineRun | null> {
+  const row = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.pipelineRun.findUnique({
+      where: { id: runId },
+    }),
+  );
   return row ? toRun(row) : null;
 }
 
@@ -222,22 +236,25 @@ const SELECT_LIST_FIELDS = {
 export async function listPipelineRuns(
   agentId: string,
   options: ListPipelineRunsOptions = {},
+  organizationId: string | null = null,
 ): Promise<{ runs: PipelineRun[]; total: number }> {
   const where: Prisma.PipelineRunWhereInput = {
     agentId,
     ...(options.status ? { status: options.status } : {}),
   };
 
-  const [rows, total] = await Promise.all([
-    prisma.pipelineRun.findMany({
-      where,
-      select: SELECT_LIST_FIELDS,
-      orderBy: { createdAt: "desc" },
-      take: Math.min(options.limit ?? 20, 100),
-      skip: options.offset ?? 0,
-    }),
-    prisma.pipelineRun.count({ where }),
-  ]);
+  const [rows, total] = await withOrgContext(prisma, organizationId, (tx) =>
+    Promise.all([
+      tx.pipelineRun.findMany({
+        where,
+        select: SELECT_LIST_FIELDS,
+        orderBy: { createdAt: "desc" },
+        take: Math.min(options.limit ?? 20, 100),
+        skip: options.offset ?? 0,
+      }),
+      tx.pipelineRun.count({ where }),
+    ]),
+  );
 
   return {
     runs: rows.map((row) =>
@@ -413,10 +430,15 @@ export async function markPipelineFailed(
  *  Idempotent: re-cancelling an already-cancelled run returns current state.
  *  Throws only if run not found or in a non-cancellable terminal state (COMPLETED/FAILED).
  */
-export async function cancelPipelineRun(runId: string): Promise<PipelineRun> {
-  const run = await prisma.pipelineRun.findUnique({
-    where: { id: runId },
-  });
+export async function cancelPipelineRun(
+  runId: string,
+  organizationId: string | null,
+): Promise<PipelineRun> {
+  const run = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.pipelineRun.findUnique({
+      where: { id: runId },
+    }),
+  );
 
   if (!run) throw new Error(`Pipeline run not found: ${runId}`);
 
@@ -431,10 +453,12 @@ export async function cancelPipelineRun(runId: string): Promise<PipelineRun> {
     throw new Error(`Pipeline run already in terminal status: ${run.status}`);
   }
 
-  const row = await prisma.pipelineRun.update({
-    where: { id: runId },
-    data: { status: "CANCELLED", completedAt: new Date() },
-  });
+  const row = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.pipelineRun.update({
+      where: { id: runId },
+      data: { status: "CANCELLED", completedAt: new Date() },
+    }),
+  );
 
   logger.info("Pipeline run cancelled", { runId });
 
@@ -463,8 +487,11 @@ export async function markPipelineAwaitingApproval(
 export async function approvePipelineRun(
   runId: string,
   feedback?: string,
+  organizationId: string | null = null,
 ): Promise<PipelineRun> {
-  const run = await prisma.pipelineRun.findUnique({ where: { id: runId } });
+  const run = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.pipelineRun.findUnique({ where: { id: runId } }),
+  );
   if (!run) throw new Error(`Pipeline run not found: ${runId}`);
   if (run.status !== "AWAITING_APPROVAL") {
     throw new Error(
@@ -472,21 +499,28 @@ export async function approvePipelineRun(
     );
   }
 
-  const row = await prisma.pipelineRun.update({
-    where: { id: runId },
-    data: {
-      status: "PENDING",
-      approvalFeedback: feedback ?? null,
-    },
-  });
+  const row = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.pipelineRun.update({
+      where: { id: runId },
+      data: {
+        status: "PENDING",
+        approvalFeedback: feedback ?? null,
+      },
+    }),
+  );
   return toRun(row);
 }
 
-export async function isPipelineAwaitingApproval(runId: string): Promise<boolean> {
-  const run = await prisma.pipelineRun.findUnique({
-    where: { id: runId },
-    select: { status: true },
-  });
+export async function isPipelineAwaitingApproval(
+  runId: string,
+  organizationId: string | null = null,
+): Promise<boolean> {
+  const run = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.pipelineRun.findUnique({
+      where: { id: runId },
+      select: { status: true },
+    }),
+  );
   return run?.status === "AWAITING_APPROVAL";
 }
 
@@ -496,13 +530,17 @@ export async function detectAndResetStalePipelineRuns(
 ): Promise<{ resetCount: number; runIds: string[] }> {
   const cutoff = new Date(Date.now() - staleThresholdMinutes * 60 * 1000);
 
-  const staleRuns = await prisma.pipelineRun.findMany({
-    where: {
-      status: "RUNNING",
-      startedAt: { lt: cutoff },
-    },
-    select: { id: true, startedAt: true, currentStep: true, agentId: true, pipeline: true },
-  });
+  // Cross-tenant system sweep (cron + worker): intentionally spans all orgs,
+  // so it runs on the admin (BYPASSRLS) client rather than a single org context.
+  const staleRuns = await withAdminBypass((db) =>
+    db.pipelineRun.findMany({
+      where: {
+        status: "RUNNING",
+        startedAt: { lt: cutoff },
+      },
+      select: { id: true, startedAt: true, currentStep: true, agentId: true, pipeline: true },
+    }),
+  );
 
   const runIds = staleRuns.map((r) => r.id);
 
@@ -517,13 +555,15 @@ export async function detectAndResetStalePipelineRuns(
     return { resetCount: staleRuns.length, runIds };
   }
 
-  await prisma.pipelineRun.updateMany({
-    where: { id: { in: runIds } },
-    data: {
-      status: "FAILED",
-      error: `Pipeline stalled — worker process was killed mid-execution (detected after ${staleThresholdMinutes} min). Check currentStep for progress before interruption. This is typically caused by a Railway container restart or OOM kill, not a code error.`,
-    },
-  });
+  await withAdminBypass((db) =>
+    db.pipelineRun.updateMany({
+      where: { id: { in: runIds } },
+      data: {
+        status: "FAILED",
+        error: `Pipeline stalled — worker process was killed mid-execution (detected after ${staleThresholdMinutes} min). Check currentStep for progress before interruption. This is typically caused by a Railway container restart or OOM kill, not a code error.`,
+      },
+    }),
+  );
 
   for (const run of staleRuns) {
     const stuckMinutes = run.startedAt
@@ -568,16 +608,21 @@ export function isRunStuck(run: { status: string; updatedAt: Date }): boolean {
  * Force-resets a stuck RUNNING pipeline run to FAILED so it can be re-enqueued
  * via the retry route with forceResume: true.
  */
-export async function forceResetStuckRun(runId: string): Promise<void> {
-  await prisma.pipelineRun.update({
-    where: { id: runId },
-    data: {
-      status: "FAILED",
-      error:
-        "Run was stuck (no DB progress detected for over 10 minutes) and was force-reset. " +
-        "The pipeline will resume from the last completed step.",
-      completedAt: new Date(),
-    },
-  });
+export async function forceResetStuckRun(
+  runId: string,
+  organizationId: string | null = null,
+): Promise<void> {
+  await withOrgContext(prisma, organizationId, (tx) =>
+    tx.pipelineRun.update({
+      where: { id: runId },
+      data: {
+        status: "FAILED",
+        error:
+          "Run was stuck (no DB progress detected for over 10 minutes) and was force-reset. " +
+          "The pipeline will resume from the last completed step.",
+        completedAt: new Date(),
+      },
+    }),
+  );
   logger.warn("Stuck pipeline run force-reset to FAILED", { runId });
 }

@@ -31,7 +31,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { applySecurityHeaders } from "@/lib/api/security-headers";
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import {
   verifyGitHubSignature,
@@ -197,10 +196,14 @@ export async function POST(
     // ── 9. Idempotency check (DB-level, race condition safe) ──────────────────
     const idempotencyKey = buildIdempotencyKey(ctx);
 
-    const existing = await prisma.pipelineRun.findUnique({
-      where: { webhookIdempotencyKey: idempotencyKey },
-      select: { id: true, status: true },
-    });
+    // No-auth webhook ingress (pre-auth) — runs as admin (BYPASSRLS) per the
+    // special-route policy; idempotency key is globally unique across tenants.
+    const existing = await withAdminBypass((db) =>
+      db.pipelineRun.findUnique({
+        where: { webhookIdempotencyKey: idempotencyKey },
+        select: { id: true, status: true },
+      }),
+    );
 
     if (existing) {
       logger.info("Webhook pipeline trigger: duplicate event, skipping", {
@@ -235,6 +238,15 @@ export async function POST(
     }
 
     // ── 11. Create PipelineRun (no LLM — task type is always "code-review") ───
+    // Resolve the agent's org so the run is created in the correct tenant
+    // context (the row stays tenant-correct even under RLS enforcement).
+    const ownerAgent = await withAdminBypass((db) =>
+      db.agent.findUnique({
+        where: { id: agentId },
+        select: { organizationId: true },
+      }),
+    );
+
     const run = await createPipelineRun({
       taskDescription: buildTaskDescription(ctx),
       taskType: "code-review",
@@ -248,6 +260,7 @@ export async function POST(
       triggerSource: ctx.provider,
       triggerBranch: ctx.headBranch,
       triggerPrNumber: ctx.prNumber,
+      organizationId: ownerAgent?.organizationId ?? null,
     });
 
     // ── 12. Enqueue BullMQ job ────────────────────────────────────────────────

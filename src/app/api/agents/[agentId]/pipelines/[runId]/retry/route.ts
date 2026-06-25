@@ -56,7 +56,7 @@ export async function POST(
   const { modelId, useSmartRouting, forceResume } = parsed.data;
 
   try {
-    const run = await getPipelineRun(runId);
+    const run = await getPipelineRun(runId, authResult.organizationId);
 
     if (!run) {
       return NextResponse.json(
@@ -103,7 +103,7 @@ export async function POST(
       // This must happen BEFORE addPipelineRunJob so any zombie BullMQ job
       // that wakes up after this point will see status PENDING (set below)
       // and skip via the zombie guard in worker.ts.
-      await forceResetStuckRun(runId);
+      await forceResetStuckRun(runId, authResult.organizationId);
 
       logger.info("Stuck pipeline run force-reset, proceeding to re-enqueue", {
         runId,

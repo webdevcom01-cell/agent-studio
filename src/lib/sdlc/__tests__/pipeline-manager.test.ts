@@ -13,6 +13,20 @@ const mockWithTenant = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api/tenant-context", () => ({
   withTenant: mockWithTenant,
+  // Cross-tenant system sweep (detectAndResetStalePipelineRuns) runs via
+  // withAdminBypass. In tests it executes the callback against the same mocked
+  // prisma client, so the findMany/updateMany assertions still hold.
+  withAdminBypass: (fn: (db: { pipelineRun: Record<string, unknown> }) => unknown) =>
+    fn({
+      pipelineRun: {
+        create: (...args: unknown[]) => mockCreate(...args),
+        findUnique: (...args: unknown[]) => mockFindUnique(...args),
+        findMany: (...args: unknown[]) => mockFindMany(...args),
+        count: (...args: unknown[]) => mockCount(...args),
+        update: (...args: unknown[]) => mockUpdate(...args),
+        updateMany: (...args: unknown[]) => mockUpdateMany(...args),
+      },
+    }),
 }));
 
 const mockCreate = vi.fn();
