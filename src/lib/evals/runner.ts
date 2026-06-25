@@ -19,7 +19,6 @@
  *     └── Update EvalRun (COMPLETED, score, durationMs, completedAt)
  */
 
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { evaluateAllAssertions } from "./assertions";
@@ -522,19 +521,21 @@ export async function runEvalSuite(
   const comparisonRunId = options.comparisonRunId;
 
   // ── 2. Create EvalRun record ───────────────────────────────────────────────
-  const run = await prisma.evalRun.create({
-    data: {
-      suiteId,
-      status: "RUNNING",
-      totalCases,
-      triggeredBy,
-      // Head-to-head comparison fields (stored as-is; Prisma will ignore unknown fields
-      // until db:push is run on Railway — these are gracefully ignored locally)
-      ...(flowVersionId ? { flowVersionId } : {}),
-      ...(modelOverride ? { modelOverride } : {}),
-      ...(comparisonRunId ? { comparisonRunId } : {}),
-    } as Parameters<typeof prisma.evalRun.create>[0]["data"],
-  });
+  const run = await withAdminBypass((db) =>
+    db.evalRun.create({
+      data: {
+        suiteId,
+        status: "RUNNING",
+        totalCases,
+        triggeredBy,
+        // Head-to-head comparison fields (stored as-is; Prisma will ignore unknown fields
+        // until db:push is run on Railway — these are gracefully ignored locally)
+        ...(flowVersionId ? { flowVersionId } : {}),
+        ...(modelOverride ? { modelOverride } : {}),
+        ...(comparisonRunId ? { comparisonRunId } : {}),
+      } as Parameters<typeof db.evalRun.create>[0]["data"],
+    }),
+  );
 
   const runStart = Date.now();
   const caseResults: CaseRunResult[] = [];
@@ -572,10 +573,12 @@ export async function runEvalSuite(
     }
 
     // Update run progress after each case
-    await prisma.evalRun.update({
-      where: { id: run.id },
-      data: { passedCases, failedCases },
-    });
+    await withAdminBypass((db) =>
+      db.evalRun.update({
+        where: { id: run.id },
+        data: { passedCases, failedCases },
+      }),
+    );
   }
 
   // ── 4. Finalise run ────────────────────────────────────────────────────────
@@ -585,17 +588,19 @@ export async function runEvalSuite(
       ? average(caseResults.map((r) => r.score))
       : 0;
 
-  const finalRun = await prisma.evalRun.update({
-    where: { id: run.id },
-    data: {
-      status: "COMPLETED",
-      passedCases,
-      failedCases,
-      score: overallScore,
-      durationMs,
-      completedAt: new Date(),
-    },
-  });
+  const finalRun = await withAdminBypass((db) =>
+    db.evalRun.update({
+      where: { id: run.id },
+      data: {
+        status: "COMPLETED",
+        passedCases,
+        failedCases,
+        score: overallScore,
+        durationMs,
+        completedAt: new Date(),
+      },
+    }),
+  );
 
   logger.info("eval_run_completed", {
     runId: run.id,
@@ -712,18 +717,20 @@ async function runSingleTestCase(
   }
 
   // Persist EvalResult
-  await prisma.evalResult.create({
-    data: {
-      runId,
-      testCaseId: testCase.id,
-      status,
-      agentOutput,
-      assertions: assertionResults as import("@/generated/prisma/runtime/library").InputJsonValue,
-      score,
-      latencyMs: latencyMs > 0 ? latencyMs : null,
-      errorMessage,
-    },
-  });
+  await withAdminBypass((db) =>
+    db.evalResult.create({
+      data: {
+        runId,
+        testCaseId: testCase.id,
+        status,
+        agentOutput,
+        assertions: assertionResults as import("@/generated/prisma/runtime/library").InputJsonValue,
+        score,
+        latencyMs: latencyMs > 0 ? latencyMs : null,
+        errorMessage,
+      },
+    }),
+  );
 
   return {
     testCaseId: testCase.id,
@@ -747,14 +754,16 @@ export async function failEvalRun(
   runId: string,
   errorMessage: string,
 ): Promise<void> {
-  await prisma.evalRun.update({
-    where: { id: runId },
-    data: {
-      status: "FAILED",
-      errorMessage,
-      completedAt: new Date(),
-    },
-  }).catch(() => {
+  await withAdminBypass((db) =>
+    db.evalRun.update({
+      where: { id: runId },
+      data: {
+        status: "FAILED",
+        errorMessage,
+        completedAt: new Date(),
+      },
+    }),
+  ).catch(() => {
     // Ignore DB errors during cleanup
   });
 }

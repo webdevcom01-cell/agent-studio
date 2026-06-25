@@ -33,28 +33,31 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
     const agentIds = ownAgents.map((a) => a.id);
 
-    const [runsTotal, runsSuccess, runsCompleted, spend, latency, openReviews] = await Promise.all([
-      prismaRead.agentExecution.count({
-        where: { agentId: { in: agentIds }, createdAt: { gte: since } },
-      }),
-      prismaRead.agentExecution.count({
-        where: { agentId: { in: agentIds }, createdAt: { gte: since }, status: "SUCCESS" },
-      }),
-      prismaRead.agentExecution.count({
-        where: { agentId: { in: agentIds }, createdAt: { gte: since }, status: { in: ["SUCCESS", "FAILED", "TIMEOUT"] } },
-      }),
-      prismaRead.costEvent.aggregate({
-        _sum: { costUsd: true },
-        where: { agentId: { in: agentIds }, createdAt: { gte: since } },
-      }),
-      prismaRead.agentExecution.aggregate({
-        _avg: { durationMs: true },
-        where: { agentId: { in: agentIds }, createdAt: { gte: since }, durationMs: { not: null } },
-      }),
-      prismaRead.humanApprovalRequest.count({
-        where: { agentId: { in: agentIds }, status: "pending" },
-      }),
-    ]);
+    const [runsTotal, runsSuccess, runsCompleted, spend, latency, openReviews] =
+      await withOrgContext(prismaRead, auth.organizationId, (tx) =>
+        Promise.all([
+          tx.agentExecution.count({
+            where: { agentId: { in: agentIds }, createdAt: { gte: since } },
+          }),
+          tx.agentExecution.count({
+            where: { agentId: { in: agentIds }, createdAt: { gte: since }, status: "SUCCESS" },
+          }),
+          tx.agentExecution.count({
+            where: { agentId: { in: agentIds }, createdAt: { gte: since }, status: { in: ["SUCCESS", "FAILED", "TIMEOUT"] } },
+          }),
+          tx.costEvent.aggregate({
+            _sum: { costUsd: true },
+            where: { agentId: { in: agentIds }, createdAt: { gte: since } },
+          }),
+          tx.agentExecution.aggregate({
+            _avg: { durationMs: true },
+            where: { agentId: { in: agentIds }, createdAt: { gte: since }, durationMs: { not: null } },
+          }),
+          tx.humanApprovalRequest.count({
+            where: { agentId: { in: agentIds }, status: "pending" },
+          }),
+        ]),
+      );
 
     return NextResponse.json({
       period: periodParam,

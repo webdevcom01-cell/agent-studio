@@ -15,6 +15,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import { loadContext, saveContext, saveMessages } from "@/lib/runtime/context";
@@ -193,10 +194,14 @@ async function scheduleWebhookRetry(
         );
 
         // Persist the BullMQ job ID so operators can look it up.
-        await prisma.webhookExecution.update({
-          where: { id: executionId },
-          data: { retryJobId: jobId },
-        });
+        // Fire-and-forget system retry scheduler (no request org in scope) →
+        // admin bypass.
+        await withAdminBypass((db) =>
+          db.webhookExecution.update({
+            where: { id: executionId },
+            data: { retryJobId: jobId },
+          }),
+        );
       } catch (queueErr) {
         // Queue unavailable (Redis not configured) — log and let the dead
         // letter record serve as the audit trail.
@@ -302,10 +307,12 @@ export async function executeWebhookTrigger(
 
   // Retries re-use an existing execution record — skip idempotency check entirely.
   if (!isRetry) {
-    const existing = await prisma.webhookExecution.findUnique({
-      where: { idempotencyKey },
-      select: { id: true, conversationId: true, status: true },
-    });
+    const existing = await withOrgContext(prisma, webhookOrgId, (tx) =>
+      tx.webhookExecution.findUnique({
+        where: { idempotencyKey },
+        select: { id: true, conversationId: true, status: true },
+      }),
+    );
 
     if (existing) {
       logger.info("Webhook event already processed (idempotent skip)", {
@@ -466,14 +473,16 @@ export async function executeWebhookTrigger(
 
     // Only enforce if all placeholders resolved to non-empty strings
     if (issueKey && !issueKey.includes("{{")) {
-      const existingByIssue = await prisma.webhookExecution.findFirst({
-        where: {
-          webhookConfigId: webhookId,
-          issueKey,
-          status: { in: ["PENDING", "QUEUED", "RUNNING"] },
-        },
-        select: { id: true, conversationId: true },
-      });
+      const existingByIssue = await withOrgContext(prisma, webhookOrgId, (tx) =>
+        tx.webhookExecution.findFirst({
+          where: {
+            webhookConfigId: webhookId,
+            issueKey,
+            status: { in: ["PENDING", "QUEUED", "RUNNING"] },
+          },
+          select: { id: true, conversationId: true },
+        }),
+      );
 
       if (existingByIssue) {
         logger.info("Webhook issue-level idempotency skip", {
@@ -512,34 +521,38 @@ export async function executeWebhookTrigger(
   const execution: { id: string } = isRetry
     ? await (async () => {
         // Load the existing execution so we know its current retryCount.
-        const existing = await prisma.webhookExecution.findUnique({
-          where: { id: retryExecutionId },
-          select: { id: true, retryCount: true },
-        });
+        const existing = await withOrgContext(prisma, webhookOrgId, (tx) =>
+          tx.webhookExecution.findUnique({
+            where: { id: retryExecutionId },
+            select: { id: true, retryCount: true },
+          }),
+        );
         if (!existing) {
           throw new Error(`Retry execution ${retryExecutionId} not found`);
         }
         currentRetryCount = existing.retryCount;
         return { id: existing.id };
       })()
-    : await prisma.webhookExecution.create({
-        data: {
-          webhookConfigId: webhookId,
-          idempotencyKey,
-          issueKey,
-          status: "PENDING",
-          triggeredAt: new Date(),
-          sourceIp: sourceIp ?? null,
-          eventType,
-          // Store original payload and sanitized headers for replay support.
-          // rawPayload is capped at 1 MB to prevent unbounded storage.
-          rawPayload: rawBody.length <= 1_048_576 ? rawBody : null,
-          rawHeaders: sanitizedHeaders,
-          isReplay,
-          replayOf: replayOf ?? null,
-        },
-        select: { id: true },
-      });
+    : await withOrgContext(prisma, webhookOrgId, (tx) =>
+        tx.webhookExecution.create({
+          data: {
+            webhookConfigId: webhookId,
+            idempotencyKey,
+            issueKey,
+            status: "PENDING",
+            triggeredAt: new Date(),
+            sourceIp: sourceIp ?? null,
+            eventType,
+            // Store original payload and sanitized headers for replay support.
+            // rawPayload is capped at 1 MB to prevent unbounded storage.
+            rawPayload: rawBody.length <= 1_048_576 ? rawBody : null,
+            rawHeaders: sanitizedHeaders,
+            isReplay,
+            replayOf: replayOf ?? null,
+          },
+          select: { id: true },
+        }),
+      );
 
   // ── 6b. Async dispatch (v2) ───────────────────────────────────────────────
   // When asyncExecution=true on the webhook config, enqueue a BullMQ job and
@@ -563,10 +576,12 @@ export async function executeWebhookTrigger(
         sourceIp,
       });
 
-      await prisma.webhookExecution.update({
-        where: { id: execution.id },
-        data: { status: "QUEUED" },
-      });
+      await withOrgContext(prisma, webhookOrgId, (tx) =>
+        tx.webhookExecution.update({
+          where: { id: execution.id },
+          data: { status: "QUEUED" },
+        }),
+      );
 
       logger.info("Webhook async dispatch: job enqueued, returning 202", {
         webhookId,
@@ -599,10 +614,12 @@ export async function executeWebhookTrigger(
 
   try {
     // Mark as RUNNING
-    await prisma.webhookExecution.update({
-      where: { id: execution.id },
-      data: { status: "RUNNING" },
-    });
+    await withOrgContext(prisma, webhookOrgId, (tx) =>
+      tx.webhookExecution.update({
+        where: { id: execution.id },
+        data: { status: "RUNNING" },
+      }),
+    );
 
     // Create context with webhook variables pre-loaded
     const context = await loadContext(agentId, undefined, webhookOrgId);
@@ -642,25 +659,29 @@ export async function executeWebhookTrigger(
   const durationMs = Date.now() - startedAt;
 
   await Promise.allSettled([
-    prisma.webhookExecution.update({
-      where: { id: execution.id },
-      data: {
-        status: executionStatus,
-        completedAt: new Date(),
-        durationMs,
-        conversationId: conversationId ?? null,
-        errorMessage: errorMessage ?? null,
-      },
-    }),
+    withOrgContext(prisma, webhookOrgId, (tx) =>
+      tx.webhookExecution.update({
+        where: { id: execution.id },
+        data: {
+          status: executionStatus,
+          completedAt: new Date(),
+          durationMs,
+          conversationId: conversationId ?? null,
+          errorMessage: errorMessage ?? null,
+        },
+      }),
+    ),
     // Update aggregate stats on the config
-    prisma.webhookConfig.update({
-      where: { id: webhookId },
-      data: {
-        lastTriggeredAt: new Date(),
-        triggerCount: { increment: 1 },
-        ...(executionStatus === "FAILED" && { failureCount: { increment: 1 } }),
-      },
-    }),
+    withOrgContext(prisma, webhookOrgId, (tx) =>
+      tx.webhookConfig.update({
+        where: { id: webhookId },
+        data: {
+          lastTriggeredAt: new Date(),
+          triggerCount: { increment: 1 },
+          ...(executionStatus === "FAILED" && { failureCount: { increment: 1 } }),
+        },
+      }),
+    ),
   ]);
 
   if (executionStatus === "FAILED") {
