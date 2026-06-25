@@ -15,6 +15,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import type { ManagedTaskStatus, Prisma } from "@/generated/prisma";
 
@@ -73,6 +74,12 @@ export interface CreateTaskInput {
   userId?: string;
   input: TaskInput;
   callbackUrl?: string;
+  /**
+   * Owning organization (for RLS tenant context). Derived from the caller's
+   * auth/session (API) or the agent record (MCP). Nullable for legacy/personal
+   * agents without an org; when null, RLS context is skipped (behaviour-safe).
+   */
+  organizationId: string | null;
 }
 
 export interface ListTasksOptions {
@@ -115,17 +122,19 @@ function toTask(row: {
 // ---------------------------------------------------------------------------
 
 export async function createTask(input: CreateTaskInput): Promise<ManagedTask> {
-  const row = await prisma.managedAgentTask.create({
-    data: {
-      name: input.name,
-      description: input.description ?? null,
-      agentId: input.agentId,
-      userId: input.userId ?? null,
-      input: input.input as unknown as Prisma.InputJsonValue,
-      callbackUrl: input.callbackUrl ?? null,
-      status: "PENDING",
-    },
-  });
+  const row = await withOrgContext(prisma, input.organizationId, (tx) =>
+    tx.managedAgentTask.create({
+      data: {
+        name: input.name,
+        description: input.description ?? null,
+        agentId: input.agentId,
+        userId: input.userId ?? null,
+        input: input.input as unknown as Prisma.InputJsonValue,
+        callbackUrl: input.callbackUrl ?? null,
+        status: "PENDING",
+      },
+    }),
+  );
 
   logger.info("Managed task created", {
     taskId: row.id,
@@ -136,31 +145,39 @@ export async function createTask(input: CreateTaskInput): Promise<ManagedTask> {
   return toTask(row);
 }
 
-export async function getTask(taskId: string): Promise<ManagedTask | null> {
-  const row = await prisma.managedAgentTask.findUnique({
-    where: { id: taskId },
-  });
+export async function getTask(
+  taskId: string,
+  organizationId: string | null = null,
+): Promise<ManagedTask | null> {
+  const row = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.managedAgentTask.findUnique({
+      where: { id: taskId },
+    }),
+  );
   return row ? toTask(row) : null;
 }
 
 export async function listTasks(
   agentId: string,
-  options: ListTasksOptions = {}
+  options: ListTasksOptions = {},
+  organizationId: string | null = null
 ): Promise<{ tasks: ManagedTask[]; total: number }> {
   const where: Prisma.ManagedAgentTaskWhereInput = {
     agentId,
     ...(options.status ? { status: options.status } : {}),
   };
 
-  const [rows, total] = await Promise.all([
-    prisma.managedAgentTask.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: Math.min(options.limit ?? 20, 100),
-      skip: options.offset ?? 0,
-    }),
-    prisma.managedAgentTask.count({ where }),
-  ]);
+  const [rows, total] = await withOrgContext(prisma, organizationId, (tx) =>
+    Promise.all([
+      tx.managedAgentTask.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: Math.min(options.limit ?? 20, 100),
+        skip: options.offset ?? 0,
+      }),
+      tx.managedAgentTask.count({ where }),
+    ]),
+  );
 
   return { tasks: rows.map(toTask), total };
 }
@@ -250,53 +267,72 @@ export async function markAbandoned(
 }
 
 /** User requests pause — worker honours this between tool steps */
-export async function requestPause(taskId: string): Promise<ManagedTask> {
-  const task = await prisma.managedAgentTask.findUnique({
-    where: { id: taskId },
-    select: { status: true },
-  });
+export async function requestPause(
+  taskId: string,
+  organizationId: string | null,
+): Promise<ManagedTask> {
+  const task = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.managedAgentTask.findUnique({
+      where: { id: taskId },
+      select: { status: true },
+    }),
+  );
 
   if (!task) throw new Error(`Task not found: ${taskId}`);
   if (task.status !== "RUNNING") {
     throw new Error(`Cannot pause task in status: ${task.status}`);
   }
 
-  const row = await prisma.managedAgentTask.update({
-    where: { id: taskId },
-    data: { status: "PAUSED" },
-  });
+  const row = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.managedAgentTask.update({
+      where: { id: taskId },
+      data: { status: "PAUSED" },
+    }),
+  );
 
   logger.info("Managed task pause requested", { taskId });
   return toTask(row);
 }
 
 /** User resumes a paused task — caller is responsible for re-enqueueing */
-export async function requestResume(taskId: string): Promise<ManagedTask> {
-  const task = await prisma.managedAgentTask.findUnique({
-    where: { id: taskId },
-    select: { status: true },
-  });
+export async function requestResume(
+  taskId: string,
+  organizationId: string | null,
+): Promise<ManagedTask> {
+  const task = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.managedAgentTask.findUnique({
+      where: { id: taskId },
+      select: { status: true },
+    }),
+  );
 
   if (!task) throw new Error(`Task not found: ${taskId}`);
   if (task.status !== "PAUSED") {
     throw new Error(`Cannot resume task in status: ${task.status}`);
   }
 
-  const row = await prisma.managedAgentTask.update({
-    where: { id: taskId },
-    data: { status: "PENDING" },
-  });
+  const row = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.managedAgentTask.update({
+      where: { id: taskId },
+      data: { status: "PENDING" },
+    }),
+  );
 
   logger.info("Managed task resume requested", { taskId });
   return toTask(row);
 }
 
 /** User cancels a task — worker checks this flag before each step */
-export async function cancelTask(taskId: string): Promise<ManagedTask> {
-  const task = await prisma.managedAgentTask.findUnique({
-    where: { id: taskId },
-    select: { status: true },
-  });
+export async function cancelTask(
+  taskId: string,
+  organizationId: string | null,
+): Promise<ManagedTask> {
+  const task = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.managedAgentTask.findUnique({
+      where: { id: taskId },
+      select: { status: true },
+    }),
+  );
 
   if (!task) throw new Error(`Task not found: ${taskId}`);
 
@@ -305,10 +341,12 @@ export async function cancelTask(taskId: string): Promise<ManagedTask> {
     throw new Error(`Task already in terminal status: ${task.status}`);
   }
 
-  const row = await prisma.managedAgentTask.update({
-    where: { id: taskId },
-    data: { status: "CANCELLED", completedAt: new Date() },
-  });
+  const row = await withOrgContext(prisma, organizationId, (tx) =>
+    tx.managedAgentTask.update({
+      where: { id: taskId },
+      data: { status: "CANCELLED", completedAt: new Date() },
+    }),
+  );
 
   logger.info("Managed task cancelled", { taskId });
   return toTask(row);

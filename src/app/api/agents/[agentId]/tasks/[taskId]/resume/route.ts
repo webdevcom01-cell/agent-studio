@@ -18,7 +18,7 @@ export async function POST(
   const { userId } = authResult;
 
   try {
-    const task = await getTask(taskId);
+    const task = await getTask(taskId, authResult.organizationId);
     if (!task || task.agentId !== agentId) {
       return NextResponse.json(
         { success: false, error: "Task not found" },
@@ -27,7 +27,7 @@ export async function POST(
     }
 
     // requestResume sets status back to PENDING
-    const updated = await requestResume(taskId);
+    const updated = await requestResume(taskId, authResult.organizationId);
 
     // Re-enqueue so the worker picks it up again
     await addManagedTaskJob({

@@ -16,7 +16,7 @@ export async function POST(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const task = await getTask(taskId);
+    const task = await getTask(taskId, authResult.organizationId);
     if (!task || task.agentId !== agentId) {
       return NextResponse.json(
         { success: false, error: "Task not found" },
@@ -24,7 +24,7 @@ export async function POST(
       );
     }
 
-    const updated = await requestPause(taskId);
+    const updated = await requestPause(taskId, authResult.organizationId);
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Failed to pause task";

@@ -27,11 +27,15 @@ export async function GET(
     );
     const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
 
-    const result = await listTasks(agentId, {
-      status: status ?? undefined,
-      limit,
-      offset,
-    });
+    const result = await listTasks(
+      agentId,
+      {
+        status: status ?? undefined,
+        limit,
+        offset,
+      },
+      authResult.organizationId,
+    );
 
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
@@ -88,6 +92,7 @@ export async function POST(
       userId,
       input: parsed.data.input,
       callbackUrl: parsed.data.callbackUrl,
+      organizationId: authResult.organizationId,
     });
 
     // Enqueue the task job (fire-and-forget — task is already PENDING in DB)

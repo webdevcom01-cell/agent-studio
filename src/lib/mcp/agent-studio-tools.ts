@@ -351,7 +351,7 @@ async function toolTriggerAgent(
   const agent = await withAdminBypass((db) =>
     db.agent.findFirst({
       where: { id: agentId, userId },
-      select: { id: true, name: true, flow: { select: { id: true } } },
+      select: { id: true, name: true, organizationId: true, flow: { select: { id: true } } },
     }),
   );
 
@@ -377,6 +377,7 @@ async function toolTriggerAgent(
     agentId,
     userId,
     input: { task: message },
+    organizationId: agent.organizationId,
   });
 
   // Enqueue the async flow job — returns immediately
