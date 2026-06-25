@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 // ─── Cost per 1M tokens (USD) ──────────────────────────────────────────────
@@ -126,7 +126,7 @@ export async function trackChatResponse(event: ChatResponseEvent): Promise<void>
         ? estimateCost(event.model, event.inputTokens, event.outputTokens)
         : undefined;
 
-    await prisma.analyticsEvent.create({
+    await withAdminBypass((db) => db.analyticsEvent.create({
       data: {
         type: "CHAT_RESPONSE",
         agentId: event.agentId,
@@ -147,13 +147,13 @@ export async function trackChatResponse(event: ChatResponseEvent): Promise<void>
           isStreaming: event.isStreaming ?? false,
         },
       },
-    });
+    }));
   });
 }
 
 export async function trackKBSearch(event: KBSearchEvent): Promise<void> {
   await safeTrack(async () => {
-    await prisma.analyticsEvent.create({
+    await withAdminBypass((db) => db.analyticsEvent.create({
       data: {
         type: "KB_SEARCH",
         agentId: event.agentId,
@@ -165,13 +165,13 @@ export async function trackKBSearch(event: KBSearchEvent): Promise<void> {
           conversationId: event.conversationId,
         },
       },
-    });
+    }));
   });
 }
 
 export async function trackToolCall(event: ToolCallEvent): Promise<void> {
   await safeTrack(async () => {
-    await prisma.analyticsEvent.create({
+    await withAdminBypass((db) => db.analyticsEvent.create({
       data: {
         type: "TOOL_CALL",
         agentId: event.agentId,
@@ -185,7 +185,7 @@ export async function trackToolCall(event: ToolCallEvent): Promise<void> {
           errorMessage: event.errorMessage,
         },
       },
-    });
+    }));
   });
 }
 
@@ -200,7 +200,7 @@ export async function trackAgentCall(event: AgentCallEvent): Promise<void> {
         ? estimateCost(event.model, event.inputTokens, event.outputTokens)
         : undefined;
 
-    await prisma.analyticsEvent.create({
+    await withAdminBypass((db) => db.analyticsEvent.create({
       data: {
         type: "AGENT_CALL",
         agentId: event.agentId,
@@ -218,13 +218,13 @@ export async function trackAgentCall(event: AgentCallEvent): Promise<void> {
           errorMessage: event.errorMessage,
         },
       },
-    });
+    }));
   });
 }
 
 export async function trackError(event: ErrorEvent): Promise<void> {
   await safeTrack(async () => {
-    await prisma.analyticsEvent.create({
+    await withAdminBypass((db) => db.analyticsEvent.create({
       data: {
         type: "ERROR",
         agentId: event.agentId,
@@ -237,7 +237,7 @@ export async function trackError(event: ErrorEvent): Promise<void> {
           nodeType: event.nodeType,
         },
       },
-    });
+    }));
   });
 }
 
@@ -254,7 +254,7 @@ interface ScheduleExecutionEvent {
 
 export async function trackScheduleExecution(event: ScheduleExecutionEvent): Promise<void> {
   await safeTrack(async () => {
-    await prisma.analyticsEvent.create({
+    await withAdminBypass((db) => db.analyticsEvent.create({
       data: {
         type: "SCHEDULE_EXECUTION",
         agentId: event.agentId,
@@ -268,7 +268,7 @@ export async function trackScheduleExecution(event: ScheduleExecutionEvent): Pro
           tokenUsage: event.tokenUsage,
         },
       },
-    });
+    }));
   });
 }
 
@@ -283,7 +283,7 @@ export async function trackFlowExecution(event: FlowExecutionEvent): Promise<voi
         ? estimateCost(event.model, event.inputTokens, event.outputTokens)
         : undefined;
 
-    await prisma.analyticsEvent.create({
+    await withAdminBypass((db) => db.analyticsEvent.create({
       data: {
         type: "FLOW_EXECUTION",
         agentId: event.agentId,
@@ -300,6 +300,6 @@ export async function trackFlowExecution(event: FlowExecutionEvent): Promise<voi
           success: event.success,
         },
       },
-    });
+    }));
   });
 }
