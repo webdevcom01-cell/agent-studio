@@ -29,10 +29,10 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const agent = await prisma.agent.findUnique({
+    const agent = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.agent.findUnique({
       where: { id: agentId },
       select: { organizationId: true },
-    });
+    }));
     const orgId = agent?.organizationId ?? null;
 
     const grants = await withOrgContext(prisma, orgId, (tx) =>

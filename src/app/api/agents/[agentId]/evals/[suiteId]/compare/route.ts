@@ -78,14 +78,14 @@ export async function POST(
 
     if (type === "version") {
       const [versionA, versionB] = await Promise.all([
-        prisma.flowVersion.findFirst({
+        withOrgContext(prisma, authResult.organizationId, (tx) => tx.flowVersion.findFirst({
           where: { id: a, flow: { agentId } },
           select: { id: true, label: true, createdAt: true },
-        }),
-        prisma.flowVersion.findFirst({
+        })),
+        withOrgContext(prisma, authResult.organizationId, (tx) => tx.flowVersion.findFirst({
           where: { id: b, flow: { agentId } },
           select: { id: true, label: true, createdAt: true },
-        }),
+        })),
       ]);
 
       if (!versionA) {

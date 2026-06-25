@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { withAdminBypass, withTenant } from "@/lib/api/tenant-context";
 import { runWithOrgId } from "@/lib/context/org-context";
@@ -76,13 +77,13 @@ export async function POST(
       const flowContent = parseFlowContent(agent.flow.content);
       const inputVars = parsed.data.input as Record<string, unknown>;
 
-      const conversation = await prisma.conversation.create({
+      const conversation = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.conversation.create({
         data: {
           agentId,
           status: "ACTIVE",
           variables: inputVars as object,
         },
-      });
+      }));
 
       const context = {
         conversationId: conversation.id,

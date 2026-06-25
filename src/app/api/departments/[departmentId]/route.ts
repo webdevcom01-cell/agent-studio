@@ -126,7 +126,7 @@ export async function DELETE(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const agentCount = await prisma.agent.count({ where: { departmentId } });
+    const agentCount = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.agent.count({ where: { departmentId } }));
     if (agentCount > 0) {
       return NextResponse.json(
         { success: false, error: `Cannot delete department with ${agentCount} assigned agent(s). Reassign agents first.` },

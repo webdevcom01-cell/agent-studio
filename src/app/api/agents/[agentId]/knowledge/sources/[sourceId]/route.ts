@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { deleteSourceChunks } from "@/lib/knowledge/ingest";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
@@ -18,12 +19,14 @@ export async function DELETE(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const source = await prisma.kBSource.findFirst({
-      where: {
-        id: sourceId,
-        knowledgeBase: { agentId },
-      },
-    });
+    const source = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.kBSource.findFirst({
+        where: {
+          id: sourceId,
+          knowledgeBase: { agentId },
+        },
+      }),
+    );
     if (!source) {
       return NextResponse.json(
         { success: false, error: "Source not found" },
@@ -32,7 +35,9 @@ export async function DELETE(
     }
 
     await deleteSourceChunks(sourceId);
-    await prisma.kBSource.delete({ where: { id: sourceId } });
+    await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.kBSource.delete({ where: { id: sourceId } }),
+    );
 
     // Compliance audit — fire-and-forget
     auditKBSourceDelete(authResult.userId, agentId, sourceId);

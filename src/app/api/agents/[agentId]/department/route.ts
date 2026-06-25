@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 
@@ -21,13 +22,13 @@ export async function GET(request: NextRequest, { params }: RouteParams): Promis
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const agent = await prisma.agent.findUnique({
+    const agent = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.agent.findUnique({
       where: { id: agentId },
       select: {
         departmentId: true,
         department: { select: { id: true, name: true, description: true, parentId: true } },
       },
-    });
+    }));
     if (!agent) return NextResponse.json({ success: false, error: "Agent not found" }, { status: 404 });
     return NextResponse.json({ success: true, data: agent.department });
   } catch (error) {
@@ -62,11 +63,11 @@ export async function POST(request: NextRequest, { params }: RouteParams): Promi
     );
     if (!dept) return NextResponse.json({ success: false, error: "Department not found" }, { status: 404 });
 
-    const updated = await prisma.agent.update({
+    const updated = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.agent.update({
       where: { id: agentId },
       data: { departmentId },
       select: { id: true, name: true, departmentId: true },
-    });
+    }));
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     logger.error("POST /api/agents/[agentId]/department error", { agentId, error });
@@ -81,11 +82,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams): Pro
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const updated = await prisma.agent.update({
+    const updated = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.agent.update({
       where: { id: agentId },
       data: { departmentId: null },
       select: { id: true, name: true, departmentId: true },
-    });
+    }));
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     logger.error("DELETE /api/agents/[agentId]/department error", { agentId, error });

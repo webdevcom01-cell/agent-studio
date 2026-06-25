@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
@@ -26,21 +27,23 @@ export async function GET(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const agentMCPServers = await prisma.agentMCPServer.findMany({
-      where: { agentId },
-      include: {
-        mcpServer: {
-          select: {
-            id: true,
-            name: true,
-            url: true,
-            transport: true,
-            enabled: true,
-            toolsCache: true,
+    const agentMCPServers = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentMCPServer.findMany({
+        where: { agentId },
+        include: {
+          mcpServer: {
+            select: {
+              id: true,
+              name: true,
+              url: true,
+              transport: true,
+              enabled: true,
+              toolsCache: true,
+            },
           },
         },
-      },
-    });
+      }),
+    );
 
     return NextResponse.json({ success: true, data: agentMCPServers });
   } catch (err) {
@@ -80,18 +83,20 @@ export async function POST(
       );
     }
 
-    const link = await prisma.agentMCPServer.create({
-      data: {
-        agentId,
-        mcpServerId: parsed.data.mcpServerId,
-        enabledTools: parsed.data.enabledTools ?? undefined,
-      },
-      include: {
-        mcpServer: {
-          select: { id: true, name: true, url: true, transport: true },
+    const link = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentMCPServer.create({
+        data: {
+          agentId,
+          mcpServerId: parsed.data.mcpServerId,
+          enabledTools: parsed.data.enabledTools ?? undefined,
         },
-      },
-    });
+        include: {
+          mcpServer: {
+            select: { id: true, name: true, url: true, transport: true },
+          },
+        },
+      }),
+    );
 
     return NextResponse.json({ success: true, data: link }, { status: 201 });
   } catch (err) {
@@ -128,14 +133,16 @@ export async function DELETE(
       );
     }
 
-    const link = await prisma.agentMCPServer.findUnique({
-      where: {
-        agentId_mcpServerId: {
-          agentId,
-          mcpServerId: parsed.data.mcpServerId,
+    const link = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentMCPServer.findUnique({
+        where: {
+          agentId_mcpServerId: {
+            agentId,
+            mcpServerId: parsed.data.mcpServerId,
+          },
         },
-      },
-    });
+      }),
+    );
 
     if (!link) {
       return NextResponse.json(
@@ -144,9 +151,9 @@ export async function DELETE(
       );
     }
 
-    await prisma.agentMCPServer.delete({
-      where: { id: link.id },
-    });
+    await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentMCPServer.delete({ where: { id: link.id } }),
+    );
 
     return NextResponse.json({ success: true, data: null });
   } catch (err) {

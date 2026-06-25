@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 const MAX_LIMIT = 100;
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ? DEFAULT_LIMIT
       : Math.min(Math.max(limitParam, 1), MAX_LIMIT);
 
-    const requests = await prisma.humanApprovalRequest.findMany({
+    const requests = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.humanApprovalRequest.findMany({
       where: {
         userId: authResult.userId,
         ...(status !== "all" ? { status } : {}),
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       include: {
         agent: { select: { id: true, name: true } },
       },
-    });
+    }));
 
     return NextResponse.json({ success: true, data: requests });
   } catch (err) {

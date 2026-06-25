@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 /**
@@ -36,32 +37,36 @@ export async function GET(
           : { accessedAt: "desc" as const };
 
     const [memories, total] = await Promise.all([
-      prisma.agentMemory.findMany({
-        where,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-        select: {
-          id: true,
-          key: true,
-          value: true,
-          category: true,
-          importance: true,
-          accessCount: true,
-          accessedAt: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      }),
-      prisma.agentMemory.count({ where }),
+      withOrgContext(prisma, authResult.organizationId, (tx) =>
+        tx.agentMemory.findMany({
+          where,
+          orderBy,
+          skip: (page - 1) * limit,
+          take: limit,
+          select: {
+            id: true,
+            key: true,
+            value: true,
+            category: true,
+            importance: true,
+            accessCount: true,
+            accessedAt: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        }),
+      ),
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.agentMemory.count({ where })),
     ]);
 
     // Get unique categories for filter UI
-    const categories = await prisma.agentMemory.findMany({
-      where: { agentId },
-      select: { category: true },
-      distinct: ["category"],
-    });
+    const categories = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentMemory.findMany({
+        where: { agentId },
+        select: { category: true },
+        distinct: ["category"],
+      }),
+    );
 
     return NextResponse.json({
       success: true,

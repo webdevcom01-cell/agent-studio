@@ -65,7 +65,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { id: true } });
+    const agent = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.agent.findUnique({ where: { id: agentId }, select: { id: true } }));
     if (!agent) {
       return NextResponse.json({ success: false, error: "Agent not found" }, { status: 404 });
     }

@@ -4,6 +4,7 @@ import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { runWithOrgId } from "@/lib/context/org-context";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { parseFlowContent } from "@/lib/validators/flow-content";
@@ -135,7 +136,7 @@ export async function POST(
       return jsonRpcError(body.id ?? null, -32000, "Agent has no flow", 400);
     }
 
-    await prisma.agentCallLog.create({
+    await withOrgContext(prisma, authResult.organizationId, (tx) => tx.agentCallLog.create({
       data: {
         traceId,
         spanId: generateId(),
@@ -148,19 +149,19 @@ export async function POST(
         isParallel: false,
         externalUrl: req.headers.get("referer") ?? undefined,
       },
-    });
+    }));
 
     const { executeFlow } = await import("@/lib/runtime/engine");
 
     const flowContent = parseFlowContent(agent.flow.content);
 
-    const conversation = await prisma.conversation.create({
+    const conversation = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.conversation.create({
       data: {
         agentId,
         status: "ACTIVE",
         variables: inputMessage ? { message: inputMessage } : {},
       },
-    });
+    }));
 
     // Propagate visited-agents into flow context for sub-agent calls
     const updatedVisited = [...visitedAgents, agentId];

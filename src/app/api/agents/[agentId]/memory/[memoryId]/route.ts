@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { z } from "zod";
 
@@ -32,9 +33,11 @@ export async function PATCH(
     }
 
     // Verify memory belongs to this agent
-    const existing = await prisma.agentMemory.findFirst({
-      where: { id: memoryId, agentId },
-    });
+    const existing = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentMemory.findFirst({
+        where: { id: memoryId, agentId },
+      }),
+    );
     if (!existing) {
       return NextResponse.json(
         { success: false, error: "Memory not found" },
@@ -47,20 +50,22 @@ export async function PATCH(
     if (parsed.data.category !== undefined) updateData.category = parsed.data.category;
     if (parsed.data.importance !== undefined) updateData.importance = parsed.data.importance;
 
-    const updated = await prisma.agentMemory.update({
-      where: { id: memoryId },
-      data: updateData,
-      select: {
-        id: true,
-        key: true,
-        value: true,
-        category: true,
-        importance: true,
-        accessCount: true,
-        accessedAt: true,
-        updatedAt: true,
-      },
-    });
+    const updated = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentMemory.update({
+        where: { id: memoryId },
+        data: updateData,
+        select: {
+          id: true,
+          key: true,
+          value: true,
+          category: true,
+          importance: true,
+          accessCount: true,
+          accessedAt: true,
+          updatedAt: true,
+        },
+      }),
+    );
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
@@ -85,9 +90,11 @@ export async function DELETE(
 
   try {
     // Verify memory belongs to this agent
-    const existing = await prisma.agentMemory.findFirst({
-      where: { id: memoryId, agentId },
-    });
+    const existing = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentMemory.findFirst({
+        where: { id: memoryId, agentId },
+      }),
+    );
     if (!existing) {
       return NextResponse.json(
         { success: false, error: "Memory not found" },
@@ -95,9 +102,11 @@ export async function DELETE(
       );
     }
 
-    await prisma.agentMemory.delete({
-      where: { id: memoryId },
-    });
+    await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.agentMemory.delete({
+        where: { id: memoryId },
+      }),
+    );
 
     return NextResponse.json({ success: true, data: { deleted: true } });
   } catch (error) {

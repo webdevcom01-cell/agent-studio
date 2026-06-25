@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 
@@ -29,10 +30,12 @@ export async function GET(
     if (isAuthError(authResult)) return authResult;
 
     // Verify schedule belongs to this agent
-    const schedule = await prisma.flowSchedule.findFirst({
-      where: { id: scheduleId, agentId },
-      select: { id: true },
-    });
+    const schedule = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowSchedule.findFirst({
+        where: { id: scheduleId, agentId },
+        select: { id: true },
+      }),
+    );
     if (!schedule) {
       return NextResponse.json(
         { success: false, error: "Schedule not found" },
@@ -47,27 +50,29 @@ export async function GET(
     const cursor = searchParams.get("cursor");
     const statusFilter = searchParams.get("status");
 
-    const executions = await prisma.scheduledExecution.findMany({
-      where: {
-        flowScheduleId: scheduleId,
-        ...(statusFilter ? { status: statusFilter as never } : {}),
-        ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}),
-      },
-      orderBy: { triggeredAt: "desc" },
-      take: limit + 1, // fetch one extra to determine if there's a next page
-      select: {
-        id: true,
-        status: true,
-        triggeredAt: true,
-        completedAt: true,
-        durationMs: true,
-        errorMessage: true,
-        tokenUsage: true,
-        costUsd: true,
-        idempotencyKey: true,
-        createdAt: true,
-      },
-    });
+    const executions = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.scheduledExecution.findMany({
+        where: {
+          flowScheduleId: scheduleId,
+          ...(statusFilter ? { status: statusFilter as never } : {}),
+          ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}),
+        },
+        orderBy: { triggeredAt: "desc" },
+        take: limit + 1, // fetch one extra to determine if there's a next page
+        select: {
+          id: true,
+          status: true,
+          triggeredAt: true,
+          completedAt: true,
+          durationMs: true,
+          errorMessage: true,
+          tokenUsage: true,
+          costUsd: true,
+          idempotencyKey: true,
+          createdAt: true,
+        },
+      }),
+    );
 
     const hasMore = executions.length > limit;
     const items = hasMore ? executions.slice(0, limit) : executions;

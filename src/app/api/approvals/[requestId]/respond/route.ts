@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { promoteInstinctToSkill } from "@/lib/ecc/instinct-engine";
 import { auditOrgApprovalRespond } from "@/lib/security/audit";
@@ -34,13 +35,13 @@ export async function POST(
       );
     }
 
-    const approvalRequest = await prisma.humanApprovalRequest.findFirst({
+    const approvalRequest = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.humanApprovalRequest.findFirst({
       where: {
         id: requestId,
         userId: authResult.userId,
         status: "pending",
       },
-    });
+    }));
 
     if (!approvalRequest) {
       return NextResponse.json(
@@ -49,14 +50,14 @@ export async function POST(
       );
     }
 
-    const updated = await prisma.humanApprovalRequest.update({
+    const updated = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.humanApprovalRequest.update({
       where: { id: requestId },
       data: {
         status: parsed.data.decision,
         response: parsed.data.response ?? null,
         resolvedAt: new Date(),
       },
-    });
+    }));
 
     // If this was an instinct promotion approval, trigger the actual Skill creation
     let promotionResult: { skillId: string } | null = null;

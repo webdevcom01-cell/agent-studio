@@ -96,7 +96,7 @@ export async function GET(
     const statusWhere =
       status === "ALL" ? {} : { status: status as Exclude<(typeof VALID_STATUSES)[number], "ALL"> };
 
-    const rows = await prisma.webhookExecution.findMany({
+    const rows = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.webhookExecution.findMany({
       where: { webhookConfigId: webhookId, ...statusWhere },
       orderBy: { createdAt: "desc" },
       take: limit,
@@ -113,7 +113,7 @@ export async function GET(
         replayOf: true,
         errorMessage: true,
       },
-    });
+    }));
 
     // Build CSV
     const lines: string[] = [];

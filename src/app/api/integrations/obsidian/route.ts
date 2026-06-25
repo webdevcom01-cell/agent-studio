@@ -10,6 +10,7 @@ import { parseBodyWithLimit } from "@/lib/api/body-limit";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { createObsidianAdapter, isObsidianConfigured } from "@/lib/ecc/obsidian-adapter";
 
 const SyncRequestSchema = z.object({
@@ -105,11 +106,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         ? { agentId, promotedToSkillId: null }
         : { promotedToSkillId: null };
 
-      const instincts = await prisma.instinct.findMany({
+      const instincts = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.instinct.findMany({
         where,
         select: { name: true, description: true, confidence: true },
         take: 100,
-      });
+      }));
 
       for (const inst of instincts) {
         try {

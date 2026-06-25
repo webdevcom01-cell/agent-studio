@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -29,16 +30,18 @@ export async function GET(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const schedule = await prisma.flowSchedule.findFirst({
-      where: { id: scheduleId, agentId },
-      include: {
-        _count: { select: { executions: true } },
-        executions: {
-          orderBy: { triggeredAt: "desc" },
-          take: 5,
+    const schedule = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowSchedule.findFirst({
+        where: { id: scheduleId, agentId },
+        include: {
+          _count: { select: { executions: true } },
+          executions: {
+            orderBy: { triggeredAt: "desc" },
+            take: 5,
+          },
         },
-      },
-    });
+      }),
+    );
 
     if (!schedule) {
       return NextResponse.json(
@@ -78,9 +81,11 @@ export async function PATCH(
     }
 
     // Verify ownership
-    const existing = await prisma.flowSchedule.findFirst({
-      where: { id: scheduleId, agentId },
-    });
+    const existing = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowSchedule.findFirst({
+        where: { id: scheduleId, agentId },
+      }),
+    );
     if (!existing) {
       return NextResponse.json(
         { success: false, error: "Schedule not found" },
@@ -134,14 +139,16 @@ export async function PATCH(
         ? { failureCount: 0 }
         : {};
 
-    const schedule = await prisma.flowSchedule.update({
-      where: { id: scheduleId },
-      data: {
-        ...updates,
-        ...(nextRunAt !== undefined ? { nextRunAt } : {}),
-        ...failureCountReset,
-      },
-    });
+    const schedule = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowSchedule.update({
+        where: { id: scheduleId },
+        data: {
+          ...updates,
+          ...(nextRunAt !== undefined ? { nextRunAt } : {}),
+          ...failureCountReset,
+        },
+      }),
+    );
 
     logger.info("schedule_updated", { agentId, scheduleId, changes: Object.keys(updates) });
 
@@ -166,9 +173,11 @@ export async function DELETE(
     const authResult = await requireAgentOwner(agentId);
     if (isAuthError(authResult)) return authResult;
 
-    const existing = await prisma.flowSchedule.findFirst({
-      where: { id: scheduleId, agentId },
-    });
+    const existing = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowSchedule.findFirst({
+        where: { id: scheduleId, agentId },
+      }),
+    );
     if (!existing) {
       return NextResponse.json(
         { success: false, error: "Schedule not found" },
@@ -176,7 +185,9 @@ export async function DELETE(
       );
     }
 
-    await prisma.flowSchedule.delete({ where: { id: scheduleId } });
+    await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowSchedule.delete({ where: { id: scheduleId } }),
+    );
 
     logger.info("schedule_deleted", { agentId, scheduleId });
 

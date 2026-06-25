@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { sanitizeErrorMessage } from "@/lib/api/sanitize-error";
@@ -36,21 +37,23 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const traces = await prisma.flowTrace.findMany({
-      where: { agentId },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-      select: {
-        id: true,
-        agentId: true,
-        testInput: true,
-        status: true,
-        totalDurationMs: true,
-        nodesExecuted: true,
-        nodesFailed: true,
-        createdAt: true,
-      },
-    });
+    const traces = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowTrace.findMany({
+        where: { agentId },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          agentId: true,
+          testInput: true,
+          status: true,
+          totalDurationMs: true,
+          nodesExecuted: true,
+          nodesFailed: true,
+          createdAt: true,
+        },
+      }),
+    );
 
     return NextResponse.json({ success: true, data: traces });
   } catch (error) {
@@ -101,7 +104,9 @@ export async function POST(
         : Prisma.DbNull,
     };
 
-    const trace = await prisma.flowTrace.create({ data: input });
+    const trace = await withOrgContext(prisma, authResult.organizationId, (tx) =>
+      tx.flowTrace.create({ data: input }),
+    );
 
     return NextResponse.json({ success: true, data: trace }, { status: 201 });
   } catch (error) {

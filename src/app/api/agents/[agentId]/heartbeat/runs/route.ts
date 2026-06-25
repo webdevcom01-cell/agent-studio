@@ -22,7 +22,7 @@ export async function GET(
   const cursor = request.nextUrl.searchParams.get("cursor") ?? undefined;
 
   try {
-    const agent = await prisma.agent.findUnique({ where: { id: agentId }, select: { organizationId: true } });
+    const agent = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.agent.findUnique({ where: { id: agentId }, select: { organizationId: true } }));
     const orgId = agent?.organizationId ?? null;
 
     const runs = await withOrgContext(prisma, orgId, (tx) =>
