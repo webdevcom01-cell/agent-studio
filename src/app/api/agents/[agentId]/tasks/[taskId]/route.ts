@@ -16,7 +16,7 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const task = await getTask(taskId);
+    const task = await getTask(taskId, authResult.organizationId);
     if (!task) {
       return NextResponse.json(
         { success: false, error: "Task not found" },
