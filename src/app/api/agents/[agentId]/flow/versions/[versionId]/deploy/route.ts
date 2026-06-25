@@ -33,7 +33,8 @@ export async function POST(
       agentId,
       versionId,
       authResult.userId,
-      note
+      note,
+      authResult.organizationId
     );
 
     // Fire-and-forget: run eval suites with runOnDeploy:true.

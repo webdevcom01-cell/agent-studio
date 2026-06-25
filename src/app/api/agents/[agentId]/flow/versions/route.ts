@@ -28,7 +28,7 @@ export async function GET(
       );
     }
 
-    const versions = await VersionService.listVersions(flow.id);
+    const versions = await VersionService.listVersions(flow.id, authResult.organizationId);
 
     return NextResponse.json({ success: true, data: versions });
   } catch (err) {
