@@ -27,11 +27,15 @@ export async function GET(
     const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "20", 10), 100);
     const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
 
-    const result = await listPipelineRuns(agentId, {
-      status: status ?? undefined,
-      limit,
-      offset,
-    });
+    const result = await listPipelineRuns(
+      agentId,
+      {
+        status: status ?? undefined,
+        limit,
+        offset,
+      },
+      authResult.organizationId,
+    );
 
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
@@ -158,6 +162,7 @@ export async function POST(
       modelId,
       useSmartRouting,
       requireApproval,
+      organizationId: authResult.organizationId,
     });
 
     // Step 4: Enqueue the pipeline runner job

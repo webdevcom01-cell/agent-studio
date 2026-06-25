@@ -27,7 +27,11 @@ export async function POST(
   }
 
   try {
-    const run = await approvePipelineRun(runId, parsed.data.feedback);
+    const run = await approvePipelineRun(
+      runId,
+      parsed.data.feedback,
+      authResult.organizationId,
+    );
 
     const stepResultsMap = run.stepResults;
     const planningStepsCompleted = run.currentStep;

@@ -16,7 +16,7 @@ export async function POST(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const existing = await getPipelineRun(runId);
+    const existing = await getPipelineRun(runId, authResult.organizationId);
 
     if (!existing) {
       return NextResponse.json(
@@ -32,7 +32,7 @@ export async function POST(
       );
     }
 
-    const run = await cancelPipelineRun(runId);
+    const run = await cancelPipelineRun(runId, authResult.organizationId);
 
     logger.info("Pipeline run cancel requested", { agentId, runId });
 

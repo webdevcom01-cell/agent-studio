@@ -16,7 +16,7 @@ export async function GET(
   if (isAuthError(authResult)) return authResult;
 
   try {
-    const run = await getPipelineRun(runId);
+    const run = await getPipelineRun(runId, authResult.organizationId);
 
     if (!run) {
       return NextResponse.json(
