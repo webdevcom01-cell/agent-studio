@@ -268,6 +268,7 @@ export async function POST(
       pipelineRunId: run.id,
       agentId,
       // userId omitted — webhook-triggered runs have no user session
+      orgId: ownerAgent?.organizationId ?? undefined,
       repoUrl: ctx.repoUrl,
     });
 

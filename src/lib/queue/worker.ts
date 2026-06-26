@@ -17,6 +17,7 @@ import { logger } from "@/lib/logger";
 import type { JobData, FlowExecuteJobData, EvalRunJobData, WebhookRetryJobData, KBIngestJobData, WebhookExecuteJobData, ManagedTaskRunJobData, McpFlowRunJobData, PipelineRunJobData, BudgetMonthlyResetJobData, HeartbeatRunJobData, GovernanceTimeoutJobData } from "./index";
 import type { TaskInput } from "@/lib/managed-tasks/manager";
 import { runWithOrgId } from "@/lib/context/org-context";
+import { withTenant } from "@/lib/api/tenant-context";
 import { trimStepMessages } from "@/lib/managed-tasks/step-trimmer";
 
 const QUEUE_NAME = "agent-studio";
@@ -148,10 +149,10 @@ async function processWebhookRetryJob(job: Job<WebhookRetryJobData>): Promise<un
   const { executeWebhookTrigger } = await import("@/lib/webhooks/execute");
 
   // Load the stored payload and headers from the original execution.
-  const execution = await prisma.webhookExecution.findUnique({
+  const execution = await withTenant((tx) => tx.webhookExecution.findUnique({
     where: { id: executionId },
     select: { rawPayload: true, rawHeaders: true, retryCount: true },
-  });
+  }));
 
   if (!execution) {
     throw new Error(`Webhook execution ${executionId} not found — cannot retry`);
@@ -491,10 +492,10 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
     if (!resumeConversationId) {
       // Seed initial variables only for new conversations
       context.variables = { ...variables };
-      await prisma.conversation.update({
-        where: { id: conversationId },
+      await withTenant((tx) => tx.conversation.update({
+        where: { id: conversationId! },
         data: { variables: context.variables as import("@/generated/prisma").Prisma.InputJsonValue },
-      });
+      }));
     }
 
     await job.updateProgress(30);
@@ -506,7 +507,7 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
 
     if (!lastAssistant) {
       await markAbandoned(taskId, "Flow completed but produced no assistant output.");
-      await prisma.conversation.update({ where: { id: conversationId }, data: { status: "ABANDONED" } });
+      await withTenant((tx) => tx.conversation.update({ where: { id: conversationId! }, data: { status: "ABANDONED" } }));
       await job.updateProgress(100);
       log.warn("MCP flow job abandoned — no assistant output", { jobId: job.id, taskId, agentId, durationMs });
       return { conversationId, output: null, messageCount: result.messages.length, durationMs };
@@ -525,7 +526,7 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
     // Keep conversation ACTIVE when paused at a human_approval node so it can be resumed.
     // saveContext() already set status=ACTIVE in that case; only override when fully done.
     if (!result.waitingForInput) {
-      await prisma.conversation.update({ where: { id: conversationId }, data: { status: "COMPLETED" } });
+      await withTenant((tx) => tx.conversation.update({ where: { id: conversationId! }, data: { status: "COMPLETED" } }));
     }
 
     await job.updateProgress(100);
@@ -540,8 +541,8 @@ async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> 
     const errorMsg = err instanceof Error ? err.message : String(err);
     await markFailed(taskId, errorMsg);
     if (conversationId) {
-      await prisma.conversation
-        .update({ where: { id: conversationId }, data: { status: "ABANDONED" } })
+      await withTenant((tx) => tx.conversation
+        .update({ where: { id: conversationId! }, data: { status: "ABANDONED" } }))
         .catch(() => undefined);
     }
     log.error("MCP flow job failed", { jobId: job.id, taskId, agentId, error: err });
@@ -678,10 +679,10 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
     void (async () => {
       try {
         const { prisma } = await import("@/lib/prisma");
-        const freshRun = await prisma.pipelineRun.findUnique({
+        const freshRun = await withTenant((tx) => tx.pipelineRun.findUnique({
           where: { id: pipelineRunId },
           select: { stepResults: true },
-        });
+        }));
         const freshStepResults = (freshRun?.stepResults ?? {}) as Record<string, string>;
         const { extractAndSaveMemory } = await import("@/lib/sdlc/pipeline-memory");
         await extractAndSaveMemory(

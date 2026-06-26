@@ -200,7 +200,7 @@ export async function POST(
       .pop();
     const outputText = lastAssistant?.content ?? "";
 
-    await prisma.agentCallLog
+    await withOrgContext(prisma, authResult.organizationId, (tx) => tx.agentCallLog
       .update({
         where: { taskId },
         data: {
@@ -209,7 +209,7 @@ export async function POST(
           durationMs,
           completedAt: new Date(),
         },
-      })
+      }))
       .catch((err) => logger.warn("A2A task update failed", err));
 
     const response = NextResponse.json({

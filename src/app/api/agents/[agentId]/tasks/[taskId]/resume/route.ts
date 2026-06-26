@@ -34,6 +34,7 @@ export async function POST(
       taskId,
       agentId,
       userId,
+      orgId: authResult.organizationId ?? undefined,
     });
 
     return NextResponse.json({ success: true, data: updated });

@@ -170,6 +170,7 @@ export async function POST(
       pipelineRunId: run.id,
       agentId,
       userId,
+      orgId: authResult.organizationId ?? undefined,
       modelId,
       requireApproval,
       useSmartRouting,

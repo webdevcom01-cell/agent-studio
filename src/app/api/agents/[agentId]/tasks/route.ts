@@ -100,6 +100,7 @@ export async function POST(
       taskId: task.id,
       agentId,
       userId,
+      orgId: authResult.organizationId ?? undefined,
     });
 
     logger.info("Managed task created and enqueued", {

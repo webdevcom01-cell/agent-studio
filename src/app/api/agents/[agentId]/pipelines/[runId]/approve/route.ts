@@ -40,6 +40,7 @@ export async function POST(
       pipelineRunId: runId,
       agentId,
       userId: run.userId ?? undefined,
+      orgId: authResult.organizationId ?? undefined,
       startFromStep: planningStepsCompleted,
       existingStepResults: stepResultsMap,
       approvalFeedback: parsed.data.feedback,

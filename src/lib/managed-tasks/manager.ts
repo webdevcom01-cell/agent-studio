@@ -16,6 +16,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { withOrgContext } from "@/lib/db/rls-middleware";
+import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import type { ManagedTaskStatus, Prisma } from "@/generated/prisma";
 
@@ -191,7 +192,7 @@ export async function markRunning(
   taskId: string,
   jobId: string
 ): Promise<ManagedTask> {
-  const row = await prisma.managedAgentTask.update({
+  const row = await withTenant((tx) => tx.managedAgentTask.update({
     where: { id: taskId },
     data: {
       status: "RUNNING",
@@ -199,7 +200,7 @@ export async function markRunning(
       startedAt: new Date(),
       progress: 0,
     },
-  });
+  }));
   return toTask(row);
 }
 
@@ -208,7 +209,7 @@ export async function markCompleted(
   taskId: string,
   output: TaskOutput
 ): Promise<ManagedTask> {
-  const row = await prisma.managedAgentTask.update({
+  const row = await withTenant((tx) => tx.managedAgentTask.update({
     where: { id: taskId },
     data: {
       status: "COMPLETED",
@@ -216,7 +217,7 @@ export async function markCompleted(
       progress: 100,
       completedAt: new Date(),
     },
-  });
+  }));
 
   logger.info("Managed task completed", {
     taskId,
@@ -233,14 +234,14 @@ export async function markFailed(
   taskId: string,
   error: string
 ): Promise<ManagedTask> {
-  const row = await prisma.managedAgentTask.update({
+  const row = await withTenant((tx) => tx.managedAgentTask.update({
     where: { id: taskId },
     data: {
       status: "FAILED",
       error,
       completedAt: new Date(),
     },
-  });
+  }));
 
   logger.error("Managed task failed", { taskId, error });
 
@@ -251,7 +252,7 @@ export async function markAbandoned(
   taskId: string,
   reason: string
 ): Promise<ManagedTask> {
-  const row = await prisma.managedAgentTask.update({
+  const row = await withTenant((tx) => tx.managedAgentTask.update({
     where: { id: taskId },
     data: {
       status: "ABANDONED",
@@ -259,7 +260,7 @@ export async function markAbandoned(
       progress: 100,
       completedAt: new Date(),
     },
-  });
+  }));
 
   logger.warn("Managed task abandoned", { taskId, reason });
 
@@ -357,26 +358,26 @@ export async function updateProgress(
   taskId: string,
   progress: number
 ): Promise<void> {
-  await prisma.managedAgentTask.update({
+  await withTenant((tx) => tx.managedAgentTask.update({
     where: { id: taskId },
     data: { progress: Math.max(0, Math.min(100, progress)) },
-  });
+  }));
 }
 
 /** Check whether the task has been cancelled (worker calls this between steps) */
 export async function isCancelled(taskId: string): Promise<boolean> {
-  const task = await prisma.managedAgentTask.findUnique({
+  const task = await withTenant((tx) => tx.managedAgentTask.findUnique({
     where: { id: taskId },
     select: { status: true },
-  });
+  }));
   return task?.status === "CANCELLED";
 }
 
 /** Check whether the task has been paused (worker calls this between steps) */
 export async function isPaused(taskId: string): Promise<boolean> {
-  const task = await prisma.managedAgentTask.findUnique({
+  const task = await withTenant((tx) => tx.managedAgentTask.findUnique({
     where: { id: taskId },
     select: { status: true },
-  });
+  }));
   return task?.status === "PAUSED";
 }
