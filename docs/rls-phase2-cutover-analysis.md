@@ -91,3 +91,61 @@ APP_USER_PASSWORD='<app_user pw>' node scripts/rls-prove-isolation.mjs
 ### Division of work
 - **Here (repo):** Phase B doc/code gap fixes.
 - **CLI (prod DB / Railway env):** Phase A verification, Phases C/D execution.
+
+## 6. Phase 2 dry-run findings (local Docker, app_user + flag on)
+
+Ran the full `skills/rls-rollout/tests/` harness against a local pgvector DB with
+all migrations applied, `app_user`/`admin_user` roles, and `RLS_ENFORCEMENT_ENABLED=true`.
+Result: `cross-tenant` (10/10) green — SELECT/INSERT/UPDATE/DELETE isolation for
+TENANT_DIRECT (Agent) and TENANT_INDIRECT (Flow→Agent) + admin bypass all pass.
+The dry-run surfaced the following:
+
+### 6.1 Real bug — public agents hidden cross-org (FIXED)
+The strict `agent_select_policy` (from hal8) had no `isPublic` clause, but
+`discover/route.ts` reads public agents cross-org via `withOrgContext` (app_user).
+Under enforcement, discover/marketplace would hide all cross-org public agents.
+**Fix:** migration `20260626000000_rls_agent_public_select` adds a separate
+permissive `agent_select_public` SELECT policy (`isPublic = true`). ORed with the
+strict org policy; private agents stay isolated; writes stay strict.
+
+### 6.2 Coverage gap — Template missing RLS (FIXED)
+Audit (models with `organizationId` vs tables with policies) found **Template** had
+NO RLS at all, despite being TENANT_DIRECT #13 in the runbook. Its query-path was
+wrapped (withOrgContext/withAdminBypass) so no active leak via known routes (app-level
+`where organizationId`), but the DB backstop was missing. **Fix:** migration
+`20260626000001_rls_phase1_template` (org policies + `isPublic` SELECT) + new
+`template-isolation.test.ts`.
+
+### 6.3 ApiKey — userId-scoped, correctly GLOBAL (NO org-RLS)
+The same audit flagged **ApiKey** (has `organizationId`, no RLS). Investigation of
+all access paths showed ApiKey is **user-owned, not org-owned**: every route scopes
+by `userId` (`requireAuth` + `where { userId }`), and validation is by `keyHash`
+(pre-context, must be global). `organizationId` is denormalized metadata, not the
+access-control axis. Adding **org**-RLS would be the wrong axis and would break the
+pre-context validation/auth paths. Decision: **ApiKey stays GLOBAL** (the burn-down
+classification was correct). If a DB backstop is ever wanted, the correct design is a
+`userId`-based policy (via `app.current_user_id`) + wrapping the api-keys routes — a
+separate, careful change, not part of this cutover.
+
+### 6.4 Performance note (not a blocker)
+`performance.test.ts`: `Agent.findMany` showed −2.5% (RLS policy eval is cheap), but
+`Agent.findUnique by id` showed a large % regression. This is the fixed
+`withOrgContext` transaction-wrapper overhead (BEGIN + set_config + COMMIT) on the
+cheapest possible query — sub-millisecond absolute, and the 10% threshold is
+unrealistic for a trivial PK lookup. Not a correctness/cutover blocker, but on a
+network DB (prod) the extra round-trips add real per-query latency; validate latency
+on prod-like conditions during the cutover window (runbook already includes latency/
+Sentry watch).
+
+### 6.5 Complete coverage audit (every model classified)
+Compared all 63 models against tables with RLS policies; every no-policy table was
+verified GLOBAL by its actual access pattern (not assumption):
+
+- **TENANT_DIRECT (14)** — all have policies (Template was the only gap → fixed here).
+- **TENANT_INDIRECT (35)** — covered by `20260621000002_rls_phase2_tenant_indirect`; proven by the cross-tenant Flow→Agent test.
+- **NextAuth (User, Account, Session, VerificationToken)** — global by necessity (auth runs before org context).
+- **userId-owned (ApiKey, CLIGeneration, GoogleOAuthToken, MCPServer, SomaReviewBatch)** — user-scoped (`requireAuth` + `where userId`), not the org axis; org-RLS would be the wrong model.
+- **System / catalog (ModelPerformanceStat, AuditLog, PipelineTemplate, Skill, Organization, SomaReviewPost)** — system telemetry / audit infra / global catalogs; read via bare/admin with no user-facing org-scoped route. (`PipelineTemplate` has no `organizationId`/`agentId` field at all — the apparent `agentId` was inside a comment.)
+
+Conclusion: every org-isolation table has an RLS backstop; every other table is
+legitimately global. RLS coverage is complete for the enforcement cutover.
