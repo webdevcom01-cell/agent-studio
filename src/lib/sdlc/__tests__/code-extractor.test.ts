@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { rmSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before imports

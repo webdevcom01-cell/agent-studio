@@ -35,7 +35,7 @@ vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { LspClient, INITIALIZE_TIMEOUT_MS, OPERATION_TIMEOUT_MS } from "../lsp-client";
+import { LspClient, INITIALIZE_TIMEOUT_MS } from "../lsp-client";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

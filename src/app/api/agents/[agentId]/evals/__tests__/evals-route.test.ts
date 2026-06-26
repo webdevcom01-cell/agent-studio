@@ -62,7 +62,7 @@ const db = prisma as unknown as {
 
 import { GET as listSuites, POST as createSuite } from "../route";
 import { GET as getSuite, PATCH as updateSuite, DELETE as deleteSuite } from "../[suiteId]/route";
-import { GET as listCases, POST as createCase, DELETE as deleteCase } from "../[suiteId]/cases/route";
+import { POST as createCase, DELETE as deleteCase } from "../[suiteId]/cases/route";
 import { GET as listRuns, POST as triggerRun } from "../[suiteId]/run/route";
 import { GET as getRunDetail } from "../[suiteId]/run/[runId]/route";
 

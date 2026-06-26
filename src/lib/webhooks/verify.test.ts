@@ -141,7 +141,7 @@ describe("verifyGitLabToken", () => {
   it("does NOT check the request body (GitLab does not HMAC-sign the body)", () => {
     // Same token, totally different body — should still pass
     const headers = { "x-gitlab-token": SECRET };
-    const tamperedBody = "completely-different-content";
+    const _tamperedBody = "completely-different-content";
     // verifyGitLabToken doesn't even take a body parameter
     expect(verifyGitLabToken(headers, SECRET).valid).toBe(true);
   });

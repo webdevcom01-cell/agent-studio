@@ -1,7 +1,7 @@
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { getHandler } from "@/lib/runtime/handlers";
 import { logger } from "@/lib/logger";
-import type { FlowContent, FlowNode } from "@/types";
+import type { FlowContent } from "@/types";
 
 export interface PostDeployCheck {
   name: string;

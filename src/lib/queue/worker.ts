@@ -145,7 +145,6 @@ async function processEvalJob(job: Job<EvalRunJobData>): Promise<unknown> {
 async function processWebhookRetryJob(job: Job<WebhookRetryJobData>): Promise<unknown> {
   const { agentId, webhookId, executionId } = job.data;
 
-  const { prisma } = await import("@/lib/prisma");
   const { executeWebhookTrigger } = await import("@/lib/webhooks/execute");
 
   // Load the stored payload and headers from the original execution.
@@ -457,7 +456,6 @@ async function processManagedTaskJob(job: Job<ManagedTaskRunJobData>): Promise<u
 async function processMcpFlowJob(job: Job<McpFlowRunJobData>): Promise<unknown> {
   const { taskId, agentId, userId, message, variables, conversationId: resumeConversationId } = job.data;
 
-  const { prisma } = await import("@/lib/prisma");
   const { executeFlow } = await import("@/lib/runtime/engine");
   const { loadContext } = await import("@/lib/runtime/context");
   const { markRunning, markCompleted, markFailed, markAbandoned } = await import("@/lib/managed-tasks/manager");
@@ -678,7 +676,6 @@ async function processPipelineRunJob(job: Job<PipelineRunJobData>): Promise<unkn
     // not the stale snapshot loaded before execution started.
     void (async () => {
       try {
-        const { prisma } = await import("@/lib/prisma");
         const freshRun = await withTenant((tx) => tx.pipelineRun.findUnique({
           where: { id: pipelineRunId },
           select: { stepResults: true },

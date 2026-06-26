@@ -97,7 +97,7 @@ import { runPipeline } from "../orchestrator";
 const FAKE_MODEL = { __brand: "model" };
 const mkWorkDir = () => `/tmp/test-sdlc-hitl/${randomUUID()}`;
 
-const NO_FILES_RESULT = {
+const _NO_FILES_RESULT = {
   filesWritten: 0,
   writtenPaths: [],
   testOutput: "No files provided — skipping real execution.",

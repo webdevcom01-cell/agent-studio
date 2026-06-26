@@ -143,7 +143,7 @@ describe("browserActionHandler", () => {
         { action: "snapshot" },
       ],
     });
-    const result = await browserActionHandler(node, makeContext());
+    const _result = await browserActionHandler(node, makeContext());
 
     expect(mockCallMCPTool).toHaveBeenCalledTimes(1);
     expect(mockCallMCPTool).toHaveBeenCalledWith("server-1", "browser_snapshot", {});

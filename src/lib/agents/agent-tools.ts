@@ -12,7 +12,6 @@
  */
 import { z } from "zod";
 import { dynamicTool, zodSchema, type ToolSet } from "ai";
-import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { randomBytes } from "node:crypto";

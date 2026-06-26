@@ -61,7 +61,7 @@ const mockFindMany = prisma.agentMemory.findMany as ReturnType<typeof vi.fn>;
 // exposed on the outer prisma, so these aliases assert on either path.
 const mockQueryRaw = prisma.$queryRawUnsafe as ReturnType<typeof vi.fn>;
 const mockExecRaw = prisma.$executeRawUnsafe as ReturnType<typeof vi.fn>;
-const mockTransaction = (prisma as unknown as { $transaction: ReturnType<typeof vi.fn> }).$transaction;
+const _mockTransaction = (prisma as unknown as { $transaction: ReturnType<typeof vi.fn> }).$transaction;
 
 function makeMemory(overrides: Record<string, unknown> = {}) {
   return {

@@ -204,7 +204,7 @@ describe("GET /api/agents/[agentId]/webhooks/[webhookId]/executions", () => {
       db.webhookExecution.findMany.mockResolvedValue([execWithPayload]);
 
       const res = await GET(makeRequest(), { params: makeParams() });
-      const json = await res.json() as { data: Array<Record<string, unknown>> };
+      const _json = await res.json() as { data: Array<Record<string, unknown>> };
 
       // rawPayload must not be in the select — Prisma mock returns what we give it,
       // but the actual route's select clause excludes rawPayload.

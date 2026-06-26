@@ -16,7 +16,6 @@
  * client won't include it until `prisma generate` runs on Vercel deploy.
  */
 
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";

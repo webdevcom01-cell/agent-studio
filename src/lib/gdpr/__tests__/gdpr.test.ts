@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockUpdate = vi.fn();
 const mockFindUnique = vi.fn();
 const mockFindMany = vi.fn();
-const mockDeleteMany = vi.fn();
+const _mockDeleteMany = vi.fn();
 const mockDelete = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({

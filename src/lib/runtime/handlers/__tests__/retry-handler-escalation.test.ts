@@ -101,7 +101,7 @@ describe("retryHandler — escalation feedback loop", () => {
 
     let attempt1Variables: Record<string, unknown> | undefined;
     const handler: NodeHandler = vi.fn()
-      .mockImplementationOnce((_node, ctx) => {
+      .mockImplementationOnce((_node, _ctx) => {
         return Promise.resolve({
           messages: [],
           nextNodeId: null,

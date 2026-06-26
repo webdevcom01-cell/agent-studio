@@ -21,7 +21,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const resolved = stored ?? (systemDark ? "dark" : "light");
     setTheme(resolved);
     document.documentElement.classList.toggle("dark", resolved === "dark");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function toggleTheme() {

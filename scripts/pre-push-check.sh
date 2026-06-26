@@ -119,7 +119,7 @@ else
   TARGET="src"
 fi
 
-LINT_OUT=$(npx next lint --dir "${TARGET}" 2>&1)
+LINT_OUT=$(npx eslint "${TARGET}" 2>&1)
 LINT_EXIT=$?
 
 if echo "$LINT_OUT" | grep -q "Failed to load SWC\|not installed\|swc-linux\|swc-wasm\|Cannot find module\|Failed to load plugin\|Mismatching @next/swc"; then

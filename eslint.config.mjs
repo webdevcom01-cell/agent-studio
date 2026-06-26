@@ -10,9 +10,23 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
-  { ignores: ["src/generated/**", "test-*.ts"] },
+  {
+    ignores: [
+      "src/generated/**",
+      "test-*.ts",
+      ".next/**",
+      "out/**",
+      "build/**",
+      "coverage/**",
+      "next-env.d.ts",
+    ],
+  },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
+    // Keep parity with `next lint`, which flagged stale eslint-disable comments.
+    linterOptions: {
+      reportUnusedDisableDirectives: "warn",
+    },
     rules: {
       // Catch leftover debug logging (allow in test files)
       "no-console": ["warn", { allow: ["error", "warn"] }],
@@ -26,6 +40,13 @@ const eslintConfig = [
           ignoreRestSiblings: true,
         },
       ],
+    },
+  },
+  {
+    // Dev/ops CLI scripts intentionally print to stdout.
+    files: ["src/scripts/**"],
+    rules: {
+      "no-console": "off",
     },
   },
 ];

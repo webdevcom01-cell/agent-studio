@@ -120,7 +120,7 @@ const callbacks = {
   onProgress: vi.fn().mockResolvedValue(undefined),
 };
 
-const NO_FILES_RESULT = {
+const _NO_FILES_RESULT = {
   filesWritten: 0,
   writtenPaths: [],
   testOutput: "",

@@ -53,8 +53,8 @@ import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const mockAuth = vi.mocked(auth);
-const mockQueryRaw = vi.mocked(prisma.$queryRaw);
-const mockExecuteRaw = vi.mocked(prisma.$executeRaw);
+const _mockQueryRaw = vi.mocked(prisma.$queryRaw);
+const _mockExecuteRaw = vi.mocked(prisma.$executeRaw);
 const mockFindMany = vi.mocked(prisma.cLIGeneration.findMany);
 const mockFindUnique = vi.mocked(prisma.cLIGeneration.findUnique);
 const mockCount = vi.mocked(prisma.cLIGeneration.count);

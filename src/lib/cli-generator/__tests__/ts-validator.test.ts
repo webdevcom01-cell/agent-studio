@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { validateTSOutput, type ValidationResult } from "../ts-validator";
+import { validateTSOutput } from "../ts-validator";
 
 vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },

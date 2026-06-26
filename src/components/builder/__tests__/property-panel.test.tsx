@@ -54,7 +54,7 @@ vi.mock("@/components/ui/input", () => ({
     onChange,
     placeholder,
     type,
-    ...props
+    ..._props
   }: {
     value?: string | number;
     onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
