@@ -20,13 +20,13 @@ export async function scheduleHeartbeat(configId: string, organizationId: string
   );
 
   if (config.flowScheduleId) {
-    await prisma.flowSchedule.update({
-      where: { id: config.flowScheduleId },
+    await withOrgContext(prisma, organizationId, (tx) => tx.flowSchedule.update({
+      where: { id: config.flowScheduleId! },
       data: { cronExpression: config.cronExpression, timezone: config.timezone, enabled: config.enabled, nextRunAt },
-    });
+    }));
     logger.info("Heartbeat FlowSchedule updated", { configId, flowScheduleId: config.flowScheduleId });
   } else {
-    const schedule = await prisma.flowSchedule.create({
+    const schedule = await withOrgContext(prisma, organizationId, (tx) => tx.flowSchedule.create({
       data: {
         agentId: config.agentId,
         scheduleType: "CRON" as ScheduleType,
@@ -36,7 +36,7 @@ export async function scheduleHeartbeat(configId: string, organizationId: string
         nextRunAt,
         label: "Heartbeat",
       },
-    });
+    }));
 
     await withOrgContext(prisma, organizationId, (tx) =>
       tx.heartbeatConfig.update({
@@ -60,10 +60,10 @@ export async function unscheduleHeartbeat(configId: string, organizationId: stri
   if (!config) return;
 
   if (config.flowScheduleId) {
-    await prisma.flowSchedule.update({
-      where: { id: config.flowScheduleId },
+    await withOrgContext(prisma, organizationId, (tx) => tx.flowSchedule.update({
+      where: { id: config.flowScheduleId! },
       data: { enabled: false },
-    });
+    }));
   }
 
   await withOrgContext(prisma, organizationId, (tx) =>

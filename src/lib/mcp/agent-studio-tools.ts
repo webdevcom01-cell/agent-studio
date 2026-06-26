@@ -360,10 +360,10 @@ async function toolTriggerAgent(
 
   // When resuming, validate that the conversation belongs to this agent and is still active.
   if (sessionId) {
-    const conv = await prisma.conversation.findFirst({
+    const conv = await withAdminBypass((db) => db.conversation.findFirst({
       where: { id: sessionId, agentId },
       select: { id: true, status: true },
-    });
+    }));
     if (!conv) return err(`Session "${sessionId}" not found for this agent.`);
     if (conv.status === "COMPLETED" || conv.status === "ABANDONED") {
       return err(`Session "${sessionId}" is already ${conv.status.toLowerCase()} and cannot be resumed.`);
@@ -433,10 +433,10 @@ async function toolSearchKnowledgeBase(
   if (!query) return err("query is required.");
 
   // Verify the KB belongs to this user (KB is owned via its agent)
-  const kb = await prisma.knowledgeBase.findFirst({
+  const kb = await withAdminBypass((db) => db.knowledgeBase.findFirst({
     where: { id: knowledgeBaseId, agent: { userId } },
     select: { id: true, name: true },
-  });
+  }));
 
   if (!kb) return err(`Knowledge base "${knowledgeBaseId}" not found.`);
 
@@ -463,7 +463,7 @@ async function toolGetTaskStatus(
   const taskId = typeof args.taskId === "string" ? args.taskId : null;
   if (!taskId) return err("taskId is required.");
 
-  const task = await prisma.managedAgentTask.findFirst({
+  const task = await withAdminBypass((db) => db.managedAgentTask.findFirst({
     where: { id: taskId, userId },
     select: {
       id: true,
@@ -475,7 +475,7 @@ async function toolGetTaskStatus(
       completedAt: true,
       createdAt: true,
     },
-  });
+  }));
 
   if (!task) return err(`Task "${taskId}" not found.`);
 

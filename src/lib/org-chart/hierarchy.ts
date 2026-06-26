@@ -8,10 +8,10 @@ export async function getAgentAncestors(agentId: string, maxDepth = 10): Promise
   let currentId = agentId;
 
   for (let depth = 0; depth < maxDepth; depth++) {
-    const agent = await prisma.agent.findUnique({
+    const agent = await withAdminBypass((db) => db.agent.findUnique({
       where: { id: currentId },
       select: { parentAgentId: true },
-    });
+    }));
 
     if (!agent?.parentAgentId) break;
 
@@ -30,10 +30,10 @@ export async function getAgentDescendants(agentId: string, maxDepth = 10): Promi
     const current = queue.shift();
     if (!current || current.depth >= maxDepth) continue;
 
-    const children = await prisma.agent.findMany({
+    const children = await withAdminBypass((db) => db.agent.findMany({
       where: { parentAgentId: current.id },
       select: { id: true },
-    });
+    }));
 
     for (const child of children) {
       descendants.push(child.id);

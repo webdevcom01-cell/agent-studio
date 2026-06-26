@@ -25,7 +25,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const agentIds = ownAgents.map((a) => a.id);
     const nameById = new Map(ownAgents.map((a) => [a.id, a.name]));
 
-    const rows = await prismaRead.agentExecution.findMany({
+    const rows = await withOrgContext(prismaRead, auth.organizationId, (tx) => tx.agentExecution.findMany({
       where: { agentId: { in: agentIds } },
       orderBy: { createdAt: "desc" },
       take: limit,
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         error: true,
         agentId: true,
       },
-    });
+    }));
 
     return NextResponse.json({
       items: rows.map((r) => ({

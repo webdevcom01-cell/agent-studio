@@ -77,17 +77,17 @@ export async function executeHardDelete(userId: string): Promise<{
   const counts: Record<string, number> = {};
 
   // Delete in dependency order (children first)
-  const agents = await prisma.agent.findMany({
+  const agents = await withAdminBypass((db) => db.agent.findMany({
     where: { userId },
     select: { id: true },
-  });
+  }));
   const agentIds = agents.map((a) => a.id);
 
   if (agentIds.length > 0) {
     // Cascade handles most child records via Prisma relations
-    const deleted = await prisma.agent.deleteMany({
+    const deleted = await withAdminBypass((db) => db.agent.deleteMany({
       where: { userId },
-    });
+    }));
     counts.agents = deleted.count;
   }
 

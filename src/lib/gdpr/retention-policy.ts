@@ -10,6 +10,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 const CONVERSATION_RETENTION_DAYS = 90;
@@ -30,23 +31,23 @@ export async function runRetentionCleanup(): Promise<RetentionResult> {
     now.getTime() - CONVERSATION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
   );
 
-  const staleConversations = await prisma.conversation.deleteMany({
+  const staleConversations = await withAdminBypass((db) => db.conversation.deleteMany({
     where: {
       updatedAt: { lt: conversationCutoff },
       status: { not: "ACTIVE" },
     },
-  });
+  }));
 
   // Old webhook executions
   const executionCutoff = new Date(
     now.getTime() - EXECUTION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
   );
 
-  const oldExecutions = await prisma.webhookExecution.deleteMany({
+  const oldExecutions = await withAdminBypass((db) => db.webhookExecution.deleteMany({
     where: {
       triggeredAt: { lt: executionCutoff },
     },
-  });
+  }));
 
   // Very old audit logs
   const auditCutoff = new Date(

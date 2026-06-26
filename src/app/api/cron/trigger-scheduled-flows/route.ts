@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { runScheduledFlow } from "@/lib/scheduler/execution-engine";
 import type { ScheduleRunResult } from "@/lib/scheduler/execution-engine";
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // ── Query due schedules ─────────────────────────────────────────────────
   let dueSchedules;
   try {
-    dueSchedules = await prisma.flowSchedule.findMany({
+    dueSchedules = await withAdminBypass((db) => db.flowSchedule.findMany({
       where: {
         enabled: true,
         nextRunAt: { lte: invocationTime },
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
       orderBy: { nextRunAt: "asc" },
       take: MAX_SCHEDULES_PER_RUN,
-    });
+    }));
   } catch (err) {
     logger.error("Cron: DB query failed", err instanceof Error ? err : new Error(String(err)));
     return NextResponse.json(

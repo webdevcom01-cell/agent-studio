@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { withOrgContext } from "@/lib/db/rls-middleware";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { getAgentAncestors } from "@/lib/org-chart/hierarchy";
 import type { CompanyMission } from "@/generated/prisma";
 import type { RuntimeContext } from "@/lib/runtime/types";
@@ -23,14 +24,14 @@ function priorityLabel(priority: number): string {
 }
 
 async function fetchGoalsForAgent(agentId: string) {
-  return prisma.agentGoalLink.findMany({
+  return withAdminBypass((db) => db.agentGoalLink.findMany({
     where: { agentId, goal: { status: "ACTIVE" } },
     include: {
       goal: {
         select: { id: true, title: true, description: true, successMetric: true, priority: true },
       },
     },
-  });
+  }));
 }
 
 export async function getAgentGoals(agentId: string): Promise<AgentGoalItem[]> {
@@ -85,10 +86,10 @@ export async function buildGoalPrompt(agentId: string): Promise<string> {
   const goals = await getAgentGoals(agentId);
   if (goals.length === 0) return "";
 
-  const agent = await prisma.agent.findUnique({
+  const agent = await withAdminBypass((db) => db.agent.findUnique({
     where: { id: agentId },
     select: { organizationId: true },
-  });
+  }));
 
   const parts: string[] = ["--- Company Goals & Objectives ---"];
 
