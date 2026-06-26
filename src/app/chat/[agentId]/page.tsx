@@ -370,6 +370,7 @@ export default function ChatPage({
                             key={pi}
                             className="mt-3 overflow-hidden rounded-lg border border-border"
                           >
+                            {/* eslint-disable-next-line @next/next/no-img-element -- dynamic Python-plot image (data/remote URL, unknown dims); next/Image adds no value here */}
                             <img
                               src={src}
                               alt={`Python plot ${pi + 1}`}

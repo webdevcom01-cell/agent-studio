@@ -570,7 +570,7 @@ export function useDebugSession(agentId: string) {
     } finally {
       setState((prev) => ({ ...prev, isRunning: false }));
     }
-  }, [agentId, saveTrace, state.testInput, state.isRunning, state.conversationId]);
+  }, [agentId, saveTrace, state.testInput, state.isRunning, state.conversationId, state.breakpoints]);
 
   return {
     state,

@@ -12,7 +12,7 @@
  * Both components share the same dropdown hook.
  */
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -73,11 +73,15 @@ function useVariableDropdown<T extends HTMLInputElement | HTMLTextAreaElement>(
     selectedIdx: 0,
   });
 
-  const matches = dropdown.open
-    ? variables.filter((v) =>
-        v.toLowerCase().startsWith(dropdown.filter.toLowerCase()),
-      )
-    : [];
+  const matches = useMemo(
+    () =>
+      dropdown.open
+        ? variables.filter((v) =>
+            v.toLowerCase().startsWith(dropdown.filter.toLowerCase()),
+          )
+        : [],
+    [dropdown.open, dropdown.filter, variables],
+  );
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<T>) => {

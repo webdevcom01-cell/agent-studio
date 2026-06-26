@@ -439,7 +439,7 @@ function FlowBuilderCanvas({
       event.preventDefault();
       debugSession.toggleBreakpoint(node.id);
     },
-    [debugSession.state.isDebugMode, debugSession.toggleBreakpoint]
+    [debugSession]
   );
 
   const addNode = useCallback(
