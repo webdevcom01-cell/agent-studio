@@ -4,7 +4,6 @@
  */
 
 import { withAdminBypass } from "@/lib/api/tenant-context";
-import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
 
@@ -33,14 +32,14 @@ export async function detectDeadChunks(
   const staleCutoff = new Date(Date.now() - STALE_THRESHOLD_DAYS * 24 * 60 * 60 * 1000);
 
   const [totalRows, deadRows, staleRows, topDead] = await Promise.all([
-    prisma.$queryRaw<CountRow[]>(
+    withAdminBypass((db) => db.$queryRaw<CountRow[]>(
       Prisma.sql`
         SELECT COUNT(*) as count FROM "KBChunk" c
         INNER JOIN "KBSource" s ON c."sourceId" = s."id"
         WHERE s."knowledgeBaseId" = ${knowledgeBaseId}
       `
-    ),
-    prisma.$queryRaw<CountRow[]>(
+    )),
+    withAdminBypass((db) => db.$queryRaw<CountRow[]>(
       Prisma.sql`
         SELECT COUNT(*) as count FROM "KBChunk" c
         INNER JOIN "KBSource" s ON c."sourceId" = s."id"
@@ -48,8 +47,8 @@ export async function detectDeadChunks(
           AND c."retrievalCount" = 0
           AND c."createdAt" < ${deadCutoff}
       `
-    ),
-    prisma.$queryRaw<CountRow[]>(
+    )),
+    withAdminBypass((db) => db.$queryRaw<CountRow[]>(
       Prisma.sql`
         SELECT COUNT(*) as count FROM "KBChunk" c
         INNER JOIN "KBSource" s ON c."sourceId" = s."id"
@@ -57,8 +56,8 @@ export async function detectDeadChunks(
           AND c."lastRetrievedAt" IS NOT NULL
           AND c."lastRetrievedAt" < ${staleCutoff}
       `
-    ),
-    prisma.$queryRaw<DeadSourceRow[]>(
+    )),
+    withAdminBypass((db) => db.$queryRaw<DeadSourceRow[]>(
       Prisma.sql`
         SELECT c."sourceId", s."name" as "sourceName", COUNT(*) as "deadCount"
         FROM "KBChunk" c
@@ -70,7 +69,7 @@ export async function detectDeadChunks(
         ORDER BY "deadCount" DESC
         LIMIT 5
       `
-    ),
+    )),
   ]);
 
   const totalChunks = Number(totalRows[0]?.count ?? 0);
@@ -102,7 +101,7 @@ export async function cleanupDeadChunks(
 ): Promise<{ deletedCount: number }> {
   const cutoff = new Date(Date.now() - thresholdDays * 24 * 60 * 60 * 1000);
 
-  const result = await prisma.$executeRaw`
+  const result = await withAdminBypass((db) => db.$executeRaw`
     DELETE FROM "KBChunk"
     WHERE "id" IN (
       SELECT c."id" FROM "KBChunk" c
@@ -111,7 +110,7 @@ export async function cleanupDeadChunks(
         AND c."retrievalCount" = 0
         AND c."createdAt" < ${cutoff}
     )
-  `;
+  `);
 
   const deletedCount = typeof result === "number" ? result : 0;
 
@@ -187,12 +186,12 @@ export async function updateChunkRetrievalStats(chunkIds: string[]): Promise<voi
   if (chunkIds.length === 0) return;
 
   try {
-    await prisma.$executeRaw`
+    await withAdminBypass((db) => db.$executeRaw`
       UPDATE "KBChunk"
       SET "retrievalCount" = "retrievalCount" + 1,
           "lastRetrievedAt" = NOW()
       WHERE "id" = ANY(${chunkIds}::text[])
-    `;
+    `);
   } catch {
     // Fire-and-forget
   }

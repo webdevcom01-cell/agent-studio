@@ -2,7 +2,6 @@
  * Knowledge Base analytics — usage stats, chunk distribution, search metrics.
  */
 
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
@@ -91,20 +90,20 @@ export async function getKBAnalytics(knowledgeBaseId: string): Promise<KBAnalyti
       drift,
       searchMetrics,
     ] = await Promise.all([
-      prisma.$queryRaw<SourceGroupRow[]>(
+      withAdminBypass((db) => db.$queryRaw<SourceGroupRow[]>(
         Prisma.sql`SELECT s."type", COUNT(*) as count FROM "KBSource" s WHERE s."knowledgeBaseId" = ${knowledgeBaseId} GROUP BY s."type"`
-      ),
-      prisma.$queryRaw<StatusGroupRow[]>(
+      )),
+      withAdminBypass((db) => db.$queryRaw<StatusGroupRow[]>(
         Prisma.sql`SELECT s."status", COUNT(*) as count FROM "KBSource" s WHERE s."knowledgeBaseId" = ${knowledgeBaseId} GROUP BY s."status"`
-      ),
-      prisma.$queryRaw<ChunkStatsRow[]>(
+      )),
+      withAdminBypass((db) => db.$queryRaw<ChunkStatsRow[]>(
         Prisma.sql`
           SELECT COUNT(*) as total, SUM(c."tokens") as total_tokens, AVG(c."tokens") as avg_tokens
           FROM "KBChunk" c INNER JOIN "KBSource" s ON c."sourceId" = s."id"
           WHERE s."knowledgeBaseId" = ${knowledgeBaseId}
         `
-      ),
-      prisma.$queryRaw<BucketRow[]>(
+      )),
+      withAdminBypass((db) => db.$queryRaw<BucketRow[]>(
         Prisma.sql`
           SELECT
             CASE
@@ -119,17 +118,17 @@ export async function getKBAnalytics(knowledgeBaseId: string): Promise<KBAnalyti
           WHERE s."knowledgeBaseId" = ${knowledgeBaseId}
           GROUP BY bucket ORDER BY bucket
         `
-      ),
-      prisma.$queryRaw<TopChunkRow[]>(
+      )),
+      withAdminBypass((db) => db.$queryRaw<TopChunkRow[]>(
         Prisma.sql`
           SELECT c."id", LEFT(c."content", 200) as content, c."retrievalCount"
           FROM "KBChunk" c INNER JOIN "KBSource" s ON c."sourceId" = s."id"
           WHERE s."knowledgeBaseId" = ${knowledgeBaseId} AND c."retrievalCount" > 0
           ORDER BY c."retrievalCount" DESC LIMIT 10
         `
-      ),
+      )),
       detectEmbeddingDrift(knowledgeBaseId).catch(() => null),
-      prisma.$queryRaw<SearchMetricsRow[]>(
+      withAdminBypass((db) => db.$queryRaw<SearchMetricsRow[]>(
         Prisma.sql`
           SELECT
             AVG((ae."metadata"->>'durationMs')::numeric) as avg_latency,
@@ -138,7 +137,7 @@ export async function getKBAnalytics(knowledgeBaseId: string): Promise<KBAnalyti
           FROM "AnalyticsEvent" ae
           WHERE ae."agentId" = ${kb.agentId} AND ae."type" = 'KB_SEARCH'
         `
-      ).catch(() => [] as SearchMetricsRow[]),
+      )).catch(() => [] as SearchMetricsRow[]),
     ]);
 
     const stats = chunkStats[0];
