@@ -23,7 +23,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma";
-import { prisma, prismaRead } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { withOrgContext } from "@/lib/db/rls-middleware";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
@@ -182,7 +182,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
 
     // Execute queries in parallel
-    const findManyArgs: Parameters<typeof prismaRead.agent.findMany>[0] = {
+    const findManyArgs: Prisma.AgentFindManyArgs = {
       where,
       orderBy,
       skip: offset,
@@ -202,7 +202,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     };
 
     // Category stats query — group by category
-    const groupByArgs: Parameters<typeof prismaRead.agent.groupBy>[0] = {
+    const groupByArgs: Parameters<(typeof prisma.agent)["groupBy"]>[0] = {
       by: ["category"],
       where: {
         OR: [
@@ -218,7 +218,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     };
 
     // Tags query — find all agents with tags
-    const tagsQueryArgs: Parameters<typeof prismaRead.agent.findMany>[0] = {
+    const tagsQueryArgs: Prisma.AgentFindManyArgs = {
       where: {
         OR: [
           { userId: authResult.userId },

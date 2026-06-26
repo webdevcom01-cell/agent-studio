@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { prismaRead } from "@/lib/prisma";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
 
@@ -144,14 +145,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     scheduleExecData,
   ] = await Promise.all([
     // 1. Total conversations
-    prismaRead.conversation.count({
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.conversation.count({
       where: { createdAt: { gte: sinceDate }, agent: { userId } },
-    }),
+    })),
 
     // 2. Total messages
-    prismaRead.message.count({
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.message.count({
       where: { createdAt: { gte: sinceDate }, conversation: { agent: { userId } } },
-    }),
+    })),
 
     // 3. Time series (hourly or daily)
     useHourly

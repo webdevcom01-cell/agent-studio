@@ -224,7 +224,7 @@ export async function importTemplate(
 
   const warnings: string[] = [];
 
-  const agent = await prisma.agent.create({
+  const agent = await withOrgContext(prisma, organizationId, (tx) => tx.agent.create({
     data: {
       name: payload.agent.name,
       description: payload.agent.description,
@@ -234,17 +234,17 @@ export async function importTemplate(
       tags: payload.agent.tags ?? [],
       organizationId,
     },
-  });
+  }));
 
   const flowIds: string[] = [];
   for (const flowDef of payload.flows) {
-    const flow = await prisma.flow.create({
+    const flow = await withOrgContext(prisma, organizationId, (tx) => tx.flow.create({
       data: {
         agentId: agent.id,
         name: flowDef.name,
         content: (flowDef.definition as object) ?? { nodes: [], edges: [], variables: [] },
       },
-    });
+    }));
     flowIds.push(flow.id);
   }
 
@@ -260,9 +260,9 @@ export async function importTemplate(
         userId: organizationId,
       },
     });
-    await prisma.agentMCPServer.create({
+    await withOrgContext(prisma, organizationId, (tx) => tx.agentMCPServer.create({
       data: { agentId: agent.id, mcpServerId: server.id },
-    });
+    }));
     mcpServerIds.push(server.id);
   }
 
@@ -293,9 +293,9 @@ export async function importTemplate(
         },
       })
     );
-    await prisma.agentGoalLink.create({
+    await withOrgContext(prisma, organizationId, (tx) => tx.agentGoalLink.create({
       data: { agentId: agent.id, goalId: created.id, role: "CONTRIBUTOR" },
-    });
+    }));
   }
 
   logger.info("Template imported", {

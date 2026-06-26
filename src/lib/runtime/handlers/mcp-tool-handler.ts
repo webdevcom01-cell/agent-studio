@@ -68,10 +68,10 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
   // No record → allow (legacy agents without explicit permissions never blocked).
   // Record exists with level < EXECUTE → deny gracefully, no throw.
   try {
-    const skillPerm = await prisma.agentSkillPermission.findUnique({
+    const skillPerm = await withAdminBypass((db) => db.agentSkillPermission.findUnique({
       where: { agentId_skillId: { agentId: context.agentId, skillId: mcpServerId } },
       select: { accessLevel: true },
-    });
+    }));
 
     if (skillPerm !== null) {
       const hasAccess = await checkSkillAccess(context.agentId, mcpServerId, "EXECUTE");
@@ -101,10 +101,10 @@ export const mcpToolHandler: NodeHandler = async (node, context) => {
   // Personal agents (no organizationId) and system/anonymous executions
   // (no context.userId) bypass this check.
   if (context.userId) {
-    const agentOrg = await prisma.agent.findUnique({
+    const agentOrg = await withAdminBypass((db) => db.agent.findUnique({
       where: { id: context.agentId },
       select: { organizationId: true },
-    });
+    }));
 
     if (agentOrg?.organizationId) {
       const orgId = agentOrg.organizationId;
@@ -327,12 +327,12 @@ async function checkMCPToolAccess(
   toolName: string,
 ): Promise<AccessCheckResult> {
   try {
-    const link = await prisma.agentMCPServer.findUnique({
+    const link = await withAdminBypass((db) => db.agentMCPServer.findUnique({
       where: {
         agentId_mcpServerId: { agentId, mcpServerId },
       },
       select: { enabledTools: true },
-    });
+    }));
 
     if (!link) {
       return { allowed: false, reason: "MCP server not linked to this agent" };
