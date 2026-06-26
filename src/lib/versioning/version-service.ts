@@ -28,9 +28,20 @@ export class VersionService {
     content: FlowContent,
     userId?: string,
     label?: string,
-    tx?: TransactionClient
+    tx?: TransactionClient,
+    organizationId?: string | null
   ): Promise<FlowVersion> {
-    const db = tx ?? prisma;
+    // When not already inside a caller's transaction, establish org context so
+    // the version insert satisfies RLS under enforcement. (Inside a tx, the
+    // caller is responsible for having set org context.)
+    if (!tx) {
+      return withOrgContext(prisma, organizationId ?? null, (txx) =>
+        VersionService.createVersion(
+          flowId, content, userId, label, txx as unknown as TransactionClient,
+        ),
+      );
+    }
+    const db = tx;
     const lastVersion = await db.flowVersion.findFirst({
       where: { flowId },
       orderBy: { version: "desc" },
@@ -134,7 +145,9 @@ export class VersionService {
       flowId,
       content,
       userId,
-      `Rollback to v${targetVersion.version}`
+      `Rollback to v${targetVersion.version}`,
+      undefined,
+      organizationId
     );
   }
 

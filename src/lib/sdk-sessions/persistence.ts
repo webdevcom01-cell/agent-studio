@@ -6,7 +6,6 @@
  * so an agent task can be resumed from any chat thread.
  */
 
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import type { SdkSessionStatus } from "@/generated/prisma";
@@ -174,7 +173,7 @@ export async function updateSdkSession(
   sessionId: string,
   input: UpdateSessionInput
 ): Promise<SdkSessionData> {
-  const row = await prisma.$transaction(async (tx) => {
+  const row = await withAdminBypass((db) => db.$transaction(async (tx) => {
     const current = await tx.agentSdkSession.findUnique({
       where: { id: sessionId },
     });
@@ -207,7 +206,7 @@ export async function updateSdkSession(
         },
       },
     });
-  });
+  }));
 
   logger.info("SDK session updated", {
     sessionId,

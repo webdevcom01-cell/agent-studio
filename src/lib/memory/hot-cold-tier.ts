@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import type { RuntimeContext } from "@/lib/runtime/types";
@@ -116,7 +115,7 @@ export async function getColdMemories(
     // SET LOCAL on one connection and the SELECT on another — the ef_search
     // tuning would silently revert to the server default. Pin both on the
     // same connection by wrapping in a single transaction.
-    const results = await prisma.$transaction(async (tx) => {
+    const results = await withAdminBypass((db) => db.$transaction(async (tx) => {
       await tx.$executeRawUnsafe("SET LOCAL hnsw.ef_search = 40");
       return tx.$queryRawUnsafe<
         Array<{
@@ -142,7 +141,7 @@ export async function getColdMemories(
         agentId,
         topK,
       );
-    });
+    }));
 
     return results.filter((r) => r.similarity > 0.3);
   } catch (error) {
