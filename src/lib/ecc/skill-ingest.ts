@@ -107,10 +107,10 @@ const ECC_VIRTUAL_KB_ID = "ecc-skills-virtual-kb";
 const ECC_VIRTUAL_SOURCE_ID = "ecc-skills-virtual-source";
 
 async function ensureVirtualSource(): Promise<void> {
-  const existing = await prisma.kBSource.findUnique({
+  const existing = await withAdminBypass((db) => db.kBSource.findUnique({
     where: { id: ECC_VIRTUAL_SOURCE_ID },
     select: { id: true },
-  });
+  }));
   if (existing) return;
 
   await withAdminBypass((db) =>
@@ -127,7 +127,7 @@ async function ensureVirtualSource(): Promise<void> {
     }),
   );
 
-  await prisma.knowledgeBase.upsert({
+  await withAdminBypass((db) => db.knowledgeBase.upsert({
     where: { id: ECC_VIRTUAL_KB_ID },
     create: {
       id: ECC_VIRTUAL_KB_ID,
@@ -135,9 +135,9 @@ async function ensureVirtualSource(): Promise<void> {
       agentId: ECC_VIRTUAL_AGENT_ID,
     },
     update: {},
-  });
+  }));
 
-  await prisma.kBSource.create({
+  await withAdminBypass((db) => db.kBSource.create({
     data: {
       id: ECC_VIRTUAL_SOURCE_ID,
       type: "TEXT",
@@ -145,7 +145,7 @@ async function ensureVirtualSource(): Promise<void> {
       status: "READY",
       knowledgeBaseId: ECC_VIRTUAL_KB_ID,
     },
-  });
+  }));
 }
 
 export async function vectorizeSkills(

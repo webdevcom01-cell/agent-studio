@@ -3,6 +3,7 @@
  * stuck source reset, and scheduled re-ingestion support.
  */
 
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
@@ -149,13 +150,13 @@ export async function resetStuckSources(
   const cutoff = new Date(Date.now() - olderThanMinutes * 60 * 1000);
 
   // Find the IDs first so we can return them and log them
-  const stuck = await prisma.kBSource.findMany({
+  const stuck = await withAdminBypass((db) => db.kBSource.findMany({
     where: {
       status: "PROCESSING",
       updatedAt: { lt: cutoff },
     },
     select: { id: true },
-  });
+  }));
 
   if (stuck.length === 0) {
     return { resetCount: 0, sourceIds: [] };
@@ -163,13 +164,13 @@ export async function resetStuckSources(
 
   const sourceIds = stuck.map((s) => s.id);
 
-  await prisma.kBSource.updateMany({
+  await withAdminBypass((db) => db.kBSource.updateMany({
     where: { id: { in: sourceIds } },
     data: {
       status: "FAILED",
       errorMsg: "Ingest timed out — please retry",
     },
-  });
+  }));
 
   logger.info("Stuck KB sources reset to FAILED", {
     resetCount: stuck.length,
@@ -208,7 +209,7 @@ const SCHEDULE_INTERVALS: Record<string, number> = {
 export async function getSourcesDueForReingestion(
   knowledgeBaseId: string
 ): Promise<string[]> {
-  const sources = await prisma.kBSource.findMany({
+  const sources = await withAdminBypass((db) => db.kBSource.findMany({
     where: {
       knowledgeBaseId,
       reingestionEnabled: true,
@@ -219,7 +220,7 @@ export async function getSourcesDueForReingestion(
       reingestionSchedule: true,
       lastIngestedAt: true,
     },
-  });
+  }));
 
   const now = Date.now();
   const due: string[] = [];

@@ -6,7 +6,6 @@
  * Dead letter: failed after all retries → moved to WebhookDeadLetter
  */
 
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
@@ -75,7 +74,7 @@ export async function moveToDeadLetter(
   webhookConfigId: string,
   errorMessage: string,
 ): Promise<string> {
-  const execution = await prisma.webhookExecution.findUnique({
+  const execution = await withAdminBypass((db) => db.webhookExecution.findUnique({
     where: { id: executionId },
     select: {
       eventType: true,
@@ -83,9 +82,9 @@ export async function moveToDeadLetter(
       rawHeaders: true,
       retryCount: true,
     },
-  });
+  }));
 
-  const deadLetter = await prisma.webhookDeadLetter.create({
+  const deadLetter = await withAdminBypass((db) => db.webhookDeadLetter.create({
     data: {
       webhookConfigId,
       executionId,
@@ -95,7 +94,7 @@ export async function moveToDeadLetter(
       errorMessage,
       retryCount: execution?.retryCount ?? 0,
     },
-  });
+  }));
 
   logger.info("Webhook moved to dead letter", {
     executionId,
@@ -164,13 +163,13 @@ export async function handleFailedExecution(
   }
 
   // Mark execution for retry
-  await prisma.webhookExecution.update({
+  await withAdminBypass((db) => db.webhookExecution.update({
     where: { id: executionId },
     data: {
       retryCount: decision.retryCount,
       status: "PENDING",
     },
-  });
+  }));
 
   logger.info("Webhook retry scheduled", {
     executionId,

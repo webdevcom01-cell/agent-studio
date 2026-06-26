@@ -7,6 +7,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import type { Prisma } from "@/generated/prisma";
 
@@ -46,10 +47,10 @@ export async function recordAllStepMetrics(
   try {
     // Read existing metrics and merge — critical for retry runs that resume
     // from step N: pre-retry step metrics (0..N-1) must not be overwritten.
-    const existing = await prisma.pipelineRun.findUnique({
+    const existing = await withAdminBypass((db) => db.pipelineRun.findUnique({
       where: { id: runId },
       select: { stepMetrics: true },
-    });
+    }));
     const existingMap =
       existing?.stepMetrics &&
       typeof existing.stepMetrics === "object" &&
@@ -58,10 +59,10 @@ export async function recordAllStepMetrics(
         : {};
     const merged = { ...existingMap, ...metrics };
 
-    await prisma.pipelineRun.update({
+    await withAdminBypass((db) => db.pipelineRun.update({
       where: { id: runId },
       data: { stepMetrics: merged as Prisma.InputJsonValue },
-    });
+    }));
     logger.info("metrics-collector: step metrics persisted (merged)", {
       runId,
       newStepCount:   Object.keys(metrics).length,
@@ -93,10 +94,10 @@ interface StatAccumulator {
 
 export async function aggregateRunMetrics(runId: string): Promise<void> {
   try {
-    const run = await prisma.pipelineRun.findUnique({
+    const run = await withAdminBypass((db) => db.pipelineRun.findUnique({
       where: { id: runId },
       select: { stepMetrics: true, agentId: true },
-    });
+    }));
 
     if (
       !run?.stepMetrics ||
@@ -221,12 +222,12 @@ export interface PipelineSummary {
 export async function getPipelineSummary(agentId: string): Promise<PipelineSummary> {
   const [counts, completedRuns] = await Promise.all([
     // Single groupBy replaces 3+ separate COUNT queries
-    prisma.pipelineRun.groupBy({
+    withAdminBypass((db) => db.pipelineRun.groupBy({
       by: ["status"],
       where: { agentId },
       _count: { id: true },
-    }),
-    prisma.pipelineRun.findMany({
+    })),
+    withAdminBypass((db) => db.pipelineRun.findMany({
       where: {
         agentId,
         status: "COMPLETED",
@@ -236,7 +237,7 @@ export async function getPipelineSummary(agentId: string): Promise<PipelineSumma
       select: { startedAt: true, completedAt: true },
       take: 100,
       orderBy: { completedAt: "desc" },
-    }),
+    })),
   ]);
 
   const byStatus = Object.fromEntries(counts.map((c) => [c.status, c._count.id]));

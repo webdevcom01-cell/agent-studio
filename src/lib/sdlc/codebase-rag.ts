@@ -28,7 +28,6 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join, extname, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { ingestSource, searchKnowledgeBase } from "@/lib/knowledge";
 import type { SearchResult } from "@/lib/knowledge";
@@ -134,8 +133,8 @@ export async function indexCodebase(
     // No indexable content — remove any stale DB sources
     if (existingSources.length > 0) {
       const staleIds = existingSources.map((s) => s.id);
-      await prisma.kBChunk.deleteMany({ where: { sourceId: { in: staleIds } } });
-      await prisma.kBSource.deleteMany({ where: { id: { in: staleIds } } });
+      await withAdminBypass((db) => db.kBChunk.deleteMany({ where: { sourceId: { in: staleIds } } }));
+      await withAdminBypass((db) => db.kBSource.deleteMany({ where: { id: { in: staleIds } } }));
     }
     return { filesIndexed: 0, knowledgeBaseId: kb.id, skipped: 0 };
   }
@@ -166,8 +165,8 @@ export async function indexCodebase(
     ...toIndex.filter((f) => f.oldSourceId !== undefined).map((f) => f.oldSourceId!),
   ];
   if (idsToDelete.length > 0) {
-    await prisma.kBChunk.deleteMany({ where: { sourceId: { in: idsToDelete } } });
-    await prisma.kBSource.deleteMany({ where: { id: { in: idsToDelete } } });
+    await withAdminBypass((db) => db.kBChunk.deleteMany({ where: { sourceId: { in: idsToDelete } } }));
+    await withAdminBypass((db) => db.kBSource.deleteMany({ where: { id: { in: idsToDelete } } }));
   }
 
   logger.info("codebase-rag: cache analysis complete", {
@@ -195,7 +194,7 @@ export async function indexCodebase(
         const next = queue.shift();
         if (next === undefined) break;
         try {
-          const source = await prisma.kBSource.create({
+          const source = await withAdminBypass((db) => db.kBSource.create({
             data: {
               type: "TEXT",
               name: next.relativePath,
@@ -209,7 +208,7 @@ export async function indexCodebase(
                 indexedAt: new Date().toISOString(),
               },
             },
-          });
+          }));
           // chunk + embed + store vectors (the expensive part)
           await ingestSource(source.id, next.content);
           indexed++;
@@ -312,13 +311,13 @@ async function findOrCreateKB(agentId: string) {
  * can be skipped (unchanged) vs. need re-embedding (new or modified).
  */
 async function fetchExistingCodebaseSources(knowledgeBaseId: string) {
-  return prisma.kBSource.findMany({
+  return withAdminBypass((db) => db.kBSource.findMany({
     where: {
       knowledgeBaseId,
       customMetadata: { path: [CODEBASE_SOURCE_TAG], equals: true },
     },
     select: { id: true, name: true, customMetadata: true },
-  });
+  }));
 }
 
 

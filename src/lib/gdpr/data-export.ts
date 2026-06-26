@@ -42,7 +42,7 @@ export async function generateUserExport(userId: string): Promise<ExportData> {
 
   const agentIds = agents.map((a) => a.id);
 
-  const conversations = await prisma.conversation.findMany({
+  const conversations = await withAdminBypass((db) => db.conversation.findMany({
     where: { agentId: { in: agentIds } },
     include: {
       messages: {
@@ -52,19 +52,19 @@ export async function generateUserExport(userId: string): Promise<ExportData> {
     },
     orderBy: { createdAt: "desc" },
     take: 1000,
-  });
+  }));
 
-  const kbSources = await prisma.kBSource.findMany({
+  const kbSources = await withAdminBypass((db) => db.kBSource.findMany({
     where: { knowledgeBase: { agentId: { in: agentIds } } },
     select: { id: true, type: true, status: true },
-  });
+  }));
 
-  const evalSuites = await prisma.evalSuite.findMany({
+  const evalSuites = await withAdminBypass((db) => db.evalSuite.findMany({
     where: { agentId: { in: agentIds } },
     include: {
       testCases: { select: { label: true, input: true, assertions: true } },
     },
-  });
+  }));
 
   logger.info("User data export generated", {
     userId,
