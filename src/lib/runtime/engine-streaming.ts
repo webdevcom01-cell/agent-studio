@@ -24,7 +24,7 @@ import {
   cleanupDebugSession,
   getAndClearVariableOverrides,
 } from "./debug-controller";
-import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 const MAX_ITERATIONS = 50;
@@ -89,7 +89,7 @@ export function executeFlowStreaming(
               waitForInput: false,
             });
             writer.close();
-            await saveMessages(context.conversationId, allMessages);
+            await saveMessages(context.conversationId, allMessages, context.orgId);
             await saveContext(context);
             return;
           }
@@ -97,13 +97,17 @@ export function executeFlowStreaming(
         }
 
         if (userMessage) {
-          await prisma.message.create({
-            data: {
-              conversationId: context.conversationId,
-              role: "USER",
-              content: userMessage,
-            },
-          });
+          await withTenant(
+            (tx) =>
+              tx.message.create({
+                data: {
+                  conversationId: context.conversationId,
+                  role: "USER",
+                  content: userMessage,
+                },
+              }),
+            context.orgId,
+          );
           context.messageHistory.push({ role: "user", content: userMessage });
           context.variables["last_message"] = userMessage;
         }
@@ -595,7 +599,7 @@ export function executeFlowStreaming(
         if (context.debugSessionId) {
           void cleanupDebugSession(context.debugSessionId).catch(() => {});
         }
-        try { await saveMessages(context.conversationId, allMessages); } catch (err) { logger.error("Failed to save messages", err, { conversationId: context.conversationId }); }
+        try { await saveMessages(context.conversationId, allMessages, context.orgId); } catch (err) { logger.error("Failed to save messages", err, { conversationId: context.conversationId }); }
         // If client disconnected (aborted) while engine was still running, mark as ABANDONED
         const statusOverride = aborted && context.currentNodeId
           ? { forceStatus: "ABANDONED" as const }

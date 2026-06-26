@@ -314,7 +314,7 @@ async function executeCallAttempt(
   const spanId = generateSpanId();
   const taskId = generateSpanId();
 
-  const callLog = await prisma.agentCallLog.create({
+  const callLog = await withTenant((tx) => tx.agentCallLog.create({
     data: {
       traceId,
       spanId,
@@ -329,7 +329,7 @@ async function executeCallAttempt(
       isParallel: false,
       executionId: context.conversationId,
     },
-  });
+  }), context.orgId);
 
   const startTime = Date.now();
   const calleeId = targetAgentId ?? externalCardUrl ?? "unknown";
@@ -341,10 +341,10 @@ async function executeCallAttempt(
     }
     checkCircuit(context.agentId, calleeId);
 
-    await prisma.agentCallLog.update({
+    await withTenant((tx) => tx.agentCallLog.update({
       where: { id: callLog.id },
       data: { status: "WORKING" },
-    });
+    }), context.orgId);
 
     let output: unknown;
 
@@ -384,11 +384,11 @@ async function executeCallAttempt(
         );
         const resumeNodeId = defaultEdge?.target ?? null;
 
-        await prisma.agentCallLog
+        await withTenant((tx) => tx.agentCallLog
           .update({
             where: { id: callLog.id },
             data: { status: "WORKING", durationMs: Date.now() - startTime },
-          })
+          }), context.orgId)
           .catch(() => {});
 
         logger.info("call_agent: sub-agent waiting for human input — propagating waitForInput", {
@@ -433,7 +433,7 @@ async function executeCallAttempt(
       after: { targetAgentId, calleeId, durationMs, status: "COMPLETED" },
     }).catch(() => {});
 
-    await prisma.agentCallLog.update({
+    await withTenant((tx) => tx.agentCallLog.update({
       where: { id: callLog.id },
       data: {
         status: "COMPLETED",
@@ -443,7 +443,7 @@ async function executeCallAttempt(
         durationMs,
         completedAt: new Date(),
       },
-    });
+    }), context.orgId);
 
     const workspaceFiles = await getWorkspaceFiles(context.conversationId);
 
@@ -481,7 +481,7 @@ async function executeCallAttempt(
     const durationMs = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : String(err);
 
-    await prisma.agentCallLog
+    await withTenant((tx) => tx.agentCallLog
       .update({
         where: { id: callLog.id },
         data: {
@@ -490,7 +490,7 @@ async function executeCallAttempt(
           durationMs,
           completedAt: new Date(),
         },
-      })
+      }), context.orgId)
       .catch((updateErr) => logger.warn("Call log update failed", updateErr));
 
     recordFailure(context.agentId, calleeId);
@@ -574,7 +574,7 @@ async function executeParallel(
       const spanId = generateSpanId();
       const taskId = generateSpanId();
 
-      await prisma.agentCallLog.create({
+      await withTenant((tx) => tx.agentCallLog.create({
         data: {
           traceId,
           spanId,
@@ -587,7 +587,7 @@ async function executeParallel(
           isParallel: true,
           executionId: context.conversationId,
         },
-      });
+      }), context.orgId);
 
       const startTime = Date.now();
 
@@ -610,7 +610,7 @@ async function executeParallel(
         const durationMs = Date.now() - startTime;
         recordSuccess(context.agentId, target.agentId);
 
-        await prisma.agentCallLog
+        await withTenant((tx) => tx.agentCallLog
           .update({
             where: { taskId },
             data: {
@@ -621,7 +621,7 @@ async function executeParallel(
               durationMs,
               completedAt: new Date(),
             },
-          })
+          }), context.orgId)
           .catch((err) => logger.warn("Call log update failed", err));
 
         return { variable: target.outputVariable, output: subResult.output };
@@ -629,7 +629,7 @@ async function executeParallel(
         const durationMs = Date.now() - startTime;
         recordFailure(context.agentId, target.agentId);
 
-        await prisma.agentCallLog
+        await withTenant((tx) => tx.agentCallLog
           .update({
             where: { taskId },
             data: {
@@ -639,7 +639,7 @@ async function executeParallel(
               durationMs,
               completedAt: new Date(),
             },
-          })
+          }), context.orgId)
           .catch((err) => logger.warn("Call log update failed", err));
 
         throw err;
@@ -850,13 +850,17 @@ async function executeSubAgent(params: SubAgentParams): Promise<SubAgentResult> 
     });
   }
 
-  const conversation = await prisma.conversation.create({
-    data: {
-      agentId: targetAgentId,
-      status: "ACTIVE",
-      variables: input,
-    },
-  });
+  const conversation = await withTenant(
+    (tx) =>
+      tx.conversation.create({
+        data: {
+          agentId: targetAgentId,
+          status: "ACTIVE",
+          variables: input,
+        },
+      }),
+    orgId,
+  );
 
   let workspace: AgentWorkspace | undefined;
   try {

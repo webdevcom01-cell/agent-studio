@@ -185,7 +185,7 @@ export async function getAgentToolsForAgent(
     const fingerprint = ctx.currentInput?.slice(0, 200) ?? "";
     const cachedResults =
       ctx.conversationId && fingerprint
-        ? await loadPartialResults(ctx.conversationId, fingerprint)
+        ? await loadPartialResults(ctx.conversationId, fingerprint, ctx.orgId)
         : {};
 
     const resumedAgents = Object.entries(cachedResults)
@@ -326,7 +326,7 @@ async function executeAgentTool(
   let callLogId: string | null = null;
 
   try {
-    const callLog = await prisma.agentCallLog.create({
+    const callLog = await withTenant((tx) => tx.agentCallLog.create({
       data: {
         traceId,
         spanId,
@@ -340,13 +340,13 @@ async function executeAgentTool(
         executionId: conversationId ?? null,
         conversationId: conversationId ?? null,
       },
-    });
+    }), ctx.orgId);
     callLogId = callLog.id;
 
-    await prisma.agentCallLog.update({
-      where: { id: callLogId },
+    await withTenant((tx) => tx.agentCallLog.update({
+      where: { id: callLog.id },
       data: { status: "WORKING" },
-    });
+    }), ctx.orgId);
   } catch (err) {
     // Audit log failures are non-critical — continue execution
     logger.warn("Agent tool: audit log creation failed", {
@@ -406,7 +406,7 @@ async function executeAgentTool(
 
     // Update audit log
     if (callLogId) {
-      await prisma.agentCallLog
+      await withTenant((tx) => tx.agentCallLog
         .update({
           where: { id: callLogId },
           data: {
@@ -415,7 +415,7 @@ async function executeAgentTool(
             durationMs,
             completedAt: new Date(),
           },
-        })
+        }), ctx.orgId)
         .catch((err) =>
           logger.warn("Agent tool: audit log update failed", {
             error: err instanceof Error ? err.message : String(err),
@@ -461,7 +461,7 @@ async function executeAgentTool(
 
     // Update audit log with failure/cancellation
     if (callLogId) {
-      await prisma.agentCallLog
+      await withTenant((tx) => tx.agentCallLog
         .update({
           where: { id: callLogId },
           data: {
@@ -470,7 +470,7 @@ async function executeAgentTool(
             durationMs,
             completedAt: new Date(),
           },
-        })
+        }), ctx.orgId)
         .catch((updateErr) =>
           logger.warn("Agent tool: audit log update failed", {
             error: updateErr instanceof Error ? updateErr.message : String(updateErr),
@@ -542,13 +542,18 @@ interface PartialResultEntry {
  */
 async function loadPartialResults(
   conversationId: string,
-  fingerprint: string
+  fingerprint: string,
+  orgId?: string | null,
 ): Promise<Record<string, PartialResultEntry>> {
   try {
-    const conv = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { variables: true },
-    });
+    const conv = await withTenant(
+      (tx) =>
+        tx.conversation.findUnique({
+          where: { id: conversationId },
+          select: { variables: true },
+        }),
+      orgId,
+    );
 
     const vars = conv?.variables as Record<string, unknown> | null;
     const stored = vars?.__partial_results as Record<string, unknown> | null;
@@ -885,13 +890,17 @@ async function executeSubAgentInternal(
 
   const flowContent = parseFlowContent(agent.flow.content);
 
-  const conversation = await prisma.conversation.create({
-    data: {
-      agentId: targetAgentId,
-      status: "ACTIVE",
-      variables: input,
-    },
-  });
+  const conversation = await withTenant(
+    (tx) =>
+      tx.conversation.create({
+        data: {
+          agentId: targetAgentId,
+          status: "ACTIVE",
+          variables: input,
+        },
+      }),
+    orgId,
+  );
 
   const subContext = {
     conversationId: conversation.id,
