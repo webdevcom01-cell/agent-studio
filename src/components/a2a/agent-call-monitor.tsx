@@ -493,7 +493,10 @@ export function AgentCallMonitor({ open, onOpenChange }: AgentCallMonitorProps) 
   );
 
   const stats: AgentCallStats | null = statsRes?.success ? statsRes.data : null;
-  const logs: CallLog[] = logsRes?.success ? logsRes.data : [];
+  const logs: CallLog[] = useMemo(
+    () => (logsRes?.success ? logsRes.data : []),
+    [logsRes],
+  );
   const isLoading = statsLoading || logsLoading;
 
   // Group logs by traceId for trace tree view

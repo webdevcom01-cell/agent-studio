@@ -168,6 +168,7 @@ function EmbedChatContent({ agentId }: { agentId: string }) {
               )}
               {msg.role === "assistant" &&
                 (msg.metadata as { plots?: string[] } | undefined)?.plots?.map((src, pi) => (
+                  // eslint-disable-next-line @next/next/no-img-element -- dynamic Python-plot image (data/remote URL, unknown dims)
                   <img
                     key={pi}
                     src={src}
