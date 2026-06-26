@@ -292,34 +292,42 @@ PostgreSQL error code `42501` = `insufficient_privilege`. This fires when RLS de
 | **Yellow** | > 5 events/hour sustained ≥ 15 min | Investigate immediately; do **not** auto-rollback yet; check if events are from smoke test cleanup artifacts |
 | **Red** | > 20 events/hour sustained ≥ 5 min | **Rollback immediately** via feature flag (§4.3); file incident report |
 
-### 4.3 Layer 1 rollback — feature flag (fastest, no deploy required)
+### 4.3 Layer 1 rollback — revert the DATABASE_URL role (primary)
+
+> ⚠️ **CORRECTION (see `docs/rls-phase2-cutover-analysis.md` §4 GAP-A):** Once
+> `DATABASE_URL` points at `app_user`, do **NOT** roll back by turning the flag
+> off. With `RLS_ENFORCEMENT_ENABLED=false`, `withOrgContext` sets no
+> `app.current_org_id`, so every policy evaluates `org = NULL` → **0 rows** → the
+> app shows empty data (worse than the incident). The correct, instant rollback
+> is to point the app back at the superuser role, which bypasses RLS regardless
+> of the GUC:
 
 ```
 Railway Dashboard → agent-studio service → Variables
-  RLS_ENFORCEMENT_ENABLED = false   ← change this
+  DATABASE_URL = <postgres superuser connection string>   ← revert this
   Save → Railway auto-redeploys (~60 seconds)
 ```
+
+> The **flag-off** rollback is only safe BEFORE the DATABASE_URL switch — i.e.
+> while the app still connects as the superuser. In that window flipping
+> `RLS_ENFORCEMENT_ENABLED=false` is a harmless no-op.
 
 Confirm rollback succeeded:
 
 ```bash
-# After redeploy, Sentry error rate must return to 0 within 5 minutes
-# Also verify via health check:
+# After redeploy, Sentry 42501 rate must return to 0 within 5 minutes
 curl https://<your-railway-domain>/api/health
-# Expected: { "status": "ok" }
+# Expected: { "status": "healthy", "db": "ok", ... }
 ```
 
-### 4.4 Layer 2 rollback — per-table escape hatch
+### 4.4 Layer 2 rollback — per-table escape hatch (NOT IMPLEMENTED)
 
-If only one table is causing `42501` and you want to keep other tables enforced:
-
-```
-Railway Variables:
-  RLS_DISABLED_TABLES = Agent          ← single table
-  RLS_DISABLED_TABLES = Agent,Template ← multiple tables
-```
-
-The Prisma extension routes queries for disabled tables through `prismaAdmin` (BYPASSRLS), per `src/lib/db/clients.ts`.
+> ⚠️ **CORRECTION (GAP-B):** `RLS_DISABLED_TABLES` is referenced in older notes
+> but is **NOT implemented** in the current codebase — there is no Prisma routing
+> extension for it, and `src/lib/db/clients.ts` does not exist. Do not rely on it.
+> For a single-table rollback that keeps other tables enforced, use the
+> drop-policy approach in §4.5. Building `RLS_DISABLED_TABLES` is optional future
+> work, not a prerequisite for cutover.
 
 ### 4.5 Layer 3 rollback — migration revert
 
@@ -436,9 +444,10 @@ Estimated re-apply window: [DATE]
 
 | File | Purpose |
 |------|---------|
-| `src/lib/db/rls-middleware.ts` | `withOrgContext` helper |
-| `src/lib/db/tenant-context.ts` | AsyncLocalStorage context store |
-| `src/lib/db/clients.ts` | `prismaApp` / `prismaAdmin` client factory |
+| `src/lib/db/rls-middleware.ts` | `withOrgContext` / `withOrgVectorTx` helpers |
+| `src/lib/api/tenant-context.ts` | `withTenant` / `withAdminBypass` |
+| `src/lib/context/org-context.ts` | AsyncLocalStorage org context store |
+| `src/lib/prisma.ts` | `prisma` / `prismaAdmin` / `prismaRead` client factory |
 | `src/lib/feature-flags/index.ts` | `RLS_ENFORCEMENT_ENABLED` flag |
 | `skill-rls-rollout-PLAN-V2.md` | Master plan (§8: SQL templates, §13: rollback) |
 | `docs/rls-tech-debt.md` | Open items and resolved history |
