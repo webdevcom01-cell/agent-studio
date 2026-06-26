@@ -114,7 +114,8 @@ describe("Public routes respect RLS via agent record", () => {
         name: "Public Template",
         organizationId: orgA.id,
         isPublic: true,
-        flowContent: {},
+        payload: {},
+        checksum: "test-checksum",
       },
     });
 
