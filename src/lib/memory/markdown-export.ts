@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
@@ -62,7 +61,7 @@ export async function exportAgentMemoryAsMarkdown(agentId: string): Promise<stri
     }),
   );
 
-  const memories = await prisma.agentMemory.findMany({
+  const memories = await withTenant((tx) => tx.agentMemory.findMany({
     where: { agentId },
     orderBy: [{ category: "asc" }, { importance: "desc" }],
     select: {
@@ -75,7 +74,7 @@ export async function exportAgentMemoryAsMarkdown(agentId: string): Promise<stri
       accessedAt: true,
       createdAt: true,
     },
-  });
+  }));
 
   const agentName = agent?.name ?? agentId;
   const lines: string[] = [];
@@ -128,7 +127,7 @@ export async function exportAgentMemoryAsMarkdown(agentId: string): Promise<stri
 export async function exportMemoryShards(
   agentId: string,
 ): Promise<Map<string, string>> {
-  const memories = await prisma.agentMemory.findMany({
+  const memories = await withTenant((tx) => tx.agentMemory.findMany({
     where: { agentId },
     orderBy: { importance: "desc" },
     select: {
@@ -140,7 +139,7 @@ export async function exportMemoryShards(
       accessedAt: true,
       createdAt: true,
     },
-  });
+  }));
 
   const categories = new Map<string, typeof memories>();
   for (const m of memories) {
@@ -252,7 +251,7 @@ export async function importMemoryFromMarkdown(
 
   for (const entry of entries) {
     try {
-      await prisma.agentMemory.upsert({
+      await withTenant((tx) => tx.agentMemory.upsert({
         where: {
           agentId_key: {
             agentId,
@@ -271,7 +270,7 @@ export async function importMemoryFromMarkdown(
           category: entry.category,
           importance: entry.importance,
         },
-      });
+      }));
       imported++;
     } catch (error) {
       logger.warn("Memory import: failed to upsert entry", { key: entry.key, error });

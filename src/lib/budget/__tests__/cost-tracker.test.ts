@@ -40,9 +40,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockTransaction.mockResolvedValue([]);
   mockWithTenant.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+    // All budget queries (reads + writes) now run through withTenant, so the
+    // tx must expose every accessor the callbacks use.
     const tx = {
+      agentBudget: { findUnique: mockFindUnique, update: vi.fn().mockResolvedValue({}) },
       costEvent: { create: vi.fn().mockResolvedValue({}) },
-      agentBudget: { update: vi.fn().mockResolvedValue({}) },
+      budgetAlert: { create: mockBudgetAlertCreate },
     };
     return fn(tx);
   });
@@ -113,7 +116,8 @@ describe("recordCost", () => {
 
     await recordCost({ agentId: "agent-1", costUsd: 0.05, modelId: "deepseek-chat" });
 
-    expect(mockWithTenant).toHaveBeenCalledOnce();
+    // Now: withTenant wraps the budget read, the cost-event write, and any alert.
+    expect(mockWithTenant).toHaveBeenCalled();
   });
 
   it("does not throw when no budget record exists", async () => {
@@ -123,7 +127,8 @@ describe("recordCost", () => {
       recordCost({ agentId: "agent-1", costUsd: 0.05, modelId: "deepseek-chat" }),
     ).resolves.not.toThrow();
 
-    expect(mockWithTenant).not.toHaveBeenCalled();
+    // The budget read runs through withTenant (once); no write follows when null.
+    expect(mockWithTenant).toHaveBeenCalledTimes(1);
   });
 
   it("does not throw when DB transaction fails", async () => {

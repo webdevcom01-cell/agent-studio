@@ -1,8 +1,8 @@
 import { generateText } from "ai";
 import { getModel } from "@/lib/ai";
-import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { emitHook } from "./hooks";
+import { withTenant } from "@/lib/api/tenant-context";
 import type { RuntimeContext } from "./types";
 
 /**
@@ -138,7 +138,7 @@ export async function compactContext(
     const trimmedSummary = summary.trim();
 
     // Persist to AgentMemory for long-term storage
-    await saveCompactionSummary(context.agentId, trimmedSummary);
+    await saveCompactionSummary(context.agentId, trimmedSummary, context.orgId);
 
     // Store in context.variables — this persists via saveContext() (conversation.variables)
     // and is read by ai-response handlers to inject into the system prompt
@@ -173,12 +173,13 @@ export async function compactContext(
  */
 async function saveCompactionSummary(
   agentId: string,
-  summary: string
+  summary: string,
+  orgId?: string | null,
 ): Promise<void> {
   const key = `__context_summary_${Date.now()}`;
 
   // Upsert the new summary
-  await prisma.agentMemory.create({
+  await withTenant((tx) => tx.agentMemory.create({
     data: {
       agentId,
       key,
@@ -186,21 +187,21 @@ async function saveCompactionSummary(
       category: COMPACTION_CATEGORY,
       importance: 0.9,
     },
-  });
+  }), orgId);
 
   // Enforce max summaries — delete oldest beyond limit
-  const allSummaries = await prisma.agentMemory.findMany({
+  const allSummaries = await withTenant((tx) => tx.agentMemory.findMany({
     where: { agentId, category: COMPACTION_CATEGORY },
     orderBy: { createdAt: "desc" },
     select: { id: true },
-  });
+  }), orgId);
 
   if (allSummaries.length > MAX_SUMMARIES_PER_AGENT) {
     const toDelete = allSummaries
       .slice(MAX_SUMMARIES_PER_AGENT)
       .map((s) => s.id);
-    await prisma.agentMemory.deleteMany({
+    await withTenant((tx) => tx.agentMemory.deleteMany({
       where: { id: { in: toDelete } },
-    });
+    }), orgId);
   }
 }

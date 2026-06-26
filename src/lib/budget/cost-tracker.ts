@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { Prisma } from "@/generated/prisma";
@@ -21,10 +20,10 @@ export interface RecordCostParams {
 
 export async function checkBudget(agentId: string): Promise<BudgetCheckResult> {
   try {
-    const budget = await prisma.agentBudget.findUnique({
+    const budget = await withTenant((tx) => tx.agentBudget.findUnique({
       where: { agentId },
       select: { hardLimitUsd: true, isHardStop: true, currentSpendUsd: true },
-    });
+    }));
 
     if (!budget) return { allowed: true };
 
@@ -50,10 +49,10 @@ export async function recordCost(params: RecordCostParams): Promise<void> {
   const { agentId, costUsd, modelId, inputTokens = 0, outputTokens = 0, source = "chat" } = params;
 
   try {
-    const budget = await prisma.agentBudget.findUnique({
+    const budget = await withTenant((tx) => tx.agentBudget.findUnique({
       where: { agentId },
       select: { id: true, softLimitUsd: true, hardLimitUsd: true, alertThreshold: true, currentSpendUsd: true },
-    });
+    }));
 
     if (!budget) return;
 
@@ -101,7 +100,7 @@ async function createAlert(
   limitUsd: number,
 ): Promise<void> {
   try {
-    await prisma.budgetAlert.create({
+    await withTenant((tx) => tx.budgetAlert.create({
       data: {
         budgetId,
         agentId,
@@ -109,7 +108,7 @@ async function createAlert(
         spendUsd: new Prisma.Decimal(spendUsd.toFixed(2)),
         limitUsd: new Prisma.Decimal(limitUsd.toFixed(2)),
       },
-    });
+    }));
     logger.warn("Budget alert created", { agentId, alertType, spendUsd, limitUsd });
   } catch (error) {
     logger.error("Failed to create budget alert", { budgetId, agentId, alertType, error });
