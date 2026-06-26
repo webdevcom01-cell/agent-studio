@@ -278,7 +278,7 @@ export async function markPipelineRunning(
   jobId: string,
   startFromStep = 0,
 ): Promise<PipelineRun> {
-  const row = await prisma.pipelineRun.update({
+  const row = await withTenant((tx) => tx.pipelineRun.update({
     where: { id: runId },
     data: {
       status: "RUNNING",
@@ -286,7 +286,7 @@ export async function markPipelineRunning(
       startedAt: new Date(),
       currentStep: startFromStep,
     },
-  });
+  }));
   return toRun(row);
 }
 
@@ -388,7 +388,7 @@ export async function markPipelineCompleted(
     ? `${finalOutput}\n\n---\n\n## ⚠️ Git Integration Failed\n\n${gitError}\n\nThe pipeline completed successfully but no pull request was created. Check your \`GITHUB_TOKEN\` (GitHub) or \`GITLAB_TOKEN\` (GitLab) configuration.`
     : finalOutput;
 
-  const row = await prisma.pipelineRun.update({
+  const row = await withTenant((tx) => tx.pipelineRun.update({
     where: { id: runId },
     data: {
       status: "COMPLETED",
@@ -396,7 +396,7 @@ export async function markPipelineCompleted(
       completedAt: new Date(),
       ...(prUrl ? { prUrl } : {}),
     },
-  });
+  }));
 
   if (gitError) {
     logger.warn("Pipeline completed with git integration failure", { runId, gitError });
@@ -412,14 +412,14 @@ export async function markPipelineFailed(
   runId: string,
   error: string,
 ): Promise<PipelineRun> {
-  const row = await prisma.pipelineRun.update({
+  const row = await withTenant((tx) => tx.pipelineRun.update({
     where: { id: runId },
     data: {
       status: "FAILED",
       error,
       completedAt: new Date(),
     },
-  });
+  }));
 
   logger.warn("Pipeline run failed", { runId, error });
 
@@ -467,20 +467,20 @@ export async function cancelPipelineRun(
 
 /** Check whether the pipeline run has been cancelled (worker calls this between steps) */
 export async function isPipelineCancelled(runId: string): Promise<boolean> {
-  const run = await prisma.pipelineRun.findUnique({
+  const run = await withTenant((tx) => tx.pipelineRun.findUnique({
     where: { id: runId },
     select: { status: true },
-  });
+  }));
   return run?.status === "CANCELLED";
 }
 
 export async function markPipelineAwaitingApproval(
   runId: string,
 ): Promise<PipelineRun> {
-  const row = await prisma.pipelineRun.update({
+  const row = await withTenant((tx) => tx.pipelineRun.update({
     where: { id: runId },
     data: { status: "AWAITING_APPROVAL" },
-  });
+  }));
   return toRun(row);
 }
 

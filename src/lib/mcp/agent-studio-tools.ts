@@ -389,6 +389,7 @@ async function toolTriggerAgent(
       message,
       variables: inputVariables,
       conversationId: sessionId,
+      orgId: agent.organizationId ?? undefined,
     });
   } catch (queueError) {
     try {

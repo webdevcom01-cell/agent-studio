@@ -1,6 +1,6 @@
 import type { NodeHandler, ExecutionResult } from "../types";
 import { resolveTemplate } from "../template";
-import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 const DEFAULT_TIMEOUT_MINUTES = 60;
@@ -87,11 +87,11 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
 
     if (approvedByText || rejectedByText) {
       const responseText = approvedByText ? "approved" : "rejected";
-      await prisma.humanApprovalRequest
+      await withTenant((tx) => tx.humanApprovalRequest
         .update({
           where: { id: pendingRequestId },
           data: { status: responseText, resolvedAt: new Date(), response: responseText },
-        })
+        }), context.orgId)
         .catch(() => {});
       return {
         messages: [{ role: "assistant", content: `Human review ${responseText}.` }],
@@ -104,9 +104,9 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
       };
     }
 
-    const updated = await prisma.humanApprovalRequest.findUnique({
+    const updated = await withTenant((tx) => tx.humanApprovalRequest.findUnique({
       where: { id: pendingRequestId },
-    });
+    }), context.orgId);
 
     if (!updated) {
       return {
@@ -135,11 +135,11 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
     }
 
     if (new Date() > updated.expiresAt) {
-      await prisma.humanApprovalRequest
+      await withTenant((tx) => tx.humanApprovalRequest
         .update({
           where: { id: pendingRequestId },
           data: { status: "timeout", resolvedAt: new Date() },
-        })
+        }), context.orgId)
         .catch((err) => {
           logger.error("Failed to update approval timeout", err, {
             requestId: pendingRequestId,
@@ -159,7 +159,7 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
 
   const expiresAt = new Date(Date.now() + timeoutMinutes * 60 * 1000);
 
-  const request = await prisma.humanApprovalRequest.create({
+  const request = await withTenant((tx) => tx.humanApprovalRequest.create({
     data: {
       executionId: context.conversationId,
       agentId: context.agentId,
@@ -169,7 +169,7 @@ export const humanApprovalHandler: NodeHandler = async (node, context) => {
       status: "pending",
       expiresAt,
     },
-  });
+  }), context.orgId);
 
   return {
     messages: [
