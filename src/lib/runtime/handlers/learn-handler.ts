@@ -1,7 +1,7 @@
 import type { NodeHandler } from "../types";
 import type { Prisma } from "@/generated/prisma";
 import { resolveTemplate } from "../template";
-import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 const MAX_EXECUTIONS_TO_SCAN = 20;
@@ -34,9 +34,9 @@ export const learnHandler: NodeHandler = async (node, context) => {
   }
 
   try {
-    const existing = await prisma.instinct.findFirst({
+    const existing = await withTenant((tx) => tx.instinct.findFirst({
       where: { agentId, name: patternName },
-    });
+    }), context.orgId);
 
     if (existing) {
       const newConfidence = Math.min(
@@ -44,7 +44,7 @@ export const learnHandler: NodeHandler = async (node, context) => {
         existing.confidence + DEFAULT_CONFIDENCE_BOOST
       );
 
-      await prisma.instinct.update({
+      await withTenant((tx) => tx.instinct.update({
         where: { id: existing.id },
         data: {
           confidence: newConfidence,
@@ -55,7 +55,7 @@ export const learnHandler: NodeHandler = async (node, context) => {
             context.variables
           ) as Prisma.InputJsonValue,
         },
-      });
+      }), context.orgId);
 
       const nextNodeId =
         context.flowContent.edges.find((e) => e.source === node.id)
@@ -81,14 +81,14 @@ export const learnHandler: NodeHandler = async (node, context) => {
       };
     }
 
-    const recentExecutions = await prisma.agentExecution.findMany({
+    const recentExecutions = await withTenant((tx) => tx.agentExecution.findMany({
       where: { agentId, status: "SUCCESS" },
       orderBy: { createdAt: "desc" },
       take: MAX_EXECUTIONS_TO_SCAN,
       select: { id: true, inputParams: true, outputResult: true },
-    });
+    }), context.orgId);
 
-    await prisma.instinct.create({
+    await withTenant((tx) => tx.instinct.create({
       data: {
         agentId,
         name: patternName,
@@ -100,7 +100,7 @@ export const learnHandler: NodeHandler = async (node, context) => {
           ? { executionIds: recentExecutions.map((e) => e.id) }
           : undefined,
       },
-    });
+    }), context.orgId);
 
     const nextNodeId =
       context.flowContent.edges.find((e) => e.source === node.id)

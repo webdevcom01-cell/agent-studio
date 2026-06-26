@@ -3,7 +3,7 @@ import { getHandler } from "./handlers";
 import { saveContext, saveMessages } from "./context";
 import { maybeCompactAndTruncate, MAX_HISTORY } from "./context-compaction";
 import { logger } from "@/lib/logger";
-import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { emitHook } from "./hooks";
 import { emitSessionEvent } from "./session-events";
 import { writeAuditLog } from "@/lib/safety/audit-logger";
@@ -142,13 +142,17 @@ export async function executeFlow(
   }
 
   if (userMessage) {
-    await prisma.message.create({
-      data: {
-        conversationId: context.conversationId,
-        role: "USER",
-        content: userMessage,
-      },
-    });
+    await withTenant(
+      (tx) =>
+        tx.message.create({
+          data: {
+            conversationId: context.conversationId,
+            role: "USER",
+            content: userMessage,
+          },
+        }),
+      context.orgId,
+    );
     context.messageHistory.push({ role: "user", content: userMessage });
     context.variables["last_message"] = userMessage;
   }
@@ -159,17 +163,21 @@ export async function executeFlow(
 
   let __exec: { id: string } | null = null;
   try {
-    __exec = await prisma.agentExecution.create({
-      data: {
-        agentId: context.agentId,
-        status: 'RUNNING',
-        ...(Object.keys(context.variables).length > 0 && {
-          inputParams: redactJsonObject(context.variables) as unknown as Prisma.InputJsonObject,
+    __exec = await withTenant(
+      (tx) =>
+        tx.agentExecution.create({
+          data: {
+            agentId: context.agentId,
+            status: 'RUNNING',
+            ...(Object.keys(context.variables).length > 0 && {
+              inputParams: redactJsonObject(context.variables) as unknown as Prisma.InputJsonObject,
+            }),
+            ...(context._a2aTraceId && { traceId: context._a2aTraceId }),
+            ...(context._parentExecutionId && { parentExecutionId: context._parentExecutionId }),
+          },
         }),
-        ...(context._a2aTraceId && { traceId: context._a2aTraceId }),
-        ...(context._parentExecutionId && { parentExecutionId: context._parentExecutionId }),
-      },
-    });
+      context.orgId,
+    );
     context._currentExecutionId = __exec.id;
   } catch (e) {
     logger.warn('AgentExecution create failed (non-fatal)', { error: e });
@@ -296,7 +304,7 @@ export async function executeFlow(
         iterations,
         meta: { nodeId: node.id, nodeType: node.type },
       });
-      await saveMessages(context.conversationId, allMessages);
+      await saveMessages(context.conversationId, allMessages, context.orgId);
       await saveContext(context);
       return { messages: allMessages, waitingForInput: true };
     }
@@ -320,7 +328,7 @@ export async function executeFlow(
     });
   }
 
-  await saveMessages(context.conversationId, allMessages);
+  await saveMessages(context.conversationId, allMessages, context.orgId);
   await saveContext(context);
 
   // Emit session.finished (timeout already emitted above when applicable)
@@ -351,17 +359,21 @@ export async function executeFlow(
 
   if (__exec?.id) {
     try {
-      await prisma.agentExecution.update({
-        where: { id: __exec.id },
-        data: {
-          status: iterations >= MAX_ITERATIONS ? 'TIMEOUT' : 'SUCCESS',
-          ...(allMessages.length > 0 && {
-            outputResult: redactJsonObject({ messages: allMessages }) as unknown as Prisma.InputJsonObject,
+      await withTenant(
+        (tx) =>
+          tx.agentExecution.update({
+            where: { id: __exec!.id },
+            data: {
+              status: iterations >= MAX_ITERATIONS ? 'TIMEOUT' : 'SUCCESS',
+              ...(allMessages.length > 0 && {
+                outputResult: redactJsonObject({ messages: allMessages }) as unknown as Prisma.InputJsonObject,
+              }),
+              completedAt: new Date(),
+              durationMs: Date.now() - flowStartMs,
+            },
           }),
-          completedAt: new Date(),
-          durationMs: Date.now() - flowStartMs,
-        },
-      });
+        context.orgId,
+      );
     } catch (e) {
       logger.warn('AgentExecution update failed (non-fatal)', { error: e });
     }

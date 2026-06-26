@@ -1,6 +1,7 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 const MAX_MEMORIES_PER_AGENT = 1000;
@@ -38,20 +39,20 @@ export const memoryWriteHandler: NodeHandler = async (node, context) => {
 
   try {
     // Check memory limit
-    const memoryCount = await prisma.agentMemory.count({
+    const memoryCount = await withTenant((tx) => tx.agentMemory.count({
       where: { agentId: context.agentId },
-    });
+    }), context.orgId);
 
     if (memoryCount >= MAX_MEMORIES_PER_AGENT) {
       // Delete oldest least-accessed memory to make room
-      const oldest = await prisma.agentMemory.findFirst({
+      const oldest = await withTenant((tx) => tx.agentMemory.findFirst({
         where: { agentId: context.agentId },
         orderBy: [{ importance: "asc" }, { accessedAt: "asc" }],
         select: { id: true },
-      });
+      }), context.orgId);
 
       if (oldest) {
-        await prisma.agentMemory.delete({ where: { id: oldest.id } });
+        await withTenant((tx) => tx.agentMemory.delete({ where: { id: oldest.id } }), context.orgId);
       }
     }
 
@@ -60,10 +61,10 @@ export const memoryWriteHandler: NodeHandler = async (node, context) => {
     const maxLength = (node.data.maxLength as number) ?? 0;
 
     if (mergeStrategy !== "replace") {
-      const existing = await prisma.agentMemory.findUnique({
+      const existing = await withTenant((tx) => tx.agentMemory.findUnique({
         where: { agentId_key: { agentId: context.agentId, key } },
         select: { value: true },
-      });
+      }), context.orgId);
 
       const existingValue = existing?.value as unknown;
       storedValue = applyMerge(mergeStrategy, existingValue, storedValue, maxLength);
@@ -124,7 +125,7 @@ export const memoryWriteHandler: NodeHandler = async (node, context) => {
         vectorStr
       );
     } else {
-      await prisma.agentMemory.upsert({
+      await withTenant((tx) => tx.agentMemory.upsert({
         where: {
           agentId_key: {
             agentId: context.agentId,
@@ -143,7 +144,7 @@ export const memoryWriteHandler: NodeHandler = async (node, context) => {
           category,
           importance,
         },
-      });
+      }), context.orgId);
     }
 
     logger.info("Memory written", {

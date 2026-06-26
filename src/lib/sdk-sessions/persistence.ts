@@ -7,6 +7,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import type { SdkSessionStatus } from "@/generated/prisma";
 
@@ -130,7 +131,7 @@ export async function createSdkSession(
   const messages = input.messages ?? [];
   const title = input.title ?? generateTitle(messages);
 
-  const row = await prisma.agentSdkSession.create({
+  const row = await withAdminBypass((db) => db.agentSdkSession.create({
     data: {
       agentId: input.agentId,
       userId: input.userId ?? null,
@@ -138,7 +139,7 @@ export async function createSdkSession(
       messages: JSON.parse(JSON.stringify(messages)),
       metadata: input.metadata ? JSON.parse(JSON.stringify(input.metadata)) : undefined,
     },
-  });
+  }));
 
   logger.info("SDK session created", {
     sessionId: row.id,
@@ -154,9 +155,9 @@ export async function createSdkSession(
 export async function loadSdkSession(
   sessionId: string
 ): Promise<SdkSessionData | null> {
-  const row = await prisma.agentSdkSession.findUnique({
+  const row = await withAdminBypass((db) => db.agentSdkSession.findUnique({
     where: { id: sessionId },
-  });
+  }));
 
   if (!row) return null;
   return toSessionData(row);
@@ -234,13 +235,13 @@ export async function listSdkSessions(
   };
 
   const [rows, total] = await Promise.all([
-    prisma.agentSdkSession.findMany({
+    withAdminBypass((db) => db.agentSdkSession.findMany({
       where,
       orderBy: { updatedAt: "desc" },
       take: options?.limit ?? 20,
       skip: options?.offset ?? 0,
-    }),
-    prisma.agentSdkSession.count({ where }),
+    })),
+    withAdminBypass((db) => db.agentSdkSession.count({ where })),
   ]);
 
   return {
@@ -253,9 +254,9 @@ export async function listSdkSessions(
  * Delete an SDK session by ID.
  */
 export async function deleteSdkSession(sessionId: string): Promise<void> {
-  await prisma.agentSdkSession.delete({
+  await withAdminBypass((db) => db.agentSdkSession.delete({
     where: { id: sessionId },
-  });
+  }));
 
   logger.info("SDK session deleted", { sessionId });
 }
@@ -266,10 +267,10 @@ export async function deleteSdkSession(sessionId: string): Promise<void> {
 export async function completeSdkSession(
   sessionId: string
 ): Promise<SdkSessionData> {
-  const row = await prisma.agentSdkSession.update({
+  const row = await withAdminBypass((db) => db.agentSdkSession.update({
     where: { id: sessionId },
     data: { status: "COMPLETED" },
-  });
+  }));
 
   return toSessionData(row);
 }

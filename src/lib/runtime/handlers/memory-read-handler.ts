@@ -1,6 +1,7 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { prisma } from "@/lib/prisma";
+import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 const MAX_RESULTS = 50;
@@ -33,24 +34,24 @@ export const memoryReadHandler: NodeHandler = async (node, context) => {
 
       const key = resolveTemplate(keyTemplate, context.variables);
 
-      const memory = await prisma.agentMemory.findUnique({
+      const memory = await withTenant((tx) => tx.agentMemory.findUnique({
         where: {
           agentId_key: {
             agentId: context.agentId,
             key,
           },
         },
-      });
+      }), context.orgId);
 
       if (memory) {
         // Update access tracking
-        await prisma.agentMemory.update({
+        await withTenant((tx) => tx.agentMemory.update({
           where: { id: memory.id },
           data: {
             accessCount: { increment: 1 },
             accessedAt: new Date(),
           },
-        });
+        }), context.orgId);
 
         return {
           messages: [],
@@ -89,18 +90,18 @@ export const memoryReadHandler: NodeHandler = async (node, context) => {
         ? resolveTemplate(category, context.variables)
         : "general";
 
-      const memories = await prisma.agentMemory.findMany({
+      const memories = await withTenant((tx) => tx.agentMemory.findMany({
         where: {
           agentId: context.agentId,
           category: resolvedCategory,
         },
         orderBy: { importance: "desc" },
         take: topK,
-      });
+      }), context.orgId);
 
       // Update access tracking for all retrieved memories
       if (memories.length > 0) {
-        await prisma.agentMemory.updateMany({
+        await withTenant((tx) => tx.agentMemory.updateMany({
           where: {
             id: { in: memories.map((m) => m.id) },
           },
@@ -108,7 +109,7 @@ export const memoryReadHandler: NodeHandler = async (node, context) => {
             accessCount: { increment: 1 },
             accessedAt: new Date(),
           },
-        });
+        }), context.orgId);
       }
 
       const result = memories.map((m) => ({
@@ -198,7 +199,7 @@ export const memoryReadHandler: NodeHandler = async (node, context) => {
 
         // Update access tracking
         if (memories.length > 0) {
-          await prisma.agentMemory.updateMany({
+          await withTenant((tx) => tx.agentMemory.updateMany({
             where: {
               id: { in: memories.map((m) => m.id) },
             },
@@ -206,7 +207,7 @@ export const memoryReadHandler: NodeHandler = async (node, context) => {
               accessCount: { increment: 1 },
               accessedAt: new Date(),
             },
-          });
+          }), context.orgId);
         }
 
         const result = memories.map((m) => ({
@@ -237,14 +238,14 @@ export const memoryReadHandler: NodeHandler = async (node, context) => {
         });
 
         // Fallback: simple text search on keys
-        const memories = await prisma.agentMemory.findMany({
+        const memories = await withTenant((tx) => tx.agentMemory.findMany({
           where: {
             agentId: context.agentId,
             key: { contains: resolvedQuery, mode: "insensitive" },
           },
           orderBy: { importance: "desc" },
           take: topK,
-        });
+        }), context.orgId);
 
         const result = memories.map((m) => ({
           key: m.key,
