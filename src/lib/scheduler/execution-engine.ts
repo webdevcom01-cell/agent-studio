@@ -14,7 +14,6 @@
  *   5. Analytics — fires a fire-and-forget SCHEDULE_EXECUTION event.
  */
 
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { executeFlow } from "@/lib/runtime/engine";
@@ -90,7 +89,7 @@ export async function runScheduledFlow(
   let execution: { id: string } | null = null;
 
   try {
-    execution = await prisma.scheduledExecution.create({
+    execution = await withAdminBypass((db) => db.scheduledExecution.create({
       data: {
         flowScheduleId: schedule.id,
         status: "PENDING",
@@ -98,7 +97,7 @@ export async function runScheduledFlow(
         idempotencyKey,
       },
       select: { id: true },
-    });
+    }));
   } catch (err) {
     // Unique constraint violation → already running or completed for this tick
     const message = err instanceof Error ? err.message : String(err);
@@ -118,16 +117,16 @@ export async function runScheduledFlow(
   }
 
   // ── 2. Mark as RUNNING ───────────────────────────────────────────────────
-  await prisma.scheduledExecution.update({
+  await withAdminBypass((db) => db.scheduledExecution.update({
     where: { id: execution.id },
     data: { status: "RUNNING" },
-  });
+  }));
 
   // ── 3. Load agent + flow ─────────────────────────────────────────────────
-  const agent = await prisma.agent.findFirst({
+  const agent = await withAdminBypass((db) => db.agent.findFirst({
     where: { id: schedule.agentId },
     include: { flow: true },
-  });
+  }));
 
   if (!agent?.flow) {
     const error = "Agent or flow not found for schedule";
@@ -143,11 +142,12 @@ export async function runScheduledFlow(
 
   // Use the active (deployed) version content when available, otherwise fallback to flow.content
   let flowSource: unknown = agent.flow.content;
-  if (agent.flow.activeVersionId) {
-    const activeVersion = await prisma.flowVersion.findUnique({
-      where: { id: agent.flow.activeVersionId },
+  const activeVersionId = agent.flow.activeVersionId;
+  if (activeVersionId) {
+    const activeVersion = await withAdminBypass((db) => db.flowVersion.findUnique({
+      where: { id: activeVersionId },
       select: { content: true },
-    });
+    }));
     if (activeVersion) flowSource = activeVersion.content;
   }
 
@@ -166,7 +166,7 @@ export async function runScheduledFlow(
 
   // ── 4. Execute the flow ──────────────────────────────────────────────────
   try {
-    const conversation = await prisma.conversation.create({
+    const conversation = await withAdminBypass((db) => db.conversation.create({
       data: {
         agentId: schedule.agentId,
         status: "ACTIVE",
@@ -177,7 +177,7 @@ export async function runScheduledFlow(
         } as object,
       },
       select: { id: true },
-    });
+    }));
 
     const context = {
       conversationId: conversation.id,
@@ -196,10 +196,10 @@ export async function runScheduledFlow(
     await executeFlow(context);
 
     // Mark conversation as completed
-    await prisma.conversation.update({
+    await withAdminBypass((db) => db.conversation.update({
       where: { id: conversation.id },
       data: { status: "COMPLETED" },
-    }).catch(() => {
+    })).catch(() => {
       // Non-critical — don't fail the execution if this update fails
     });
 

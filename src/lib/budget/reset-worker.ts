@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 export interface BudgetResetResult {
@@ -8,9 +8,9 @@ export interface BudgetResetResult {
 export async function resetAllBudgets(): Promise<BudgetResetResult> {
   const now = new Date();
 
-  const budgets = await prisma.agentBudget.findMany({
+  const budgets = await withAdminBypass((db) => db.agentBudget.findMany({
     select: { id: true, periodStart: true },
-  });
+  }));
 
   const toReset = budgets.filter((b) => {
     const nextReset = new Date(b.periodStart);
@@ -23,12 +23,14 @@ export async function resetAllBudgets(): Promise<BudgetResetResult> {
     return { count: 0 };
   }
 
-  await prisma.$transaction(
-    toReset.map((b) =>
-      prisma.agentBudget.update({
-        where: { id: b.id },
-        data: { currentSpendUsd: 0, periodStart: now },
-      }),
+  await withAdminBypass((db) =>
+    db.$transaction(
+      toReset.map((b) =>
+        db.agentBudget.update({
+          where: { id: b.id },
+          data: { currentSpendUsd: 0, periodStart: now },
+        }),
+      ),
     ),
   );
 

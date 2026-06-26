@@ -14,6 +14,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAgentOwner, isAuthError } from "@/lib/api/auth-guard";
+import { withOrgContext } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 import { executeWebhookTrigger } from "@/lib/webhooks/execute";
 
@@ -34,7 +35,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
   try {
     // ── Load original execution ──────────────────────────────────────────────
-    const original = await prisma.webhookExecution.findFirst({
+    const original = await withOrgContext(prisma, auth.organizationId, (tx) => tx.webhookExecution.findFirst({
       where: {
         id: executionId,
         webhookConfigId: webhookId,
@@ -47,7 +48,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
         eventType: true,
         sourceIp: true,
       },
-    });
+    }));
 
     if (!original) {
       return NextResponse.json(

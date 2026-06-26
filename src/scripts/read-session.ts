@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 
 async function main() {
 const id = process.argv[2] ?? "cmokgu2g1000hpbyx4y8l4wpj";
 
-const conv = await prisma.conversation.findUnique({
+const conv = await withAdminBypass((db) => db.conversation.findUnique({
   where: { id },
   select: { status: true, variables: true },
-});
+}));
 
 if (!conv) {
   console.log("NOT FOUND:", id);

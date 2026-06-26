@@ -2,6 +2,7 @@ import { createMCPClient } from "@ai-sdk/mcp";
 import { dynamicTool, type ToolSet as AIToolSet, jsonSchema } from "ai";
 import type { MCPTransport } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { getOrCreate, remove } from "./pool";
 import {
@@ -24,12 +25,12 @@ function parseHeaders(headers: unknown): Record<string, string> | undefined {
 }
 
 export async function getMCPToolsForAgent(agentId: string): Promise<AIToolSet> {
-  const agentServers = await prisma.agentMCPServer.findMany({
+  const agentServers = await withAdminBypass((db) => db.agentMCPServer.findMany({
     where: { agentId },
     include: {
       mcpServer: true,
     },
-  });
+  }));
 
   const enabledServers = agentServers.filter((as) => as.mcpServer.enabled);
 

@@ -19,7 +19,6 @@
 
 import { generateText } from "ai";
 import { getModel } from "@/lib/ai";
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { recordMetric } from "@/lib/observability/metrics";
@@ -113,7 +112,7 @@ export async function fireSdkLearnHook(
 async function recordSdkExecution(record: SdkExecutionRecord) {
   const startedAt = new Date(Date.now() - record.durationMs);
 
-  return prisma.agentExecution.create({
+  return withAdminBypass((db) => db.agentExecution.create({
     data: {
       agentId: record.agentId,
       status: "SUCCESS",
@@ -136,7 +135,7 @@ async function recordSdkExecution(record: SdkExecutionRecord) {
       traceId: record.traceId ?? null,
     },
     select: { id: true },
-  });
+  }));
 }
 
 /**

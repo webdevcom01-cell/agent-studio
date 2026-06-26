@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 
 export interface A2ASkill {
@@ -204,7 +203,7 @@ export async function upsertAgentCard(
 ): Promise<void> {
   const card = await generateAgentCard(agentId, userId, baseUrl);
 
-  await prisma.agentCard.upsert({
+  await withAdminBypass((db) => db.agentCard.upsert({
     where: { agentId },
     create: {
       agentId,
@@ -214,5 +213,5 @@ export async function upsertAgentCard(
     update: {
       skills: JSON.parse(JSON.stringify(card.skills)),
     },
-  });
+  }));
 }

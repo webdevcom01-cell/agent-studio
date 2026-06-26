@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
 const MAX_MEMORIES_LOADED = 10;
@@ -58,14 +58,14 @@ Categories:
     });
 
     for (const memory of result.object.memories) {
-      await prisma.pipelineMemory.create({
+      await withAdminBypass((db) => db.pipelineMemory.create({
         data: {
           runId,
           agentId,
           category: memory.category as MemoryCategory,
           content: memory.content,
         },
-      });
+      }));
     }
 
     logger.info("pipeline-memory: memories saved", {
@@ -85,12 +85,12 @@ Categories:
 export async function loadRelevantMemory(agentId: string, taskDescription?: string): Promise<string> {
   try {
     // Load more records than we'll use so we can filter by relevance
-    const allRecords = await prisma.pipelineMemory.findMany({
+    const allRecords = await withAdminBypass((db) => db.pipelineMemory.findMany({
       where: { agentId },
       orderBy: { createdAt: "desc" },
       take: 30,
       select: { category: true, content: true },
-    });
+    }));
 
     if (allRecords.length === 0) return "";
 

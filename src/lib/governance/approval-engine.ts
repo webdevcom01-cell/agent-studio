@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { withOrgContext } from "@/lib/db/rls-middleware";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { Prisma } from "@/generated/prisma";
 import type { ApprovalPolicy, PolicyDecision } from "@/generated/prisma";
@@ -151,10 +152,10 @@ export async function resolveDecision(
  * See tech-debt #6 for pre-flag-flip verification steps.
  */
 export async function processTimeouts(): Promise<ProcessTimeoutsResult> {
-  const expired = await prisma.policyDecision.findMany({
+  const expired = await withAdminBypass((db) => db.policyDecision.findMany({
     where: { status: "PENDING", expiresAt: { lt: new Date() } },
     include: { policy: { select: { timeoutApprove: true } } },
-  });
+  }));
 
   let approved = 0;
   let rejected = 0;
@@ -163,10 +164,10 @@ export async function processTimeouts(): Promise<ProcessTimeoutsResult> {
     expired.map(async (d) => {
       const resolution = d.policy.timeoutApprove ? "APPROVED" : "REJECTED";
       // Auto-resolved decisions are identifiable by resolvedAt IS NOT NULL with no resolvedBy
-      await prisma.policyDecision.update({
+      await withAdminBypass((db) => db.policyDecision.update({
         where: { id: d.id },
         data: { status: resolution, resolvedAt: new Date() },
-      });
+      }));
       if (d.policy.timeoutApprove) {
         approved++;
       } else {

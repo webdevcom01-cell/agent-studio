@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import type { RuntimeContext } from "@/lib/runtime/types";
 
@@ -58,7 +59,7 @@ export async function getHotMemories(
   const cutoff = new Date(Date.now() - HOT_RECENCY_MS);
 
   // Fetch memories matching any hot criterion
-  const memories = await prisma.agentMemory.findMany({
+  const memories = await withAdminBypass((db) => db.agentMemory.findMany({
     where: {
       agentId,
       OR: [
@@ -77,7 +78,7 @@ export async function getHotMemories(
       accessedAt: true,
       createdAt: true,
     },
-  });
+  }));
 
   // Rank by composite score and take top N
   const scored = memories.map((m) => ({
