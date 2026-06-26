@@ -132,11 +132,11 @@ export async function POST(
     });
 
     // Link A → B as well (mutual reference)
-    await prisma.$executeRaw`
+    await withOrgContext(prisma, authResult.organizationId, (tx) => tx.$executeRaw`
       UPDATE "EvalRun"
       SET "comparisonRunId" = ${summaryB.runId}
       WHERE id = ${summaryA.runId}
-    `.catch((err: unknown) => {
+    `).catch((err: unknown) => {
       // Non-fatal: linking is cosmetic, runs already complete
       logger.warn("eval_compare: failed to link runA comparisonRunId", { err });
     });

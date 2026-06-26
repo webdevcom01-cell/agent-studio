@@ -112,7 +112,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       })),
 
       // 4. Top callers
-      prisma.$queryRaw<TopAgentRow[]>(Prisma.sql`
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.$queryRaw<TopAgentRow[]>(Prisma.sql`
         SELECT
           l."callerAgentId" AS "agentId",
           a."name" AS "agentName",
@@ -124,10 +124,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         GROUP BY l."callerAgentId", a."name"
         ORDER BY "callCount" DESC
         LIMIT 5
-      `),
+      `)),
 
       // 5. Top callees
-      prisma.$queryRaw<TopAgentRow[]>(Prisma.sql`
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.$queryRaw<TopAgentRow[]>(Prisma.sql`
         SELECT
           l."calleeAgentId" AS "agentId",
           a."name" AS "agentName",
@@ -141,10 +141,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         GROUP BY l."calleeAgentId", a."name"
         ORDER BY "callCount" DESC
         LIMIT 5
-      `),
+      `)),
 
       // 6. Recent failures
-      prisma.$queryRaw<RecentFailureRow[]>(Prisma.sql`
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.$queryRaw<RecentFailureRow[]>(Prisma.sql`
         SELECT
           l."taskId",
           ca."name" AS "callerName",
@@ -160,10 +160,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           AND l."status" = 'FAILED'
         ORDER BY l."createdAt" DESC
         LIMIT 10
-      `),
+      `)),
 
       // 7. Time series (call volume + success/fail over time)
-      prisma.$queryRaw<TimeSeriesRow[]>(Prisma.sql`
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.$queryRaw<TimeSeriesRow[]>(Prisma.sql`
         SELECT
           ${bucketExpr} AS bucket,
           COUNT(*)::bigint AS call_count,
@@ -176,10 +176,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           AND l."createdAt" >= ${since}
         GROUP BY ${bucketExpr}
         ORDER BY bucket ASC
-      `),
+      `)),
 
       // 8. Latency distribution buckets
-      prisma.$queryRaw<LatencyBucketRow[]>(Prisma.sql`
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.$queryRaw<LatencyBucketRow[]>(Prisma.sql`
         SELECT bucket_label, bucket_order, COUNT(*)::bigint AS count
         FROM (
           SELECT
@@ -208,10 +208,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         ) buckets
         GROUP BY bucket_label, bucket_order
         ORDER BY bucket_order ASC
-      `),
+      `)),
 
       // 9. Agent pair breakdown (caller → callee with metrics)
-      prisma.$queryRaw<AgentPairRow[]>(Prisma.sql`
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.$queryRaw<AgentPairRow[]>(Prisma.sql`
         SELECT
           l."callerAgentId" AS caller_id,
           ca."name" AS caller_name,
@@ -230,10 +230,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         GROUP BY l."callerAgentId", ca."name", l."calleeAgentId", ta."name"
         ORDER BY call_count DESC
         LIMIT 15
-      `),
+      `)),
 
       // 10. Latency percentiles
-      prisma.$queryRaw<PercentileRow[]>(Prisma.sql`
+      withOrgContext(prisma, authResult.organizationId, (tx) => tx.$queryRaw<PercentileRow[]>(Prisma.sql`
         SELECT
           PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY l."durationMs")::float AS p50_ms,
           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY l."durationMs")::float AS p95_ms,
@@ -244,7 +244,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         WHERE a."userId" = ${userId}
           AND l."createdAt" >= ${since}
           AND l."durationMs" IS NOT NULL
-      `),
+      `)),
     ]);
 
     const completed = statusBreakdown.find((s) => s.status === "COMPLETED")?._count ?? 0;

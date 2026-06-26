@@ -195,7 +195,7 @@ export async function vectorizeSkills(
         const embeddingArray = embeddings[j];
         const vectorLiteral = `[${embeddingArray.join(",")}]`;
 
-        await prisma.$executeRaw`
+        await withAdminBypass((db) => db.$executeRaw`
           INSERT INTO "KBChunk" (id, content, embedding, tokens, metadata, "sourceId", "createdAt")
           VALUES (
             ${`skill-${skill.id}-${i + j}`},
@@ -211,7 +211,7 @@ export async function vectorizeSkills(
             embedding = EXCLUDED.embedding,
             tokens = EXCLUDED.tokens,
             metadata = EXCLUDED.metadata
-        `;
+        `);
         totalChunks++;
       }
     }

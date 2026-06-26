@@ -156,7 +156,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // 3. Time series (hourly or daily)
     useHourly
-      ? prismaRead.$queryRaw<HourlyRow[]>(
+      ? withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<HourlyRow[]>(
           Prisma.sql`
             SELECT
               TO_CHAR(c."createdAt", 'YYYY-MM-DD HH24:00') AS hour,
@@ -167,8 +167,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             GROUP BY TO_CHAR(c."createdAt", 'YYYY-MM-DD HH24:00')
             ORDER BY hour ASC
           `
-        )
-      : prismaRead.$queryRaw<DailyRow[]>(
+        ))
+      : withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<DailyRow[]>(
           Prisma.sql`
             SELECT DATE(c."createdAt")::text AS date, COUNT(*)::bigint AS count
             FROM "Conversation" c
@@ -177,10 +177,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             GROUP BY DATE(c."createdAt")
             ORDER BY DATE(c."createdAt") ASC
           `
-        ),
+        )),
 
     // 4. Top agents
-    prismaRead.$queryRaw<TopAgentRow[]>(
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<TopAgentRow[]>(
       Prisma.sql`
         SELECT
           a."id" AS "agentId", a."name" AS "agentName",
@@ -194,10 +194,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         ORDER BY "conversationCount" DESC
         LIMIT 10
       `
-    ),
+    )),
 
     // 5. Common first messages
-    prismaRead.$queryRaw<FirstMessageRow[]>(
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<FirstMessageRow[]>(
       Prisma.sql`
         SELECT fm."content", COUNT(*)::bigint AS "count"
         FROM (
@@ -212,11 +212,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         ORDER BY "count" DESC
         LIMIT 20
       `
-    ),
+    )),
 
     // 6. Response time percentiles (p50, p95, p99) by day
     //    Falls back to metadata->>'totalResponseTimeMs' for events created before durationMs column
-    prismaRead.$queryRaw<AvgResponseRow[]>(
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<AvgResponseRow[]>(
       Prisma.sql`
         SELECT
           DATE(ae."createdAt")::text AS date,
@@ -237,10 +237,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         GROUP BY DATE(ae."createdAt")
         ORDER BY DATE(ae."createdAt") ASC
       `
-    ),
+    )),
 
     // 7. KB search hit rate
-    prismaRead.$queryRaw<KBCountRow[]>(
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<KBCountRow[]>(
       Prisma.sql`
         SELECT
           ((ae.metadata->>'resultCount')::int > 0) AS has_results,
@@ -252,10 +252,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           AND a."userId" = ${userId}
         GROUP BY has_results
       `
-    ),
+    )),
 
     // 8. Model usage breakdown
-    prismaRead.$queryRaw<ModelUsageRow[]>(
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<ModelUsageRow[]>(
       Prisma.sql`
         SELECT
           ae."model" AS model,
@@ -273,10 +273,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         GROUP BY ae."model"
         ORDER BY request_count DESC
       `
-    ),
+    )),
 
     // 9. Error rates by day
-    prismaRead.$queryRaw<ErrorRateRow[]>(
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<ErrorRateRow[]>(
       Prisma.sql`
         SELECT
           DATE(ae."createdAt")::text AS date,
@@ -289,10 +289,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         GROUP BY DATE(ae."createdAt")
         ORDER BY DATE(ae."createdAt") ASC
       `
-    ),
+    )),
 
     // 10. Cost by day
-    prismaRead.$queryRaw<CostByDayRow[]>(
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<CostByDayRow[]>(
       Prisma.sql`
         SELECT
           DATE(ae."createdAt")::text AS date,
@@ -306,10 +306,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         GROUP BY DATE(ae."createdAt")
         ORDER BY DATE(ae."createdAt") ASC
       `
-    ),
+    )),
 
     // 11. Token summary
-    prismaRead.$queryRaw<TokenSummaryRow[]>(
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<TokenSummaryRow[]>(
       Prisma.sql`
         SELECT
           COALESCE(SUM(ae."inputTokens"), 0)::bigint AS total_input,
@@ -320,10 +320,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         WHERE ae."createdAt" >= ${sinceDate}
           AND a."userId" = ${userId}
       `
-    ),
+    )),
 
     // 12. Tool usage stats
-    prismaRead.$queryRaw<ToolUsageRow[]>(
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<ToolUsageRow[]>(
       Prisma.sql`
         SELECT
           ae.metadata->>'toolName' AS tool_name,
@@ -340,10 +340,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         ORDER BY call_count DESC
         LIMIT 20
       `
-    ),
+    )),
 
     // 13. Conversation funnel
-    prismaRead.$queryRaw<ConversationFunnelRow[]>(
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<ConversationFunnelRow[]>(
       Prisma.sql`
         SELECT step, COUNT(*)::bigint AS count FROM (
           SELECT 'started' AS step FROM "Conversation" c
@@ -367,10 +367,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         ) funnel
         GROUP BY step
       `
-    ),
+    )),
 
     // 14. Schedule execution stats by day
-    prismaRead.$queryRaw<ScheduleDailyRow[]>(
+    withOrgContext(prismaRead, authResult.organizationId, (tx) => tx.$queryRaw<ScheduleDailyRow[]>(
       Prisma.sql`
         SELECT
           DATE(ae."createdAt")::text AS date,
@@ -385,7 +385,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         GROUP BY DATE(ae."createdAt")
         ORDER BY DATE(ae."createdAt") ASC
       `
-    ),
+    )),
   ]);
 
   // ─── Process results ────────────────────────────────────────────────────

@@ -17,6 +17,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
 import { computeNextRunAt } from "./cron-validator";
@@ -94,7 +95,7 @@ export async function syncSchedulesFromFlow(
   );
 
   // ── Load existing node-linked schedules via raw SQL ────────────────────────
-  const existing = await prisma.$queryRaw<ExistingScheduleRow[]>(
+  const existing = await withAdminBypass((db) => db.$queryRaw<ExistingScheduleRow[]>(
     Prisma.sql`
       SELECT id, "nodeId" AS node_id, "scheduleType" AS schedule_type,
              "cronExpression" AS cron_expression, "intervalMinutes" AS interval_minutes,
@@ -102,7 +103,7 @@ export async function syncSchedulesFromFlow(
       FROM "FlowSchedule"
       WHERE "agentId" = ${agentId} AND "nodeId" IS NOT NULL
     `,
-  );
+  ));
 
   const existingByNodeId = new Map(existing.map((s) => [s.node_id, s]));
   const processedNodeIds = new Set<string>();
@@ -134,7 +135,7 @@ export async function syncSchedulesFromFlow(
     if (!existingRecord) {
       // CREATE via raw SQL to include nodeId
       try {
-        await prisma.$executeRaw`
+        await withAdminBypass((db) => db.$executeRaw`
           INSERT INTO "FlowSchedule" (
             "id", "agentId", "nodeId", "scheduleType", "cronExpression",
             "intervalMinutes", "timezone", "enabled", "label", "maxRetries",
@@ -145,7 +146,7 @@ export async function syncSchedulesFromFlow(
             ${label}, ${maxRetries}, ${nextRunAt}, 0, NOW(), NOW()
           )
           ON CONFLICT ("agentId", "nodeId") DO NOTHING
-        `;
+        `);
         result.created++;
         logger.info("schedule_sync_created", { agentId, nodeId, scheduleType });
       } catch (err) {
@@ -165,7 +166,7 @@ export async function syncSchedulesFromFlow(
 
       if (configChanged || enabledChanged) {
         const failureReset = enabledChanged && enabled ? 0 : undefined;
-        await prisma.$executeRaw`
+        await withAdminBypass((db) => db.$executeRaw`
           UPDATE "FlowSchedule"
           SET "scheduleType" = ${scheduleType}::"ScheduleType",
               "cronExpression" = ${cronExpression},
@@ -178,7 +179,7 @@ export async function syncSchedulesFromFlow(
               "failureCount" = CASE WHEN ${failureReset !== undefined} THEN 0 ELSE "failureCount" END,
               "updatedAt" = NOW()
           WHERE id = ${existingRecord.id}
-        `;
+        `);
         result.updated++;
         logger.info("schedule_sync_updated", { agentId, nodeId, scheduleType });
       }
@@ -188,10 +189,10 @@ export async function syncSchedulesFromFlow(
   // ── Disable node-linked schedules whose node was removed ───────────────────
   for (const [nodeId, record] of existingByNodeId) {
     if (!processedNodeIds.has(nodeId) && record.enabled) {
-      await prisma.$executeRaw`
+      await withAdminBypass((db) => db.$executeRaw`
         UPDATE "FlowSchedule" SET "enabled" = false, "updatedAt" = NOW()
         WHERE id = ${record.id}
-      `;
+      `);
       result.disabled++;
       logger.info("schedule_sync_disabled", { agentId, nodeId });
     }
