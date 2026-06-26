@@ -1,4 +1,3 @@
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
 import { generateEmbedding } from "./embeddings";

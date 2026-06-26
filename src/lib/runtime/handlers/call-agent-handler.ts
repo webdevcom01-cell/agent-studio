@@ -1,7 +1,6 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { validateNamedSchema } from "@/lib/mcp/schema-validator";
-import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { randomBytes } from "node:crypto";

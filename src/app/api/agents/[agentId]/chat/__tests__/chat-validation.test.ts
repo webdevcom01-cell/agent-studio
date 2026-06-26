@@ -85,7 +85,6 @@ function makeRequest(body: Record<string, unknown>): NextRequest {
 
 // Import mocked modules so we can re-apply defaults in beforeEach
 import * as RateLimit from "@/lib/rate-limit";
-import * as BodyLimit from "@/lib/api/body-limit";
 import * as FeatureFlags from "@/lib/feature-flags";
 import * as Queue from "@/lib/queue";
 

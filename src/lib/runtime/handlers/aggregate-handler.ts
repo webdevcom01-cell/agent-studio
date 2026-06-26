@@ -1,4 +1,4 @@
-import type { NodeHandler, ExecutionResult } from "../types";
+import type { NodeHandler } from "../types";
 import { logger } from "@/lib/logger";
 
 const DEFAULT_OUTPUT_VARIABLE = "aggregate_result";

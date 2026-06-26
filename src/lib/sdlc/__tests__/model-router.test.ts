@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { isModelAvailable, resolveStepModel, getEscalationModel, resolveStepModelAdaptive } from "../model-router";
-import type { StepPhase } from "../model-router";
 
 // ---------------------------------------------------------------------------
 // Controlled model catalog

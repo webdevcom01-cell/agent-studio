@@ -12,7 +12,6 @@
  *   kb:read       → search_knowledge_base
  */
 
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { hybridSearch } from "@/lib/knowledge";

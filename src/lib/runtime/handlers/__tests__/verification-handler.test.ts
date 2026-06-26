@@ -163,7 +163,7 @@ describe("verificationHandler", () => {
       ],
     });
 
-    const result = await verificationHandler(
+    const _result = await verificationHandler(
       makeNode({
         checks: [
           { type: "test", command: "npm test" },

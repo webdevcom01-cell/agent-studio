@@ -133,7 +133,7 @@ function makeCallbacks(overrides: {
 }
 
 /** Reusable no-op code-extractor result — no files written, nothing to compile. */
-const NO_FILES_RESULT = {
+const _NO_FILES_RESULT = {
   filesWritten: 0,
   writtenPaths: [],
   testOutput: "No files provided — skipping real execution.",

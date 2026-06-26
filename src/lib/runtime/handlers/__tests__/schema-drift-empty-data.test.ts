@@ -87,7 +87,7 @@ function makeContext(): RuntimeContext {
 }
 
 /** Assert the handler doesn't throw and returns a valid ExecutionResult shape. */
-async function expectGracefulResult(
+async function _expectGracefulResult(
   handler: (node: FlowNode, ctx: RuntimeContext) => Promise<unknown>
 ) {
   const result = await handler(makeNode("message"), makeContext());

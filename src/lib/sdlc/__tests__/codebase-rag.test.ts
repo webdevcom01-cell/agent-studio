@@ -85,7 +85,7 @@ import type { SearchResult } from "@/lib/knowledge/search";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeStatDir() {
+function _makeStatDir() {
   return { isDirectory: () => true, isFile: () => false, size: 0 };
 }
 
@@ -102,7 +102,7 @@ function makeSource(id = "src-1") {
 }
 
 /** Set up mocks for a flat directory with N .ts files */
-function setupFlatDir(fileNames: string[], workingDir = "/tmp/sdlc") {
+function setupFlatDir(fileNames: string[], _workingDir = "/tmp/sdlc") {
   mockExistsSync.mockReturnValue(true);
   mockPrismaKBUpsert.mockResolvedValue(makeKB());
   mockPrismaKBSourceFindMany.mockResolvedValue([]);

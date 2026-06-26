@@ -17,7 +17,7 @@ vi.mock("@/lib/cost/budget-tracker", () => ({
       _vars: Record<string, unknown>,
       _trackVar: string,
       budget: number,
-      threshold: number
+      _threshold: number
     ) => ({
       totalTokens: 1000,
       totalCostUsd: 0.05,

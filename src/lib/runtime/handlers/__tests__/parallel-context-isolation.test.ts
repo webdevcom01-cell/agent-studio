@@ -19,7 +19,7 @@ vi.mock("@/lib/logger", () => ({
 vi.mock("../index", () => ({
   getHandler: (type: string) => {
     if (type === "set_variable") {
-      return async (node: FlowNode, ctx: RuntimeContext) => ({
+      return async (node: FlowNode, _ctx: RuntimeContext) => ({
         messages: [],
         nextNodeId: (node.data.nextNodeId as string) ?? null,
         waitForInput: false,
@@ -221,7 +221,7 @@ describe("parallel-handler context isolation (B2)", () => {
     });
     const node = makeParallelNode();
 
-    const result = await parallelHandler(node, context);
+    const _result = await parallelHandler(node, context);
 
     // Original config should be completely untouched
     const config = context.variables.config as Record<string, unknown>;

@@ -8,7 +8,7 @@
  * - Graceful handling when providerOverride is set
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import type { FlowContent, FlowNode } from "@/types";
 
 // ── Mock the entire handler's dependencies ────────────────────────────
