@@ -101,3 +101,43 @@ export async function withOrgContext<T>(
     },
   );
 }
+
+/**
+ * Execute an HNSW vector search that requires a session-local GUC
+ * (`SET LOCAL hnsw.ef_search = …`) held for the duration of the query.
+ *
+ * Unlike withOrgContext (whose transaction is conditional on the RLS flag),
+ * this ALWAYS opens a transaction so the `SET LOCAL` and the subsequent
+ * `SELECT` are pinned to the same pooled connection — without it the ef_search
+ * tuning silently reverts to the server default. When an org is known it also
+ * sets `app.current_org_id` inside that same transaction so RLS policies
+ * tenant-isolate the result under enforcement. Setting the GUC is a harmless
+ * no-op while enforcement is off.
+ *
+ * @param setLocal a literal `SET LOCAL …` statement (no user input — caller-built)
+ * @example
+ * await withOrgVectorTx(prisma, orgId, "SET LOCAL hnsw.ef_search = 40",
+ *   (tx) => tx.$queryRawUnsafe(sql, vec, agentId, topK))
+ */
+export async function withOrgVectorTx<T>(
+  client: PrismaClient,
+  orgId: string | null | undefined,
+  setLocal: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  const resolvedOrgId = orgId ?? getCurrentOrgId();
+  return client.$transaction(
+    async (tx) => {
+      if (resolvedOrgId) {
+        await tx.$executeRaw`SELECT set_config('app.current_org_id', ${resolvedOrgId}, true)`;
+      }
+      await tx.$executeRawUnsafe(setLocal);
+      return fn(tx);
+    },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+      maxWait: 5000,
+      timeout: 30000,
+    },
+  );
+}

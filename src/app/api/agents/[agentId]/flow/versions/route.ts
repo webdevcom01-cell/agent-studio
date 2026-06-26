@@ -72,7 +72,9 @@ export async function POST(
       flow.id,
       parseFlowContent(flow.content),
       authResult.userId,
-      label
+      label,
+      undefined,
+      authResult.organizationId
     );
 
     return NextResponse.json({ success: true, data: version }, { status: 201 });

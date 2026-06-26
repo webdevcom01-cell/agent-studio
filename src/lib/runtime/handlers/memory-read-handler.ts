@@ -2,6 +2,7 @@ import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
 import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/api/tenant-context";
+import { withOrgVectorTx } from "@/lib/db/rls-middleware";
 import { logger } from "@/lib/logger";
 
 const MAX_RESULTS = 50;
@@ -171,8 +172,7 @@ export const memoryReadHandler: NodeHandler = async (node, context) => {
         // SET LOCAL on one connection and the SELECT on another — the ef_search
         // tuning would silently revert to the server default. Pin both on the
         // same connection by wrapping in a single transaction.
-        const memories = await prisma.$transaction(async (tx) => {
-          await tx.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = 40`);
+        const memories = await withOrgVectorTx(prisma, context.orgId, `SET LOCAL hnsw.ef_search = 40`, async (tx) => {
           // Cosine similarity search (accelerated by HNSW index)
           return tx.$queryRawUnsafe<
             Array<{
