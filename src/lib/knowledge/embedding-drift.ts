@@ -5,7 +5,6 @@
  * currently configured one. Advises the user to re-ingest for consistency.
  */
 
-import { prisma } from "@/lib/prisma";
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
@@ -36,15 +35,15 @@ export async function detectEmbeddingDrift(
     const currentModel = kb?.embeddingModel ?? "text-embedding-3-small";
 
     const [totalRows, matchRows] = await Promise.all([
-      prisma.$queryRaw<CountRow[]>(
+      withAdminBypass((db) => db.$queryRaw<CountRow[]>(
         Prisma.sql`
           SELECT COUNT(*) as count
           FROM "KBChunk" c
           INNER JOIN "KBSource" s ON c."sourceId" = s."id"
           WHERE s."knowledgeBaseId" = ${knowledgeBaseId}
         `
-      ),
-      prisma.$queryRaw<CountRow[]>(
+      )),
+      withAdminBypass((db) => db.$queryRaw<CountRow[]>(
         Prisma.sql`
           SELECT COUNT(*) as count
           FROM "KBChunk" c
@@ -52,7 +51,7 @@ export async function detectEmbeddingDrift(
           WHERE s."knowledgeBaseId" = ${knowledgeBaseId}
             AND c."metadata"->>'embeddingModel' = ${currentModel}
         `
-      ),
+      )),
     ]);
 
     const chunksTotal = Number(totalRows[0]?.count ?? 0);
@@ -116,11 +115,11 @@ export async function markChunkEmbeddingModel(
 ): Promise<void> {
   try {
     const patch = JSON.stringify({ embeddingModel: modelId });
-    await prisma.$executeRaw`
+    await withAdminBypass((db) => db.$executeRaw`
       UPDATE "KBChunk"
       SET "metadata" = COALESCE("metadata", '{}'::jsonb) || ${patch}::jsonb
       WHERE "sourceId" = ${sourceId}
-    `;
+    `);
   } catch (err) {
     logger.warn("Failed to mark chunk embedding model", {
       sourceId,

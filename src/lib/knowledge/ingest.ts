@@ -75,9 +75,9 @@ async function loadKBConfig(sourceId: string): Promise<KBConfig | null> {
     // contextualEnrichment is in schema.prisma + DB but not in generated types yet
     // (pnpm db:generate is blocked in this environment due to 403 on binary fetch).
     // Fetched via raw query until types are regenerated.
-    const enrichRows = await prisma.$queryRaw<Array<{ contextualEnrichment: boolean }>>(
+    const enrichRows = await withAdminBypass((db) => db.$queryRaw<Array<{ contextualEnrichment: boolean }>>(
       Prisma.sql`SELECT "contextualEnrichment" FROM "KnowledgeBase" WHERE id = ${source.knowledgeBase.id} LIMIT 1`,
-    );
+    ));
 
     return {
       ...source.knowledgeBase,
@@ -233,7 +233,7 @@ export async function ingestSource(
 
     for (let batchStart = 0; batchStart < chunksToEmbed.length; batchStart += BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + BATCH_SIZE, chunksToEmbed.length);
-      const values = [];
+      const values: Prisma.Sql[] = [];
 
       for (let i = batchStart; i < batchEnd; i++) {
         const content = chunksToEmbed[i];
@@ -248,10 +248,10 @@ export async function ingestSource(
         );
       }
 
-      await prisma.$executeRaw`
+      await withAdminBypass((db) => db.$executeRaw`
         INSERT INTO "KBChunk" ("id", "content", "embedding", "tokens", "metadata", "createdAt", "sourceId", "contentHash")
         VALUES ${Prisma.join(values)}
-      `;
+      `);
     }
 
     const contentHash = computeContentHash(finalText);

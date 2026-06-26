@@ -6,7 +6,7 @@
  */
 
 import { createHash } from "crypto";
-import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
 
 /**
@@ -28,7 +28,7 @@ export async function findDuplicateChunks(
 ): Promise<Set<string>> {
   if (contentHashes.length === 0) return new Set();
 
-  const rows = await prisma.$queryRaw<{ hash: string }[]>(
+  const rows = await withAdminBypass((db) => db.$queryRaw<{ hash: string }[]>(
     Prisma.sql`
       SELECT DISTINCT c."contentHash" as hash
       FROM "KBChunk" c
@@ -36,7 +36,7 @@ export async function findDuplicateChunks(
       WHERE s."knowledgeBaseId" = ${knowledgeBaseId}
         AND c."contentHash" = ANY(${contentHashes}::text[])
     `
-  );
+  ));
 
   return new Set(rows.map((r) => r.hash));
 }

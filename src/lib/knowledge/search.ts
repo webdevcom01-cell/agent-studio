@@ -52,9 +52,9 @@ async function loadKBConfig(knowledgeBaseId: string): Promise<KBSearchConfig | n
     // (pnpm db:generate is blocked in this environment due to 403 on binary fetch).
     // Fetched via raw query until types are regenerated.
     // contextualEnrichment and fusionStrategy fetched via raw query until types are regenerated
-    const extraRows = await prisma.$queryRaw<Array<{ contextualEnrichment: boolean; fusionStrategy: string }>>(
+    const extraRows = await withAdminBypass((db) => db.$queryRaw<Array<{ contextualEnrichment: boolean; fusionStrategy: string }>>(
       Prisma.sql`SELECT "contextualEnrichment", "fusionStrategy" FROM "KnowledgeBase" WHERE id = ${knowledgeBaseId} LIMIT 1`,
-    );
+    ));
 
     return {
       ...kb,
@@ -255,7 +255,7 @@ async function keywordSearch(
   topK: number
 ): Promise<SearchResult[]> {
   const keywordStart = performance.now();
-  const results = await prisma.$queryRaw<KeywordSearchRow[]>(
+  const results = await withAdminBypass((db) => db.$queryRaw<KeywordSearchRow[]>(
     Prisma.sql`
       SELECT
         c."id", c."content",
@@ -269,7 +269,7 @@ async function keywordSearch(
       ORDER BY rank DESC
       LIMIT ${topK}
     `
-  );
+  ));
   const keywordDurationMs = performance.now() - keywordStart;
   recordMetric("kb.search.keyword_query_ms", keywordDurationMs, "ms", {
     knowledgeBaseId,
@@ -460,7 +460,7 @@ export async function expandChunksWithContext(
     // Use a PostgreSQL array literal string (e.g. '{0,1}') — valid int[] syntax.
     // Note: jsonb::int[] cast is not supported in PostgreSQL; text::int[] works.
     const indicesLiteral = `{${indices.join(",")}}`;
-    const neighbors = await prisma.$queryRaw<NeighborChunkRow[]>(
+    const neighbors = await withAdminBypass((db) => db.$queryRaw<NeighborChunkRow[]>(
       Prisma.sql`
         SELECT c."id", c."content", c."sourceId", c."metadata"
         FROM "KBChunk" c
@@ -468,7 +468,7 @@ export async function expandChunksWithContext(
           AND (c."metadata"->>'index')::int = ANY(${indicesLiteral}::int[])
         ORDER BY (c."metadata"->>'index')::int ASC
       `
-    );
+    ));
 
     const neighborsByIndex = new Map<number, NeighborChunkRow>();
     for (const n of neighbors) {
