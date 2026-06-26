@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
 
@@ -54,14 +55,14 @@ export async function composeSkillPipeline(
     // compositionLayer is in schema.prisma + DB but not in generated types yet
     // (pnpm db:generate is blocked in this environment due to 403 on binary fetch).
     // Fetched via raw query until types are regenerated.
-    const rows = await prisma.$queryRaw<SkillRow[]>(
+    const rows = await withAdminBypass((db) => db.$queryRaw<SkillRow[]>(
       Prisma.sql`
         SELECT s.id, s.name, s.slug, s."compositionLayer", s.content, s.description
         FROM "Skill" s
         INNER JOIN "AgentSkillPermission" asp ON asp."skillId" = s.id
         WHERE asp."agentId" = ${agentId}
       `,
-    );
+    ));
 
     const skillMap = new Map<string, ComposedSkill>();
 
@@ -79,14 +80,14 @@ export async function composeSkillPipeline(
 
     // If a specific task skill was requested and not already included, load it
     if (taskSkillId && !skillMap.has(taskSkillId)) {
-      const taskRows = await prisma.$queryRaw<SkillRow[]>(
+      const taskRows = await withAdminBypass((db) => db.$queryRaw<SkillRow[]>(
         Prisma.sql`
           SELECT id, name, slug, "compositionLayer", content, description
           FROM "Skill"
           WHERE id = ${taskSkillId}
           LIMIT 1
         `,
-      );
+      ));
       if (taskRows[0]) {
         const ts = taskRows[0];
         skillMap.set(ts.id, {
@@ -160,7 +161,7 @@ export function formatSkillPipelineForPrompt(skills: ComposedSkill[]): string {
 export async function getGuaranteeSkills(agentId: string): Promise<ComposedSkill[]> {
   try {
     // Raw query for guarantee skills — compositionLayer not in generated types
-    const rows = await prisma.$queryRaw<SkillRow[]>(
+    const rows = await withAdminBypass((db) => db.$queryRaw<SkillRow[]>(
       Prisma.sql`
         SELECT s.id, s.name, s.slug, s."compositionLayer", s.content, s.description
         FROM "Skill" s
@@ -169,7 +170,7 @@ export async function getGuaranteeSkills(agentId: string): Promise<ComposedSkill
           AND s."compositionLayer" = 'guarantee'
         ORDER BY s.name ASC
       `,
-    );
+    ));
 
     return rows.map((s) => ({
       ...s,

@@ -16,7 +16,7 @@
  * embedding API calls (same limit as KB search pipeline).
  */
 
-import { prisma } from "@/lib/prisma";
+import { withAdminBypass } from "@/lib/api/tenant-context";
 import { Prisma } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
 import { generateEmbedding, acquireEmbeddingSemaphore, releaseEmbeddingSemaphore } from "@/lib/knowledge";
@@ -175,14 +175,14 @@ export async function routeToSkill(
 
   try {
     // Load skills for agent via AgentSkillPermission
-    const rows = await prisma.$queryRaw<SkillRow[]>(
+    const rows = await withAdminBypass((db) => db.$queryRaw<SkillRow[]>(
       Prisma.sql`
         SELECT s.id, s.name, s.slug, s.description, s.content
         FROM "Skill" s
         INNER JOIN "AgentSkillPermission" asp ON asp."skillId" = s.id
         WHERE asp."agentId" = ${agentId}
       `,
-    );
+    ));
 
     if (rows.length === 0) return [];
 

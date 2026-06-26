@@ -436,7 +436,8 @@ async function executeAgentTool(
         durationMs,
         completedAt: new Date().toISOString(),
       },
-      currentInput?.slice(0, 200)
+      currentInput?.slice(0, 200),
+      ctx.orgId,
     );
 
     return outputText || "[Agent returned no output]";
@@ -497,7 +498,8 @@ async function executeAgentTool(
         durationMs,
         completedAt: new Date().toISOString(),
       },
-      currentInput?.slice(0, 200)
+      currentInput?.slice(0, 200),
+      ctx.orgId,
     );
 
     logger.error("Agent tool execution failed", err instanceof Error ? err : new Error(errorMsg), {
@@ -623,7 +625,8 @@ async function savePartialResult(
   conversationId: string | undefined,
   toolName: string,
   entry: PartialResultEntry,
-  fingerprint?: string
+  fingerprint?: string,
+  orgId?: string | null,
 ): Promise<void> {
   if (!conversationId) return;
   try {
@@ -633,7 +636,7 @@ async function savePartialResult(
       // Nested jsonb_set: write fingerprint + result atomically in a single UPDATE.
       // Inner call writes _fp; outer call writes the agent result.
       const fpPath = `{__partial_results,_fp}`;
-      await prisma.$executeRaw`
+      await withTenant((tx) => tx.$executeRaw`
         UPDATE "Conversation"
         SET variables = jsonb_set(
           jsonb_set(
@@ -647,10 +650,10 @@ async function savePartialResult(
           true
         )
         WHERE id = ${conversationId}
-      `;
+      `, orgId);
     } else {
       // No fingerprint — just write the result (backward compat)
-      await prisma.$executeRaw`
+      await withTenant((tx) => tx.$executeRaw`
         UPDATE "Conversation"
         SET variables = jsonb_set(
           COALESCE(variables::jsonb, '{}'::jsonb),
@@ -659,7 +662,7 @@ async function savePartialResult(
           true
         )
         WHERE id = ${conversationId}
-      `;
+      `, orgId);
     }
   } catch (err) {
     logger.warn("Failed to save partial result for sub-agent", {

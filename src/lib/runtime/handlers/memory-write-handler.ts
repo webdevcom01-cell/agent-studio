@@ -1,6 +1,5 @@
 import type { NodeHandler } from "../types";
 import { resolveTemplate } from "../template";
-import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 
@@ -108,7 +107,7 @@ export const memoryWriteHandler: NodeHandler = async (node, context) => {
     if (embeddingData) {
       // Use raw SQL for vector field
       const vectorStr = `[${embeddingData.join(",")}]`;
-      await prisma.$executeRawUnsafe(
+      await withTenant((tx) => tx.$executeRawUnsafe(
         `INSERT INTO "AgentMemory" (id, "agentId", key, value, category, importance, embedding, "accessCount", "createdAt", "updatedAt", "accessedAt")
          VALUES (gen_random_uuid(), $1, $2, $3::jsonb, $4, $5, $6::vector, 0, NOW(), NOW(), NOW())
          ON CONFLICT ("agentId", key) DO UPDATE SET
@@ -123,7 +122,7 @@ export const memoryWriteHandler: NodeHandler = async (node, context) => {
         category,
         importance,
         vectorStr
-      );
+      ), context.orgId);
     } else {
       await withTenant((tx) => tx.agentMemory.upsert({
         where: {

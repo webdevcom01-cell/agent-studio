@@ -51,9 +51,9 @@ export async function GET(
 
     let lockVersion = 1;
     try {
-      const lockRows = await prisma.$queryRaw<{ lockVersion: number }[]>`
+      const lockRows = await withOrgContext(prisma, authResult.organizationId, (tx) => tx.$queryRaw<{ lockVersion: number }[]>`
         SELECT "lockVersion" FROM "Flow" WHERE "agentId" = ${agentId}
-      `;
+      `);
       lockVersion = lockRows[0]?.lockVersion ?? 1;
     } catch {
       // lockVersion column may not exist yet (pending db:push) — use default 1
