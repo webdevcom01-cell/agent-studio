@@ -81,3 +81,36 @@ DB **and** code are **cutover-ready**. The cutover is a low-risk, well-understoo
 change (both DB-role vars together, flag stays true), pending only the `app_user`
 GRANT check and (ideally) a dry-run. Today, with `DATABASE_URL=postgres`, RLS does
 **not** isolate — but tenant isolation is low-urgency while effectively single-org.
+
+---
+
+## Update 2026-06-28 — dry-run (pg_dump) INVALID; cutover deferred
+
+Local rehearsal via `scripts/rls-prod-dryrun.sh` (uses `pg_dump --schema-only`)
+was attempted and is NOT trustworthy. Verified findings:
+
+- `pg_dump --schema-only` is INCOMPLETE here: prod has **202** policies
+  (`SELECT count(*) FROM pg_policies WHERE schemaname='public'` = 202) but the
+  dump captured only **76** (~126 missing, ~62%).
+- `current_org_id()` was also missing from the dump (rehearsal had 0 rows until
+  created manually). The earlier "current_org_id() not found in dump" was real.
+- Rehearsal therefore did NOT mirror prod; vitest harness not run (would mislead).
+- Rehearsal cleaned up.
+
+Implications:
+1. Backup/DR risk (new tech-debt): schema-only pg_dump does not capture full RLS
+   or current_org_id(); a restore would silently lose most RLS. Investigate
+   (likely pg_dump client vs prod server version skew); do not rely on it for
+   RLS-bearing backups.
+2. Cutover correctness still well-evidenced WITHOUT the dry-run: SQL audit (202
+   policies, coverage 48/48 FORCE RLS, roles correct, current_org_id compatible,
+   app_user GRANTs present) + CI "RLS/RLS cross-tenant" green on every PR.
+
+Decision — Phase 2 env cutover DEFERRED (deliberate, not blocked) until:
+- a faithful rehearsal via Railway Backup/Restore clone (NOT pg_dump), and
+- a low-traffic window with rollback ready (DATABASE_URL -> postgres = instant revert).
+Rationale: end-to-end cutover not faithfully rehearsable via pg_dump; unexplained
+flag/RLS fragility (see incident doc); isolation low-urgency while single-org.
+
+Repo consolidation: duplicate Cowork clone /Users/buda007/agent-studio removed;
+single source of truth = ~/Desktop/agent-studio.
