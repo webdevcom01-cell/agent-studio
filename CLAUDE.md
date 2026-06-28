@@ -182,25 +182,22 @@ All API routes: `{ success: true, data: T }` or `{ success: false, error: string
 
 - **Live (Phase 0 — 10/10 sub-phases):** 0a (withOrgContext $transaction), 0a.5 (HAL-8 hotfix), 0a.6 (Sentry 42501), 0b (DB roles), 0e (hnsw in tx), 0a.7 (CI fix — PR #114), 0f (feature flag — PR #115), 0c (JWT currentOrgId + ALS — PR #118), 0d (personal org backfill — PR #119), 0b.5 (raw $transaction refactor — PR #121)
 - **Live (Phase 1 prep):** 0a.7b (schema drift reconciliation — PR #125 merged 2026-05-23), cutover runbook (PR #126 merged 2026-05-23 — see docs/rls-phase-1-cutover-runbook.md)
-- **Phase 0 COMPLETE** — all 10 sub-phases live; Phase 1 prep 2/3 done
-- **Phase 1 prep status:**
-  - ✅ Task 1: Phase 0a.7b schema drift (PR #125)
-  - ✅ Task 3: Production cutover runbook (PR #126 — docs/rls-phase-1-cutover-runbook.md)
-  - ❌ Task 2: skills/rls-rollout/ scaffold (LAST prep task before Phase 1 begins)
-- **Status checker skill:** `skills/rls-status-checker/`
-- **Cutover runbook:** `docs/rls-phase-1-cutover-runbook.md` (read before any Phase 1 migration)
-- **Master plan:** `skill-rls-rollout-PLAN-V2.md`
-- **Execution order (Phase 0 — ALL DONE):**
-  1. ~~`0a.7` — CI fix~~ ✅ live (PR #114)
-  2. ~~`0f`~~ ✅ live (PR #115)
-  3. ~~`0c`~~ ✅ live (PR #118)
-  4. ~~`0d`~~ ✅ live (PR #119)
-  5. ~~`0b.5`~~ ✅ live (PR #121)
-- **Phase 1 prep order:**
-  1. ~~`0a.7b` — schema drift~~ ✅ done (PR #125)
-  2. ~~Cutover runbook~~ ✅ done (PR #126)
-  3. `skills/rls-rollout/` scaffold — NEXT
-- **Feature flag system:** `src/lib/feature-flags/index.ts` — `DEFAULT_FLAGS` map; `RLS_ENFORCEMENT_ENABLED` is now live (default `false`, CI forces `true`)
+- **Phase 0 COMPLETE** — all 10 sub-phases live. Phase 1 query-path COMPLETE + verified
+  (burn-down 0/0/0, run 2026-06-27). `skills/rls-rollout/` scaffold is DONE (exists, complete).
+- **2026-06-27 VERIFIED prod audit** (owner-run SQL) → see `docs/rls-status-audit-2026-06-27.md`:
+  - Roles ready: `app_user` (bypassrls=f), `admin_user` (bypassrls=t), `postgres` (super).
+  - `current_org_id()` = `NULLIF(current_setting('app.current_org_id',TRUE),'')` → compatible w/ app.
+  - Coverage COMPLETE: 48/48 tenant tables FORCE RLS + ≥4 policies, no gaps.
+  - Drift is REAL but BENIGN: prod policies hand-applied (names `agent_select`/`agent_admin`
+    + `current_org_id()` fn) differ from repo migrations, but functionally correct.
+  - **Cutover = env flip only:** set `DATABASE_URL_ADMIN_USER`→admin_user AND
+    `DATABASE_URL`→app_user **together** (else `withAdminBypass`/74 sites + chat fall back & break);
+    keep `RLS_ENFORCEMENT_ENABLED=true`. Last pre-flip check: `app_user` GRANTs.
+- **Cutover runbook:** `docs/rls-phase-1-cutover-runbook.md`
+- **Skill (DONE, exists):** `skills/rls-rollout/` (SKILL.md, reference/, scripts/, templates/, tests/)
+- **STALE refs (do not trust):** `skill-rls-rollout-PLAN-V2.md` and `skills/rls-status-checker/`
+  are referenced in old notes but DO NOT EXIST. `RLS_DISABLED_TABLES` rollback layer NOT implemented.
+- **Feature flag system:** `src/lib/feature-flags/index.ts` — `DEFAULT_FLAGS` map; `RLS_ENFORCEMENT_ENABLED` (default `false`, CI forces `true`; prod MUST stay `true` — see incident doc)
 
 ### async-execution Feature Flag
 - ⚠️ Flag is wired at 100% rollout in `src/lib/feature-flags/index.ts` and checked in the chat route
@@ -324,3 +321,19 @@ Engineering skills configured for this repo (mattpocock/skills):
 - Pre bilo kog rada proveri: `pwd` (mora /Users/buda007/Desktop/agent-studio)
   i `git branch --show-current`.
 - Postoji zbunjujući prazan folder ~/agent-studio koji NIJE projekat.
+
+### RLS / Feature flags (PROD)
+- NE postavljaj `RLS_ENFORCEMENT_ENABLED=false` u produkciji bez prethodne
+  istrage. Kad je flip-ovan na `false` (+ redeploy) 2026-06-27, chat je pao sa
+  500 na nivou rute (pre izvršavanja), iako je `/api/health` ostao zelen; vraćanje
+  na `true` = chat radi. UZROK JOŠ NIJE POTVRĐEN: prva hipoteza (pgbouncer/
+  prepared-statement) je OBORENA jer je DB direktan (postgres.railway.internal:5432,
+  ne pooler). Za pravi uzrok treba log prethodnog (flag=false) deploy-a.
+  (Incident: docs/incident-2026-06-27-rls-flag-chat-500.md)
+- Flag ostaje `true`. Pravi RLS cutover ZADRŽAVA flag `true` (enforcement ga
+  zahteva) i menja samo DB rolu (DATABASE_URL → app_user) — taj put NE koristi
+  flag=false putanju.
+- Anthropic RADI u prod-u: span `gen_ai.generate` (claude-haiku-4-5-20251001,
+  finish_reason: stop) + nema "ANTHROPIC_API_KEY not set" warninga → ključ JESTE
+  postavljen. Nijedan agent ga ipak ne koristi (svi na gpt-4.1-mini). Ključ je
+  bio eksponiran → rotirati radi bezbednosti (bez funkcionalnog uticaja).
