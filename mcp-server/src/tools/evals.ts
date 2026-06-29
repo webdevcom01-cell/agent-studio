@@ -124,6 +124,14 @@ interface LatestRunRow {
   createdAt: string;
 }
 
+interface SuiteDeleteRow {
+  id: string;
+  name: string;
+  agentId: string;
+  caseCount: number;
+  runCount: number;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getEnvConfig(): EnvConfig | { error: string } {
@@ -232,6 +240,39 @@ async function restPatch<TResponse>(
       return { ok: false, error: (parsed as ApiError).error ?? "Unknown API error" };
     }
     return { ok: true, data: (parsed as ApiSuccess<TResponse>).data };
+  } catch {
+    return { ok: false, error: `Invalid JSON response: ${text.slice(0, 200)}` };
+  }
+}
+
+async function restDelete(
+  config: EnvConfig,
+  path: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${config.studioUrl}${path}`, {
+      method: "DELETE",
+      headers: { "x-api-key": config.apiKey },
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Request failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+
+  const text = await response.text().catch(() => "");
+  if (!response.ok) {
+    return { ok: false, error: `HTTP ${response.status}: ${text.slice(0, 400)}` };
+  }
+
+  try {
+    const parsed = JSON.parse(text) as ApiResponse<null>;
+    if (!parsed.success) {
+      return { ok: false, error: (parsed as ApiError).error ?? "Unknown API error" };
+    }
+    return { ok: true };
   } catch {
     return { ok: false, error: `Invalid JSON response: ${text.slice(0, 200)}` };
   }
@@ -735,6 +776,84 @@ Read-only â queries the database directly.`,
         createdAt: run.createdAt,
       };
 
+      return {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
+      };
+    }
+  );
+
+
+  // ────── as_delete_eval_suite ──────────────────────────────
+  server.registerTool(
+    "as_delete_eval_suite",
+    {
+      title: "Delete Eval Suite",
+      description: `Delete an eval suite (and all its test cases and runs) from an agent.
+
+Use for cleanup of throwaway / obsolete suites. DESTRUCTIVE, so it is two-step by design:
+  • confirm: false (default) → dry-run; returns a preview (name, caseCount, runCount) of what WOULD be deleted.
+  • confirm: true            → permanently deletes the suite; test cases and runs cascade.
+
+The agent is resolved from the suite automatically, then it calls
+DELETE /api/agents/:agentId/evals/:evalId.
+
+Returns { deleted: true, evalId } or, in dry-run, a preview.
+
+Requires env vars: AGENT_STUDIO_URL and AGENT_STUDIO_API_KEY (only when confirm: true).`,
+      inputSchema: {
+        eval_id: z.string()
+          .describe("Eval suite ID (EvalSuite.id, a cuid)."),
+        confirm: z.boolean().optional().default(false)
+          .describe("false = dry-run preview (default); true = actually delete."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ eval_id, confirm }) => {
+      const suite = await queryOne<SuiteDeleteRow>(
+        `SELECT es.id, es.name, es."agentId",
+                (SELECT COUNT(*) FROM "EvalTestCase" t WHERE t."suiteId" = es.id)::int AS "caseCount",
+                (SELECT COUNT(*) FROM "EvalRun" r WHERE r."suiteId" = es.id)::int      AS "runCount"
+         FROM "EvalSuite" es
+         WHERE es.id = $1`,
+        [eval_id]
+      );
+      if (!suite) {
+        return { content: [{ type: "text", text: `Eval suite not found: ${eval_id}` }] };
+      }
+
+      if (!confirm) {
+        const preview = {
+          dryRun: true,
+          wouldDelete: {
+            evalId: suite.id,
+            name: suite.name,
+            agentId: suite.agentId,
+            caseCount: suite.caseCount,
+            runCount: suite.runCount,
+          },
+          message: "Dry-run only. Re-run with confirm: true to permanently delete this suite (cases + runs cascade).",
+        };
+        return {
+          content: [{ type: "text", text: JSON.stringify(preview, null, 2) }],
+          structuredContent: preview,
+        };
+      }
+
+      const config = getEnvConfig();
+      if ("error" in config) {
+        return { content: [{ type: "text", text: `Configuration error: ${config.error}` }] };
+      }
+
+      const result = await restDelete(
+        config,
+        `/api/agents/${suite.agentId}/evals/${eval_id}`
+      );
+      if (!result.ok) {
+        return { content: [{ type: "text", text: `Failed to delete eval suite: ${result.error}` }] };
+      }
+
+      const out = { deleted: true, evalId: eval_id, agentId: suite.agentId };
       return {
         content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
         structuredContent: out,

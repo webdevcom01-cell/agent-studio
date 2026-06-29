@@ -51,9 +51,9 @@ registerDiagnosticTools(server); // 3 tools: diagnose_models, health_check, find
 registerA2ATools(server);        // 2 tools: get_agent_call_log, list_agent_calls
 registerExecutionTools(server);  // 1 tool:  chat_with_agent
 registerKnowledgeTools(server);  // 6 tools: list_kb, search_kb, add_kb_url, add_kb_text, kb_status, delete_kb_source
-registerEvalTools(server);       // 8 tools: list_evals, run_eval, get_eval_result, create_eval_case, create_agent, create_eval_suite, set_eval_run_on_deploy, get_latest_eval_run
+registerEvalTools(server);       // 9 tools: list_evals, run_eval, get_eval_result, create_eval_case, create_agent, create_eval_suite, set_eval_run_on_deploy, get_latest_eval_run, delete_eval_suite
 registerF1F7Tools(server);       // 10 tools: get/set_budget, get_org_chart, assign_department, list/link_goals, get_heartbeat, set_heartbeat_context, set_heartbeat_schedule, export_template
-                                 // Total: 40 tools
+                                 // Total: 41 tools
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
 
