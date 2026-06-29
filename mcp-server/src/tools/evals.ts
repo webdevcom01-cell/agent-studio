@@ -102,6 +102,28 @@ interface CreatedCaseData {
   input: string;
 }
 
+interface CreatedSuiteData {
+  id: string;
+  name: string;
+  description: string | null;
+  runOnDeploy: boolean;
+  isDefault: boolean;
+}
+
+interface UpdatedSuiteData {
+  id: string;
+  name: string;
+  runOnDeploy: boolean;
+}
+
+interface LatestRunRow {
+  id: string;
+  status: string;
+  score: number | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getEnvConfig(): EnvConfig | { error: string } {
@@ -148,6 +170,44 @@ async function restPost<TResponse>(
   try {
     response = await fetch(`${config.studioUrl}${path}`, {
       method: "POST",
+      headers: {
+        "x-api-key": config.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Request failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+
+  const text = await response.text().catch(() => "");
+  if (!response.ok) {
+    return { ok: false, error: `HTTP ${response.status}: ${text.slice(0, 400)}` };
+  }
+
+  try {
+    const parsed = JSON.parse(text) as ApiResponse<TResponse>;
+    if (!parsed.success) {
+      return { ok: false, error: (parsed as ApiError).error ?? "Unknown API error" };
+    }
+    return { ok: true, data: (parsed as ApiSuccess<TResponse>).data };
+  } catch {
+    return { ok: false, error: `Invalid JSON response: ${text.slice(0, 200)}` };
+  }
+}
+
+async function restPatch<TResponse>(
+  config: EnvConfig,
+  path: string,
+  body: Record<string, unknown>
+): Promise<{ ok: true; data: TResponse } | { ok: false; error: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${config.studioUrl}${path}`, {
+      method: "PATCH",
       headers: {
         "x-api-key": config.apiKey,
         "Content-Type": "application/json",
@@ -519,4 +579,167 @@ Requires env vars: AGENT_STUDIO_URL and AGENT_STUDIO_API_KEY.`,
       };
     }
   );
+
+  // ────── as_create_eval_suite ──────────────────────────────
+  server.registerTool(
+    "as_create_eval_suite",
+    {
+      title: "Create Eval Suite",
+      description: `Create a new, empty eval suite on an agent.
+
+After creating it, add test cases with as_create_eval_case, then run with as_run_eval.
+Calls POST /api/agents/:agentId/evals.
+
+Returns { evalId, name, runOnDeploy }.
+
+Requires env vars: AGENT_STUDIO_URL and AGENT_STUDIO_API_KEY.`,
+      inputSchema: {
+        agent_id: z.string()
+          .describe("Exact agent ID to attach the suite to."),
+        name: z.string().min(1).max(255)
+          .describe("Eval suite name."),
+        description: z.string().max(1000).optional()
+          .describe("Optional description."),
+        run_on_deploy: z.boolean().optional().default(false)
+          .describe("Auto-run this suite on every flow deploy (default false)."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ agent_id, name, description, run_on_deploy }) => {
+      const config = getEnvConfig();
+      if ("error" in config) {
+        return { content: [{ type: "text", text: `Configuration error: ${config.error}` }] };
+      }
+
+      const body: Record<string, unknown> = { name, runOnDeploy: run_on_deploy ?? false };
+      if (description !== undefined) body.description = description;
+
+      const result = await restPost<CreatedSuiteData>(
+        config,
+        `/api/agents/${agent_id}/evals`,
+        body
+      );
+
+      if (!result.ok) {
+        return { content: [{ type: "text", text: `Failed to create eval suite: ${result.error}` }] };
+      }
+
+      const out = {
+        evalId: result.data.id,
+        name: result.data.name,
+        runOnDeploy: result.data.runOnDeploy,
+        message: "Eval suite created. Add cases with as_create_eval_case.",
+      };
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
+      };
+    }
+  );
+
+  // ────── as_set_eval_run_on_deploy ──────────────────────────────
+  server.registerTool(
+    "as_set_eval_run_on_deploy",
+    {
+      title: "Set Eval runOnDeploy",
+      description: `Enable or disable the runOnDeploy flag on an existing eval suite.
+
+When enabled, the suite runs automatically every time the agent's flow is deployed.
+The agent is resolved from the suite automatically. Calls PATCH /api/agents/:agentId/evals/:evalId.
+
+Returns { evalId, runOnDeploy }.
+
+Requires env vars: AGENT_STUDIO_URL and AGENT_STUDIO_API_KEY.`,
+      inputSchema: {
+        eval_id: z.string()
+          .describe("Eval suite ID (EvalSuite.id, a cuid)."),
+        enabled: z.boolean()
+          .describe("true = run on every deploy; false = disable."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ eval_id, enabled }) => {
+      const config = getEnvConfig();
+      if ("error" in config) {
+        return { content: [{ type: "text", text: `Configuration error: ${config.error}` }] };
+      }
+
+      const suiteAgent = await resolveSuiteAgent(eval_id);
+      if (!suiteAgent) {
+        return { content: [{ type: "text", text: `Eval suite not found: ${eval_id}` }] };
+      }
+
+      const result = await restPatch<UpdatedSuiteData>(
+        config,
+        `/api/agents/${suiteAgent.agentId}/evals/${eval_id}`,
+        { runOnDeploy: enabled }
+      );
+
+      if (!result.ok) {
+        return { content: [{ type: "text", text: `Failed to update eval suite: ${result.error}` }] };
+      }
+
+      const out = {
+        evalId: eval_id,
+        runOnDeploy: result.data.runOnDeploy,
+      };
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
+      };
+    }
+  );
+
+  // ────── as_get_latest_eval_run ──────────────────────────────
+  server.registerTool(
+    "as_get_latest_eval_run",
+    {
+      title: "Get Latest Eval Run",
+      description: `Get the most recent run (runId, status, score, finishedAt) for an eval suite.
+
+Bridges as_run_eval (which returns a jobId) and as_get_eval_result (which needs a runId):
+after triggering a run, call this to obtain the runId of the latest run for the suite.
+
+Read-only â queries the database directly.`,
+      inputSchema: {
+        eval_id: z.string()
+          .describe("Eval suite ID (EvalSuite.id, a cuid)."),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ eval_id }) => {
+      const run = await queryOne<LatestRunRow>(
+        `SELECT id, status, score,
+                "completedAt"::text AS "completedAt",
+                "createdAt"::text   AS "createdAt"
+         FROM "EvalRun"
+         WHERE "suiteId" = $1
+         ORDER BY "createdAt" DESC
+         LIMIT 1`,
+        [eval_id]
+      );
+
+      if (!run) {
+        const out = { evalId: eval_id, runId: null, message: "No runs found for this suite." };
+        return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out };
+      }
+
+      const out = {
+        evalId: eval_id,
+        runId: run.id,
+        status: run.status,
+        score: run.score,
+        finishedAt: run.completedAt,
+        createdAt: run.createdAt,
+      };
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
+      };
+    }
+  );
+
 }

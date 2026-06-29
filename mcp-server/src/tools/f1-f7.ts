@@ -317,4 +317,47 @@ Set save: true with name and description to publish to the Clipmart marketplace.
       }
     }
   );
+
+  // F3 ────── as_set_heartbeat_schedule ──────────────────────────────
+  server.registerTool(
+    "as_set_heartbeat_schedule",
+    {
+      title: "Set Agent Heartbeat Schedule",
+      description: `Set (upsert) and enable an agent's native heartbeat schedule for 24/7 autonomy.
+
+Idempotent upsert: creates the heartbeat config or updates the existing one, then schedules it.
+Calls POST /api/agents/:agentId/heartbeat. After setting, verify with as_get_heartbeat_status.
+
+Note: organizationId (org_id) is required by the heartbeat API.
+
+Returns the saved config { agentId, cronExpression, enabled, timezone, maxContextItems }.`,
+      inputSchema: {
+        agent_id: z.string().describe("Exact agent ID."),
+        org_id: z.string().describe("Organization ID (required by the heartbeat API)."),
+        cron_expression: z.string().min(1).describe("Cron expression, e.g. '0 9 * * *'."),
+        timezone: z.string().optional().describe("IANA timezone (default UTC)."),
+        enabled: z.boolean().optional().describe("Enable the heartbeat (default true)."),
+        max_context_items: z.number().int().min(1).max(500).optional()
+          .describe("Max context items injected per run (default 50)."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ agent_id, org_id, cron_expression, timezone, enabled, max_context_items }) => {
+      try {
+        const body: Record<string, unknown> = {
+          organizationId: org_id,
+          cronExpression: cron_expression,
+          enabled: enabled ?? true,
+        };
+        if (timezone !== undefined) body.timezone = timezone;
+        if (max_context_items !== undefined) body.maxContextItems = max_context_items;
+
+        const data = await apiPost(`/api/agents/${agent_id}/heartbeat`, body);
+        return ok(data);
+      } catch (e) {
+        return err(e instanceof Error ? e.message : String(e));
+      }
+    }
+  );
+
 }

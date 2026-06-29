@@ -160,6 +160,39 @@ async function restPost<TResponse>(
   }
 }
 
+async function restDelete(
+  config: EnvConfig,
+  path: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${config.studioUrl}${path}`, {
+      method: "DELETE",
+      headers: { "x-api-key": config.apiKey },
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Request failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+
+  const text = await response.text().catch(() => "");
+  if (!response.ok) {
+    return { ok: false, error: `HTTP ${response.status}: ${text.slice(0, 400)}` };
+  }
+
+  try {
+    const parsed = JSON.parse(text) as ApiResponse<null>;
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error ?? "Unknown API error" };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: `Invalid JSON response: ${text.slice(0, 200)}` };
+  }
+}
+
 // ── Tool registration ─────────────────────────────────────────────────────────
 
 export function registerKnowledgeTools(server: McpServer): void {
@@ -498,4 +531,86 @@ embeddingStatus values: empty | processing | ready | partial_failure | failed`,
       };
     }
   );
+
+  // ────── as_delete_kb_source ──────────────────────────────
+  server.registerTool(
+    "as_delete_kb_source",
+    {
+      title: "Delete KB Source",
+      description: `Delete a single source/document from a knowledge base.
+
+Use for KB reconciliation — removing a stale, duplicate, or poisoned document.
+DESTRUCTIVE, so it is two-step by design:
+  • confirm: false (default) → dry-run; returns a preview of the source that WOULD be deleted.
+  • confirm: true            → permanently deletes the source and its embedding chunks.
+
+The agent is resolved from kb_id automatically, then it calls
+DELETE /api/agents/:agentId/knowledge/sources/:sourceId.
+
+Returns { deleted: true, sourceId } or, in dry-run, a preview.
+
+Requires env vars: AGENT_STUDIO_URL and AGENT_STUDIO_API_KEY (only when confirm: true).`,
+      inputSchema: {
+        kb_id: z.string()
+          .describe("Knowledge base ID (KnowledgeBase.id)."),
+        source_id: z.string()
+          .describe("Source/document ID (KBSource.id)."),
+        confirm: z.boolean().optional().default(false)
+          .describe("false = dry-run preview (default); true = actually delete."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ kb_id, source_id, confirm }) => {
+      const kb = await resolveKbAgent(kb_id);
+      if (!kb) {
+        return { content: [{ type: "text", text: `Knowledge base not found: ${kb_id}` }] };
+      }
+
+      const src = await queryOne<{ id: string; name: string; status: string; charCount: number }>(
+        `SELECT id, name, status, "charCount" FROM "KBSource" WHERE id = $1 AND "knowledgeBaseId" = $2`,
+        [source_id, kb_id]
+      );
+      if (!src) {
+        return { content: [{ type: "text", text: `Source ${source_id} not found in knowledge base ${kb_id}.` }] };
+      }
+
+      if (!confirm) {
+        const preview = {
+          dryRun: true,
+          wouldDelete: {
+            sourceId: src.id,
+            name: src.name,
+            status: src.status,
+            charCount: src.charCount,
+            kbId: kb_id,
+          },
+          message: "Dry-run only. Re-run with confirm: true to permanently delete this source and its chunks.",
+        };
+        return {
+          content: [{ type: "text", text: JSON.stringify(preview, null, 2) }],
+          structuredContent: preview,
+        };
+      }
+
+      const config = getEnvConfig();
+      if ("error" in config) {
+        return { content: [{ type: "text", text: `Configuration error: ${config.error}` }] };
+      }
+
+      const result = await restDelete(
+        config,
+        `/api/agents/${kb.agentId}/knowledge/sources/${source_id}`
+      );
+      if (!result.ok) {
+        return { content: [{ type: "text", text: `Failed to delete source: ${result.error}` }] };
+      }
+
+      const out = { deleted: true, sourceId: source_id, kbId: kb_id };
+      return {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
+      };
+    }
+  );
+
 }
