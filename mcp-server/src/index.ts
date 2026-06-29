@@ -148,10 +148,10 @@ async function runHTTP(): Promise<void> {
     process.stderr.write(`[MCP] Database: ${process.env.DATABASE_URL ? "✅ DATABASE_URL set" : "❌ DATABASE_URL missing"}\n`);
     process.stderr.write(`[MCP] Studio URL: ${process.env.AGENT_STUDIO_URL ? `✅ ${process.env.AGENT_STUDIO_URL}` : "⚠️  AGENT_STUDIO_URL not set — as_chat_with_agent disabled"}\n`);
     process.stderr.write(`[MCP] Studio API key: ${process.env.AGENT_STUDIO_API_KEY ? "✅ set" : "⚠️  AGENT_STUDIO_API_KEY not set — as_chat_with_agent disabled"}\n`);
-    process.stderr.write(`[MCP] KB tools: 5 registered\n`);
-    process.stderr.write(`[MCP] Eval tools: 5 registered\n`);
-    process.stderr.write(`[MCP] F1-F7 tools: 9 registered (budget, org-chart, goals, heartbeat, templates)\n`);
-    process.stderr.write(`[MCP] Total tools: 35\n`);
+    process.stderr.write(`[MCP] KB tools: 6 registered\n`);
+    process.stderr.write(`[MCP] Eval tools: 9 registered\n`);
+    process.stderr.write(`[MCP] F1-F7 tools: 10 registered (budget, org-chart, goals, heartbeat, set-heartbeat-schedule, templates)\n`);
+    process.stderr.write(`[MCP] Total tools: 41\n`);
   });
 }
 
