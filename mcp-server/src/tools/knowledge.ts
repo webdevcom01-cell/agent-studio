@@ -48,6 +48,17 @@ interface SourceStatusSummaryRow {
   count: string;
 }
 
+interface KBSourceListRow {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  charCount: number;
+  errorMsg: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface EnvConfig {
   studioUrl: string;
   apiKey: string;
@@ -606,6 +617,61 @@ Requires env vars: AGENT_STUDIO_URL and AGENT_STUDIO_API_KEY (only when confirm:
       }
 
       const out = { deleted: true, sourceId: source_id, kbId: kb_id };
+      return {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
+      };
+    }
+  );
+
+  // ────── as_list_kb_sources ────────────────────────────────────────────────
+  server.registerTool(
+    "as_list_kb_sources",
+    {
+      title: "List KB Sources",
+      description: `List all source documents in a knowledge base with their KBSource IDs.
+
+Provide kb_id (KnowledgeBase.id). Returns each source's sourceId (KBSource.id), title, type,
+charCount, embeddingStatus, errorMsg, and createdAt.
+
+sourceId is the ID required by as_delete_kb_source and as_get_kb_embedding_status(document_id).
+Use this tool to discover source IDs before targeting them for deletion or status checks.
+
+Read-only — queries the database directly (no API key required).`,
+      inputSchema: {
+        kb_id: z.string()
+          .describe("Knowledge base ID (KnowledgeBase.id, a cuid)."),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ kb_id }) => {
+      // Validate the KB exists
+      const kb = await queryOne<{ id: string }>(`SELECT id FROM "KnowledgeBase" WHERE id = $1`, [kb_id]);
+      if (!kb) {
+        return { content: [{ type: "text", text: `Knowledge base not found: ${kb_id}` }] };
+      }
+
+      const rows = await query<KBSourceListRow>(
+        `SELECT id, name, type, status, "charCount", "errorMsg",
+                "createdAt"::text AS "createdAt",
+                "updatedAt"::text AS "updatedAt"
+         FROM "KBSource"
+         WHERE "knowledgeBaseId" = $1
+         ORDER BY "createdAt" DESC`,
+        [kb_id]
+      );
+
+      const sources = rows.map((r) => ({
+        sourceId: r.id,
+        title: r.name,
+        type: r.type,
+        charCount: r.charCount,
+        embeddingStatus: r.status,
+        errorMsg: r.errorMsg ?? null,
+        createdAt: r.createdAt,
+      }));
+
+      const out = { kbId: kb_id, sources, count: sources.length };
       return {
         content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
         structuredContent: out,

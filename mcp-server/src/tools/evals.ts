@@ -132,6 +132,32 @@ interface SuiteDeleteRow {
   runCount: number;
 }
 
+interface CaseWithSuiteRow {
+  id: string;
+  suiteId: string;
+  agentId: string;
+  label: string;
+  input: string;
+  assertions: unknown;
+}
+
+interface CaseListRow {
+  id: string;
+  suiteId: string;
+  label: string;
+  input: string;
+  assertions: unknown;
+  order: number;
+  createdAt: string;
+}
+
+interface UpdatedCaseItem {
+  id: string;
+  label: string;
+  input: string;
+  assertions: unknown;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getEnvConfig(): EnvConfig | { error: string } {
@@ -272,6 +298,68 @@ async function restDelete(
     if (!parsed.success) {
       return { ok: false, error: (parsed as ApiError).error ?? "Unknown API error" };
     }
+    return { ok: true };
+  } catch {
+    return { ok: false, error: `Invalid JSON response: ${text.slice(0, 200)}` };
+  }
+}
+
+async function resolveCase(caseId: string): Promise<CaseWithSuiteRow | null> {
+  return queryOne<CaseWithSuiteRow>(
+    `SELECT etc.id, etc."suiteId", es."agentId", etc.label, etc.input, etc.assertions
+     FROM "EvalTestCase" etc
+     JOIN "EvalSuite" es ON es.id = etc."suiteId"
+     WHERE etc.id = $1`,
+    [caseId]
+  );
+}
+
+async function restPut<TResponse>(
+  config: EnvConfig,
+  path: string,
+  body: Record<string, unknown>
+): Promise<{ ok: true; data: TResponse } | { ok: false; error: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${config.studioUrl}${path}`, {
+      method: "PUT",
+      headers: { "x-api-key": config.apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    return { ok: false, error: `Request failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  const text = await response.text().catch(() => "");
+  if (!response.ok) return { ok: false, error: `HTTP ${response.status}: ${text.slice(0, 400)}` };
+  try {
+    const parsed = JSON.parse(text) as ApiResponse<TResponse>;
+    if (!parsed.success) return { ok: false, error: (parsed as ApiError).error ?? "Unknown API error" };
+    return { ok: true, data: (parsed as ApiSuccess<TResponse>).data };
+  } catch {
+    return { ok: false, error: `Invalid JSON response: ${text.slice(0, 200)}` };
+  }
+}
+
+async function restDeleteWithBody(
+  config: EnvConfig,
+  path: string,
+  body: Record<string, unknown>
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${config.studioUrl}${path}`, {
+      method: "DELETE",
+      headers: { "x-api-key": config.apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    return { ok: false, error: `Request failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  const text = await response.text().catch(() => "");
+  if (!response.ok) return { ok: false, error: `HTTP ${response.status}: ${text.slice(0, 400)}` };
+  try {
+    const parsed = JSON.parse(text) as ApiResponse<null>;
+    if (!parsed.success) return { ok: false, error: (parsed as ApiError).error ?? "Unknown API error" };
     return { ok: true };
   } catch {
     return { ok: false, error: `Invalid JSON response: ${text.slice(0, 200)}` };
@@ -854,6 +942,205 @@ Requires env vars: AGENT_STUDIO_URL and AGENT_STUDIO_API_KEY (only when confirm:
       }
 
       const out = { deleted: true, evalId: eval_id, agentId: suite.agentId };
+      return {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
+      };
+    }
+  );
+
+  // ────── as_list_eval_cases ────────────────────────────────────────────────
+  server.registerTool(
+    "as_list_eval_cases",
+    {
+      title: "List Eval Test Cases",
+      description: `List all test cases in an eval suite with their IDs, inputs, and assertions.
+
+Provide eval_id (EvalSuite.id). Returns each case's caseId, label, input, and the first
+assertion (type + value) — the fields needed to target as_update_eval_case or as_delete_eval_case.
+
+Read-only — queries the database directly (no API key required).`,
+      inputSchema: {
+        eval_id: z.string()
+          .describe("Eval suite ID (EvalSuite.id, a cuid)."),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ eval_id }) => {
+      const rows = await query<CaseListRow>(
+        `SELECT id, "suiteId", label, input, assertions, "order", "createdAt"::text AS "createdAt"
+         FROM "EvalTestCase"
+         WHERE "suiteId" = $1
+         ORDER BY "order" ASC`,
+        [eval_id]
+      );
+
+      const cases = rows.map((r) => {
+        const assertions = Array.isArray(r.assertions) ? r.assertions : [];
+        const firstAssertion = assertions[0] as { type?: string; value?: string } | undefined;
+        return {
+          caseId: r.id,
+          label: r.label,
+          input: r.input,
+          assertion: firstAssertion
+            ? { type: firstAssertion.type ?? null, value: firstAssertion.value ?? null }
+            : null,
+          order: r.order,
+          createdAt: r.createdAt,
+        };
+      });
+
+      const out = { evalId: eval_id, cases, count: cases.length };
+      return {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
+      };
+    }
+  );
+
+  // ────── as_update_eval_case ────────────────────────────────────────────────
+  server.registerTool(
+    "as_update_eval_case",
+    {
+      title: "Update Eval Test Case",
+      description: `Edit an existing eval test case — change its input, expected output (assertion value), or label.
+
+Provide case_id (EvalTestCase.id) and at least one of: input, expected_output, description.
+  • expected_output updates the assertion to { type: "contains", value: <new_value> }.
+  • description updates the case label.
+The suite and agent are resolved automatically from case_id.
+
+Calls PUT /api/agents/:agentId/evals/:suiteId/cases with the case patch.
+
+Returns { caseId, input, assertion: {type, value} } from the updated record.
+
+Requires env vars: AGENT_STUDIO_URL and AGENT_STUDIO_API_KEY.`,
+      inputSchema: {
+        case_id: z.string()
+          .describe("Test case ID (EvalTestCase.id, a cuid)."),
+        input: z.string().min(1).optional()
+          .describe("New user message for this test case."),
+        expected_output: z.string().min(1).optional()
+          .describe("New expected string — replaces the assertion value (type stays 'contains')."),
+        description: z.string().optional()
+          .describe("New label / display name for this test case."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ case_id, input, expected_output, description }) => {
+      if (input === undefined && expected_output === undefined && description === undefined) {
+        return { content: [{ type: "text", text: "Error: provide at least one of: input, expected_output, description." }] };
+      }
+
+      const tc = await resolveCase(case_id);
+      if (!tc) {
+        return { content: [{ type: "text", text: `Test case not found: ${case_id}` }] };
+      }
+
+      const config = getEnvConfig();
+      if ("error" in config) {
+        return { content: [{ type: "text", text: `Configuration error: ${config.error}` }] };
+      }
+
+      const patch: Record<string, unknown> = { id: case_id };
+      if (input !== undefined) patch.input = input;
+      if (description !== undefined) patch.label = description;
+      if (expected_output !== undefined) patch.assertions = [{ type: "contains", value: expected_output }];
+
+      const result = await restPut<UpdatedCaseItem[]>(
+        config,
+        `/api/agents/${tc.agentId}/evals/${tc.suiteId}/cases`,
+        { cases: [patch] }
+      );
+
+      if (!result.ok) {
+        return { content: [{ type: "text", text: `Failed to update test case: ${result.error}` }] };
+      }
+
+      const updated = Array.isArray(result.data) ? result.data[0] : result.data;
+      const assertions = Array.isArray(updated?.assertions) ? updated.assertions : [];
+      const firstAssertion = assertions[0] as { type?: string; value?: string } | undefined;
+
+      const out = {
+        caseId: case_id,
+        evalId: tc.suiteId,
+        input: updated?.input ?? (input ?? tc.input),
+        assertion: firstAssertion
+          ? { type: firstAssertion.type ?? "contains", value: firstAssertion.value ?? expected_output }
+          : { type: "contains", value: expected_output ?? null },
+      };
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
+      };
+    }
+  );
+
+  // ────── as_delete_eval_case ────────────────────────────────────────────────
+  server.registerTool(
+    "as_delete_eval_case",
+    {
+      title: "Delete Eval Test Case",
+      description: `Delete a single test case from an eval suite without deleting the whole suite.
+
+DESTRUCTIVE — two-step by design:
+  • confirm: false (default) → dry-run; returns a preview of what WOULD be deleted.
+  • confirm: true            → permanently deletes the test case.
+
+The suite and agent are resolved automatically from case_id. Calls
+DELETE /api/agents/:agentId/evals/:suiteId/cases with the case ID in the request body.
+
+Returns { deleted: true, caseId } or, in dry-run, a preview.
+
+Requires env vars: AGENT_STUDIO_URL and AGENT_STUDIO_API_KEY (only when confirm: true).`,
+      inputSchema: {
+        case_id: z.string()
+          .describe("Test case ID (EvalTestCase.id, a cuid)."),
+        confirm: z.boolean().optional().default(false)
+          .describe("false = dry-run preview (default); true = actually delete."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ case_id, confirm }) => {
+      const tc = await resolveCase(case_id);
+      if (!tc) {
+        return { content: [{ type: "text", text: `Test case not found: ${case_id}` }] };
+      }
+
+      if (!confirm) {
+        const preview = {
+          dryRun: true,
+          wouldDelete: {
+            caseId: tc.id,
+            label: tc.label,
+            input: tc.input,
+            evalId: tc.suiteId,
+            agentId: tc.agentId,
+          },
+          message: "Dry-run only. Re-run with confirm: true to permanently delete this test case.",
+        };
+        return {
+          content: [{ type: "text", text: JSON.stringify(preview, null, 2) }],
+          structuredContent: preview,
+        };
+      }
+
+      const config = getEnvConfig();
+      if ("error" in config) {
+        return { content: [{ type: "text", text: `Configuration error: ${config.error}` }] };
+      }
+
+      const result = await restDeleteWithBody(
+        config,
+        `/api/agents/${tc.agentId}/evals/${tc.suiteId}/cases`,
+        { id: case_id }
+      );
+      if (!result.ok) {
+        return { content: [{ type: "text", text: `Failed to delete test case: ${result.error}` }] };
+      }
+
+      const out = { deleted: true, caseId: case_id, evalId: tc.suiteId };
       return {
         content: [{ type: "text", text: JSON.stringify(out, null, 2) }],
         structuredContent: out,
