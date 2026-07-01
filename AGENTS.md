@@ -53,13 +53,13 @@ PostgreSQL RLS (`withOrgContext` middleware).
 
 | Doc | When to read |
 |-----|-------------|
-| [folder-structure.md](.Codex/docs/folder-structure.md) | Finding files, project layout |
-| [prisma-models.md](.Codex/docs/prisma-models.md) | DB schema changes, model relations, enums |
-| [api-routes.md](.Codex/docs/api-routes.md) | Adding/modifying API endpoints |
-| [conventions-patterns.md](.Codex/docs/conventions-patterns.md) | Runtime engine, streaming, RAG, webhooks, evals, CLI gen, MCP, node type checklist |
-| [ecc-integration.md](.Codex/docs/ecc-integration.md) | ECC module, skills, instincts, meta-orchestrator, Learn Hook |
-| [railway-deployment.md](.Codex/docs/railway-deployment.md) | Deploy config, Railway constraints, env vars |
-| [deal-flow-agent.md](.Codex/docs/deal-flow-agent.md) | M&A due diligence subproject (Python FastAPI) |
+| [folder-structure.md](.claude/docs/folder-structure.md) | Finding files, project layout |
+| [prisma-models.md](.claude/docs/prisma-models.md) | DB schema changes, model relations, enums |
+| [api-routes.md](.claude/docs/api-routes.md) | Adding/modifying API endpoints |
+| [conventions-patterns.md](.claude/docs/conventions-patterns.md) | Runtime engine, streaming, RAG, webhooks, evals, CLI gen, MCP, node type checklist |
+| [ecc-integration.md](.claude/docs/ecc-integration.md) | ECC module, skills, instincts, meta-orchestrator, Learn Hook |
+| [railway-deployment.md](.claude/docs/railway-deployment.md) | Deploy config, Railway constraints, env vars |
+| [deal-flow-agent.md](.claude/docs/deal-flow-agent.md) | M&A due diligence subproject (Python FastAPI) |
 
 ---
 
@@ -115,7 +115,7 @@ All API routes: `{ success: true, data: T }` or `{ success: false, error: string
 ### ECC SDK Learn Hook
 - Triggers auto `AgentExecution` record + ECC instinct extraction when `claude_agent_sdk` session ends
 - Requires `ECC_ENABLED=true`; async — never blocks the main flow
-- Hook: `src/lib/ecc/learn-hook.ts` — see [ecc-integration.md](.Codex/docs/ecc-integration.md)
+- Hook: `src/lib/ecc/learn-hook.ts` — see [ecc-integration.md](.claude/docs/ecc-integration.md)
 
 ---
 
@@ -234,7 +234,7 @@ Run `pnpm precheck` before every commit+push. All 4 checks must PASS: TypeScript
 - Only valid route exports: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, dynamic, revalidate, runtime, fetchCache, preferredRegion
 
 ### Adding a New Node Type
-Full 11-step checklist → [conventions-patterns.md](.Codex/docs/conventions-patterns.md#adding-a-new-node-type).
+Full 11-step checklist → [conventions-patterns.md](.claude/docs/conventions-patterns.md#adding-a-new-node-type).
 Short: `NodeType` union → `NODE_TYPES` array → handler → register → node component → flow-builder → node-picker → property-panel → test → node-picker count.
 
 ### Adding a New API Route
