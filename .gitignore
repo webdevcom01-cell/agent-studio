@@ -148,7 +148,7 @@ agent-architect-v0.2-install.sh
 # SOMA pipeline development docs and prompt files (private working files)
 *-prompt.md
 *-sinteza.md
-docs/forensic/
+docs/forensics/
 anthropic-klaster-A-E-sinteza.md
 soma-pass1-5-sinteza.md
 hybrid-consolidation-prompt.md
@@ -210,3 +210,13 @@ AUDIT-security.md
 /dependabot-prs.json
 /soma-agent-debugger/
 /soma-agent-debugger-install.sh
+
+# Eval workspace fixtures (auto-generated, not docs)
+.claude/skills/*-workspace/**/eval-*/**/outputs/
+
+# Packaged skill bundles at repo root (source of truth is skills/)
+/agent-health-check.skill
+/instincts-updater.skill
+/kb-sync.skill
+/soma-memory-fix.skill
+/soma-run.skill
