@@ -2,7 +2,7 @@
 
 > **Svrha:** Referentni dokument za Claude Code sesije. Sve što projekat ima — na jednom mestu.
 > **Ažurirano:** April 2026 (dubinska analiza koda)
-> **Statistike:** 55 node tipova · 89+ API routes · 85+ UI komponenti · 36 Prisma modela · 2502+ unit testova
+> **Statistike:** 66 node tipova · 170+ API routes · 123+ UI komponenti · 63 Prisma modela · 322 test fajla (4000+ testova)
 
 ---
 
@@ -21,7 +21,7 @@
 
 **Ključne komponente:**
 - `flow-builder.tsx` — glavni editor
-- `node-picker.tsx` — paleta sa 55 tipova nodova
+- `node-picker.tsx` — paleta sa 66 tipova nodova
 - `property-panel.tsx` — desni sidebar za konfiguraciju
 - `version-panel.tsx` — istorija verzija
 - `diff-view.tsx` — poređenje verzija
@@ -30,7 +30,7 @@
 
 ---
 
-## 2. SVI NODE TIPOVI (55)
+## 2. SVI NODE TIPOVI (66)
 
 **Lokacija:** `src/types/index.ts` (definicije), `src/lib/runtime/handlers/` (logika), `src/components/builder/nodes/` (prikaz)
 
@@ -121,6 +121,17 @@
 | `aggregate` | aggregate-handler.ts | Merge rezultata iz paralelnih grana |
 | `cache` | cache-handler.ts | Redis caching sa TTL i sourceHandle routing-om |
 | `learn` | learn-handler.ts | ECC pattern extraction iz AgentExecution istorije |
+| `swarm` | swarm-handler.ts | Deljeni task pool sa N radnika koji dinamički preuzimaju zadatke. Merge: concat ili summarize |
+| `verification` | verification-handler.ts | Pokreće build/test/lint/custom komande (execFile whitelist) i rutira na passed/failed |
+| `ast_transform` | ast-transform-handler.ts | Strukturalna AST pretraga + refaktor via @ast-grep/napi (TS/Python) |
+| `lsp_query` | lsp-query-handler.ts | LSP operacije nad kodom: hover, definition, completion, diagnostics |
+| `project_context` | project-context-handler.ts | Učitava kontekst fajlove (glob) i sklapa ih u jedan context blok |
+| `sandbox_verify` | sandbox-verify-handler.ts | Provera koda na zabranjene pattern-e (npr. `: any`, `console.log`, `@prisma/client`) |
+| `file_writer` | file-writer-handler.ts | Piše generisane fajlove na disk (direct mode ili iz varijable), template putanje |
+| `process_runner` | process-runner-handler.ts | Pokreće procese (npr. vitest) u /tmp/sdlc workspace-u |
+| `git_node` | git-node-handler.ts | Sekvenca git operacija (checkout/add/commit/push) + opciono kreiranje PR-a |
+| `deploy_trigger` | deploy-trigger-handler.ts | Vercel deploy na staging/production sa praćenjem statusa (READY/ERROR/BUILDING) |
+| `claude_agent_sdk` | claude-agent-sdk-handler.ts | Claude Agent SDK sesija sa MCP/agent alatima i perzistencijom sesije |
 
 ---
 
@@ -139,7 +150,7 @@
 | `python-executor.ts` | Python execution via Pyodide WASM worker |
 | `workers/pyodide-node-worker.js` | Node.js Worker thread sa Pyodide |
 | `types.ts` | RuntimeContext, ExecutionResult, NodeHandler, StreamChunk tipovi |
-| `handlers/index.ts` | Registry svih 55 handlera |
+| `handlers/index.ts` | Registry svih 66 handlera |
 
 **Sigurnosni limiti:** MAX_ITERATIONS=50 · MAX_HISTORY=100 · function timeout 5s · Python timeout 30s
 
@@ -533,7 +544,7 @@
 
 ---
 
-## 27. PODACI — SVIH 36 PRISMA MODELA
+## 27. PODACI — SVIH 63 PRISMA MODELA
 
 **Lokacija:** `prisma/schema.prisma`
 
@@ -575,6 +586,33 @@
 | Instinct | Naučeni pattern (ECC, confidence 0-1) |
 | CLIGeneration | CLI generator pipeline run |
 | AuditLog | Compliance log |
+| ApiKey | Hashovan API ključ sa scope-ovima i istekom |
+| ManagedAgentTask | Async managed task (job, input/output, progress, callback) |
+| PipelineRun | SDLC pipeline run (koraci, metrike, smart routing) |
+| PipelineMemory | Memorija po pipeline run-u (kategorija, sadržaj) |
+| AgentSdkSession | Claude Agent SDK sesija (poruke, token usage, resume count) |
+| WebhookDeadLetter | Dead-letter zapis neuspelih webhook isporuka |
+| CompanyMission | Misija organizacije (vizija, vrednosti, ciljevi) |
+| Goal | Hijerarhijski cilj vezan za misiju |
+| AgentGoalLink | Veza agent↔cilj sa ulogom |
+| HeartbeatConfig | Konfiguracija heartbeat-a agenta (cron, system prompt) |
+| HeartbeatContext | Key/value kontekst za heartbeat sa TTL |
+| HeartbeatRun | Log jednog heartbeat izvršavanja |
+| Department | Organizaciona jedinica (hijerarhija, agenti) |
+| AgentPermissionGrant | Grant permisije između agenata (scope, istek) |
+| AgentBudget | Budžet agenta (hard/soft limit, tekuća potrošnja) |
+| CostEvent | Pojedinačni trošak (model, tokeni, USD) |
+| BudgetAlert | Alert pri probijanju budžeta |
+| Organization | Organizacija (plan, članovi, agenti) |
+| OrganizationMember | Članstvo korisnika u organizaciji sa ulogom |
+| Invitation | Pozivnica u organizaciju (token, istek) |
+| ModelPerformanceStat | Statistika performansi modela po fazi (uspeh, retry, tokeni) |
+| Template | Deljivi template agenta (payload, checksum, import count) |
+| ApprovalPolicy | Politika odobravanja akcija (pattern, odobravači, timeout) |
+| PolicyDecision | Odluka po approval politici (status, resolver) |
+| PipelineTemplate | Pre-built pipeline recept (agent slugs, koraci, setup guide) |
+| SomaReviewBatch | SOMA review batch (trend, ugao, status) |
+| SomaReviewPost | SOMA review post (platforma, hook, hashtag-ovi, quality flags) |
 
 ---
 
@@ -624,7 +662,7 @@
 
 ### Unit testovi
 - **Framework:** Vitest + @testing-library/react
-- **Broj:** 2502+ testova u 179 test fajlova
+- **Broj:** 4000+ testova u 322 test fajla
 - **Lokacija:** `src/**/__tests__/*.test.ts`
 - **Coverage:** handlers, evals, webhooks, CLI generator, auth, security, safety, cache, cost
 
