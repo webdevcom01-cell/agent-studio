@@ -313,4 +313,4 @@ Ako pipeline prođe bez PAUSE na prvom pokušaju — uspeli smo.
 
 - [AGENT-IMPROVEMENT-PLAN.md](./AGENT-IMPROVEMENT-PLAN.md) — Tehničke detalje Faza 1-6
 - [SDLC-AGENTS-PLAN.md](./SDLC-AGENTS-PLAN.md) — Originalni SDLC arhitektura plan
-- [01-sdlc-orchestrator.md](./sdlc-prompts/01-sdlc-orchestrator.md) — Orchestrator system prompt
+- [01-sdlc-orchestrator.md](../../sdlc-prompts/01-sdlc-orchestrator.md) — Orchestrator system prompt

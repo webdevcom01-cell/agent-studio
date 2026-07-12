@@ -955,3 +955,94 @@ Runs deterministic quality checks on generated code before it reaches the PR Gat
 - `console.log/warn/error` — use `logger` from `@/lib/logger`
 
 ---
+
+
+## Coding & Deployment Nodes (SDLC)
+
+These nodes power the autonomous SDLC pipeline: running an agent SDK loop, writing files, executing processes, performing git operations, and triggering deploys.
+
+---
+
+### claude_agent_sdk — Claude Agent SDK
+
+Executes an agentic task using the Claude Agent SDK with tool calling, optional session persistence, and optional sub-agent orchestration. Use it for autonomous reasoning and multi-step problem solving.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Task | ✅ | — | Instructions for the agent to execute. Supports `{{variables}}`. |
+| System Prompt | — | — | Instructions defining agent behavior and persona. Supports `{{variables}}`. |
+| Model | — | `claude-sonnet-4-6` | Claude model to use. |
+| Max Steps | — | `20` | Maximum tool-calling iterations. Prevents runaway loops. |
+| Enable MCP | — | on | When on, the agent can call MCP tools available to this agent. |
+| Enable Sub Agents | — | off | When on, the agent can invoke other agents as tools. |
+| Enable Session Resume | — | off | When on, persists conversation history across flow runs. |
+| Output Variable | — | — | Variable where the agent's final response text is stored. |
+| SDK Session ID | — | — | ID of an existing `AgentSdkSession` to resume a prior session. |
+
+> **Session resume:** loads history from a DB-backed session (`SDK Session ID`) or flow variables, then compacts and persists messages for the next run. A new session is auto-created if neither is provided.
+
+---
+
+### deploy_trigger — Deploy Trigger
+
+Triggers a Vercel deployment to staging or production and polls until completion. Routes to `passed` (READY) or `failed` (ERROR, timeout, skipped).
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Target | — | `staging` | Deploy environment: `staging` or `production`. |
+| Project ID | — | `$VERCEL_PROJECT_ID` | Vercel project ID. Uses the env var if not set. |
+| Branch | — | `main` | Git branch to deploy. |
+| Output Variable | — | `deployResult` | Result object: `deploymentId`, `url`, `status`, `target`, `durationMs`, `logs`. |
+| Poll Interval (ms) | — | `5000` | How often to check deployment status. |
+| Timeout (ms) | — | `300000` | Maximum wait (5 min) before failing. |
+
+> **Credentials:** requires `VERCEL_TOKEN`. When missing, the node gracefully skips. **Routes:** `passed` on READY; `failed` on ERROR/CANCELED/timeout.
+
+---
+
+### file_writer — File Writer
+
+Writes generated code files to disk. Supports multi-file mode (from a code-output variable) and direct single-file mode (path + content).
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Target Directory | ✅ | — | Directory where files are written. Supports `{{variables}}`. Falls back to `/tmp/sdlc` if read-only. |
+| Input Variable | — | `codeOutput` | Variable holding a code object with a `files` array (`path`, `content`). |
+| Output Variable | — | `fileWriteResult` | Result: `{ filesWritten[], errors[], targetDir, success, writtenPath }`. |
+| File Path | — | — | *(direct mode)* Path for a single-file write. Supports `{{variables}}`. |
+| Content | — | — | *(direct mode)* File content to write. Supports `{{variables}}`. |
+
+> **Direct mode:** when both `File Path` and `Content` are set, writes one file and ignores `Input Variable`. On EACCES/EROFS, auto-falls back to `/tmp/sdlc`.
+
+---
+
+### git_node — Git
+
+Executes a sequence of git operations (checkout, add, commit, push, create PR) in a working directory. Initializes the repo if needed.
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Working Directory | — | `/tmp/sdlc` or cwd | Directory where git runs. Supports `{{variables}}`. |
+| Branch | — | `feat/autonomous-{{timestamp}}` | Branch to create/checkout. Supports `{{variables}}`. |
+| Commit Message | — | `chore: autonomous pipeline commit` | Commit message. Supports `{{variables}}`. |
+| Operations | — | `["checkout_branch","add","commit","push"]` | Sequence: `checkout_branch`, `add`, `commit`, `push`, `create_pr`. |
+| Output Variable | — | `gitResult` | Result: `{ branch, commitHash, pushed, success, message, prUrl?, prNumber? }`. |
+| PR Repository | — | `$GIT_REPO` | *(create_pr)* Repo in `owner/repo` format. Falls back to `GIT_REPO`. |
+
+> **Credentials:** requires `GITHUB_TOKEN` (or `GITHUB_PAT`) for push/create_pr; the token is pre-validated against the GitHub API. **Routes:** `passed` on success; `failed` on any operation error.
+
+---
+
+### process_runner — Process Runner
+
+Executes shell commands with a timeout and output capture, with automatic path remapping for test files (vitest guard).
+
+| Field | Required | Default | Description |
+|---|:---:|---|---|
+| Command | ✅ | — | Executable or command string (e.g. `npm run test`, `vitest`). |
+| Arguments | — | — | Array of command-line arguments. Supports `{{variables}}`. |
+| Working Directory | — | cwd | Directory where the command runs. Supports `{{variables}}`. |
+| Timeout (ms) | — | `300000` | Maximum execution time (5 min); kills the process if exceeded. |
+| Output Variable | — | `processResult` | Result: `{ success, command, stdout, stderr, exitCode, durationMs }`. |
+
+> **Vitest guard:** when a source file is passed to vitest instead of its test file, the handler auto-remaps to the corresponding `*.test.ts`. **Routes:** `passed` (exit 0) or `failed` (nonzero).

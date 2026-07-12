@@ -27,7 +27,7 @@
   <img src="https://img.shields.io/badge/Next.js-15.5-000?logo=next.js" alt="Next.js">
   <img src="https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white" alt="Node">
   <img src="https://img.shields.io/badge/Tests-2800%2B-brightgreen" alt="Tests">
-  <img src="https://img.shields.io/badge/Node_Types-55-orange" alt="55 Node Types">
+  <img src="https://img.shields.io/badge/Node_Types-66-orange" alt="66 Node Types">
   <img src="https://img.shields.io/badge/Templates-250-purple" alt="250 Templates">
   <img src="https://img.shields.io/badge/MCP-Ready-8B5CF6?logo=anthropic&logoColor=white" alt="MCP Ready">
   <img src="https://img.shields.io/badge/A2A-v0.3-4285F4?logo=google&logoColor=white" alt="A2A v0.3">
@@ -83,7 +83,7 @@ Open [http://localhost:3000](http://localhost:3000) and create your first agent.
 
 ## Features
 
-- **Visual Flow Editor** — Drag-and-drop builder with 55 node types (AI, logic, integrations, webhooks) powered by XyFlow; full version history, deploy pipeline, and one-click rollback
+- **Visual Flow Editor** — Drag-and-drop builder with 66 node types (AI, logic, integrations, webhooks) powered by XyFlow; full version history, deploy pipeline, and one-click rollback
 - **Enterprise RAG Pipeline** — Ingest URLs, PDFs, DOCX, Excel, PPTX; chunk with 5 strategies; hybrid search (semantic + BM25) with pgvector; LLM re-ranking and RAGAS evaluation
 - **MCP + A2A Protocols** — Connect any MCP server (Streamable HTTP + SSE); agent-to-agent communication following Google A2A v0.3 with circuit breaker and distributed tracing
 - **Inbound Webhooks** — Standard Webhooks spec (HMAC-SHA256); receive events from GitHub, Stripe, Slack, and any provider; trigger flows with idempotency and event filtering
@@ -203,7 +203,7 @@ graph TB
         Chat[Chat Interface]
     end
 
-    subgraph API["API Layer (107 routes)"]
+    subgraph API["API Layer (170 routes)"]
         Agents[Agent CRUD]
         FlowAPI[Flow Versioning & Deploy]
         ChatAPI[Chat - Streaming NDJSON]
@@ -215,7 +215,7 @@ graph TB
 
     subgraph Runtime["Flow Runtime Engine"]
         Engine[Execution Loop]
-        Handlers[55 Node Handlers]
+        Handlers[66 Node Handlers]
         Stream[Streaming Engine]
     end
 
@@ -333,9 +333,9 @@ pnpm precheck:file    # Same, for a specific file
 ## Project Structure
 
 ```
-prisma/schema.prisma        # 41 models, pgvector, versioning, A2A, ECC
+prisma/schema.prisma        # 63 models, pgvector, versioning, A2A, ECC
 src/
-  app/                      # Pages and 107 API routes
+  app/                      # Pages and 170 API routes
     builder/[agentId]/      # Flow editor
     chat/[agentId]/         # Chat interface
     knowledge/[agentId]/    # Knowledge base
@@ -346,7 +346,7 @@ src/
     settings/               # API keys + account settings
   components/               # React components
   lib/
-    runtime/                # Flow engine (55 handlers)
+    runtime/                # Flow engine (66 handlers)
     knowledge/              # RAG pipeline
     ecc/                    # ECC module
     evals/                  # Eval runner
@@ -366,7 +366,7 @@ scripts/                    # Dev tooling (pre-push-check.sh)
 |---|---|
 | [Platform Overview](docs/01-overview.md) | Features and architecture |
 | [Getting Started](docs/08-getting-started.md) | Setup guide |
-| [Node Reference](docs/10-node-reference.md) | All 55 node types |
+| [Node Reference](docs/10-node-reference.md) | All 66 node types |
 | [Knowledge Base Guide](docs/09-knowledge-base-guide.md) | RAG pipeline |
 | [CLI Generator](docs/12-cli-generator.md) | MCP bridge generation |
 | [Agent Evals](docs/13-agent-evals.md) | Testing framework |

@@ -8,6 +8,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Documentation (2026-06-27)
+- **DOC-FIX** — Corrected stale counts repo-wide: node types 55 → **66**, Prisma models 36 → **63**, API routes → **170**, UI components → **123** (`README.md`, `FEATURES.md`). Source of truth: `src/types/index.ts` `NodeType` union and `prisma/schema.prisma`.
+- **DOC-FIX** — `docs/10-node-reference.md`: documented the 5 previously-missing nodes (`claude_agent_sdk`, `deploy_trigger`, `file_writer`, `git_node`, `process_runner`); now covers all 66.
+- **DOC-FIX** — `FEATURES.md`: added the 11 missing node rows and 27 missing model rows so tables match the headline counts.
+- **DOC-FIX** — `AGENTS.md`: repaired 9 broken links (`.Codex/docs/*` → `.claude/docs/*`).
+- **DOC-FIX** — `.gitignore`: fixed `docs/forensic/` → `docs/forensics/` typo; ignored eval-workspace fixtures and root `.skill` bundles.
+
 ### Added (2026-04-28)
 - **SEC-05** — AuditLog wired for admin actions: `org.member.remove`, `org.member.add`, `org.invite.send`, `org.approval.respond` across 4 API routes. Fire-and-forget typed wrappers.
 - **AGENT-01** — 16 "Need Improvement" agents upgraded in 4 batches: JSON output schemas, escalation protocols, SLA thresholds, scope boundaries, before/after formats.
