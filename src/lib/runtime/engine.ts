@@ -24,6 +24,39 @@ function redactJsonObject(obj: unknown): unknown {
   }
 }
 
+// ── F2-1: faithful execution status ─────────────────────────────────────────
+// Node handlers convert provider/tool errors into normal assistant messages
+// (ai-response-handler catch → "AI call failed: …", call-agent-handler →
+// "Sub-agent call failed…") so the conversation can degrade gracefully.
+// The persisted AgentExecution must still record the failure — a run whose
+// AI node died must never be stored as a green SUCCESS with error=null.
+const FAILURE_SENTINEL_PREFIXES = [
+  "AI call failed:",
+  "Sub-agent call failed",
+  "Parallel agent call failed:",
+  "[AI_ERROR]",
+];
+
+// call-agent-handler's continue-on-error branch emits exactly this message and
+// deliberately routes the flow onward — that is graceful degradation the flow
+// author opted into, NOT a run failure. Hard sub-agent failures ("…after all
+// retries.", "Sub-agent call failed: <err>") still mark the run FAILED.
+const GRACEFUL_DEGRADATION_MESSAGES = new Set([
+  "Sub-agent call failed. Continuing flow.",
+]);
+
+export function detectExecutionFailure(messages: OutputMessage[]): string | null {
+  for (const msg of messages) {
+    if (msg.role !== "assistant" || typeof msg.content !== "string") continue;
+    const content = msg.content;
+    if (GRACEFUL_DEGRADATION_MESSAGES.has(content.trim())) continue;
+    if (FAILURE_SENTINEL_PREFIXES.some((prefix) => content.startsWith(prefix))) {
+      return content.slice(0, 500);
+    }
+  }
+  return null;
+}
+
 /**
  * Nodes that manage their own output routing via sourceHandles.
  * When these return nextNodeId: null, the engine should NOT follow
@@ -358,13 +391,18 @@ export async function executeFlow(
   }).catch(() => {});
 
   if (__exec?.id) {
+    // F2-1: a node-level failure surfaced as a sentinel message must not be
+    // persisted as SUCCESS. TIMEOUT (max iterations) takes precedence.
+    const failureError =
+      iterations >= MAX_ITERATIONS ? null : detectExecutionFailure(allMessages);
     try {
       await withTenant(
         (tx) =>
           tx.agentExecution.update({
             where: { id: __exec!.id },
             data: {
-              status: iterations >= MAX_ITERATIONS ? 'TIMEOUT' : 'SUCCESS',
+              status: iterations >= MAX_ITERATIONS ? 'TIMEOUT' : failureError ? 'FAILED' : 'SUCCESS',
+              ...(failureError && { error: failureError }),
               ...(allMessages.length > 0 && {
                 outputResult: redactJsonObject({ messages: allMessages }) as unknown as Prisma.InputJsonObject,
               }),
