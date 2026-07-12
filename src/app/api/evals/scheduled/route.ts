@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { triggerScheduledEvals } from "@/lib/evals/schedule-hook";
+import { requireCronSecret } from "@/lib/api/auth-guard";
 
 /**
  * POST /api/evals/scheduled
@@ -8,27 +9,19 @@ import { triggerScheduledEvals } from "@/lib/evals/schedule-hook";
  * Cron-triggered endpoint: checks all schedule-enabled eval suites and runs
  * any that are due according to their cron expression.
  *
- * Security: protected by CRON_SECRET header (same pattern as /api/ecc/ingest-skills).
+ * Security: protected by requireCronSecret (fail-closed in production —
+ * 503 when CRON_SECRET is not configured; dev-open only outside production).
  * Called by the Railway Cron Service every 5 minutes alongside existing scheduled flows.
  *
  * This endpoint returns immediately — all eval work is fire-and-forget.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Verify CRON_SECRET
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const authHeader = request.headers.get("authorization");
-    const providedSecret = authHeader?.startsWith("Bearer ")
-      ? authHeader.slice(7)
-      : request.headers.get("x-cron-secret");
-
-    if (providedSecret !== cronSecret) {
-      logger.warn("scheduled-evals: unauthorized cron request");
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+  // Fail-closed cron auth (F1.1): 503 in production when CRON_SECRET unset,
+  // 401 on missing/wrong Bearer token. Never falls through unauthenticated.
+  const authError = requireCronSecret(request);
+  if (authError) {
+    logger.warn("scheduled-evals: unauthorized cron request");
+    return authError;
   }
 
   // Determine base URL for internal chat API calls

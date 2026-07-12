@@ -196,8 +196,8 @@ curl https://staging/api/user/export \
   -H "Cookie: session=multi_org_user_session"  # expect data from multiple orgs
 
 # Cron — verify CRON_SECRET still works
-curl https://staging/api/cron/trigger-scheduled-flows \
-  -H "x-cron-secret: $CRON_SECRET"  # expect job execution
+curl -X POST https://staging/api/cron/trigger-scheduled-flows \
+  -H "Authorization: Bearer $CRON_SECRET"  # expect job execution
 ```
 
 ---
