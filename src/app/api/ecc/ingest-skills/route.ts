@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
-import { getEnv } from "@/lib/env";
 import { parseSkillMd, slugify, ingestSkills, vectorizeSkills } from "@/lib/ecc";
+import { requireCronSecret } from "@/lib/api/auth-guard";
 import type { ParsedSkill } from "@/lib/ecc";
 
 export const maxDuration = 300;
@@ -18,22 +18,11 @@ const IngestRequestSchema = z.object({
   batchSize: z.number().int().min(1).max(50).optional(),
 });
 
-function verifyCronSecret(req: NextRequest): boolean {
-  const env = getEnv();
-  const cronSecret = env.CRON_SECRET;
-  if (!cronSecret) return true;
-
-  const authHeader = req.headers.get("authorization") ?? "";
-  return authHeader === `Bearer ${cronSecret}`;
-}
-
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  if (!verifyCronSecret(req)) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
-    );
-  }
+  // Fail-closed cron auth (F1.1): 503 in production when CRON_SECRET unset,
+  // 401 on missing/wrong Bearer token. Never falls through unauthenticated.
+  const authError = requireCronSecret(req);
+  if (authError) return authError;
 
   try {
     const body = await req.json();
