@@ -160,6 +160,44 @@ describe("F2-1: execution status propagation", () => {
     expect(data.error).toBeUndefined();
   });
 
+  it("continue-on-error: 'Sub-agent call failed. Continuing flow.' stays SUCCESS", async () => {
+    const nodes = [makeNode("call1", "call_agent")];
+    setupHandlers({
+      call1: async () => ({
+        messages: [
+          { role: "assistant" as const, content: "Sub-agent call failed. Continuing flow." },
+        ],
+        nextNodeId: null,
+        waitForInput: false,
+      }),
+    });
+
+    await executeFlow(makeContext(nodes, []), "hi");
+
+    const data = lastExecutionUpdateData();
+    expect(data.status).toBe("SUCCESS");
+    expect(data.error).toBeUndefined();
+  });
+
+  it("hard sub-agent failure with reason → still FAILED", async () => {
+    const nodes = [makeNode("call1", "call_agent")];
+    setupHandlers({
+      call1: async () => ({
+        messages: [
+          { role: "assistant" as const, content: "Sub-agent call failed: connect ECONNREFUSED" },
+        ],
+        nextNodeId: null,
+        waitForInput: false,
+      }),
+    });
+
+    await executeFlow(makeContext(nodes, []), "hi");
+
+    const data = lastExecutionUpdateData();
+    expect(data.status).toBe("FAILED");
+    expect(data.error).toBeTruthy();
+  });
+
   it("genuine content mentioning failures mid-text is NOT flagged", async () => {
     const nodes = [makeNode("ai1", "ai_response")];
     setupHandlers({

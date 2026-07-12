@@ -37,10 +37,19 @@ const FAILURE_SENTINEL_PREFIXES = [
   "[AI_ERROR]",
 ];
 
+// call-agent-handler's continue-on-error branch emits exactly this message and
+// deliberately routes the flow onward — that is graceful degradation the flow
+// author opted into, NOT a run failure. Hard sub-agent failures ("…after all
+// retries.", "Sub-agent call failed: <err>") still mark the run FAILED.
+const GRACEFUL_DEGRADATION_MESSAGES = new Set([
+  "Sub-agent call failed. Continuing flow.",
+]);
+
 export function detectExecutionFailure(messages: OutputMessage[]): string | null {
   for (const msg of messages) {
     if (msg.role !== "assistant" || typeof msg.content !== "string") continue;
     const content = msg.content;
+    if (GRACEFUL_DEGRADATION_MESSAGES.has(content.trim())) continue;
     if (FAILURE_SENTINEL_PREFIXES.some((prefix) => content.startsWith(prefix))) {
       return content.slice(0, 500);
     }
