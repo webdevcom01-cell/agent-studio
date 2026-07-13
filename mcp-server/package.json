@@ -29,7 +29,7 @@
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "vitest": "^3.2.1"
+    "vitest": "^3.2.7"
   },
   "overrides": {
     "qs": ">=6.15.2",
