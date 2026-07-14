@@ -17,6 +17,10 @@ vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 vi.mock("@/lib/logger", () => ({
   logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
+// In-memory rate limiter would return 429 after 10 POSTs across this file
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: vi.fn().mockReturnValue({ allowed: true }),
+}));
 
 import { GET, POST } from "../route";
 
@@ -143,5 +147,47 @@ describe("POST /api/mcp-servers", () => {
     const body = await res.json();
     expect(res.status).toBe(400);
     expect(body.success).toBe(false);
+  });
+});
+
+// ─── F4-1: headers se enkriptuju pre upisa, plaintext se ne vraća ────────────
+
+describe("F4-1: MCPServer.headers encryption at rest", () => {
+  const PLAIN = { Authorization: "Bearer plain-secret-xyz" };
+
+  beforeEach(async () => {
+    const { randomBytes } = await import("crypto");
+    vi.stubEnv("OAUTH_ENCRYPTION_KEY", randomBytes(32).toString("base64url"));
+  });
+
+  it("POST: prisma.create ne sme dobiti plaintext token (enkriptovan envelope)", async () => {
+    mockPrisma.mCPServer.create.mockImplementation(
+      async (args: { data: Record<string, unknown> }) => ({ id: "s1", ...args.data }),
+    );
+
+    const res = await POST(
+      makeRequest({ name: "Enc Test", url: "https://enc.example/mcp", headers: PLAIN }),
+    );
+    expect(res.status).toBe(201);
+
+    const data = mockPrisma.mCPServer.create.mock.calls[0][0].data as {
+      headers: unknown;
+    };
+    expect(JSON.stringify(data.headers)).not.toContain("plain-secret-xyz");
+    expect((data.headers as { __enc?: string }).__enc).toBeTypeOf("string");
+  });
+
+  it("POST: odgovor ne sme sadržati plaintext token", async () => {
+    mockPrisma.mCPServer.create.mockImplementation(
+      async (args: { data: Record<string, unknown> }) => ({ id: "s1", ...args.data }),
+    );
+
+    const res = await POST(
+      makeRequest({ name: "Enc Test 2", url: "https://enc2.example/mcp", headers: PLAIN }),
+    );
+    expect(res.status).toBe(201);
+    const raw = JSON.stringify(await res.json());
+    expect(raw).not.toContain("plain-secret-xyz");
+    expect(raw).not.toContain("__enc");
   });
 });

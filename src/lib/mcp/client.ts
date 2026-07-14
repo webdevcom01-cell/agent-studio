@@ -12,6 +12,7 @@ import {
 } from "./cli-bridge/cli-mcp-server";
 import { eccMcpCircuitBreaker } from "@/lib/ecc/mcp-circuit-breaker";
 import { isECCEnabled } from "@/lib/ecc/feature-flag";
+import { decryptMcpHeaders } from "./header-crypto";
 
 const ECC_MCP_URL = process.env.ECC_MCP_URL ?? "";
 
@@ -19,9 +20,10 @@ type MCPToolSet = Awaited<ReturnType<Awaited<ReturnType<typeof createMCPClient>>
 
 const CLI_BRIDGE_SERVER_TYPE = "cli_bridge";
 
+// F4-1: headers are stored encrypted at rest ({ __enc: ... }); legacy rows
+// are plaintext objects. decryptMcpHeaders handles both transparently.
 function parseHeaders(headers: unknown): Record<string, string> | undefined {
-  if (!headers || typeof headers !== "object") return undefined;
-  return headers as Record<string, string>;
+  return decryptMcpHeaders(headers);
 }
 
 export async function getMCPToolsForAgent(agentId: string): Promise<AIToolSet> {

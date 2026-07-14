@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { testMCPConnection } from "@/lib/mcp/client";
+import { decryptMcpHeaders } from "@/lib/mcp/header-crypto";
 
 interface RouteParams {
   params: Promise<{ serverId: string }>;
@@ -28,12 +29,9 @@ export async function POST(
       );
     }
 
-    const headers = server.headers as Record<string, string> | null;
-    const result = await testMCPConnection(
-      server.url,
-      server.transport,
-      headers ?? undefined,
-    );
+    // F4-1: decrypt-aware (encrypted envelope or legacy plaintext)
+    const headers = decryptMcpHeaders(server.headers);
+    const result = await testMCPConnection(server.url, server.transport, headers);
 
     if (result.success) {
       await prisma.mCPServer.update({

@@ -5,6 +5,7 @@ import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { auditMCPServerCreate } from "@/lib/security/audit";
+import { encryptMcpHeaders } from "@/lib/mcp/header-crypto";
 
 const createServerSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
@@ -72,7 +73,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         name: parsed.data.name,
         url: parsed.data.url,
         transport: parsed.data.transport,
-        headers: parsed.data.headers ?? undefined,
+        // F4-1: headers may contain Bearer tokens — encrypted at rest
+        headers: parsed.data.headers ? encryptMcpHeaders(parsed.data.headers) : undefined,
         userId: authResult.userId,
       },
     });
@@ -84,7 +86,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       transport: parsed.data.transport,
     });
 
-    return NextResponse.json({ success: true, data: server }, { status: 201 });
+    // F4-1: never echo headers (even encrypted) back to the client
+    const { headers: _headers, ...safeServer } = server;
+    return NextResponse.json({ success: true, data: safeServer }, { status: 201 });
   } catch (err) {
     logger.error("Failed to create MCP server", {
       error: err instanceof Error ? err.message : String(err),
