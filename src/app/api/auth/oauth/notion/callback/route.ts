@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { encryptMcpHeaders } from "@/lib/mcp/header-crypto";
 
 export const runtime = "nodejs";
 
@@ -111,7 +112,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         where: { id: existing.id },
         data: {
           name: serverName,
-          headers: { Authorization: `Bearer ${access_token}` },
+          // F4-1: encrypted at rest
+          headers: encryptMcpHeaders({ Authorization: `Bearer ${access_token}` }),
           enabled: true,
         },
       });
@@ -122,7 +124,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           name: serverName,
           url: notionMcpUrl,
           transport: "STREAMABLE_HTTP",
-          headers: { Authorization: `Bearer ${access_token}` },
+          // F4-1: encrypted at rest
+          headers: encryptMcpHeaders({ Authorization: `Bearer ${access_token}` }),
           enabled: true,
         },
       });

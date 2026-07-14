@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { auditMCPServerDelete } from "@/lib/security/audit";
+import { encryptMcpHeaders } from "@/lib/mcp/header-crypto";
 
 interface RouteParams {
   params: Promise<{ serverId: string }>;
@@ -16,6 +17,12 @@ const updateServerSchema = z.object({
   headers: z.record(z.string()).nullable().optional(),
   enabled: z.boolean().optional(),
 });
+
+// F4-1: never return stored headers (encrypted or legacy plaintext) to the client
+function stripHeaders<T extends { headers?: unknown }>(server: T): Omit<T, "headers"> {
+  const { headers: _headers, ...safe } = server;
+  return safe;
+}
 
 async function getOwnedServer(serverId: string, userId: string) {
   return prisma.mCPServer.findFirst({
@@ -50,7 +57,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, data: server });
+    return NextResponse.json({ success: true, data: stripHeaders(server) });
   } catch (err) {
     logger.error("Failed to get MCP server", {
       error: err instanceof Error ? err.message : String(err),
@@ -92,7 +99,11 @@ export async function PATCH(
     if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
     if (parsed.data.url !== undefined) updateData.url = parsed.data.url;
     if (parsed.data.transport !== undefined) updateData.transport = parsed.data.transport;
-    if (parsed.data.headers !== undefined) updateData.headers = parsed.data.headers;
+    // F4-1: headers may contain Bearer tokens — encrypted at rest
+    if (parsed.data.headers !== undefined) {
+      updateData.headers =
+        parsed.data.headers === null ? null : encryptMcpHeaders(parsed.data.headers);
+    }
     if (parsed.data.enabled !== undefined) updateData.enabled = parsed.data.enabled;
 
     const server = await prisma.mCPServer.update({
@@ -100,7 +111,7 @@ export async function PATCH(
       data: updateData,
     });
 
-    return NextResponse.json({ success: true, data: server });
+    return NextResponse.json({ success: true, data: stripHeaders(server) });
   } catch (err) {
     logger.error("Failed to update MCP server", {
       error: err instanceof Error ? err.message : String(err),
