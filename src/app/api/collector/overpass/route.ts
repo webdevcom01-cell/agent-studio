@@ -17,6 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardCollectorRoute } from "@/lib/api/collector-guard";
 
 const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 
@@ -28,6 +29,10 @@ let lastCallAt = 0;
 const MAX_QUERY_LEN = 8000;
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  // F2-3: authenticate + rate-limit before proxying to OSM Overpass
+  const guard = await guardCollectorRoute(req, "overpass");
+  if (!("userId" in guard)) return guard; // 401/429 short-circuit
+
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
