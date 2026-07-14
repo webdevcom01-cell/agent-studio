@@ -20,6 +20,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { guardCollectorRoute } from "@/lib/api/collector-guard";
 
 const GOOGLE_BASE = "https://maps.googleapis.com/maps/api/place";
 
@@ -65,6 +66,10 @@ const DETAILS_FIELDS = [
 ].join(",");
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  // F2-3: authenticate + rate-limit before proxying to billed Google Places
+  const guard = await guardCollectorRoute(req, "places");
+  if (!("userId" in guard)) return guard; // 401/429 short-circuit
+
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
