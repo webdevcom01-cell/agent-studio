@@ -21,6 +21,9 @@ vi.mock("@/lib/logger", () => ({
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn().mockReturnValue({ allowed: true }),
 }));
+// F4-4: SSRF guard resolves hostnames — keep tests hermetic (public IP)
+const mockDnsLookup = vi.hoisted(() => vi.fn());
+vi.mock("node:dns/promises", () => ({ lookup: mockDnsLookup }));
 
 import { GET, POST } from "../route";
 
@@ -37,6 +40,7 @@ function makeRequest(body: unknown): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuth.mockResolvedValue(SESSION);
+  mockDnsLookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 });
 
 describe("GET /api/mcp-servers", () => {
@@ -48,7 +52,7 @@ describe("GET /api/mcp-servers", () => {
 
   it("returns list of servers for authenticated user", async () => {
     const servers = [
-      { id: "s1", name: "Server 1", url: "http://localhost/mcp", _count: { agents: 2 } },
+      { id: "s1", name: "Server 1", url: "https://mcp.example.com/mcp", _count: { agents: 2 } },
     ];
     mockPrisma.mCPServer.findMany.mockResolvedValue(servers);
 
@@ -67,7 +71,7 @@ describe("GET /api/mcp-servers", () => {
 describe("POST /api/mcp-servers", () => {
   it("returns 401 when not authenticated", async () => {
     mockAuth.mockResolvedValue(null);
-    const res = await POST(makeRequest({ name: "Test", url: "http://localhost/mcp" }));
+    const res = await POST(makeRequest({ name: "Test", url: "https://mcp.example.com/mcp" }));
     expect(res.status).toBe(401);
   });
 
@@ -84,10 +88,10 @@ describe("POST /api/mcp-servers", () => {
   });
 
   it("creates server with valid data", async () => {
-    const created = { id: "s1", name: "Test", url: "http://localhost/mcp", transport: "STREAMABLE_HTTP" };
+    const created = { id: "s1", name: "Test", url: "https://mcp.example.com/mcp", transport: "STREAMABLE_HTTP" };
     mockPrisma.mCPServer.create.mockResolvedValue(created);
 
-    const res = await POST(makeRequest({ name: "Test", url: "http://localhost/mcp" }));
+    const res = await POST(makeRequest({ name: "Test", url: "https://mcp.example.com/mcp" }));
     const body = await res.json();
 
     expect(res.status).toBe(201);
@@ -96,7 +100,7 @@ describe("POST /api/mcp-servers", () => {
     expect(mockPrisma.mCPServer.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         name: "Test",
-        url: "http://localhost/mcp",
+        url: "https://mcp.example.com/mcp",
         transport: "STREAMABLE_HTTP",
         userId: "u1",
       }),
@@ -106,7 +110,7 @@ describe("POST /api/mcp-servers", () => {
   it("accepts SSE transport", async () => {
     mockPrisma.mCPServer.create.mockResolvedValue({ id: "s1" });
 
-    await POST(makeRequest({ name: "SSE Server", url: "http://localhost/sse", transport: "SSE" }));
+    await POST(makeRequest({ name: "SSE Server", url: "https://mcp.example.com/sse", transport: "SSE" }));
 
     expect(mockPrisma.mCPServer.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ transport: "SSE" }),
@@ -114,14 +118,14 @@ describe("POST /api/mcp-servers", () => {
   });
 
   it("rejects invalid transport value with 400", async () => {
-    const res = await POST(makeRequest({ name: "Test", url: "http://localhost/mcp", transport: "WEBSOCKET" }));
+    const res = await POST(makeRequest({ name: "Test", url: "https://mcp.example.com/mcp", transport: "WEBSOCKET" }));
     const body = await res.json();
     expect(res.status).toBe(400);
     expect(body.success).toBe(false);
   });
 
   it("rejects name exceeding 100 characters with 400", async () => {
-    const res = await POST(makeRequest({ name: "a".repeat(101), url: "http://localhost/mcp" }));
+    const res = await POST(makeRequest({ name: "a".repeat(101), url: "https://mcp.example.com/mcp" }));
     const body = await res.json();
     expect(res.status).toBe(400);
     expect(body.success).toBe(false);
@@ -136,7 +140,7 @@ describe("POST /api/mcp-servers", () => {
   });
 
   it("rejects missing name with 400", async () => {
-    const res = await POST(makeRequest({ url: "http://localhost/mcp" }));
+    const res = await POST(makeRequest({ url: "https://mcp.example.com/mcp" }));
     const body = await res.json();
     expect(res.status).toBe(400);
     expect(body.success).toBe(false);
@@ -189,5 +193,39 @@ describe("F4-1: MCPServer.headers encryption at rest", () => {
     const raw = JSON.stringify(await res.json());
     expect(raw).not.toContain("plain-secret-xyz");
     expect(raw).not.toContain("__enc");
+  });
+});
+
+// ─── F4-4: SSRF guard na registraciji ────────────────────────────────────────
+
+describe("F4-4: SSRF guard on MCPServer.url", () => {
+  beforeEach(() => {
+    mockPrisma.mCPServer.create.mockResolvedValue({ id: "s1" });
+  });
+
+  it.each([
+    "http://169.254.169.254/latest/meta-data/",
+    "http://localhost:8000/mcp",
+    "http://10.0.0.5/mcp",
+    "http://192.168.1.1/mcp",
+    "http://[::1]:9000/mcp",
+  ])("POST odbija privatni/metadata URL sa 400: %s", async (url) => {
+    const res = await POST(makeRequest({ name: "SSRF", url, headers: undefined }));
+    expect(res.status).toBe(400);
+    expect(mockPrisma.mCPServer.create).not.toHaveBeenCalled();
+  });
+
+  it("POST dozvoljava *.railway.internal (ECC allowlist)", async () => {
+    const res = await POST(
+      makeRequest({ name: "ECC", url: "http://positive-inspiration.railway.internal:8000" }),
+    );
+    expect(res.status).toBe(201);
+  });
+
+  it("POST odbija hostname koji se rezolvuje u privatnu adresu", async () => {
+    mockDnsLookup.mockResolvedValue([{ address: "10.0.0.9", family: 4 }]);
+    const res = await POST(makeRequest({ name: "Rebind", url: "https://rebind.example.com/mcp" }));
+    expect(res.status).toBe(400);
+    expect(mockPrisma.mCPServer.create).not.toHaveBeenCalled();
   });
 });
