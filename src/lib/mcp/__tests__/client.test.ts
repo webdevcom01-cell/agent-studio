@@ -32,6 +32,9 @@ vi.mock("../pool", () => ({
   remove: mockRemove,
 }));
 
+vi.mock("@/lib/security/ssrf-guard", () => ({
+  validateMcpUrl: vi.fn().mockResolvedValue({ allowed: true }),
+}));
 vi.mock("@/lib/logger", () => ({
   logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));

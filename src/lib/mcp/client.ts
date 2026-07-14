@@ -13,6 +13,7 @@ import {
 import { eccMcpCircuitBreaker } from "@/lib/ecc/mcp-circuit-breaker";
 import { isECCEnabled } from "@/lib/ecc/feature-flag";
 import { decryptMcpHeaders } from "./header-crypto";
+import { validateMcpUrl } from "@/lib/security/ssrf-guard";
 
 const ECC_MCP_URL = process.env.ECC_MCP_URL ?? "";
 
@@ -196,6 +197,11 @@ export async function testMCPConnection(
   let client: Awaited<ReturnType<typeof createMCPClient>> | null = null;
 
   try {
+    // F4-4: SSRF guard on the direct test-connection path as well
+    const ssrf = await validateMcpUrl(url);
+    if (!ssrf.allowed) {
+      return { success: false, tools: [], error: `Blocked (SSRF guard): ${ssrf.reason}` };
+    }
     const type = transport === "SSE" ? "sse" : "http";
     const transportConfig = headers
       ? { type, url, headers } as const

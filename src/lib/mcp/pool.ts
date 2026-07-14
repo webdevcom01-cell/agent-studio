@@ -2,6 +2,7 @@ import { createMCPClient } from "@ai-sdk/mcp";
 import type { MCPTransport as MCPTransportType } from "@/generated/prisma";
 import { logger } from "@/lib/logger";
 import { registerMCPConnection, removeMCPConnection } from "@/lib/redis";
+import { validateMcpUrl } from "@/lib/security/ssrf-guard";
 
 interface PoolEntry {
   client: Awaited<ReturnType<typeof createMCPClient>>;
@@ -95,6 +96,13 @@ export async function getOrCreate(
   evictLRU();
 
   const promise = (async (): Promise<PoolEntry["client"]> => {
+    // F4-4: connect-time SSRF re-check (DNS can change after registration).
+    // TOCTOU note: resolve-then-check is not airtight against active DNS
+    // rebinding between this check and the socket; full fix = pin verified IP.
+    const ssrf = await validateMcpUrl(url);
+    if (!ssrf.allowed) {
+      throw new Error(`MCP connection blocked (SSRF guard): ${ssrf.reason}`);
+    }
     const transportConfig = buildTransportConfig(url, transport, headers);
     const client = await createMCPClient({ transport: transportConfig });
     pool.set(serverId, { client, lastUsed: Date.now() });

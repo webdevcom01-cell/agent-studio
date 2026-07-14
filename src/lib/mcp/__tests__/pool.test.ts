@@ -6,6 +6,9 @@ const mockCreateMCPClient = vi.hoisted(() =>
   vi.fn().mockResolvedValue({ tools: mockTools, close: mockClose }),
 );
 
+vi.mock("@/lib/security/ssrf-guard", () => ({
+  validateMcpUrl: vi.fn().mockResolvedValue({ allowed: true }),
+}));
 vi.mock("@ai-sdk/mcp", () => ({
   createMCPClient: mockCreateMCPClient,
 }));

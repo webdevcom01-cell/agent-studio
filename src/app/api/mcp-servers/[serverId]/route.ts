@@ -5,6 +5,7 @@ import { requireAuth, isAuthError } from "@/lib/api/auth-guard";
 import { logger } from "@/lib/logger";
 import { auditMCPServerDelete } from "@/lib/security/audit";
 import { encryptMcpHeaders } from "@/lib/mcp/header-crypto";
+import { validateMcpUrl } from "@/lib/security/ssrf-guard";
 
 interface RouteParams {
   params: Promise<{ serverId: string }>;
@@ -97,7 +98,17 @@ export async function PATCH(
 
     const updateData: Record<string, unknown> = {};
     if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
-    if (parsed.data.url !== undefined) updateData.url = parsed.data.url;
+    if (parsed.data.url !== undefined) {
+      // F4-4: SSRF guard — reject private/metadata targets on URL change
+      const ssrf = await validateMcpUrl(parsed.data.url);
+      if (!ssrf.allowed) {
+        return NextResponse.json(
+          { success: false, error: `URL rejected: ${ssrf.reason}` },
+          { status: 400 },
+        );
+      }
+      updateData.url = parsed.data.url;
+    }
     if (parsed.data.transport !== undefined) updateData.transport = parsed.data.transport;
     // F4-1: headers may contain Bearer tokens — encrypted at rest
     if (parsed.data.headers !== undefined) {

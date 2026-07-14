@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { auditMCPServerCreate } from "@/lib/security/audit";
 import { encryptMcpHeaders } from "@/lib/mcp/header-crypto";
+import { validateMcpUrl } from "@/lib/security/ssrf-guard";
 
 const createServerSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
@@ -64,6 +65,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!parsed.success) {
       return NextResponse.json(
         { success: false, error: parsed.error.errors[0].message },
+        { status: 400 },
+      );
+    }
+
+    // F4-4: SSRF guard — reject private/metadata targets at registration
+    const ssrf = await validateMcpUrl(parsed.data.url);
+    if (!ssrf.allowed) {
+      return NextResponse.json(
+        { success: false, error: `URL rejected: ${ssrf.reason}` },
         { status: 400 },
       );
     }
