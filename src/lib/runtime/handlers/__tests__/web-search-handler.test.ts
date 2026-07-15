@@ -107,6 +107,44 @@ describe("webSearchHandler", () => {
     );
   });
 
+  it("forwards opt-in topic and days to Tavily when set on the node", async () => {
+    mockTavilySearch.mockResolvedValueOnce({ results: [] });
+
+    await webSearchHandler(
+      makeNode({ topic: "news", days: 14 }),
+      makeContext(),
+    );
+
+    expect(mockTavilySearch).toHaveBeenCalledWith(
+      "latest AI news",
+      expect.objectContaining({ topic: "news", days: 14 }),
+    );
+  });
+
+  it("omits topic and days when not set (default behaviour unchanged)", async () => {
+    mockTavilySearch.mockResolvedValueOnce({ results: [] });
+
+    await webSearchHandler(makeNode(), makeContext());
+
+    expect(mockTavilySearch).toHaveBeenCalledTimes(1);
+    const [, opts] = mockTavilySearch.mock.calls[0] as [string, Record<string, unknown>];
+    expect(opts).not.toHaveProperty("topic");
+    expect(opts).not.toHaveProperty("days");
+  });
+
+  it("ignores an invalid topic value and non-positive days", async () => {
+    mockTavilySearch.mockResolvedValueOnce({ results: [] });
+
+    await webSearchHandler(
+      makeNode({ topic: "bogus", days: -3 }),
+      makeContext(),
+    );
+
+    const [, opts] = mockTavilySearch.mock.calls[0] as [string, Record<string, unknown>];
+    expect(opts).not.toHaveProperty("topic");
+    expect(opts).not.toHaveProperty("days");
+  });
+
   it("handles API errors gracefully without crashing", async () => {
     mockTavilySearch.mockRejectedValueOnce(new Error("429 Rate limit exceeded"));
 
