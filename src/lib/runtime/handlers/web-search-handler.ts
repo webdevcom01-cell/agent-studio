@@ -28,6 +28,15 @@ export const webSearchHandler: NodeHandler = async (node, context) => {
   const includeImages = (node.data.includeImages as boolean) ?? false;
   const includeDomains = (node.data.includeDomains as string[]) ?? [];
   const excludeDomains = (node.data.excludeDomains as string[]) ?? [];
+  // Opt-in freshness controls (Tavily only). Default undefined → not forwarded,
+  // so existing web_search nodes keep byte-identical behaviour.
+  const topicRaw = node.data.topic as string | undefined;
+  const topic =
+    topicRaw === "news" || topicRaw === "general" || topicRaw === "finance"
+      ? topicRaw
+      : undefined;
+  const daysRaw = node.data.days as number | undefined;
+  const days = typeof daysRaw === "number" && daysRaw > 0 ? daysRaw : undefined;
   const outputVariable =
     (node.data.outputVariable as string) || DEFAULT_OUTPUT_VARIABLE;
 
@@ -75,6 +84,8 @@ export const webSearchHandler: NodeHandler = async (node, context) => {
         includeImages,
         includeDomains,
         excludeDomains,
+        topic,
+        days,
         apiKey: tavilyKey,
       });
     } else if (braveKey) {
@@ -156,6 +167,8 @@ interface TavilyOptions {
   includeImages: boolean;
   includeDomains: string[];
   excludeDomains: string[];
+  topic?: "general" | "news" | "finance";
+  days?: number;
   apiKey: string;
 }
 
@@ -172,6 +185,9 @@ async function searchTavily(
     includeImages: options.includeImages,
     includeDomains: options.includeDomains.length > 0 ? options.includeDomains : undefined,
     excludeDomains: options.excludeDomains.length > 0 ? options.excludeDomains : undefined,
+    // Opt-in freshness params — only forwarded when explicitly set on the node.
+    ...(options.topic ? { topic: options.topic } : {}),
+    ...(options.days !== undefined ? { days: options.days } : {}),
   });
 
   return (response.results ?? []).map((r) => ({
