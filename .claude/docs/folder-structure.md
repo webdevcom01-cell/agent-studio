@@ -2,7 +2,7 @@
 
 ```
 prisma/
-  schema.prisma         ← DB schema (36 models, pgvector, versioning, A2A, CLIGeneration, Evals, Schedules, Traces, ECC)
+  schema.prisma         ← DB schema (63 models, pgvector, versioning, A2A, CLIGeneration, Evals, Schedules, Traces, ECC)
   migrations/           ← auto-generated — never edit manually
 
 railway.toml            ← Railway deploy config (Nixpacks, healthcheck, 2 replicas)

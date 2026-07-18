@@ -126,13 +126,13 @@
 
 | Dokument | Opis |
 |----------|------|
-| `CLAUDE.md` | Projekt kontekst, tech stack, 61 node tip |
+| `CLAUDE.md` | Projekt kontekst, tech stack, 66 node tipova |
 | `TECH_DEBT.md` | Knip baseline (2026-04-28): 87 unused exports, 8 files, 18 deps |
 | `SAAS-MIGRATION-PLAN.md` | 24-nedeljni SaaS roadmap, Faza 0-8 |
 | `AGENT-EVAL-RESULTS.md` | 7D scoring rubric, SQL za brisanje dummy agenata |
 | `AGENT-IMPROVEMENT-PLAN.md` | Root cause: Code Gen Agent PR Gate fail |
 | `SDLC-AGENTS-PLAN.md` | 4 nova agenta + 3 upgrade-a, sve faze pending |
-| `CHANGELOG.md` | Semantic versioning, 55→61 node, 2880→3211 testova |
+| `CHANGELOG.md` | Semantic versioning, istorija rasta do 66 node tipova |
 | `Agent-Studio-Forensic-Analysis-2026-04-27.docx` | Kompletna forenzička analiza |
 
 ---

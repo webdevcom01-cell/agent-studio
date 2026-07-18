@@ -11,7 +11,7 @@ Add source (URL / text / file)
     ↓
 Scraping / parsing content
     ↓
-Chunking (splitting text into ~400 token pieces)
+Chunking (splitting text into ~512 token pieces)
     ↓
 Embedding (converting each chunk to a 1536-dimension vector)
     ↓
@@ -196,17 +196,17 @@ The number of results retrieved adapts to the query complexity:
 
 | Query Length | Results Retrieved |
 |-------------|-------------------|
-| Short (1-3 words) | 3 results |
-| Medium (4-8 words) | 5 results |
-| Long (9+ words) | 7 results |
+| Short (1-3 words) | up to 3 results |
+| Medium (4-8 words) | ~60% of the configured top-K |
+| Long (9+ words) | full configured top-K |
 
-Short queries are usually specific (e.g. "pricing"), so fewer results are needed. Longer queries benefit from more context.
+Short queries are usually specific (e.g. "pricing"), so fewer results are needed. Longer queries benefit from more context. The exact counts scale with the knowledge base's configured top-K setting.
 
 ### Weighted Hybrid Search
 
 Search combines two methods with weighted scoring:
-- **Semantic search (70%)** — finds content with similar meaning, even if different words are used
-- **BM25 keyword search (30%)** — finds exact keyword matches, good for technical terms and proper nouns
+- **Semantic search (70% by default, 80% when contextual enrichment is enabled)** — finds content with similar meaning, even if different words are used
+- **BM25 keyword search (30% by default, 20% with contextual enrichment)** — finds exact keyword matches, good for technical terms and proper nouns
 
 This weighted approach means semantic similarity drives most results, but exact matches still get a boost.
 
@@ -218,10 +218,10 @@ Retrieved chunks are capped at 4000 tokens total. This prevents overloading the 
 
 ## Technical Details
 
-- Chunk size: ~400 tokens with 20% overlap between chunks
+- Chunk size: 512 tokens (default) with ~20% overlap between chunks
 - Embedding model: OpenAI text-embedding-3-small (1536 dimensions)
 - Search: Hybrid (semantic cosine similarity + BM25 keyword search)
-- Ranking: Reciprocal Rank Fusion (70/30 semantic/keyword) + optional LLM re-ranking
+- Ranking: Reciprocal Rank Fusion (70/30 semantic/keyword by default; 80/20 with contextual enrichment; configurable per KB via hybridAlpha) + optional LLM re-ranking
 - Parent retrieval: Automatic expansion to neighboring chunks within 4000 token budget
 - Similarity threshold: 0.25 minimum relevance score
 - Storage: PostgreSQL with pgvector extension

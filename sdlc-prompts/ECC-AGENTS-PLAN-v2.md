@@ -234,7 +234,7 @@ High-value standalone agents. Lighter XML wrapper — no pipeline_context needed
 - **Prompt strategy:** XML wrapper with:
   - pgvector 0.8.0 specifics (HNSW m=16, ef_construction=64, cosine distance)
   - Supabase constraints, port 6543/5432
-  - 36 Prisma models awareness
+  - 63 Prisma models awareness
   - Cascade delete verification checklist
 - **Tags:** `database`, `postgresql`, `prisma`, `pgvector`, `ecc-origin`
 
@@ -302,7 +302,7 @@ Use ECC prompts as-is with minimal changes.
 ### C3. API Tester Agent
 - **ECC source:** `ecc-api-tester`
 - **Model:** `claude-haiku-4-5-20251001`
-- **Scope:** agent-studio's 80+ API routes
+- **Scope:** agent-studio's 170 API routes
 - **Tags:** `api`, `testing`, `endpoints`, `ecc-origin`
 
 ### C4. Accessibility Auditor Agent

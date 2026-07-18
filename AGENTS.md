@@ -37,8 +37,8 @@ PostgreSQL RLS (`withOrgContext` middleware).
   - ⚠️ PRODUCTION DB = Railway PostgreSQL (postgres.railway.internal) — NOT Supabase
   - Supabase project `elegzqtlqkcvqhpklykl` is PAUSED/UNUSED — do not query it
 - **AI:** Vercel AI SDK v6 (`ai@6.0.116`) — never raw fetch to providers
-  - **Chat (required):** DeepSeek (default), OpenAI; **optional:** Anthropic, Gemini, Groq, Mistral, Moonshot
-  - **Model catalog:** `src/lib/models.ts` — client-safe, 18 models across 6 providers
+  - **Chat (required):** DeepSeek (default), OpenAI; **optional:** Anthropic, Gemini, Groq, Mistral, Moonshot, Ollama (local)
+  - **Model catalog:** `src/lib/models.ts` — client-safe, 20 models across 8 providers
   - **Embeddings:** OpenAI `text-embedding-3-small` (1536 dim) — required
 - **Queue:** BullMQ + ioredis v5 — managed async tasks + cross-replica shared state
 - **Auth:** NextAuth v5 + PrismaAdapter, JWT sessions, GitHub + Google OAuth

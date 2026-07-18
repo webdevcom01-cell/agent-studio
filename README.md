@@ -104,17 +104,18 @@ Open [http://localhost:3000](http://localhost:3000) and create your first agent.
 
 ## Supported AI Providers
 
-Agent Studio works with **18 models across 7 providers** out of the box. Add the corresponding API key to unlock each tier.
+Agent Studio works with **20 models across 8 providers** out of the box (Ollama runs locally). Add the corresponding API key to unlock each tier.
 
 | Provider | Models | Tier |
 |---|---|---|
 | **DeepSeek** *(default)* | `deepseek-chat`, `deepseek-reasoner` | Fast · Powerful |
-| **OpenAI** | `gpt-4.1-mini`, `gpt-4.1`, `o4-mini`, `o3` | Fast · Balanced · Powerful |
+| **OpenAI** | `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1`, `o4-mini`, `o3` | Fast · Balanced · Powerful |
 | **Anthropic** | `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-6` | Fast · Balanced · Powerful |
 | **Google Gemini** | `gemini-2.5-flash`, `gemini-2.5-pro` | Fast · Powerful |
 | **Groq** | `llama-3.3-70b-versatile`, `compound-beta` | Fast |
 | **Mistral** | `mistral-small-3.1`, `mistral-medium-3`, `mistral-large-2512` | Fast · Balanced · Powerful |
 | **Moonshot / Kimi** | `kimi-k2`, `kimi-k2-thinking` | Balanced · Powerful |
+| **Ollama** *(local)* | `ollama/qwen3:8b` | Fast |
 
 > **Required:** `OPENAI_API_KEY` is always needed for embeddings (`text-embedding-3-small`). All other providers are optional.
 
@@ -319,7 +320,7 @@ pnpm precheck:file    # Same, for a specific file
 | Language | TypeScript strict |
 | Styling | Tailwind CSS v4 |
 | Database | PostgreSQL + pgvector, Prisma v6 |
-| AI | Vercel AI SDK v6 (7 providers, 18 models) |
+| AI | Vercel AI SDK v6 (8 providers, 20 models) |
 | Auth | NextAuth v5 (GitHub + Google OAuth) |
 | Flow Editor | @xyflow/react v12 |
 | MCP | @ai-sdk/mcp (Streamable HTTP + SSE) |
