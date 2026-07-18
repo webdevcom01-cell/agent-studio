@@ -9,7 +9,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 Visual AI agent builder with multi-agent orchestration and continuous learning. Build AI agents
 via a flow editor (XyFlow), manage knowledge bases with RAG (chunking + embeddings + hybrid
 search), enable agent-to-agent communication (A2A protocol), and chat with agents. Features:
-agent marketplace (221 templates, 19 categories), agent-as-tool orchestration, web browsing via
+agent marketplace (221 templates, 20 categories), agent-as-tool orchestration, web browsing via
 MCP, embeddable chat widget, CLI Generator (6-phase AI pipeline, dual-target FastMCP/Node.js MCP),
 Agent Evals (3-layer: deterministic + semantic + LLM-as-Judge), inbound webhooks (Standard
 Webhooks, HMAC-SHA256), **claude_agent_sdk node** (subagent spawning, DB-backed session
@@ -37,8 +37,8 @@ PostgreSQL RLS (`withOrgContext` middleware).
   - ⚠️ PRODUCTION DB = Railway PostgreSQL (postgres.railway.internal) — NOT Supabase
   - Supabase project `elegzqtlqkcvqhpklykl` is PAUSED/UNUSED — do not query it
 - **AI:** Vercel AI SDK v6 (`ai@6.0.116`) — never raw fetch to providers
-  - **Chat (required):** DeepSeek (default), OpenAI; **optional:** Anthropic, Gemini, Groq, Mistral, Moonshot
-  - **Model catalog:** `src/lib/models.ts` — client-safe, 18 models across 6 providers
+  - **Chat (required):** DeepSeek (default), OpenAI; **optional:** Anthropic, Gemini, Groq, Mistral, Moonshot, Ollama (local)
+  - **Model catalog:** `src/lib/models.ts` — client-safe, 20 models across 8 providers
   - **Embeddings:** OpenAI `text-embedding-3-small` (1536 dim) — required
 - **Queue:** BullMQ + ioredis v5 — managed async tasks + cross-replica shared state
 - **Auth:** NextAuth v5 + PrismaAdapter, JWT sessions, GitHub + Google OAuth

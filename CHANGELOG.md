@@ -8,6 +8,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Documentation (2026-07-18)
+- **DOC-REORG** — `docs/` reorganized to the Diátaxis structure: `01-getting-started/`, `02-guides/`, `03-reference/` (incl. `nodes/`), `04-explanation/`, `_archive/`. Serbian filenames renamed (`02-nodes-osnovno` → `nodes/basic`, `05-nodes-integracije` → `nodes/integrations`); root `RLS-TESTING.md` → `docs/02-guides/rls-testing.md`; 29 working docs + `docs/design/` + old `docs/archive/` consolidated under `docs/_archive/`. New navigation index at `docs/README.md`. All internal links repaired; live references updated (`CLAUDE.md`, `TECH_DEBT.md`, CI workflows, `skills/rls-rollout`).
+- **DOC-NEW** — Generated reference docs from code: `docs/03-reference/api.md` (170 routes from `src/app/api/**/route.ts`), `data-model.md` (63 models from `prisma/schema.prisma`), `config-env.md` (env vars from `.env.example` + `process.env` usage), `glossary.md`.
+- **DOC-FIX** — Stale counts synced to code repo-wide: 20 models / 8 providers (`src/lib/models.ts`), 30 ECC templates, 221 templates in 20 categories, 24 discover categories, 333 unit-test files, chunk default 512 tokens, hybridAlpha 0.7/0.8, 67 handler registry keys (66 `NodeType` + internal `code_review`). Affected: `README.md`, `AGENTS.md`, `CLAUDE.md`, `FEATURES.md`, `SPRINT-BOARD.md`, `.claude/docs/*` (text-only), `sdlc-prompts/*`, `website/docs/intro.md`.
+- **DOC-FIX** — `FEATURES.md`: `google_workspace` removed from the node-type table (not a formal `NodeType` — reachable via `mcp_tool` MCP proxy); table now has exactly 66 rows.
+- **PRIVACY** — Untracked 93 files already covered by `.gitignore`: 77 eval-workspace fixtures, `docs/deployment/` (3), `docs/forensics/` (8), 5 root `.skill` bundles.
+
 ### Documentation (2026-06-27)
 - **DOC-FIX** — Corrected stale counts repo-wide: node types 55 → **66**, Prisma models 36 → **63**, API routes → **170**, UI components → **123** (`README.md`, `FEATURES.md`). Source of truth: `src/types/index.ts` `NodeType` union and `prisma/schema.prisma`.
 - **DOC-FIX** — `docs/10-node-reference.md`: documented the 5 previously-missing nodes (`claude_agent_sdk`, `deploy_trigger`, `file_writer`, `git_node`, `process_runner`); now covers all 66.

@@ -2,7 +2,7 @@
 
 > **Svrha:** Referentni dokument za Claude Code sesije. Sve što projekat ima — na jednom mestu.
 > **Ažurirano:** April 2026 (dubinska analiza koda)
-> **Statistike:** 66 node tipova · 170+ API routes · 123+ UI komponenti · 63 Prisma modela · 322 test fajla (4000+ testova)
+> **Statistike:** 66 node tipova · 170+ API routes · 123+ UI komponenti · 63 Prisma modela · 333 test fajla (4000+ testova)
 
 ---
 
@@ -95,7 +95,8 @@
 | `speech_audio` | speech-audio-handler.ts | TTS (Eleven Labs) i STT (Deepgram) |
 | `multimodal_input` | multimodal-input-handler.ts | Prihvatanje slika, audio, fajlova od korisnika |
 | `desktop_app` | desktop-app-handler.ts | Desktop automation (zahteva instaliranog agenta) |
-| `google_workspace` | (via MCP proxy) | Google Sheets, Docs, Drive, Calendar, Gmail |
+
+> **Napomena:** Google Workspace (Sheets, Docs, Drive, Calendar, Gmail) nije formalni `NodeType` — dostupan je kroz `mcp_tool` node via MCP proxy (v. sekciju 22).
 
 ### Transformacija podataka
 | Node | Handler | Opis |
@@ -150,7 +151,7 @@
 | `python-executor.ts` | Python execution via Pyodide WASM worker |
 | `workers/pyodide-node-worker.js` | Node.js Worker thread sa Pyodide |
 | `types.ts` | RuntimeContext, ExecutionResult, NodeHandler, StreamChunk tipovi |
-| `handlers/index.ts` | Registry svih 66 handlera |
+| `handlers/index.ts` | Registry — 67 handler ključeva (66 NodeType + interni `code_review`) |
 
 **Sigurnosni limiti:** MAX_ITERATIONS=50 · MAX_HISTORY=100 · function timeout 5s · Python timeout 30s
 
@@ -292,7 +293,7 @@
 
 **Lokacija:** `src/lib/ecc/`, `services/ecc-skills-mcp/`
 
-- **29 ECC agent template-a** u `src/data/ecc-agent-templates.json`
+- **30 ECC agent template-a** u `src/data/ecc-agent-templates.json`
 - **60+ skills** ingested i vektorizovani u KB
 - **Skills Browser** na `/skills` sa search + faceted filter (jezik, kategorija, agent)
 - **Meta-Orchestrator:** LLM-based task routing ka odgovarajućem agentu
@@ -381,7 +382,7 @@
 
 - Faceted search: kategorija, tag, model, sortiranje, scope (public/mine/all)
 - 4 paralelne Prisma query-je (agenti, count, category stats, tag agregacija)
-- 23 kategorije (uključujući marketplace-only)
+- 24 kategorije (uključujući marketplace-only)
 - Debounced search 300ms
 - Agent model fields: `category String?`, `tags String[]`, `isPublic Boolean`
 
@@ -391,7 +392,7 @@
 
 **Lokacija:** `src/data/agent-templates.json`, `src/app/templates/page.tsx`
 
-- 221 template-a u 19 kategorija
+- 221 template-a u 20 kategorija
 - Kategorije pokrivene: customer-support, coding, data, finance, hr, sales, research, writing, itd.
 - Starter flows za odabrane template-e (pre-populated 3-5 nodova)
 - Browse Templates tab u "New Agent" dialogu
@@ -662,7 +663,7 @@
 
 ### Unit testovi
 - **Framework:** Vitest + @testing-library/react
-- **Broj:** 4000+ testova u 322 test fajla
+- **Broj:** 4000+ testova u 333 test fajla
 - **Lokacija:** `src/**/__tests__/*.test.ts`
 - **Coverage:** handlers, evals, webhooks, CLI generator, auth, security, safety, cache, cost
 

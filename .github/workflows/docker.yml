@@ -12,7 +12,7 @@ jobs:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
     # Raised from 30 -> 45 min. Phase 0a docker build clocked 30m 29s and was
-    # cancelled — see docs/rls-tech-debt.md item #1. Combined with dropping the
+    # cancelled — see docs/_archive/rls-tech-debt.md item #1. Combined with dropping the
     # linux/arm64 QEMU leg below, this gives comfortable headroom.
     timeout-minutes: 45
 

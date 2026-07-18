@@ -2,7 +2,7 @@
 
 ```
 prisma/
-  schema.prisma         ← DB schema (36 models, pgvector, versioning, A2A, CLIGeneration, Evals, Schedules, Traces, ECC)
+  schema.prisma         ← DB schema (63 models, pgvector, versioning, A2A, CLIGeneration, Evals, Schedules, Traces, ECC)
   migrations/           ← auto-generated — never edit manually
 
 railway.toml            ← Railway deploy config (Nixpacks, healthcheck, 2 replicas)
@@ -41,7 +41,7 @@ src/
     login/page.tsx                    ← Login page (GitHub + Google OAuth)
     analytics/page.tsx                ← Analytics dashboard (charts, response times, KB stats)
     discover/page.tsx                 ← Agent Discovery Marketplace (faceted search, categories, tags)
-    templates/page.tsx                ← Agent Templates Gallery (221 templates, 19 categories)
+    templates/page.tsx                ← Agent Templates Gallery (221 templates, 20 categories)
     templates/templates-client.tsx    ← Templates client component (search + filter)
     builder/[agentId]/page.tsx        ← Flow editor page
     builder/[agentId]/error.tsx       ← Error boundary (Flow Editor Error)
@@ -172,14 +172,14 @@ src/
     theme-provider.tsx    ← Dark mode theme provider
 
   data/
-    agent-templates.json      ← 221 agent templates across 19 categories
-    ecc-agent-templates.json  ← 29 ECC Developer Agent templates (separate from existing 221)
+    agent-templates.json      ← 221 agent templates across 20 categories
+    ecc-agent-templates.json  ← 30 ECC Developer Agent templates (separate from existing 221)
     starter-flows.ts          ← Pre-populated FlowContent for selected templates
     devsecops-kb/             ← Static KB content for DevSecOps agents
 
   lib/
     ai.ts             ← AI model routing (DeepSeek/OpenAI/Anthropic/Gemini/Groq/Mistral/Kimi)
-    models.ts         ← Client-safe model catalog (18 models, 6 providers, fast/balanced/powerful tiers)
+    models.ts         ← Client-safe model catalog (20 models, 8 providers, fast/balanced/powerful tiers)
     auth.ts           ← NextAuth config (GitHub + Google providers, PrismaAdapter, JWT)
     analytics.ts      ← Fire-and-forget analytics tracking
     env.ts            ← Environment variable validation (Zod schema)

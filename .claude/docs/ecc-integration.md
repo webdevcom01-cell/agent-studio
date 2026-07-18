@@ -72,7 +72,7 @@ src/lib/ecc/
   └── types.ts                        # ECC-specific TypeScript interfaces
 
 src/data/
-  └── ecc-agent-templates.json        # 29 ECC agent templates
+  └── ecc-agent-templates.json        # 30 ECC agent templates
 
 src/app/skills/page.tsx               # Skill Browser UI
 src/app/api/ecc/ingest-skills/route.ts # POST — async bulk skill ingestion
@@ -99,7 +99,7 @@ Models added: AgentExecution, Skill, AgentSkillPermission, Instinct, AuditLog.
 See `.claude/docs/prisma-models.md` for full schema definitions.
 Agent model extended with: executions, skillPermissions, instincts, eccEnabled.
 
-### Phase 1: Import 29 ECC Agents as Templates
+### Phase 1: Import 30 ECC Agents as Templates
 - New category "Developer Agents" in `src/lib/constants/agent-categories.ts`
 - `src/data/ecc-agent-templates.json` — 29 templates, separate from existing 221
 - Import script: `scripts/import-ecc-agents.mjs`

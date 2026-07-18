@@ -104,17 +104,18 @@ Open [http://localhost:3000](http://localhost:3000) and create your first agent.
 
 ## Supported AI Providers
 
-Agent Studio works with **18 models across 7 providers** out of the box. Add the corresponding API key to unlock each tier.
+Agent Studio works with **20 models across 8 providers** out of the box (Ollama runs locally). Add the corresponding API key to unlock each tier.
 
 | Provider | Models | Tier |
 |---|---|---|
 | **DeepSeek** *(default)* | `deepseek-chat`, `deepseek-reasoner` | Fast · Powerful |
-| **OpenAI** | `gpt-4.1-mini`, `gpt-4.1`, `o4-mini`, `o3` | Fast · Balanced · Powerful |
+| **OpenAI** | `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1`, `o4-mini`, `o3` | Fast · Balanced · Powerful |
 | **Anthropic** | `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-6` | Fast · Balanced · Powerful |
 | **Google Gemini** | `gemini-2.5-flash`, `gemini-2.5-pro` | Fast · Powerful |
 | **Groq** | `llama-3.3-70b-versatile`, `compound-beta` | Fast |
 | **Mistral** | `mistral-small-3.1`, `mistral-medium-3`, `mistral-large-2512` | Fast · Balanced · Powerful |
 | **Moonshot / Kimi** | `kimi-k2`, `kimi-k2-thinking` | Balanced · Powerful |
+| **Ollama** *(local)* | `ollama/qwen3:8b` | Fast |
 
 > **Required:** `OPENAI_API_KEY` is always needed for embeddings (`text-embedding-3-small`). All other providers are optional.
 
@@ -319,7 +320,7 @@ pnpm precheck:file    # Same, for a specific file
 | Language | TypeScript strict |
 | Styling | Tailwind CSS v4 |
 | Database | PostgreSQL + pgvector, Prisma v6 |
-| AI | Vercel AI SDK v6 (7 providers, 18 models) |
+| AI | Vercel AI SDK v6 (8 providers, 20 models) |
 | Auth | NextAuth v5 (GitHub + Google OAuth) |
 | Flow Editor | @xyflow/react v12 |
 | MCP | @ai-sdk/mcp (Streamable HTTP + SSE) |
@@ -351,7 +352,7 @@ src/
     ecc/                    # ECC module
     evals/                  # Eval runner
     mcp/                    # MCP client + pool
-  data/                     # 250 agent templates (221 + 29 ECC)
+  data/                     # 251 agent templates (221 + 30 ECC)
 services/ecc-skills-mcp/    # Python FastMCP server (Railway service)
 e2e/                        # Playwright E2E tests
 docs/                       # Documentation
@@ -364,12 +365,12 @@ scripts/                    # Dev tooling (pre-push-check.sh)
 
 | Document | Description |
 |---|---|
-| [Platform Overview](docs/01-overview.md) | Features and architecture |
-| [Getting Started](docs/08-getting-started.md) | Setup guide |
-| [Node Reference](docs/10-node-reference.md) | All 66 node types |
-| [Knowledge Base Guide](docs/09-knowledge-base-guide.md) | RAG pipeline |
-| [CLI Generator](docs/12-cli-generator.md) | MCP bridge generation |
-| [Agent Evals](docs/13-agent-evals.md) | Testing framework |
+| [Platform Overview](docs/01-getting-started/overview.md) | Features and architecture |
+| [Getting Started](docs/01-getting-started/quick-start.md) | Setup guide |
+| [Node Reference](docs/03-reference/nodes/reference.md) | All 66 node types |
+| [Knowledge Base Guide](docs/01-getting-started/knowledge-base.md) | RAG pipeline |
+| [CLI Generator](docs/02-guides/cli-generator.md) | MCP bridge generation |
+| [Agent Evals](docs/02-guides/agent-evals.md) | Testing framework |
 | [CHANGELOG](CHANGELOG.md) | Version history |
 
 ---

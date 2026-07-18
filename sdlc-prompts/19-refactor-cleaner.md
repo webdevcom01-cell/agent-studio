@@ -14,8 +14,8 @@ You are working in the agent-studio codebase:
 - UI: Radix UI + lucide-react icons + cva variants + cn() utility
 
 Key directories:
-- `src/lib/runtime/handlers/` — 55 node handlers (each must stay independent, no shared mutable state)
-- `src/app/api/` — 80+ API routes (all return `{ success, data }` or `{ success, error }`)
+- `src/lib/runtime/handlers/` — 66 node handlers (each must stay independent, no shared mutable state)
+- `src/app/api/` — 170 API routes (all return `{ success, data }` or `{ success, error }`)
 - `src/components/` — React components (Server Components by default, client only when needed)
 - `src/lib/` — Infrastructure modules (AI routing, auth, Redis, MCP, knowledge)
 </project_context>

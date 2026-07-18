@@ -7,7 +7,7 @@
 
 ## Context
 
-The 29 ECC (everything-claude-code) agents currently exist **only as JSON templates** in
+The 30 ECC (everything-claude-code) agents currently exist **only as JSON templates** in
 `src/data/ecc-agent-templates.json`. They are not live agents in the Railway production database.
 
 The 7 SDLC Pipeline agents we built in the previous session ARE live:
@@ -107,7 +107,7 @@ day-to-day development on the agent-studio codebase.
 
 ### B2. Database Reviewer
 - **Model:** `claude-sonnet-4-6`
-- **Why:** agent-studio is PostgreSQL/Prisma/pgvector heavy. 36 models, HNSW indexes, cascade
+- **Why:** agent-studio is PostgreSQL/Prisma/pgvector heavy. 63 models, HNSW indexes, cascade
   deletes — a specialist is valuable. Unique to our stack.
 - **Prompt strategy:** XML format, add pgvector/HNSW context, Supabase constraints, Prisma v6
 - **Tags:** database, postgresql, prisma, pgvector
@@ -130,7 +130,7 @@ day-to-day development on the agent-studio codebase.
 
 ### B5. Refactor Cleaner
 - **Model:** `claude-sonnet-4-6`
-- **Why:** Large codebase (55 node handlers, 179 test files, 36 Prisma models). Dead code
+- **Why:** Large codebase (66 node handlers, 333 test files, 63 Prisma models). Dead code
   accumulates. This agent does surgical cleanup safely.
 - **Prompt strategy:** Use ECC prompt, add note about never touching `src/generated/`
 - **Tags:** refactoring, cleanup, dead-code
@@ -169,7 +169,7 @@ Valuable for specific scenarios, lower urgency. Create after Phase B is complete
 
 ### C3. API Tester
 - **Model:** `claude-haiku-4-5-20251001`
-- **Why:** agent-studio has 80+ API routes. Complement to the Evals framework — manual API
+- **Why:** agent-studio has 170 API routes. Complement to the Evals framework — manual API
   testing vs automated evals. Haiku is fast and cheap enough for this.
 - **Tags:** api, testing, endpoints
 
