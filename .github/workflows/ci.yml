@@ -165,7 +165,7 @@ jobs:
     # agent-import-export.spec.ts — see CI run #770). continue-on-error
     # keeps the workflow green so Railway deploys can proceed while a
     # dedicated workstream fixes the failing tests. Revert this line when
-    # E2E tests are repaired — tracked in docs/rls-tech-debt.md item #4.
+    # E2E tests are repaired — tracked in docs/_archive/rls-tech-debt.md item #4.
     continue-on-error: true
     if: >-
       github.event_name == 'workflow_dispatch' && github.event.inputs.run_e2e == 'true' ||

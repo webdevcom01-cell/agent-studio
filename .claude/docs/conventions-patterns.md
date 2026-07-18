@@ -181,7 +181,7 @@ PDF (pdf-parse), DOCX (mammoth), HTML (cheerio), Excel/CSV (xlsx), PPTX (JSZip X
 - Debounced search (300ms), loading skeletons, active filter pills
 
 ## Agent Templates
-- 221 templates in `src/data/agent-templates.json` across 19 categories
+- 221 templates in `src/data/agent-templates.json` across 20 categories
 - Dashboard "New Agent" dialog includes "Browse Templates" tab
 - When adding templates: update `src/data/agent-templates.json` array + header `total` + `categories` list
 

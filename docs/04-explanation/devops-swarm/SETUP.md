@@ -374,5 +374,5 @@ Code pushed to GitHub is irreversible in practice (even with rollback, the commi
 ## Related Documentation
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — System design and data flow
-- [Node Reference](../10-node-reference.md) — All 55 flow node types
-- [Agent Evals Guide](../13-agent-evals.md) — Testing agent pipelines
+- [Node Reference](../../03-reference/nodes/reference.md) — All 55 flow node types
+- [Agent Evals Guide](../../02-guides/agent-evals.md) — Testing agent pipelines

@@ -9,7 +9,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 Visual AI agent builder with multi-agent orchestration and continuous learning. Build AI agents
 via a flow editor (XyFlow), manage knowledge bases with RAG (chunking + embeddings + hybrid
 search), enable agent-to-agent communication (A2A protocol), and chat with agents. Features:
-agent marketplace (221 templates, 19 categories), agent-as-tool orchestration, web browsing via
+agent marketplace (221 templates, 20 categories), agent-as-tool orchestration, web browsing via
 MCP, embeddable chat widget, CLI Generator (6-phase AI pipeline, dual-target FastMCP/Node.js MCP),
 Agent Evals (3-layer: deterministic + semantic + LLM-as-Judge), inbound webhooks (Standard
 Webhooks, HMAC-SHA256), **claude_agent_sdk node** (subagent spawning, DB-backed session

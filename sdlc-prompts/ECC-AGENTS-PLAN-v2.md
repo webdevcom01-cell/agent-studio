@@ -29,7 +29,7 @@
 
 ## Context
 
-29 ECC agents exist as JSON templates in `src/data/ecc-agent-templates.json`.
+30 ECC agents exist as JSON templates in `src/data/ecc-agent-templates.json`.
 7 SDLC Pipeline agents are live in production (23/23 tests passed).
 
 This plan creates the remaining agents needed to complete the ecosystem, wire them together

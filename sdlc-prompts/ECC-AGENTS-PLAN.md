@@ -7,7 +7,7 @@
 
 ## Context
 
-The 29 ECC (everything-claude-code) agents currently exist **only as JSON templates** in
+The 30 ECC (everything-claude-code) agents currently exist **only as JSON templates** in
 `src/data/ecc-agent-templates.json`. They are not live agents in the Railway production database.
 
 The 7 SDLC Pipeline agents we built in the previous session ARE live:

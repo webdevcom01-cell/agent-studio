@@ -33,7 +33,7 @@ paths use `prismaAdmin` (BYPASSRLS / `admin_user`).
 ### 🔴 Remaining for FULL cutover (the real open work)
 1. Flip the **`rls-enforcement`** feature flag ON in production.
 2. Point the app's runtime connection at **`app_user`** (`DATABASE_URL_APP_USER` — currently commented out in `.env.example`; primary `DATABASE_URL` likely still a bypass role).
-3. Run **cross-tenant isolation tests** in staging (`skills/rls-rollout/` + `docs/rls-phase-0d-test-plan.md`) and verify no read breakage.
+3. Run **cross-tenant isolation tests** in staging (`skills/rls-rollout/` + `docs/_archive/rls-phase-0d-test-plan.md`) and verify no read breakage.
 4. Confirm cascade policies fully cover standalone child tables, or add `organizationId` where a direct column is needed.
 5. Staged enable → monitor → rollback plan ready (`skills/rls-rollout/rollback.sh`).
 

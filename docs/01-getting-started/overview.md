@@ -104,13 +104,13 @@ When a user sends a message:
 
 ## Available AI Models
 
-18 models across 7 providers, tiered by capability:
+20 models across 8 providers, tiered by capability:
 
 | Tier | Models |
 |------|--------|
-| Fast | deepseek-chat, gpt-4.1-mini, claude-haiku-4-5, gemini-2.5-flash, llama-3.3-70b, mistral-small-3.1 |
-| Balanced | gpt-4.1, claude-sonnet-4-6, compound-beta, mistral-medium-3, kimi-k2 |
-| Powerful | deepseek-reasoner, o4-mini, o3, claude-opus-4-6, gemini-2.5-pro, mistral-large-3, kimi-k2-thinking |
+| Fast | gpt-4o-mini, gpt-4.1-mini, claude-haiku-4-5-20251001, gemini-2.5-flash, llama-3.3-70b-versatile, mistral-small-3.1-2503, ollama/qwen3:8b |
+| Balanced | deepseek-chat, gpt-4.1, claude-sonnet-4-6, compound-beta, mistral-medium-3, kimi-k2-0905-preview |
+| Powerful | deepseek-reasoner, o4-mini, o3, claude-opus-4-6, gemini-2.5-pro, mistral-large-2512, kimi-k2-thinking |
 
 DeepSeek is the default. OpenAI API key is required for embeddings (DeepSeek has no embedding support).
 

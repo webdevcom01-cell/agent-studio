@@ -39,7 +39,7 @@ Open [http://localhost:3000](http://localhost:3000) and create your first agent.
 | Framework | Next.js 15.5, App Router, Turbopack |
 | Language | TypeScript strict |
 | Database | PostgreSQL + pgvector, Prisma v6 |
-| AI | Vercel AI SDK v6 (7 providers, 18 models) |
+| AI | Vercel AI SDK v6 (8 providers, 20 models) |
 | Auth | NextAuth v5 (GitHub + Google OAuth) |
 | Flow Editor | @xyflow/react v12 |
 

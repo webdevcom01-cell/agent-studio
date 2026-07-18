@@ -177,7 +177,7 @@ Generates text using a language model. The primary node for conversational AI, R
 | Field | Required | Default | Description |
 |---|:---:|---|---|
 | System Prompt | — | — | Instructions defining model behavior and persona. Supports `{{variables}}` and `{{kb_context}}`. |
-| Model | — | `deepseek-chat` | The AI model to use. See [Supported Models](../README.md#supported-ai-providers). |
+| Model | — | `deepseek-chat` | The AI model to use. See [Supported Models](../../../README.md#supported-ai-providers). |
 | Max Tokens | — | `500` | Maximum response length in tokens. |
 | Output Variable | — | — | If set, stores the response in this variable for later use. |
 | Output Schema | — | — | Named schema to enforce on the response JSON: `CodeGenOutput`, `PRGateOutput`, `ArchitectureOutput`. When set, uses `generateObject` to force structured output. If the response doesn't match the schema, an error is returned. |

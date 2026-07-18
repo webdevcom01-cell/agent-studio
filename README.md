@@ -352,7 +352,7 @@ src/
     ecc/                    # ECC module
     evals/                  # Eval runner
     mcp/                    # MCP client + pool
-  data/                     # 250 agent templates (221 + 29 ECC)
+  data/                     # 251 agent templates (221 + 30 ECC)
 services/ecc-skills-mcp/    # Python FastMCP server (Railway service)
 e2e/                        # Playwright E2E tests
 docs/                       # Documentation
@@ -365,12 +365,12 @@ scripts/                    # Dev tooling (pre-push-check.sh)
 
 | Document | Description |
 |---|---|
-| [Platform Overview](docs/01-overview.md) | Features and architecture |
-| [Getting Started](docs/08-getting-started.md) | Setup guide |
-| [Node Reference](docs/10-node-reference.md) | All 66 node types |
-| [Knowledge Base Guide](docs/09-knowledge-base-guide.md) | RAG pipeline |
-| [CLI Generator](docs/12-cli-generator.md) | MCP bridge generation |
-| [Agent Evals](docs/13-agent-evals.md) | Testing framework |
+| [Platform Overview](docs/01-getting-started/overview.md) | Features and architecture |
+| [Getting Started](docs/01-getting-started/quick-start.md) | Setup guide |
+| [Node Reference](docs/03-reference/nodes/reference.md) | All 66 node types |
+| [Knowledge Base Guide](docs/01-getting-started/knowledge-base.md) | RAG pipeline |
+| [CLI Generator](docs/02-guides/cli-generator.md) | MCP bridge generation |
+| [Agent Evals](docs/02-guides/agent-evals.md) | Testing framework |
 | [CHANGELOG](CHANGELOG.md) | Version history |
 
 ---

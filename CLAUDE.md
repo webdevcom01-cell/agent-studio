@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Visual AI agent builder with multi-agent orchestration and continuous learning. Build AI agents
 via a flow editor (XyFlow), manage knowledge bases with RAG (chunking + embeddings + hybrid
 search), enable agent-to-agent communication (A2A protocol), and chat with agents. Features:
-agent marketplace (221 templates, 19 categories), agent-as-tool orchestration, web browsing via
+agent marketplace (221 templates, 20 categories), agent-as-tool orchestration, web browsing via
 MCP, embeddable chat widget, CLI Generator (6-phase AI pipeline, dual-target FastMCP/Node.js MCP),
 Agent Evals (3-layer: deterministic + semantic + LLM-as-Judge), inbound webhooks (Standard
 Webhooks, HMAC-SHA256), **claude_agent_sdk node** (subagent spawning, DB-backed session
@@ -38,13 +38,13 @@ PostgreSQL RLS (`withOrgContext` middleware).
   - Supabase project `elegzqtlqkcvqhpklykl` is PAUSED/UNUSED — do not query it
 - **AI:** Vercel AI SDK v6 (`ai@6.0.116`) — never raw fetch to providers
   - **Chat (required):** DeepSeek (default), OpenAI; **optional:** Anthropic, Gemini, Groq, Mistral, Moonshot
-  - **Model catalog:** `src/lib/models.ts` — client-safe, 18 models across 6 providers
+  - **Model catalog:** `src/lib/models.ts` — client-safe, 20 models across 8 providers
   - **Embeddings:** OpenAI `text-embedding-3-small` (1536 dim) — required
 - **Queue:** BullMQ + ioredis v5 — managed async tasks + cross-replica shared state
 - **Auth:** NextAuth v5 + PrismaAdapter, JWT sessions, GitHub + Google OAuth
 - **MCP:** @ai-sdk/mcp — Streamable HTTP + SSE transports
 - **Validation:** Zod v3 | **UI:** Radix UI + lucide-react | **Flow editor:** @xyflow/react v12
-- **Tests:** Vitest + @vitest/coverage-v8 (unit) | Playwright (E2E, 10 spec files)
+- **Tests:** Vitest + @vitest/coverage-v8 (unit) | Playwright (E2E, 11 spec files)
 - **Utilities:** SWR, recharts, Sonner, cva, clsx, tailwind-merge
 
 ---
@@ -76,7 +76,7 @@ PostgreSQL RLS (`withOrgContext` middleware).
 - Client hook: `useStreamingChat` in `src/components/chat/use-streaming-chat.ts`
 
 ### Knowledge/RAG
-- Ingest → chunk (400 tokens) → embed (OpenAI) → pgvector
+- Ingest → chunk (512 tokens default) → embed (OpenAI) → pgvector
 - Search: hybrid (semantic 70% + BM25 30%) → optional LLM re-ranking, HNSW sub-10ms
 
 ### Auth
@@ -181,10 +181,10 @@ All API routes: `{ success: true, data: T }` or `{ success: false, error: string
 ## RLS Rollout Status
 
 - **Live (Phase 0 — 10/10 sub-phases):** 0a (withOrgContext $transaction), 0a.5 (HAL-8 hotfix), 0a.6 (Sentry 42501), 0b (DB roles), 0e (hnsw in tx), 0a.7 (CI fix — PR #114), 0f (feature flag — PR #115), 0c (JWT currentOrgId + ALS — PR #118), 0d (personal org backfill — PR #119), 0b.5 (raw $transaction refactor — PR #121)
-- **Live (Phase 1 prep):** 0a.7b (schema drift reconciliation — PR #125 merged 2026-05-23), cutover runbook (PR #126 merged 2026-05-23 — see docs/rls-phase-1-cutover-runbook.md)
+- **Live (Phase 1 prep):** 0a.7b (schema drift reconciliation — PR #125 merged 2026-05-23), cutover runbook (PR #126 merged 2026-05-23 — see docs/_archive/rls-phase-1-cutover-runbook.md)
 - **Phase 0 COMPLETE** — all 10 sub-phases live. Phase 1 query-path COMPLETE + verified
   (burn-down 0/0/0, run 2026-06-27). `skills/rls-rollout/` scaffold is DONE (exists, complete).
-- **2026-06-27 VERIFIED prod audit** (owner-run SQL) → see `docs/rls-status-audit-2026-06-27.md`:
+- **2026-06-27 VERIFIED prod audit** (owner-run SQL) → see `docs/_archive/rls-status-audit-2026-06-27.md`:
   - Roles ready: `app_user` (bypassrls=f), `admin_user` (bypassrls=t), `postgres` (super).
   - `current_org_id()` = `NULLIF(current_setting('app.current_org_id',TRUE),'')` → compatible w/ app.
   - Coverage COMPLETE: 48/48 tenant tables FORCE RLS + ≥4 policies, no gaps.
@@ -193,7 +193,7 @@ All API routes: `{ success: true, data: T }` or `{ success: false, error: string
   - **Cutover = env flip only:** set `DATABASE_URL_ADMIN_USER`→admin_user AND
     `DATABASE_URL`→app_user **together** (else `withAdminBypass`/74 sites + chat fall back & break);
     keep `RLS_ENFORCEMENT_ENABLED=true`. Last pre-flip check: `app_user` GRANTs.
-- **Cutover runbook:** `docs/rls-phase-1-cutover-runbook.md`
+- **Cutover runbook:** `docs/_archive/rls-phase-1-cutover-runbook.md`
 - **Skill (DONE, exists):** `skills/rls-rollout/` (SKILL.md, reference/, scripts/, templates/, tests/)
 - **STALE refs (do not trust):** `skill-rls-rollout-PLAN-V2.md` and `skills/rls-status-checker/`
   are referenced in old notes but DO NOT EXIST. `RLS_DISABLED_TABLES` rollback layer NOT implemented.
@@ -263,7 +263,7 @@ Short: `NodeType` union → `NODE_TYPES` array → handler → register → node
 - Public: add path to `src/middleware.ts` matcher; validate input with Zod; never expose internals in catch
 
 ### Testing
-- Unit: Vitest, `__tests__/` next to source; 3960+ tests across 300 files
+- Unit: Vitest, `__tests__/` next to source; 4000+ tests across 333 files
 - E2E: Playwright, `e2e/tests/`, `.spec.ts`; test behavior, not implementation
 
 ### AI Model Config
@@ -329,7 +329,7 @@ Engineering skills configured for this repo (mattpocock/skills):
   na `true` = chat radi. UZROK JOŠ NIJE POTVRĐEN: prva hipoteza (pgbouncer/
   prepared-statement) je OBORENA jer je DB direktan (postgres.railway.internal:5432,
   ne pooler). Za pravi uzrok treba log prethodnog (flag=false) deploy-a.
-  (Incident: docs/incident-2026-06-27-rls-flag-chat-500.md)
+  (Incident: docs/_archive/incident-2026-06-27-rls-flag-chat-500.md)
 - Flag ostaje `true`. Pravi RLS cutover ZADRŽAVA flag `true` (enforcement ga
   zahteva) i menja samo DB rolu (DATABASE_URL → app_user) — taj put NE koristi
   flag=false putanju.

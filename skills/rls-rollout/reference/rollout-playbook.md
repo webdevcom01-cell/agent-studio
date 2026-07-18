@@ -10,7 +10,7 @@ Quick-reference map of documents, scripts, and tools for the Phase 1–4 rollout
 |----------|---------|
 | `skill-rls-rollout-PLAN-V2.md` | Master plan (root of repo). Architecture decisions, phase scope, templates |
 | `skill-rls-rollout-FORENSIC-REPORT.md` | 12 hallucinations + 18 gaps from v1. Read before making decisions. |
-| `docs/rls-phase-1-cutover-runbook.md` | **Production cutover runbook.** Read before touching prod. |
+| `docs/_archive/rls-phase-1-cutover-runbook.md` | **Production cutover runbook.** Read before touching prod. |
 | `skills/rls-rollout/reference/model-classifications.md` | All 61 models classified. |
 | `skills/rls-rollout/reference/policy-patterns.md` | Which template to use for each model type. |
 | `skills/rls-rollout/reference/decision-log.md` | Append-only log of rollout decisions. |

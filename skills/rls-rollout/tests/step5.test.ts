@@ -53,7 +53,7 @@ describe.skip("Step 5 — runbook generation", () => {
 
   it("master cutover runbook exists", () => {
     expect(
-      existsSync(resolve(ROOT, "docs/rls-phase-1-cutover-runbook.md"))
+      existsSync(resolve(ROOT, "docs/_archive/rls-phase-1-cutover-runbook.md"))
     ).toBe(true);
   });
 
