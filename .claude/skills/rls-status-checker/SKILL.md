@@ -74,7 +74,7 @@ Capture: `open_pr_count`, `open_prs[]` (number + title),
 ### 1c — RAILWAY STATE
 
 ```bash
-curl -sf https://agent-studio.up.railway.app/api/health
+curl -sf https://agent-studio-production-c43e.up.railway.app/api/health
 ```
 
 Capture from JSON: `status`, `db`, `redis`, `replicaId`.

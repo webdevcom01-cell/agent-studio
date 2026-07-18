@@ -5,7 +5,7 @@ Ready-to-import n8n workflow templates that connect external triggers to Agent S
 ## Quick Setup
 
 ### 1. Deploy n8n on Railway (5 minutes)
-Click → https://railway.com/template/n8n
+Click → https://railway.com/deploy/n8n
 
 Required env vars for n8n on Railway:
 ```
