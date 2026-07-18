@@ -1,39 +1,39 @@
 # API Reference
 
-> **Izvor istine:** `src/app/api/**/route.ts` — ovaj dokument je generisan iz stvarnog stanja koda.
-> **Ukupno ruta:** 170 | **Generisano:** 2026-07-18 sa grane `docs/reorg-diataxis`
+> **Source of truth:** `src/app/api/**/route.ts` — this document is generated from the actual state of the code.
+> **Total routes:** 170 | **Generated:** 2026-07-18 from branch `docs/english-only`
 
-Konvencija odgovora (v. `AGENTS.md`): rute vraćaju `{ success, data }` ili `{ success, error }`. Za detalje autentikacije pojedinačne rute pogledaj njen `route.ts` fajl.
+Response convention (see `AGENTS.md`): routes return `{ success, data }` or `{ success, error }`. For authentication details of an individual route, see its `route.ts` file.
 
-Rute su grupisane po prvom segmentu ispod `/api/`. Ukupno 37 grupa.
+Routes are grouped by the first path segment under `/api/`. 37 groups in total.
 
-## A2A protokol (`/api/a2a`) — 2 ruta
+## A2A Protocol (`/api/a2a`) — 2 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/a2a/[agentId]/agent-card` | GET | [`route.ts`](../../src/app/api/a2a/[agentId]/agent-card/route.ts) |
 | `/api/a2a/agents` | GET | [`route.ts`](../../src/app/api/a2a/agents/route.ts) |
 
-## Admin (`/api/admin`) — 3 ruta
+## Admin (`/api/admin`) — 3 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/admin/flags` | GET, PATCH | [`route.ts`](../../src/app/api/admin/flags/route.ts) |
 | `/api/admin/jobs` | GET | [`route.ts`](../../src/app/api/admin/jobs/route.ts) |
 | `/api/admin/stats` | GET | [`route.ts`](../../src/app/api/admin/stats/route.ts) |
 
-## Agent-to-agent pozivi (`/api/agent-calls`) — 3 ruta
+## Agent-to-Agent Calls (`/api/agent-calls`) — 3 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/agent-calls` | GET | [`route.ts`](../../src/app/api/agent-calls/route.ts) |
 | `/api/agent-calls/circuits` | GET | [`route.ts`](../../src/app/api/agent-calls/circuits/route.ts) |
 | `/api/agent-calls/stats` | GET | [`route.ts`](../../src/app/api/agent-calls/stats/route.ts) |
 
-## Agenti (`/api/agents`) — 82 ruta
+## Agents (`/api/agents`) — 82 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/agents` | GET, POST | [`route.ts`](../../src/app/api/agents/route.ts) |
 | `/api/agents/[agentId]` | DELETE, GET, PATCH | [`route.ts`](../../src/app/api/agents/[agentId]/route.ts) |
 | `/api/agents/[agentId]/a2a` | POST | [`route.ts`](../../src/app/api/agents/[agentId]/a2a/route.ts) |
@@ -117,32 +117,32 @@ Rute su grupisane po prvom segmentu ispod `/api/`. Ukupno 37 grupa.
 | `/api/agents/discover` | GET | [`route.ts`](../../src/app/api/agents/discover/route.ts) |
 | `/api/agents/import` | POST | [`route.ts`](../../src/app/api/agents/import/route.ts) |
 
-## Analitika (`/api/analytics`) — 3 ruta
+## Analytics (`/api/analytics`) — 3 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/analytics` | GET | [`route.ts`](../../src/app/api/analytics/route.ts) |
 | `/api/analytics/activity` | GET | [`route.ts`](../../src/app/api/analytics/activity/route.ts) |
 | `/api/analytics/summary` | GET | [`route.ts`](../../src/app/api/analytics/summary/route.ts) |
 
-## API ključevi (`/api/api-keys`) — 2 ruta
+## API Keys (`/api/api-keys`) — 2 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/api-keys` | GET, POST | [`route.ts`](../../src/app/api/api-keys/route.ts) |
 | `/api/api-keys/[keyId]` | DELETE, PATCH | [`route.ts`](../../src/app/api/api-keys/[keyId]/route.ts) |
 
-## Odobrenja (HITL) (`/api/approvals`) — 2 ruta
+## Approvals (HITL) (`/api/approvals`) — 2 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/approvals` | GET | [`route.ts`](../../src/app/api/approvals/route.ts) |
 | `/api/approvals/[requestId]/respond` | POST | [`route.ts`](../../src/app/api/approvals/[requestId]/respond/route.ts) |
 
-## Autentikacija (`/api/auth`) — 6 ruta
+## Authentication (`/api/auth`) — 6 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/auth/[...nextauth]` | GET, POST | [`route.ts`](../../src/app/api/auth/[...nextauth]/route.ts) |
 | `/api/auth/oauth/google-workspace` | GET | [`route.ts`](../../src/app/api/auth/oauth/google-workspace/route.ts) |
 | `/api/auth/oauth/google-workspace/callback` | GET | [`route.ts`](../../src/app/api/auth/oauth/google-workspace/callback/route.ts) |
@@ -150,10 +150,10 @@ Rute su grupisane po prvom segmentu ispod `/api/`. Ukupno 37 grupa.
 | `/api/auth/oauth/notion/callback` | GET | [`route.ts`](../../src/app/api/auth/oauth/notion/callback/route.ts) |
 | `/api/auth/register` | POST | [`route.ts`](../../src/app/api/auth/register/route.ts) |
 
-## CLI generator (`/api/cli-generator`) — 9 ruta
+## CLI Generator (`/api/cli-generator`) — 9 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/cli-generator` | GET, POST | [`route.ts`](../../src/app/api/cli-generator/route.ts) |
 | `/api/cli-generator/[generationId]` | DELETE, GET | [`route.ts`](../../src/app/api/cli-generator/[generationId]/route.ts) |
 | `/api/cli-generator/[generationId]/advance` | POST | [`route.ts`](../../src/app/api/cli-generator/[generationId]/advance/route.ts) |
@@ -164,17 +164,17 @@ Rute su grupisane po prvom segmentu ispod `/api/`. Ukupno 37 grupa.
 | `/api/cli-generator/[generationId]/resume` | POST | [`route.ts`](../../src/app/api/cli-generator/[generationId]/resume/route.ts) |
 | `/api/cli-generator/[generationId]/test-mcp` | GET | [`route.ts`](../../src/app/api/cli-generator/[generationId]/test-mcp/route.ts) |
 
-## Collector proxy (`/api/collector`) — 2 ruta
+## Collector Proxy (`/api/collector`) — 2 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/collector/overpass` | POST | [`route.ts`](../../src/app/api/collector/overpass/route.ts) |
 | `/api/collector/places` | POST | [`route.ts`](../../src/app/api/collector/places/route.ts) |
 
-## Cron poslovi (`/api/cron`) — 7 ruta
+## Cron Jobs (`/api/cron`) — 7 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/cron/budget-reset` | GET | [`route.ts`](../../src/app/api/cron/budget-reset/route.ts) |
 | `/api/cron/cleanup` | POST | [`route.ts`](../../src/app/api/cron/cleanup/route.ts) |
 | `/api/cron/evolve` | POST | [`route.ts`](../../src/app/api/cron/evolve/route.ts) |
@@ -183,181 +183,181 @@ Rute su grupisane po prvom segmentu ispod `/api/`. Ukupno 37 grupa.
 | `/api/cron/migrate-webhook-secrets` | POST | [`route.ts`](../../src/app/api/cron/migrate-webhook-secrets/route.ts) |
 | `/api/cron/trigger-scheduled-flows` | POST | [`route.ts`](../../src/app/api/cron/trigger-scheduled-flows/route.ts) |
 
-## Odluke (`/api/decisions`) — 1 ruta
+## Decisions (`/api/decisions`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/decisions/[decisionId]` | DELETE, GET, POST | [`route.ts`](../../src/app/api/decisions/[decisionId]/route.ts) |
 
-## Departmani (`/api/departments`) — 2 ruta
+## Departments (`/api/departments`) — 2 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/departments` | GET, POST | [`route.ts`](../../src/app/api/departments/route.ts) |
 | `/api/departments/[departmentId]` | DELETE, GET, PATCH | [`route.ts`](../../src/app/api/departments/[departmentId]/route.ts) |
 
-## Dokumentacija (`/api/docs`) — 1 ruta
+## Documentation (`/api/docs`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/docs` | GET | [`route.ts`](../../src/app/api/docs/route.ts) |
 
-## ECC (`/api/ecc`) — 1 ruta
+## ECC (`/api/ecc`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/ecc/ingest-skills` | POST | [`route.ts`](../../src/app/api/ecc/ingest-skills/route.ts) |
 
-## Evaluacije (`/api/evals`) — 4 ruta
+## Evals (`/api/evals`) — 4 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/evals/backfill` | POST | [`route.ts`](../../src/app/api/evals/backfill/route.ts) |
 | `/api/evals/scheduled` | POST | [`route.ts`](../../src/app/api/evals/scheduled/route.ts) |
 | `/api/evals/standards` | GET | [`route.ts`](../../src/app/api/evals/standards/route.ts) |
 | `/api/evals/standards/[category]` | GET | [`route.ts`](../../src/app/api/evals/standards/[category]/route.ts) |
 
-## Ciljevi (`/api/goals`) — 2 ruta
+## Goals (`/api/goals`) — 2 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/goals` | GET, POST | [`route.ts`](../../src/app/api/goals/route.ts) |
 | `/api/goals/[goalId]` | DELETE, GET, PATCH | [`route.ts`](../../src/app/api/goals/[goalId]/route.ts) |
 
-## Health check (`/api/health`) — 1 ruta
+## Health Check (`/api/health`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/health` | GET | [`route.ts`](../../src/app/api/health/route.ts) |
 
-## Integracije (`/api/integrations`) — 1 ruta
+## Integrations (`/api/integrations`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/integrations/obsidian` | GET, POST | [`route.ts`](../../src/app/api/integrations/obsidian/route.ts) |
 
-## Pozivnice (`/api/invites`) — 1 ruta
+## Invites (`/api/invites`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/invites/[token]/accept` | POST | [`route.ts`](../../src/app/api/invites/[token]/accept/route.ts) |
 
-## Poslovi (`/api/jobs`) — 1 ruta
+## Jobs (`/api/jobs`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/jobs/[jobId]` | GET | [`route.ts`](../../src/app/api/jobs/[jobId]/route.ts) |
 
-## Ključevi (`/api/keys`) — 1 ruta
+## Keys (`/api/keys`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/keys/validate` | POST | [`route.ts`](../../src/app/api/keys/validate/route.ts) |
 
-## MCP (`/api/mcp`) — 2 ruta
+## MCP (`/api/mcp`) — 2 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/mcp/agent-studio` | POST | [`route.ts`](../../src/app/api/mcp/agent-studio/route.ts) |
 | `/api/mcp/proxy/google-workspace/[tokenId]` | POST | [`route.ts`](../../src/app/api/mcp/proxy/google-workspace/[tokenId]/route.ts) |
 
-## MCP serveri (`/api/mcp-servers`) — 3 ruta
+## MCP Servers (`/api/mcp-servers`) — 3 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/mcp-servers` | GET, POST | [`route.ts`](../../src/app/api/mcp-servers/route.ts) |
 | `/api/mcp-servers/[serverId]` | DELETE, GET, PATCH | [`route.ts`](../../src/app/api/mcp-servers/[serverId]/route.ts) |
 | `/api/mcp-servers/[serverId]/test` | POST | [`route.ts`](../../src/app/api/mcp-servers/[serverId]/test/route.ts) |
 
-## Misije (`/api/mission`) — 1 ruta
+## Mission (`/api/mission`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/mission` | GET, POST, PUT | [`route.ts`](../../src/app/api/mission/route.ts) |
 
-## OpenAPI spec (`/api/openapi.json`) — 1 ruta
+## OpenAPI Spec (`/api/openapi.json`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/openapi.json` | GET | [`route.ts`](../../src/app/api/openapi.json/route.ts) |
 
-## Organizacije (`/api/orgs`) — 3 ruta
+## Organizations (`/api/orgs`) — 3 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/orgs/[orgId]/invite` | POST | [`route.ts`](../../src/app/api/orgs/[orgId]/invite/route.ts) |
 | `/api/orgs/[orgId]/members` | GET | [`route.ts`](../../src/app/api/orgs/[orgId]/members/route.ts) |
 | `/api/orgs/[orgId]/members/[memberId]` | DELETE | [`route.ts`](../../src/app/api/orgs/[orgId]/members/[memberId]/route.ts) |
 
-## Pipeline template-i (`/api/pipeline-templates`) — 2 ruta
+## Pipeline Templates (`/api/pipeline-templates`) — 2 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/pipeline-templates` | GET | [`route.ts`](../../src/app/api/pipeline-templates/route.ts) |
 | `/api/pipeline-templates/[slug]/deploy` | POST | [`route.ts`](../../src/app/api/pipeline-templates/[slug]/deploy/route.ts) |
 
-## Politike (`/api/policies`) — 3 ruta
+## Policies (`/api/policies`) — 3 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/policies` | GET, POST | [`route.ts`](../../src/app/api/policies/route.ts) |
 | `/api/policies/[policyId]` | DELETE, GET, PATCH | [`route.ts`](../../src/app/api/policies/[policyId]/route.ts) |
 | `/api/policies/[policyId]/decisions` | GET | [`route.ts`](../../src/app/api/policies/[policyId]/decisions/route.ts) |
 
-## Rasporedi (`/api/schedules`) — 1 ruta
+## Schedules (`/api/schedules`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/schedules/preview` | POST | [`route.ts`](../../src/app/api/schedules/preview/route.ts) |
 
-## SDLC (`/api/sdlc`) — 1 ruta
+## SDLC (`/api/sdlc`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/sdlc/metrics` | GET | [`route.ts`](../../src/app/api/sdlc/metrics/route.ts) |
 
-## Skills (`/api/skills`) — 2 ruta
+## Skills (`/api/skills`) — 2 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/skills` | GET | [`route.ts`](../../src/app/api/skills/route.ts) |
 | `/api/skills/evolve` | POST | [`route.ts`](../../src/app/api/skills/evolve/route.ts) |
 
-## SOMA (`/api/soma`) — 3 ruta
+## SOMA (`/api/soma`) — 3 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/soma/review-queue` | GET, POST | [`route.ts`](../../src/app/api/soma/review-queue/route.ts) |
 | `/api/soma/review-queue/[batchId]` | GET | [`route.ts`](../../src/app/api/soma/review-queue/[batchId]/route.ts) |
 | `/api/soma/review-queue/[batchId]/posts/[postId]` | PATCH | [`route.ts`](../../src/app/api/soma/review-queue/[batchId]/posts/[postId]/route.ts) |
 
-## Taskovi (`/api/tasks`) — 3 ruta
+## Tasks (`/api/tasks`) — 3 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/tasks/[taskId]/checkout` | DELETE, POST | [`route.ts`](../../src/app/api/tasks/[taskId]/checkout/route.ts) |
 | `/api/tasks/[taskId]/checkout/force-release` | POST | [`route.ts`](../../src/app/api/tasks/[taskId]/checkout/force-release/route.ts) |
 | `/api/tasks/[taskId]/checkout/renew` | POST | [`route.ts`](../../src/app/api/tasks/[taskId]/checkout/renew/route.ts) |
 
-## Template-i (`/api/templates`) — 4 ruta
+## Templates (`/api/templates`) — 4 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/templates` | GET, POST | [`route.ts`](../../src/app/api/templates/route.ts) |
 | `/api/templates/[templateId]` | DELETE, GET, PATCH | [`route.ts`](../../src/app/api/templates/[templateId]/route.ts) |
 | `/api/templates/[templateId]/import` | POST | [`route.ts`](../../src/app/api/templates/[templateId]/import/route.ts) |
 | `/api/templates/import` | POST | [`route.ts`](../../src/app/api/templates/import/route.ts) |
 
-## Korisnik (profil) (`/api/user`) — 3 ruta
+## User (profile) (`/api/user`) — 3 routes
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/user/account` | DELETE, POST | [`route.ts`](../../src/app/api/user/account/route.ts) |
 | `/api/user/complete-onboarding` | POST | [`route.ts`](../../src/app/api/user/complete-onboarding/route.ts) |
 | `/api/user/export` | POST | [`route.ts`](../../src/app/api/user/export/route.ts) |
 
-## Korisnici (`/api/users`) — 1 ruta
+## Users (`/api/users`) — 1 route
 
-| Ruta | Metode | Fajl |
-|------|--------|------|
+| Route | Methods | File |
+|-------|---------|------|
 | `/api/users/switch-org` | POST | [`route.ts`](../../src/app/api/users/switch-org/route.ts) |

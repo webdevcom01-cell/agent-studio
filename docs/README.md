@@ -1,49 +1,49 @@
-# Agent Studio dokumentacija
+# Agent Studio Documentation
 
-Dokumentacija je organizovana po [Diátaxis](https://diataxis.fr/) standardu: tutorijali za početak, guide-ovi za konkretne zadatke, referenca za činjenice, explanation za razumevanje sistema.
+The documentation follows the [Diátaxis](https://diataxis.fr/) standard: tutorials to get started, guides for concrete tasks, reference for facts, and explanation for understanding the system.
 
-## 01 — Getting Started (tutorijali)
+## 01 — Getting Started (tutorials)
 
-| Dokument | Sadržaj |
-|----------|---------|
-| [overview.md](01-getting-started/overview.md) | Šta je Agent Studio i od čega se sastoji |
-| [quick-start.md](01-getting-started/quick-start.md) | Prvo pokretanje i prvi agent |
-| [knowledge-base.md](01-getting-started/knowledge-base.md) | Kako radi knowledge base (RAG) i kako se puni |
+| Document | Contents |
+|----------|----------|
+| [overview.md](01-getting-started/overview.md) | What Agent Studio is and what it consists of |
+| [quick-start.md](01-getting-started/quick-start.md) | First run and your first agent |
+| [knowledge-base.md](01-getting-started/knowledge-base.md) | How the knowledge base (RAG) works and how to fill it |
 
-## 02 — Guides (kako da...)
+## 02 — Guides (how to…)
 
-| Dokument | Sadržaj |
-|----------|---------|
-| [flow-patterns.md](02-guides/flow-patterns.md) | Obrasci za građenje flow-ova |
-| [analytics.md](02-guides/analytics.md) | Analitika izvršavanja |
-| [cli-generator.md](02-guides/cli-generator.md) | Generisanje CLI alata iz agenta |
-| [agent-evals.md](02-guides/agent-evals.md) | Evaluacija agenata (suites, cases, regression) |
-| [faq.md](02-guides/faq.md) | FAQ i troubleshooting |
-| [rls-testing.md](02-guides/rls-testing.md) | Testiranje PostgreSQL RLS izolacije |
+| Document | Contents |
+|----------|----------|
+| [flow-patterns.md](02-guides/flow-patterns.md) | Patterns for building flows |
+| [analytics.md](02-guides/analytics.md) | Execution analytics |
+| [cli-generator.md](02-guides/cli-generator.md) | Generating a CLI tool from an agent |
+| [agent-evals.md](02-guides/agent-evals.md) | Evaluating agents (suites, cases, regression) |
+| [faq.md](02-guides/faq.md) | FAQ and troubleshooting |
+| [rls-testing.md](02-guides/rls-testing.md) | Testing PostgreSQL RLS isolation |
 
-## 03 — Reference (činjenice)
+## 03 — Reference (facts)
 
-| Dokument | Sadržaj |
-|----------|---------|
-| [nodes/basic.md](03-reference/nodes/basic.md) | Osnovni nodovi |
-| [nodes/ai.md](03-reference/nodes/ai.md) | AI nodovi |
-| [nodes/flow-control.md](03-reference/nodes/flow-control.md) | Flow-control nodovi |
-| [nodes/integrations.md](03-reference/nodes/integrations.md) | Integracioni nodovi |
-| [nodes/reference.md](03-reference/nodes/reference.md) | Kompletna referenca svih 66 node tipova |
-| [api.md](03-reference/api.md) | Svih 170 API ruta (generisano iz koda) |
-| [data-model.md](03-reference/data-model.md) | Svih 63 Prisma modela (generisano iz šeme) |
-| [config-env.md](03-reference/config-env.md) | Environment varijable i konfiguracija |
-| [glossary.md](03-reference/glossary.md) | Pojmovnik |
+| Document | Contents |
+|----------|----------|
+| [nodes/basic.md](03-reference/nodes/basic.md) | Basic nodes |
+| [nodes/ai.md](03-reference/nodes/ai.md) | AI nodes |
+| [nodes/flow-control.md](03-reference/nodes/flow-control.md) | Flow-control nodes |
+| [nodes/integrations.md](03-reference/nodes/integrations.md) | Integration nodes |
+| [nodes/reference.md](03-reference/nodes/reference.md) | Complete reference of all 66 node types |
+| [api.md](03-reference/api.md) | All 170 API routes (generated from code) |
+| [data-model.md](03-reference/data-model.md) | All 63 Prisma models (generated from the schema) |
+| [config-env.md](03-reference/config-env.md) | Environment variables and configuration |
+| [glossary.md](03-reference/glossary.md) | Glossary |
 
-## 04 — Explanation (razumevanje)
+## 04 — Explanation (understanding)
 
-| Dokument | Sadržaj |
-|----------|---------|
-| [devops-swarm/ARCHITECTURE.md](04-explanation/devops-swarm/ARCHITECTURE.md) | Arhitektura DevOps swarm-a |
-| [devops-swarm/SETUP.md](04-explanation/devops-swarm/SETUP.md) | Setup DevOps swarm-a |
+| Document | Contents |
+|----------|----------|
+| [devops-swarm/ARCHITECTURE.md](04-explanation/devops-swarm/ARCHITECTURE.md) | DevOps swarm architecture |
+| [devops-swarm/SETUP.md](04-explanation/devops-swarm/SETUP.md) | DevOps swarm setup |
 
-## Ostalo
+## Other
 
 - [adr/](adr/) — Architecture Decision Records
-- [agents/](agents/) — meta-dokumentacija za AI agente koji rade nad ovim repo-om (referencirano iz `CLAUDE.md`)
-- [_archive/](_archive/) — završeni/prevaziđeni planovi, radni dokumenti i istorijski auditi
+- [agents/](agents/) — meta-documentation for AI agents working on this repo (referenced from `CLAUDE.md`)
+- [_archive/](_archive/) — completed/superseded plans, working documents, and historical audits

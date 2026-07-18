@@ -1,28 +1,28 @@
 # Glossary
 
-> Pojmovnik Agent Studio projekta. Definicije su izvedene iz `README.md`, `FEATURES.md`, `AGENTS.md` i koda; uz svaki pojam stoji primarni izvor.
+> Terminology of the Agent Studio project. Definitions are derived from `README.md`, `FEATURES.md`, `AGENTS.md`, and the code; each term lists its primary source.
 
-| Pojam | Definicija | Izvor |
-|-------|-----------|-------|
-| **Agent** | Centralni entitet: AI agent sa svojim flow-om, modelom, prompt-om, knowledge base-om i podešavanjima. | `prisma/schema.prisma` (model `Agent`), `FEATURES.md` §27 |
-| **Flow** | Vizuelni workflow agenta — graf nodova i veza, čuva se kao JSON. Ima verzionisanje (`FlowVersion`) i deploy pipeline (`FlowDeployment`). | `prisma/schema.prisma` (model `Flow`), `README.md` |
-| **Node** | Korak u flow-u. Postoji 66 formalnih tipova (`NodeType` unija). | `src/types/index.ts:32` |
-| **Handler** | Runtime implementacija jednog node tipa. Registry ima 67 ključeva (66 `NodeType` + interni `code_review`). | `src/lib/runtime/handlers/index.ts` |
-| **NodeType** | TypeScript unija svih formalnih tipova nodova — izvor istine za broj nodova (66). | `src/types/index.ts:32` |
-| **Knowledge Base (KB)** | Kolekcija izvora (URL/tekst/fajl) koja se chunk-uje, embed-uje i pretražuje za RAG kontekst agenta. | `docs/01-getting-started/knowledge-base.md` |
-| **RAG** | Retrieval-Augmented Generation — hibridna pretraga (semantic + BM25, RRF fuzija) nad KB chunk-ovima koja se ubacuje u kontekst modela. | `src/lib/knowledge/search.ts` |
-| **Chunk** | Deo teksta izvora (~512 tokena default) sa embedding vektorom (1536 dim, `text-embedding-3-small`). | `src/lib/knowledge/chunker.ts:20`, `src/lib/ai.ts:117` |
-| **hybridAlpha** | Težina semantičke komponente u hibridnoj pretrazi (default 0.7; 0.8 uz contextual enrichment). | `src/lib/schemas/kb-config.ts:61`, `src/lib/knowledge/search.ts:563` |
-| **MCP** | Model Context Protocol — protokol za povezivanje spoljnih alata; agenti ga koriste kroz `mcp_tool` node i MCP servere. | `FEATURES.md`, `src/app/api/mcp-servers/` |
-| **A2A** | Google Agent-to-Agent protokol — omogućava da spoljni agenti otkriju i pozovu Agent Studio agente (agent-card). | `src/app/api/a2a/` |
-| **ECC** | Modul sa specijalizovanim developer agentima (30 template-a) i skills MCP servisom. | `src/lib/ecc/`, `src/data/ecc-agent-templates.json` |
-| **SDLC pipeline** | Autonomni software-development pipeline sa specijalizovanim agent prompt-ovima. | `sdlc-prompts/`, `src/lib/sdlc/` |
-| **Eval / Eval Suite** | Framework za evaluaciju agenata: suite → case → run → rezultat, sa regression detekcijom. | `src/lib/evals/`, `docs/02-guides/agent-evals.md` |
-| **HITL** | Human-in-the-loop — `human_approval` node i approval politike (`ApprovalPolicy`). | `src/lib/runtime/handlers/`, `prisma/schema.prisma` |
-| **RLS** | PostgreSQL Row-Level Security — enforcement po organizaciji kroz `withOrgContext` middleware; flag `RLS_ENFORCEMENT_ENABLED`. | `docs/02-guides/rls-testing.md`, `.env.example` |
-| **Organizacija** | Multi-tenant jedinica (`Organization`, `OrganizationMember`, `Invitation`) — nosilac RLS izolacije. | `prisma/schema.prisma` |
-| **Template** | Deljivi recept za agenta (221 template-a u 20 kategorija) sa opcionim starter flow-om. | `src/data/agent-templates.json` |
-| **CLI generator** | Modul koji od agenta generiše samostalan CLI alat. | `docs/02-guides/cli-generator.md`, `src/app/api/cli-generator/` |
-| **Heartbeat** | Zakazano periodično buđenje agenta sa kontekstom (schedule + context). | `prisma/schema.prisma`, `src/app/api/schedules/` |
-| **BullMQ** | Redis-bazirani queue za pozadinske poslove (izvršavanja, ingestija KB, cron). | `README.md` (tech stack), `REDIS_URL` u `.env.example` |
-| **pgvector** | PostgreSQL ekstenzija za vektorsku pretragu (HNSW indeksi) — skladište embeddings-a. | `prisma/schema.prisma`, `README.md` |
+| Term | Definition | Source |
+|------|-----------|--------|
+| **Agent** | The central entity: an AI agent with its own flow, model, prompt, knowledge base, and settings. | `prisma/schema.prisma` (model `Agent`), `FEATURES.md` §27 |
+| **Flow** | An agent's visual workflow — a graph of nodes and edges stored as JSON. Versioned (`FlowVersion`) with a deploy pipeline (`FlowDeployment`). | `prisma/schema.prisma` (model `Flow`), `README.md` |
+| **Node** | A step in a flow. There are 66 formal types (the `NodeType` union). | `src/types/index.ts:32` |
+| **Handler** | The runtime implementation of one node type. The registry has 67 keys (66 `NodeType` + the internal `code_review`). | `src/lib/runtime/handlers/index.ts` |
+| **NodeType** | The TypeScript union of all formal node types — the source of truth for the node count (66). | `src/types/index.ts:32` |
+| **Knowledge Base (KB)** | A collection of sources (URL/text/file) that gets chunked, embedded, and searched to provide RAG context to an agent. | `docs/01-getting-started/knowledge-base.md` |
+| **RAG** | Retrieval-Augmented Generation — hybrid search (semantic + BM25, RRF fusion) over KB chunks, injected into the model's context. | `src/lib/knowledge/search.ts` |
+| **Chunk** | A piece of source text (~512 tokens by default) with an embedding vector (1536 dims, `text-embedding-3-small`). | `src/lib/knowledge/chunker.ts:20`, `src/lib/ai.ts:117` |
+| **hybridAlpha** | The weight of the semantic component in hybrid search (default 0.7; 0.8 with contextual enrichment). | `src/lib/schemas/kb-config.ts:61`, `src/lib/knowledge/search.ts:563` |
+| **MCP** | Model Context Protocol — a protocol for connecting external tools; agents use it via the `mcp_tool` node and MCP servers. | `FEATURES.md`, `src/app/api/mcp-servers/` |
+| **A2A** | Google's Agent-to-Agent protocol — lets external agents discover and call Agent Studio agents (agent card). | `src/app/api/a2a/` |
+| **ECC** | A module of specialized developer agents (30 templates) and a skills MCP service. | `src/lib/ecc/`, `src/data/ecc-agent-templates.json` |
+| **SDLC pipeline** | An autonomous software-development pipeline built from specialized agent prompts. | `sdlc-prompts/`, `src/lib/sdlc/` |
+| **Eval / Eval Suite** | The agent evaluation framework: suite → case → run → result, with regression detection. | `src/lib/evals/`, `docs/02-guides/agent-evals.md` |
+| **HITL** | Human-in-the-loop — the `human_approval` node and approval policies (`ApprovalPolicy`). | `src/lib/runtime/handlers/`, `prisma/schema.prisma` |
+| **RLS** | PostgreSQL Row-Level Security — per-organization enforcement via the `withOrgContext` middleware; controlled by the `RLS_ENFORCEMENT_ENABLED` flag. | `docs/02-guides/rls-testing.md`, `.env.example` |
+| **Organization** | The multi-tenant unit (`Organization`, `OrganizationMember`, `Invitation`) — the carrier of RLS isolation. | `prisma/schema.prisma` |
+| **Template** | A shareable agent recipe (221 templates in 20 categories), optionally with a starter flow. | `src/data/agent-templates.json` |
+| **CLI generator** | The module that generates a standalone CLI tool from an agent. | `docs/02-guides/cli-generator.md`, `src/app/api/cli-generator/` |
+| **Heartbeat** | A scheduled periodic wake-up of an agent with injected context (schedule + context). | `prisma/schema.prisma`, `src/app/api/schedules/` |
+| **BullMQ** | The Redis-based queue for background jobs (executions, KB ingestion, cron). | `README.md` (tech stack), `REDIS_URL` in `.env.example` |
+| **pgvector** | The PostgreSQL extension for vector search (HNSW indexes) — the embeddings store. | `prisma/schema.prisma`, `README.md` |
