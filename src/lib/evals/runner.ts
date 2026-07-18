@@ -22,6 +22,7 @@
 import { withAdminBypass } from "@/lib/api/tenant-context";
 import { logger } from "@/lib/logger";
 import { evaluateAllAssertions } from "./assertions";
+import { alertOnEvalRegression } from "./regression-alert";
 import { validateEvalBaseUrl } from "./ssrf-guard";
 import { EvalAssertionSchema } from "./schemas";
 import type { AssertionContext, EvalAssertion, AssertionResult } from "./schemas";
@@ -610,6 +611,15 @@ export async function runEvalSuite(
     failedCases,
     score: overallScore,
     durationMs,
+  });
+
+  // Fire-and-forget regression alert — never blocks or fails the eval (B6/G2)
+  void alertOnEvalRegression({
+    suiteId,
+    suiteName: suite.name,
+    agentId,
+    runId: finalRun.id,
+    score: overallScore,
   });
 
   return {
