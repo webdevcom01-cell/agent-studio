@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Documentation (2026-07-18) — English-only pass
+- **DOC-LANG** — All live, user-facing documentation translated to English: `FEATURES.md` (full 707-line reference), `docs/README.md` index, generated reference docs (`api.md`, `data-model.md`, `config-env.md`, `glossary.md` — regenerated in English), `CLAUDE.md` "Working Rules" section, `.claude/commands/health.md` and `lint-vault.md`. Structure, counts, links, and code identifiers byte-identical.
+- Intentionally NOT translated: Serbian trigger phrases and user-facing prompt strings inside `skills/*/SKILL.md` (functional bilingual invocation triggers), and Serbian working logs slated for archival (`SPRINT-BOARD.md`, `FIX-LOG.md`, `SOMA-*`, `TASKS.md`), plus historical `docs/_archive/`.
+
 ### Documentation (2026-07-18)
 - **DOC-REORG** — `docs/` reorganized to the Diátaxis structure: `01-getting-started/`, `02-guides/`, `03-reference/` (incl. `nodes/`), `04-explanation/`, `_archive/`. Serbian filenames renamed (`02-nodes-osnovno` → `nodes/basic`, `05-nodes-integracije` → `nodes/integrations`); root `RLS-TESTING.md` → `docs/02-guides/rls-testing.md`; 29 working docs + `docs/design/` + old `docs/archive/` consolidated under `docs/_archive/`. New navigation index at `docs/README.md`. All internal links repaired; live references updated (`CLAUDE.md`, `TECH_DEBT.md`, CI workflows, `skills/rls-rollout`).
 - **DOC-NEW** — Generated reference docs from code: `docs/03-reference/api.md` (170 routes from `src/app/api/**/route.ts`), `data-model.md` (63 models from `prisma/schema.prisma`), `config-env.md` (env vars from `.env.example` + `process.env` usage), `glossary.md`.

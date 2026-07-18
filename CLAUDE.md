@@ -307,33 +307,34 @@ Engineering skills configured for this repo (mattpocock/skills):
 ## Working Rules (learned)
 
 ### Build
-- `pnpm build` traje 3-5 min i NEMA progress indikator — TIŠINA NIJE KVAR.
-- NIKAD ne prekidaj build (Ctrl+C, pkill, kill). Pusti ga da završi.
-- Uspešan build: "Compiled with warnings in ~50s", 192 rute, 2 bezopasna
-  3rd-party warninga (e2b, next-auth/jose) — to je normalno.
+- `pnpm build` takes 3-5 min and has NO progress indicator — SILENCE IS NOT A FAILURE.
+- NEVER interrupt the build (Ctrl+C, pkill, kill). Let it finish.
+- A successful build: "Compiled with warnings in ~50s", 192 routes, 2 harmless
+  3rd-party warnings (e2b, next-auth/jose) — that is normal.
 
 ### Node
-- Zahteva se Node 22 (LTS). Node 25 NIJE podržan i pravi probleme sa build-om.
-- Provera: `node -v` mora biti v22.x pre build-a.
+- Node 22 (LTS) is required. Node 25 is NOT supported and causes build problems.
+- Check: `node -v` must be v22.x before building.
 
 ### Git workflow
-- Commit ODMAH čim typecheck + testovi prođu. NE čekaj build pre commita.
-- Pre bilo kog rada proveri: `pwd` (mora /Users/buda007/Desktop/agent-studio)
-  i `git branch --show-current`.
-- Postoji zbunjujući prazan folder ~/agent-studio koji NIJE projekat.
+- Commit IMMEDIATELY once typecheck + tests pass. Do NOT wait for the build before committing.
+- Before any work check: `pwd` (must be /Users/buda007/Desktop/agent-studio)
+  and `git branch --show-current`.
+- There is a confusing empty folder ~/agent-studio that is NOT the project.
 
 ### RLS / Feature flags (PROD)
-- NE postavljaj `RLS_ENFORCEMENT_ENABLED=false` u produkciji bez prethodne
-  istrage. Kad je flip-ovan na `false` (+ redeploy) 2026-06-27, chat je pao sa
-  500 na nivou rute (pre izvršavanja), iako je `/api/health` ostao zelen; vraćanje
-  na `true` = chat radi. UZROK JOŠ NIJE POTVRĐEN: prva hipoteza (pgbouncer/
-  prepared-statement) je OBORENA jer je DB direktan (postgres.railway.internal:5432,
-  ne pooler). Za pravi uzrok treba log prethodnog (flag=false) deploy-a.
+- Do NOT set `RLS_ENFORCEMENT_ENABLED=false` in production without prior
+  investigation. When it was flipped to `false` (+ redeploy) on 2026-06-27, chat went
+  down with a 500 at the route level (before execution), even though `/api/health`
+  stayed green; flipping back to `true` = chat works. ROOT CAUSE NOT YET CONFIRMED:
+  the first hypothesis (pgbouncer/prepared-statement) was REFUTED because the DB is
+  direct (postgres.railway.internal:5432, not a pooler). Finding the real cause
+  requires the logs of the previous (flag=false) deploy.
   (Incident: docs/_archive/incident-2026-06-27-rls-flag-chat-500.md)
-- Flag ostaje `true`. Pravi RLS cutover ZADRŽAVA flag `true` (enforcement ga
-  zahteva) i menja samo DB rolu (DATABASE_URL → app_user) — taj put NE koristi
-  flag=false putanju.
-- Anthropic RADI u prod-u: span `gen_ai.generate` (claude-haiku-4-5-20251001,
-  finish_reason: stop) + nema "ANTHROPIC_API_KEY not set" warninga → ključ JESTE
-  postavljen. Nijedan agent ga ipak ne koristi (svi na gpt-4.1-mini). Ključ je
-  bio eksponiran → rotirati radi bezbednosti (bez funkcionalnog uticaja).
+- The flag stays `true`. The real RLS cutover KEEPS the flag `true` (enforcement
+  requires it) and only changes the DB role (DATABASE_URL → app_user) — that path
+  does NOT use the flag=false route.
+- Anthropic WORKS in prod: span `gen_ai.generate` (claude-haiku-4-5-20251001,
+  finish_reason: stop) + no "ANTHROPIC_API_KEY not set" warning → the key IS set.
+  No agent uses it though (all on gpt-4.1-mini). The key was exposed → rotate it
+  for security (no functional impact).

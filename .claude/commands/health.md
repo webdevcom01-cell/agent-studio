@@ -1,11 +1,11 @@
 ---
-description: Project health — pokreni deterministički scripts/project-health.mjs pa daj prioritizovan savet (verbatim + sud)
+description: Project health — run the deterministic scripts/project-health.mjs, then give prioritized advice (verbatim + judgment)
 ---
 
-PRAVILO: brojanje radi ISKLJUČIVO skript. Ti NE preračunavaš, NE izmišljaš brojeve ni nalaze.
+RULE: counting is done EXCLUSIVELY by the script. You do NOT recount and do NOT invent numbers or findings.
 
-1. Pokreni: `node scripts/project-health.mjs`
-   (dodaj `--full` za testove+coverage — sporo; podrazumevano preskače).
-2. Prenesi tabelu i sekcije iz izlaza skripta **DOSLOVNO** (može u code blok).
-3. TEK ISPOD, u sekciji "## Savet", dodaj prioritizaciju po ROI (visok uticaj / nizak trud prvo) prema TIM nalazima — bez ijednog novog broja/fajla koji nije u izlazu.
-4. Ako neki alat nedostaje (npr. `madge`/`knip` ne postoji ili padne), predloži instalaciju/popravku — NE izmišljaj nalaz.
+1. Run: `node scripts/project-health.mjs`
+   (add `--full` for tests+coverage — slow; skipped by default).
+2. Relay the table and sections from the script output **VERBATIM** (a code block is fine).
+3. ONLY BELOW that, in an "## Advice" section, add prioritization by ROI (high impact / low effort first) based on THOSE findings — without a single new number/file that is not in the output.
+4. If a tool is missing (e.g. `madge`/`knip` does not exist or fails), suggest installing/fixing it — do NOT invent a finding.

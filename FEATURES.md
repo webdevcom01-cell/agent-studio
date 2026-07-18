@@ -1,355 +1,355 @@
-# Agent Studio — Kompletan katalog feature-a
+# Agent Studio — Complete Feature Catalog
 
-> **Svrha:** Referentni dokument za Claude Code sesije. Sve što projekat ima — na jednom mestu.
-> **Ažurirano:** April 2026 (dubinska analiza koda)
-> **Statistike:** 66 node tipova · 170+ API routes · 123+ UI komponenti · 63 Prisma modela · 333 test fajla (4000+ testova)
+> **Purpose:** Reference document for Claude Code sessions. Everything the project has — in one place.
+> **Updated:** April 2026 (in-depth code analysis)
+> **Statistics:** 66 node types · 170+ API routes · 123+ UI components · 63 Prisma models · 333 test files (4000+ tests)
 
 ---
 
-## 1. FLOW BUILDER — Vizuelni editor
+## 1. FLOW BUILDER — Visual Editor
 
-**Lokacija:** `src/app/builder/[agentId]/page.tsx`, `src/components/builder/`
+**Location:** `src/app/builder/[agentId]/page.tsx`, `src/components/builder/`
 
-**Šta radi:**
-- ReactFlow (@xyflow/react v12) vizuelni editor za kreiranje AI workflow-ova
-- Drag-and-drop dodavanje nodova iz node picker-a
-- Real-time property panel za konfiguraciju svakog noda
-- Version history sidebar sa diff prikazom i rollback opcijom
-- Deploy dialog sa sandbox testom pre produkcije
-- Debug mode sa breakpoint-ima, step-through, variable watch
-- Timeline vizualizacija execution trace-a
+**What it does:**
+- ReactFlow (@xyflow/react v12) visual editor for creating AI workflows
+- Drag-and-drop node addition from the node picker
+- Real-time property panel for configuring each node
+- Version history sidebar with diff view and rollback option
+- Deploy dialog with sandbox test before production
+- Debug mode with breakpoints, step-through, variable watch
+- Timeline visualization of the execution trace
 
-**Ključne komponente:**
-- `flow-builder.tsx` — glavni editor
-- `node-picker.tsx` — paleta sa 66 tipova nodova
-- `property-panel.tsx` — desni sidebar za konfiguraciju
-- `version-panel.tsx` — istorija verzija
-- `diff-view.tsx` — poređenje verzija
-- `debug-toolbar.tsx`, `debug-panel.tsx`, `debug-timeline.tsx` — debug alati
+**Key components:**
+- `flow-builder.tsx` — main editor
+- `node-picker.tsx` — palette with 66 node types
+- `property-panel.tsx` — right sidebar for configuration
+- `version-panel.tsx` — version history
+- `diff-view.tsx` — version comparison
+- `debug-toolbar.tsx`, `debug-panel.tsx`, `debug-timeline.tsx` — debug tools
 - `deploy-dialog.tsx` — deploy flow
 
 ---
 
-## 2. SVI NODE TIPOVI (66)
+## 2. ALL NODE TYPES (66)
 
-**Lokacija:** `src/types/index.ts` (definicije), `src/lib/runtime/handlers/` (logika), `src/components/builder/nodes/` (prikaz)
+**Location:** `src/types/index.ts` (definitions), `src/lib/runtime/handlers/` (logic), `src/components/builder/nodes/` (display)
 
-### Kontrola toka
-| Node | Handler | Opis |
+### Flow Control
+| Node | Handler | Description |
 |------|---------|------|
-| `message` | message-handler.ts | Prikazuje tekst korisniku. Podržava `{{variable}}` interpolaciju |
-| `button` | button-handler.ts | Dugmad za routing — korisnik bira sledeći korak |
-| `capture` | capture-handler.ts | Hvata korisnički unos i čuva u varijablu |
-| `condition` | condition-handler.ts | If/else grananje na osnovu izraza |
-| `switch` | switch-handler.ts | Multi-branch routing (kao JS switch) |
-| `set_variable` | set-variable-handler.ts | Postavlja/ažurira varijablu u kontekstu |
-| `end` | end-handler.ts | Završava flow |
-| `goto` | goto-handler.ts | Bezuslovni skok na drugi node |
-| `wait` | wait-handler.ts | Pauza (fiksno vreme ili cron) |
-| `loop` | loop-handler.ts | Iteracija (array, broj, uslov). Limit: 50 iteracija |
-| `parallel` | parallel-handler.ts + parallel-streaming-handler.ts | Paralelno izvršavanje grana + merge |
+| `message` | message-handler.ts | Displays text to the user. Supports `{{variable}}` interpolation |
+| `button` | button-handler.ts | Buttons for routing — the user chooses the next step |
+| `capture` | capture-handler.ts | Captures user input and stores it in a variable |
+| `condition` | condition-handler.ts | If/else branching based on an expression |
+| `switch` | switch-handler.ts | Multi-branch routing (like a JS switch) |
+| `set_variable` | set-variable-handler.ts | Sets/updates a variable in the context |
+| `end` | end-handler.ts | Ends the flow |
+| `goto` | goto-handler.ts | Unconditional jump to another node |
+| `wait` | wait-handler.ts | Pause (fixed time or cron) |
+| `loop` | loop-handler.ts | Iteration (array, count, condition). Limit: 50 iterations |
+| `parallel` | parallel-handler.ts + parallel-streaming-handler.ts | Parallel branch execution + merge |
 | `retry` | retry-handler.ts | Exponential backoff retry wrapper |
 
-### AI i LLM
-| Node | Handler | Opis |
+### AI & LLM
+| Node | Handler | Description |
 |------|---------|------|
-| `ai_response` | ai-response-handler.ts + streaming | LLM odgovor sa RAG, MCP alatima, agent tools. 20-step tool limit |
-| `ai_classify` | ai-classify-handler.ts | Klasifikacija teksta u kategorije sa confidence score-om |
-| `ai_extract` | ai-extract-handler.ts | Strukturovana ekstrakcija podataka sa Zod validacijom |
-| `ai_summarize` | ai-summarize-handler.ts | Sumarizacija teksta ili konverzacije |
-| `structured_output` | structured-output-handler.ts | Tipizovan JSON output sa Zod schema validacijom |
-| `plan_and_execute` | plan-and-execute-handler.ts | ReAct-style planiranje — moćan model planira, jeftini izvršavaju |
-| `reflexive_loop` | reflexive-loop-handler.ts | Self-correcting loop. Max 5 iteracija, konfigurabilan prag kvaliteta |
-| `semantic_router` | semantic-router-handler.ts | Routing na osnovu semantičke sličnosti poruka sa intentima |
+| `ai_response` | ai-response-handler.ts + streaming | LLM response with RAG, MCP tools, agent tools. 20-step tool limit |
+| `ai_classify` | ai-classify-handler.ts | Text classification into categories with a confidence score |
+| `ai_extract` | ai-extract-handler.ts | Structured data extraction with Zod validation |
+| `ai_summarize` | ai-summarize-handler.ts | Summarization of text or a conversation |
+| `structured_output` | structured-output-handler.ts | Typed JSON output with Zod schema validation |
+| `plan_and_execute` | plan-and-execute-handler.ts | ReAct-style planning — a powerful model plans, cheap ones execute |
+| `reflexive_loop` | reflexive-loop-handler.ts | Self-correcting loop. Max 5 iterations, configurable quality threshold |
+| `semantic_router` | semantic-router-handler.ts | Routing based on semantic similarity of messages to intents |
 
-### Znanje i pretraga
-| Node | Handler | Opis |
+### Knowledge & Search
+| Node | Handler | Description |
 |------|---------|------|
 | `kb_search` | kb-search-handler.ts | Hybrid search (semantic + BM25). Dynamic top-k. Analytics tracking |
-| `web_search` | web-search-handler.ts | Web pretraga via Tavily ili Brave Search API |
-| `web_fetch` | web-fetch-handler.ts | HTTP fetch + HTML/JSON parsing (cheerio). SSRF zaštita |
+| `web_search` | web-search-handler.ts | Web search via Tavily or Brave Search API |
+| `web_fetch` | web-fetch-handler.ts | HTTP fetch + HTML/JSON parsing (cheerio). SSRF protection |
 | `browser_action` | browser-action-handler.ts | Playwright headless browser automation |
-| `embeddings` | embeddings-handler.ts | Generisanje embeddings-a (OpenAI, custom modeli) |
+| `embeddings` | embeddings-handler.ts | Embedding generation (OpenAI, custom models) |
 
-### Memorija
-| Node | Handler | Opis |
+### Memory
+| Node | Handler | Description |
 |------|---------|------|
-| `memory_write` | memory-write-handler.ts | Čuva podatke u agent persistent memory (sa embedding-om) |
-| `memory_read` | memory-read-handler.ts | Čita iz agent memorije (key/category/semantic search) |
+| `memory_write` | memory-write-handler.ts | Stores data in agent persistent memory (with embedding) |
+| `memory_read` | memory-read-handler.ts | Reads from agent memory (key/category/semantic search) |
 
-### Integracije
-| Node | Handler | Opis |
+### Integrations
+| Node | Handler | Description |
 |------|---------|------|
-| `api_call` | api-call-handler.ts | HTTP pozivi (GET/POST/PUT/DELETE). Auth headers, retry, JSON mapping |
-| `mcp_tool` | mcp-tool-handler.ts | Deterministički MCP tool poziv po imenu |
-| `mcp_task_runner` | mcp-task-runner-handler.ts | Long-running MCP task sa progress tracking-om |
-| `call_agent` | call-agent-handler.ts | Agent-to-Agent (A2A) poziv. Circuit breaker, rate limit, depth limit (3) |
-| `email_send` | email-send-handler.ts | Slanje emaila via konfigurisani SMTP ili servis |
-| `notification` | notification-handler.ts | Multi-channel notifikacije (Slack, Discord, email, webhook) |
-| `webhook` | webhook-handler.ts | Outbound webhook sa retry i idempotency |
-| `webhook_trigger` | webhook-trigger-handler.ts | Inbound webhook entry point. Kreira WebhookConfig u DB |
-| `schedule_trigger` | schedule-trigger-handler.ts | Cron/interval trigger entry point. Kreira FlowSchedule u DB |
-| `database_query` | database-query-handler.ts | SQL izvršavanje (MySQL/PostgreSQL) sa limitima |
-| `file_operations` | file-operations-handler.ts | Čitanje/pisanje fajlova (S3, lokalni storage) |
-| `image_generation` | image-generation-handler.ts | Generisanje slika (FAL.ai, Stability AI/DALL-E) |
-| `speech_audio` | speech-audio-handler.ts | TTS (Eleven Labs) i STT (Deepgram) |
-| `multimodal_input` | multimodal-input-handler.ts | Prihvatanje slika, audio, fajlova od korisnika |
-| `desktop_app` | desktop-app-handler.ts | Desktop automation (zahteva instaliranog agenta) |
+| `api_call` | api-call-handler.ts | HTTP calls (GET/POST/PUT/DELETE). Auth headers, retry, JSON mapping |
+| `mcp_tool` | mcp-tool-handler.ts | Deterministic MCP tool call by name |
+| `mcp_task_runner` | mcp-task-runner-handler.ts | Long-running MCP task with progress tracking |
+| `call_agent` | call-agent-handler.ts | Agent-to-Agent (A2A) call. Circuit breaker, rate limit, depth limit (3) |
+| `email_send` | email-send-handler.ts | Sends email via configured SMTP or service |
+| `notification` | notification-handler.ts | Multi-channel notifications (Slack, Discord, email, webhook) |
+| `webhook` | webhook-handler.ts | Outbound webhook with retry and idempotency |
+| `webhook_trigger` | webhook-trigger-handler.ts | Inbound webhook entry point. Creates a WebhookConfig in the DB |
+| `schedule_trigger` | schedule-trigger-handler.ts | Cron/interval trigger entry point. Creates a FlowSchedule in the DB |
+| `database_query` | database-query-handler.ts | SQL execution (MySQL/PostgreSQL) with limits |
+| `file_operations` | file-operations-handler.ts | File reading/writing (S3, local storage) |
+| `image_generation` | image-generation-handler.ts | Image generation (FAL.ai, Stability AI/DALL-E) |
+| `speech_audio` | speech-audio-handler.ts | TTS (Eleven Labs) and STT (Deepgram) |
+| `multimodal_input` | multimodal-input-handler.ts | Accepts images, audio, and files from the user |
+| `desktop_app` | desktop-app-handler.ts | Desktop automation (requires an installed agent) |
 
-> **Napomena:** Google Workspace (Sheets, Docs, Drive, Calendar, Gmail) nije formalni `NodeType` — dostupan je kroz `mcp_tool` node via MCP proxy (v. sekciju 22).
+> **Note:** Google Workspace (Sheets, Docs, Drive, Calendar, Gmail) is not a formal `NodeType` — it is available through the `mcp_tool` node via the MCP proxy (see section 22).
 
-### Transformacija podataka
-| Node | Handler | Opis |
+### Data Transformation
+| Node | Handler | Description |
 |------|---------|------|
-| `format_transform` | format-transform-handler.ts | JSON↔CSV↔XML↔YAML konverzija |
-| `function` | function-handler.ts | Sandboxed JS/TS izvršavanje (vm2, 5s timeout) |
-| `python_code` | python-code-handler.ts | Python izvršavanje u subprocess sandboxu |
-| `code_interpreter` | code-interpreter-handler.ts | Arbitrary code execution sa output capture |
+| `format_transform` | format-transform-handler.ts | JSON↔CSV↔XML↔YAML conversion |
+| `function` | function-handler.ts | Sandboxed JS/TS execution (vm2, 5s timeout) |
+| `python_code` | python-code-handler.ts | Python execution in a subprocess sandbox |
+| `code_interpreter` | code-interpreter-handler.ts | Arbitrary code execution with output capture |
 
-### Kvalitet i evaluacija
-| Node | Handler | Opis |
+### Quality & Evaluation
+| Node | Handler | Description |
 |------|---------|------|
-| `evaluator` | evaluator-handler.ts | AI-powered content evaluacija sa criteria scoring |
-| `trajectory_evaluator` | trajectory-evaluator-handler.ts | Evaluacija agent reasoning trajectory (korak-po-korak) |
-| `guardrails` | guardrails-handler.ts | Content moderation, PII detekcija, prompt injection odbrana |
-| `human_approval` | human-approval-handler.ts | Pauzira flow i čeka human decision |
-| `cost_monitor` | cost-monitor-handler.ts | Token budget tracking + alerting. Adaptive mode za auto-downgrade |
+| `evaluator` | evaluator-handler.ts | AI-powered content evaluation with criteria scoring |
+| `trajectory_evaluator` | trajectory-evaluator-handler.ts | Evaluation of the agent reasoning trajectory (step-by-step) |
+| `guardrails` | guardrails-handler.ts | Content moderation, PII detection, prompt injection defense |
+| `human_approval` | human-approval-handler.ts | Pauses the flow and waits for a human decision |
+| `cost_monitor` | cost-monitor-handler.ts | Token budget tracking + alerting. Adaptive mode for auto-downgrade |
 
-### Napredne arhitekture
-| Node | Handler | Opis |
+### Advanced Architectures
+| Node | Handler | Description |
 |------|---------|------|
-| `ab_test` | ab-test-handler.ts | A/B traffic splitting sa weighted routing |
-| `aggregate` | aggregate-handler.ts | Merge rezultata iz paralelnih grana |
-| `cache` | cache-handler.ts | Redis caching sa TTL i sourceHandle routing-om |
-| `learn` | learn-handler.ts | ECC pattern extraction iz AgentExecution istorije |
-| `swarm` | swarm-handler.ts | Deljeni task pool sa N radnika koji dinamički preuzimaju zadatke. Merge: concat ili summarize |
-| `verification` | verification-handler.ts | Pokreće build/test/lint/custom komande (execFile whitelist) i rutira na passed/failed |
-| `ast_transform` | ast-transform-handler.ts | Strukturalna AST pretraga + refaktor via @ast-grep/napi (TS/Python) |
-| `lsp_query` | lsp-query-handler.ts | LSP operacije nad kodom: hover, definition, completion, diagnostics |
-| `project_context` | project-context-handler.ts | Učitava kontekst fajlove (glob) i sklapa ih u jedan context blok |
-| `sandbox_verify` | sandbox-verify-handler.ts | Provera koda na zabranjene pattern-e (npr. `: any`, `console.log`, `@prisma/client`) |
-| `file_writer` | file-writer-handler.ts | Piše generisane fajlove na disk (direct mode ili iz varijable), template putanje |
-| `process_runner` | process-runner-handler.ts | Pokreće procese (npr. vitest) u /tmp/sdlc workspace-u |
-| `git_node` | git-node-handler.ts | Sekvenca git operacija (checkout/add/commit/push) + opciono kreiranje PR-a |
-| `deploy_trigger` | deploy-trigger-handler.ts | Vercel deploy na staging/production sa praćenjem statusa (READY/ERROR/BUILDING) |
-| `claude_agent_sdk` | claude-agent-sdk-handler.ts | Claude Agent SDK sesija sa MCP/agent alatima i perzistencijom sesije |
+| `ab_test` | ab-test-handler.ts | A/B traffic splitting with weighted routing |
+| `aggregate` | aggregate-handler.ts | Merges results from parallel branches |
+| `cache` | cache-handler.ts | Redis caching with TTL and sourceHandle routing |
+| `learn` | learn-handler.ts | ECC pattern extraction from AgentExecution history |
+| `swarm` | swarm-handler.ts | Shared task pool with N workers that dynamically claim tasks. Merge: concat or summarize |
+| `verification` | verification-handler.ts | Runs build/test/lint/custom commands (execFile whitelist) and routes to passed/failed |
+| `ast_transform` | ast-transform-handler.ts | Structural AST search + refactor via @ast-grep/napi (TS/Python) |
+| `lsp_query` | lsp-query-handler.ts | LSP operations on code: hover, definition, completion, diagnostics |
+| `project_context` | project-context-handler.ts | Loads context files (glob) and assembles them into a single context block |
+| `sandbox_verify` | sandbox-verify-handler.ts | Checks code for forbidden patterns (e.g. `: any`, `console.log`, `@prisma/client`) |
+| `file_writer` | file-writer-handler.ts | Writes generated files to disk (direct mode or from a variable), template paths |
+| `process_runner` | process-runner-handler.ts | Runs processes (e.g. vitest) in the /tmp/sdlc workspace |
+| `git_node` | git-node-handler.ts | Sequence of git operations (checkout/add/commit/push) + optional PR creation |
+| `deploy_trigger` | deploy-trigger-handler.ts | Vercel deploy to staging/production with status tracking (READY/ERROR/BUILDING) |
+| `claude_agent_sdk` | claude-agent-sdk-handler.ts | Claude Agent SDK session with MCP/agent tools and session persistence |
 
 ---
 
 ## 3. RUNTIME ENGINE
 
-**Lokacija:** `src/lib/runtime/`
+**Location:** `src/lib/runtime/`
 
-| Fajl | Opis |
+| File | Description |
 |------|------|
-| `engine.ts` | Sinhroni execution loop. MAX_ITERATIONS=50, MAX_HISTORY=100 |
-| `engine-streaming.ts` | Streaming varijanta — NDJSON ReadableStream output |
-| `stream-protocol.ts` | StreamChunk encode/decode/writer. Tipovi: message, stream_start/delta/end, done, error |
-| `context.ts` | Load/save conversation context iz DB |
-| `template.ts` | `{{variable}}` interpolacija. Podržava nested paths i bracket notation |
+| `engine.ts` | Synchronous execution loop. MAX_ITERATIONS=50, MAX_HISTORY=100 |
+| `engine-streaming.ts` | Streaming variant — NDJSON ReadableStream output |
+| `stream-protocol.ts` | StreamChunk encode/decode/writer. Types: message, stream_start/delta/end, done, error |
+| `context.ts` | Load/save conversation context from the DB |
+| `template.ts` | `{{variable}}` interpolation. Supports nested paths and bracket notation |
 | `debug-controller.ts` | Debug session state machine (breakpoints, step, resume, inspect) |
 | `python-executor.ts` | Python execution via Pyodide WASM worker |
-| `workers/pyodide-node-worker.js` | Node.js Worker thread sa Pyodide |
-| `types.ts` | RuntimeContext, ExecutionResult, NodeHandler, StreamChunk tipovi |
-| `handlers/index.ts` | Registry — 67 handler ključeva (66 NodeType + interni `code_review`) |
+| `workers/pyodide-node-worker.js` | Node.js Worker thread with Pyodide |
+| `types.ts` | RuntimeContext, ExecutionResult, NodeHandler, StreamChunk types |
+| `handlers/index.ts` | Registry — 67 handler keys (66 NodeType + internal `code_review`) |
 
-**Sigurnosni limiti:** MAX_ITERATIONS=50 · MAX_HISTORY=100 · function timeout 5s · Python timeout 30s
+**Safety limits:** MAX_ITERATIONS=50 · MAX_HISTORY=100 · function timeout 5s · Python timeout 30s
 
 ---
 
-## 4. CHAT INTERFEJS
+## 4. CHAT INTERFACE
 
-**Lokacija:** `src/app/chat/[agentId]/page.tsx`, `src/components/chat/`
+**Location:** `src/app/chat/[agentId]/page.tsx`, `src/components/chat/`
 
-- Streaming chat sa NDJSON protokolom
+- Streaming chat with the NDJSON protocol
 - `use-streaming-chat.ts` hook — line-buffered NDJSON parser, AbortController (1800s timeout)
-- Pipeline progress prikaz za multi-agent workflow-ove
-- Prikaz citata iz Knowledge Base
-- `pipeline-progress.tsx` — real-time progress indikator
-- `plot-renderer.tsx` — Recharts vizualizacije u chat output-u
-- Embed widget podrška (`/embed/[agentId]`)
-- Public embed.js script za ugradnju na spoljne sajtove
+- Pipeline progress display for multi-agent workflows
+- Display of citations from the Knowledge Base
+- `pipeline-progress.tsx` — real-time progress indicator
+- `plot-renderer.tsx` — Recharts visualizations in chat output
+- Embed widget support (`/embed/[agentId]`)
+- Public embed.js script for embedding on external sites
 
 ---
 
 ## 5. KNOWLEDGE BASE (RAG Pipeline)
 
-**Lokacija:** `src/lib/knowledge/`, `src/app/knowledge/[agentId]/page.tsx`
+**Location:** `src/lib/knowledge/`, `src/app/knowledge/[agentId]/page.tsx`
 
 ### Ingestion
-- **Parseri:** PDF (pdf-parse), DOCX (mammoth), HTML (cheerio), XLSX (xlsx), PPTX (JSZip), plain text
-- **Chunking:** 5 strategija — recursive, markdown, code, sentence, fixed (400 tokena, 20% overlap)
+- **Parsers:** PDF (pdf-parse), DOCX (mammoth), HTML (cheerio), XLSX (xlsx), PPTX (JSZip), plain text
+- **Chunking:** 5 strategies — recursive, markdown, code, sentence, fixed (400 tokens, 20% overlap)
 - **Embeddings:** OpenAI text-embedding-3-small (1536 dim), text-embedding-3-large (3072 dim)
-- **Deduplication:** SHA-256 content hash, pronalazi duplicate chunks pre embedding-a
-- **Progress tracking:** 6 faza (parsing→chunking→dedup→embedding→storing→complete) u bazi
-- **Max file:** 10MB, dozvoljeni tipovi: PDF/DOCX/XLSX/CSV/PPTX
+- **Deduplication:** SHA-256 content hash, finds duplicate chunks before embedding
+- **Progress tracking:** 6 phases (parsing→chunking→dedup→embedding→storing→complete) in the database
+- **Max file:** 10MB, allowed types: PDF/DOCX/XLSX/CSV/PPTX
 
 ### Search
 - **Hybrid search:** semantic (pgvector cosine) + BM25 keyword → RRF fusion (70% semantic, 30% BM25)
-- **HNSW index:** m=16, ef_construction=64. Dynamic efSearch (40/60/100 za kratke/srednje/duge upite)
-- **GIN index:** Full-text search za BM25
+- **HNSW index:** m=16, ef_construction=64. Dynamic efSearch (40/60/100 for short/medium/long queries)
+- **GIN index:** Full-text search for BM25
 - **Threshold:** 0.25 similarity minimum
-- **Dynamic top-k:** 5 za kratke upite, 8 za duže
-- **Parent document retrieval:** vraća širi kontekst oko matched chunks
+- **Dynamic top-k:** 5 for short queries, 8 for longer ones
+- **Parent document retrieval:** returns broader context around matched chunks
 
-### Napredne funkcije
+### Advanced Features
 - **Query transformation:** HyDE (hypothetical document embedding), multi-query expansion
-- **Reranking:** LLM rubric (deepseek-chat) ili Cohere Rerank v3.5
+- **Reranking:** LLM rubric (deepseek-chat) or Cohere Rerank v3.5
 - **Context ordering:** relevance, lost-in-middle, chronological, diversity (MMR-like)
-- **Metadata filtering:** 10 operatora (eq/neq/gt/gte/lt/lte/in/nin/contains/exists)
-- **Embedding cache:** Redis 600s TTL. Semaphore: max 3 concurrent embedding poziva
-- **Drift detection:** detektuje mismatch embedding modela
+- **Metadata filtering:** 10 operators (eq/neq/gt/gte/lt/lte/in/nin/contains/exists)
+- **Embedding cache:** Redis 600s TTL. Semaphore: max 3 concurrent embedding calls
+- **Drift detection:** detects embedding model mismatch
 - **RAGAS evaluation:** faithfulness, contextPrecision, contextRecall, answerRelevancy
-- **Analytics:** source/chunk stats, token distribucija, top retrieved chunks
+- **Analytics:** source/chunk stats, token distribution, top retrieved chunks
 - **Maintenance:** dead chunk cleanup, scheduled re-ingestion
 
 ---
 
 ## 6. WEBHOOKS (Inbound)
 
-**Lokacija:** `src/lib/webhooks/`, `src/app/webhooks/[agentId]/page.tsx`
+**Location:** `src/lib/webhooks/`, `src/app/webhooks/[agentId]/page.tsx`
 
 - **Standard Webhooks spec:** HMAC-SHA256, x-webhook-id/timestamp/signature headers, 5-min timestamp window
-- **Idempotency:** @@unique na WebhookExecution.idempotencyKey — duplikat = 409
-- **Event filtering:** po tipu eventa (GitHub, Slack, Stripe, generic)
+- **Idempotency:** @@unique on WebhookExecution.idempotencyKey — duplicate = 409
+- **Event filtering:** by event type (GitHub, Slack, Stripe, generic)
 - **Body/header mapping:** JSONPath, dot notation, bracket notation
-- **Rotation:** `POST .../rotate` generiše novi HMAC ključ
-- **Replay:** re-izvršava webhook sa originalnim payload-om
+- **Rotation:** `POST .../rotate` generates a new HMAC key
+- **Replay:** re-executes the webhook with the original payload
 - **Execution log:** status, payload, duration, replay chain
-- **Rate limit:** 60 req/min po webhookId
-- **Provider presets:** GitHub, Stripe, Slack, Generic (pre-konfigurisani maperi)
-- **Slack URL verification:** automatski odgovara na challenge pre signature check-a
-- **UI:** Dva panela — lista + detalj sa Executions/Configuration/Test tabovima
+- **Rate limit:** 60 req/min per webhookId
+- **Provider presets:** GitHub, Stripe, Slack, Generic (pre-configured mappers)
+- **Slack URL verification:** automatically responds to the challenge before the signature check
+- **UI:** Two panels — list + detail with Executions/Configuration/Test tabs
 
 ---
 
 ## 7. SCHEDULED FLOWS
 
-**Lokacija:** `src/lib/scheduler/`, API: `/api/agents/[agentId]/schedules`
+**Location:** `src/lib/scheduler/`, API: `/api/agents/[agentId]/schedules`
 
-- **Tipovi:** CRON (5-field), INTERVAL (1-10080 min), MANUAL
-- **IANA timezone podrška**
-- **Preview:** sledeći N vremena izvršavanja za dati cron izraz
-- **Execution history:** status, duration, tokenUsage, errorMessage po execuciji
-- **Failure notifications:** multi-channel upozorenja pri consecutive failure-ima
-- **Auto-sync:** schedule_trigger node → FlowSchedule DB zapis pri deploy-u
-- **Railway cron:** `/api/cron/trigger-scheduled-flows` — CRON_SECRET zaštita
+- **Types:** CRON (5-field), INTERVAL (1-10080 min), MANUAL
+- **IANA timezone support**
+- **Preview:** next N execution times for a given cron expression
+- **Execution history:** status, duration, tokenUsage, errorMessage per execution
+- **Failure notifications:** multi-channel alerts on consecutive failures
+- **Auto-sync:** schedule_trigger node → FlowSchedule DB record on deploy
+- **Railway cron:** `/api/cron/trigger-scheduled-flows` — CRON_SECRET protection
 - **Stats API:** total runs, success rate, avg duration
 
 ---
 
 ## 8. AGENT EVALS (Testing Framework)
 
-**Lokacija:** `src/lib/evals/`, `src/app/evals/[agentId]/page.tsx`
+**Location:** `src/lib/evals/`, `src/app/evals/[agentId]/page.tsx`
 
-### 12 tipova asercija (3 sloja)
-| Sloj | Tip | Opis |
+### 12 assertion types (3 layers)
+| Layer | Type | Description |
 |------|-----|------|
-| L1 Deterministic | exact_match | Tačno poklapanje stringa |
-| L1 | contains | Sadrži substring |
+| L1 Deterministic | exact_match | Exact string match |
+| L1 | contains | Contains substring |
 | L1 | icontains | Case-insensitive contains |
-| L1 | not_contains | Ne sadrži |
-| L1 | regex | Regex poklapanje |
-| L1 | starts_with | Počinje sa |
-| L1 | json_valid | Validan JSON |
-| L1 | latency | Vreme odgovora ispod praga |
-| L2 Semantic | semantic_similarity | Cosine sličnost via OpenAI embedding (prag 0.8) |
+| L1 | not_contains | Does not contain |
+| L1 | regex | Regex match |
+| L1 | starts_with | Starts with |
+| L1 | json_valid | Valid JSON |
+| L1 | latency | Response time below threshold |
+| L2 Semantic | semantic_similarity | Cosine similarity via OpenAI embedding (threshold 0.8) |
 | L3 LLM-Judge | llm_rubric | Custom criteria scoring (0-1) |
-| L3 | kb_faithfulness | Hallucination detekcija vs KB |
-| L3 | relevance | Odgovara li na pitanje |
+| L3 | kb_faithfulness | Hallucination detection vs KB |
+| L3 | relevance | Whether it answers the question |
 
 ### Features
-- Auto-generisanje test case-ova iz system prompt-a i konverzacija
-- A/B poređenje (po flow verziji ili modelu)
-- CSV export rezultata (po run-u ili suite-u)
-- runOnDeploy flag — automatski pokreće posle svakog deploy-a
+- Auto-generation of test cases from the system prompt and conversations
+- A/B comparison (by flow version or model)
+- CSV export of results (per run or per suite)
+- runOnDeploy flag — runs automatically after every deploy
 - Scheduled evals (cron)
-- Eval standards katalog sa pre-built assertion template-ima
-- Trend chart (Recharts LineChart) za score kroz vreme
-- Limiti: 20 suites/agent, 50 test cases/suite, 1 running run/suite
+- Eval standards catalog with pre-built assertion templates
+- Trend chart (Recharts LineChart) for score over time
+- Limits: 20 suites/agent, 50 test cases/suite, 1 running run/suite
 
 ---
 
 ## 9. CLI GENERATOR (MCP Bridge)
 
-**Lokacija:** `src/lib/cli-generator/`, `src/app/cli-generator/page.tsx`
+**Location:** `src/lib/cli-generator/`, `src/app/cli-generator/page.tsx`
 
-- **6 faza:** analyze → design → implement → test → document → publish
-- **Dual target:** Python (FastMCP) ili TypeScript (Node.js MCP SDK)
-- **Generisani fajlovi Python (10):** main.py, bridge.py, server.py, __init__.py, conftest.py, test_bridge.py, test_server.py, requirements.txt, pyproject.toml, README.md
-- **Generisani fajlovi TypeScript (8):** index.ts, bridge.ts, server.ts, bridge.test.ts, server.test.ts, package.json, tsconfig.json, README.md
-- **Auto-fix engine:** automatski popravlja česte greške generisanog koda
-- **Python validator:** proverava FastMCP import, @mcp.tool, mcp.run() posle generate-a
-- **TypeScript validator:** 8 validacionih pravila za MCP SDK output
-- **Stuck detection:** STUCK_THRESHOLD_MS = 5 min → AlertTriangle u UI
-- **Auto-resume:** frontend detektuje stuck i automatski resume-uje
-- **Live file preview:** SWR polling na /files tokom generisanja
-- **Download:** ZIP arhiva generisanih fajlova
-- **Publish:** registruje bridge kao MCP server u korisnikov nalog
+- **6 phases:** analyze → design → implement → test → document → publish
+- **Dual target:** Python (FastMCP) or TypeScript (Node.js MCP SDK)
+- **Generated Python files (10):** main.py, bridge.py, server.py, __init__.py, conftest.py, test_bridge.py, test_server.py, requirements.txt, pyproject.toml, README.md
+- **Generated TypeScript files (8):** index.ts, bridge.ts, server.ts, bridge.test.ts, server.test.ts, package.json, tsconfig.json, README.md
+- **Auto-fix engine:** automatically fixes common errors in generated code
+- **Python validator:** checks for FastMCP import, @mcp.tool, mcp.run() after generation
+- **TypeScript validator:** 8 validation rules for MCP SDK output
+- **Stuck detection:** STUCK_THRESHOLD_MS = 5 min → AlertTriangle in the UI
+- **Auto-resume:** frontend detects a stuck state and resumes automatically
+- **Live file preview:** SWR polling on /files during generation
+- **Download:** ZIP archive of the generated files
+- **Publish:** registers the bridge as an MCP server in the user's account
 
 ---
 
-## 10. ECC INTEGRACIJA (Everything-Claude-Code)
+## 10. ECC INTEGRATION (Everything-Claude-Code)
 
-**Lokacija:** `src/lib/ecc/`, `services/ecc-skills-mcp/`
+**Location:** `src/lib/ecc/`, `services/ecc-skills-mcp/`
 
-- **30 ECC agent template-a** u `src/data/ecc-agent-templates.json`
-- **60+ skills** ingested i vektorizovani u KB
-- **Skills Browser** na `/skills` sa search + faceted filter (jezik, kategorija, agent)
-- **Meta-Orchestrator:** LLM-based task routing ka odgovarajućem agentu
-- **Instinct sistem:** pattern extraction iz AgentExecution istorije → confidence 0-1 → promovišu se u skills pri >0.85
-- **Learn node:** hvata patterne iz korisnikove interakcije
-- **ECC Skills MCP server:** poseban Railway servis (Python FastMCP, port 8000)
+- **30 ECC agent templates** in `src/data/ecc-agent-templates.json`
+- **60+ skills** ingested and vectorized into the KB
+- **Skills Browser** at `/skills` with search + faceted filter (language, category, agent)
+- **Meta-Orchestrator:** LLM-based task routing to the appropriate agent
+- **Instinct system:** pattern extraction from AgentExecution history → confidence 0-1 → promoted to skills at >0.85
+- **Learn node:** captures patterns from user interaction
+- **ECC Skills MCP server:** separate Railway service (Python FastMCP, port 8000)
   - `get_skill(name)`, `search_skills(query, tag?)`, `list_skills(language?)`
   - asyncpg connection pool (min=2, max=10)
-  - **TRENUTNO: numReplicas=1 (SPOF — videti SAAS-MIGRATION-PLAN.md Faza 0)**
+  - **CURRENTLY: numReplicas=1 (SPOF — see SAAS-MIGRATION-PLAN.md Phase 0)**
 - **Feature flag:** `ECC_ENABLED` env var (default: false)
-- **Evolve API:** `/api/skills/evolve` — AI klasteruje instinkte i generiše novi SKILL.md
+- **Evolve API:** `/api/skills/evolve` — AI clusters instincts and generates a new SKILL.md
 
 ---
 
 ## 11. MCP (Model Context Protocol)
 
-**Lokacija:** `src/lib/mcp/`
+**Location:** `src/lib/mcp/`
 
-- **Transporti:** Streamable HTTP (primarni) + SSE (backward compat)
+- **Transports:** Streamable HTTP (primary) + SSE (backward compat)
 - **Connection pool:** MAX_POOL_SIZE=50, IDLE_TTL=5min, auto-cleanup 60s
-- **Graceful degradation:** ako MCP server ne odgovori — AI nastavlja bez alata
-- **Tool filtering:** per-agent enabledTools array — samo odabrani alati se prosleđuju AI-u
-- **Featured servers:** pre-konfigurisani MCP serveri (GitHub, Playwright, itd.)
-- **ECC Skills MCP:** skills kao MCP resursi (`kb://agent-id/skill-name`)
+- **Graceful degradation:** if an MCP server does not respond — the AI continues without tools
+- **Tool filtering:** per-agent enabledTools array — only the selected tools are passed to the AI
+- **Featured servers:** pre-configured MCP servers (GitHub, Playwright, etc.)
+- **ECC Skills MCP:** skills as MCP resources (`kb://agent-id/skill-name`)
 - **Google Workspace proxy:** `/api/mcp/proxy/google-workspace/[tokenId]` — OAuth token aware
 
 ---
 
-## 12. AGENT-AS-TOOL ORCHESTRACIJA
+## 12. AGENT-AS-TOOL ORCHESTRATION
 
-**Lokacija:** `src/lib/agents/agent-tools.ts`
+**Location:** `src/lib/agents/agent-tools.ts`
 
-- Konvertuje sibling agente u Vercel AI SDK tool definicije
-- AI dinamički odlučuje koji sub-agent pozvati na osnovu konteksta
-- **Timeout profili (AGENT_TIMEOUT_PROFILES):**
+- Converts sibling agents into Vercel AI SDK tool definitions
+- The AI dynamically decides which sub-agent to call based on context
+- **Timeout profiles (AGENT_TIMEOUT_PROFILES):**
   - fast (45s): reality checker, validator, linter
   - standard (120s): research, discovery, product, analysis
   - slow (150s): architect, design, plan, spec
   - very-slow (180s): code, generate, implement, engineer
-  - default (120s): ostalo
-- **Per-agent override:** `expectedDurationSeconds` u Agent modelu
-- **Zaštita:** circuit breaker + rate limiter + circular call detekcija + depth limit (3) + audit log
-- **stopWhen:** stepCountIs(20) za multi-step tool calling
+  - default (120s): everything else
+- **Per-agent override:** `expectedDurationSeconds` in the Agent model
+- **Protection:** circuit breaker + rate limiter + circular call detection + depth limit (3) + audit log
+- **stopWhen:** stepCountIs(20) for multi-step tool calling
 
 ---
 
-## 13. A2A (Agent-to-Agent) PROTOKOL
+## 13. A2A (Agent-to-Agent) PROTOCOL
 
-**Lokacija:** `src/lib/a2a/`
+**Location:** `src/lib/a2a/`
 
-- **Google A2A v0.3 spec** — AgentCard sa JSON-LD
+- **Google A2A v0.3 spec** — AgentCard with JSON-LD
 - **AgentCard:** name, description, skills, inputModes, outputModes, capabilities
-- **Circuit breaker:** CLOSED/OPEN/HALF_OPEN. Konfigurabilan prag failures
+- **Circuit breaker:** CLOSED/OPEN/HALF_OPEN. Configurable failure threshold
 - **Rate limiter:** per-agent call rate limiting
-- **Distributed tracing:** traceId, spanId, parentSpanId u AgentCallLog
-- **Discovery:** `/api/a2a/agents` — javni katalog dostupnih agenata
+- **Distributed tracing:** traceId, spanId, parentSpanId in AgentCallLog
+- **Discovery:** `/api/a2a/agents` — public catalog of available agents
 - **Agent Call Monitor UI:** `src/components/a2a/agent-call-monitor.tsx`
 - **Stats API:** `/api/agent-calls/stats`
 
@@ -357,270 +357,270 @@
 
 ## 14. FLOW VERSIONING & DEPLOY
 
-- Immutable snapshots pri svakom save-u (30s throttle, skip ako se ništa nije promenilo)
-- Lifecycle: DRAFT → PUBLISHED → ARCHIVED (samo jedan PUBLISHED u jednom trenutku)
-- Deploy: archivira stari PUBLISHED, publishuje novi, update Flow.activeVersionId, kreira FlowDeployment — sve u jednoj transakciji
-- Rollback: kreira NOVU verziju sa starim sadržajem (non-destructive), zatim deploye
-- Diff engine: poredi nodove po ID-u, edges po ID-u, varijable po imenu; ignoriše pomeranje nodova <10px
-- Sandbox test pre deploy-a: `/api/agents/[agentId]/flow/versions/[versionId]/test`
-- Deploy hook: automatski pokreće eval suites sa runOnDeploy=true
+- Immutable snapshots on every save (30s throttle, skipped if nothing changed)
+- Lifecycle: DRAFT → PUBLISHED → ARCHIVED (only one PUBLISHED at any given time)
+- Deploy: archives the old PUBLISHED, publishes the new one, updates Flow.activeVersionId, creates a FlowDeployment — all in a single transaction
+- Rollback: creates a NEW version with the old content (non-destructive), then deploys it
+- Diff engine: compares nodes by ID, edges by ID, variables by name; ignores node movement <10px
+- Sandbox test before deploy: `/api/agents/[agentId]/flow/versions/[versionId]/test`
+- Deploy hook: automatically runs eval suites with runOnDeploy=true
 
 ---
 
 ## 15. HUMAN APPROVAL WORKFLOW
 
-- `human_approval` node pauzira flow i čeka human decision
+- `human_approval` node pauses the flow and waits for a human decision
 - HumanApprovalRequest model: PENDING → APPROVED/REJECTED/EXPIRED
-- `/api/approvals` — lista pending zahteva
+- `/api/approvals` — list of pending requests
 - `/api/approvals/[requestId]/respond` — approve/reject
 
 ---
 
 ## 16. AGENT MARKETPLACE / DISCOVERY
 
-**Lokacija:** `src/app/discover/page.tsx`, `/api/agents/discover`
+**Location:** `src/app/discover/page.tsx`, `/api/agents/discover`
 
-- Faceted search: kategorija, tag, model, sortiranje, scope (public/mine/all)
-- 4 paralelne Prisma query-je (agenti, count, category stats, tag agregacija)
-- 24 kategorije (uključujući marketplace-only)
+- Faceted search: category, tag, model, sorting, scope (public/mine/all)
+- 4 parallel Prisma queries (agents, count, category stats, tag aggregation)
+- 24 categories (including marketplace-only)
 - Debounced search 300ms
 - Agent model fields: `category String?`, `tags String[]`, `isPublic Boolean`
 
 ---
 
-## 17. TEMPLATES (221 template-a)
+## 17. TEMPLATES (221 templates)
 
-**Lokacija:** `src/data/agent-templates.json`, `src/app/templates/page.tsx`
+**Location:** `src/data/agent-templates.json`, `src/app/templates/page.tsx`
 
-- 221 template-a u 20 kategorija
-- Kategorije pokrivene: customer-support, coding, data, finance, hr, sales, research, writing, itd.
-- Starter flows za odabrane template-e (pre-populated 3-5 nodova)
-- Browse Templates tab u "New Agent" dialogu
+- 221 templates across 20 categories
+- Categories covered: customer-support, coding, data, finance, hr, sales, research, writing, etc.
+- Starter flows for selected templates (pre-populated 3-5 nodes)
+- Browse Templates tab in the "New Agent" dialog
 
 ---
 
 ## 18. ANALYTICS DASHBOARD
 
-**Lokacija:** `src/app/analytics/page.tsx`, `/api/analytics`
+**Location:** `src/app/analytics/page.tsx`, `/api/analytics`
 
-- Response time metrike po agentu i modelu
-- KB search statistike
-- Conversation counts i token usage
+- Response time metrics per agent and model
+- KB search statistics
+- Conversation counts and token usage
 - Cost breakdown (USD)
 - TTFB (Time To First Byte) tracking
 - SWR-based real-time refresh
-- Recharts vizualizacije
+- Recharts visualizations
 
 ---
 
 ## 19. DEVSECOPS PIPELINE
 
-**Lokacija:** `src/app/devsecops/page.tsx`
+**Location:** `src/app/devsecops/page.tsx`
 
-- Interaktivna checklist za DevSecOps setup
-- Arhitekturni dijagram
-- Integrisano sa OWASP standardima
+- Interactive checklist for DevSecOps setup
+- Architecture diagram
+- Integrated with OWASP standards
 
 ---
 
-## 20. AUTENTIKACIJA I BEZBEDNOST
+## 20. AUTHENTICATION & SECURITY
 
-**Lokacija:** `src/lib/auth.ts`, `src/middleware.ts`, `src/lib/security/`, `src/lib/safety/`
+**Location:** `src/lib/auth.ts`, `src/middleware.ts`, `src/lib/security/`, `src/lib/safety/`
 
 ### Auth
-- NextAuth v5 (beta.30), JWT strategija, 24h max age
-- Provajderi: GitHub OAuth + Google OAuth (oba kondicionalna na env vars)
-- CSRF Origin header check u middleware-u za POST/PUT/PATCH/DELETE
-- HTTPOnly, SameSite=lax, Secure (prod) kolačići
+- NextAuth v5 (beta.30), JWT strategy, 24h max age
+- Providers: GitHub OAuth + Google OAuth (both conditional on env vars)
+- CSRF Origin header check in the middleware for POST/PUT/PATCH/DELETE
+- HTTPOnly, SameSite=lax, Secure (prod) cookies
 
 ### Token encryption
-- `src/lib/auth-adapter.ts` — AES-256-GCM enkripcija OAuth tokena pre čuvanja u DB
-- `src/lib/crypto.ts` — kriptografski utilities
+- `src/lib/auth-adapter.ts` — AES-256-GCM encryption of OAuth tokens before storing in the DB
+- `src/lib/crypto.ts` — cryptographic utilities
 
-### API zaštita
-- `requireAuth()` i `requireAgentOwner()` u svakom API route-u
+### API protection
+- `requireAuth()` and `requireAgentOwner()` in every API route
 - Body limit: 1MB default (`src/lib/api/body-limit.ts`)
-- SSRF zaštita: validateExternalUrlWithDNS() sa private IP blocklist-om
-- File upload: whitelist ekstenzija + MIME type validacija
+- SSRF protection: validateExternalUrlWithDNS() with a private IP blocklist
+- File upload: extension whitelist + MIME type validation
 
 ### Security headers (`src/lib/api/security-headers.ts`)
 - X-Content-Type-Options: nosniff
 - X-Frame-Options: DENY
 - Referrer-Policy: strict-origin-when-cross-origin
 - Permissions-Policy
-- **NEDOSTAJE: Content-Security-Policy (CSP) — videti SAAS-MIGRATION-PLAN.md Faza 3**
+- **MISSING: Content-Security-Policy (CSP) — see SAAS-MIGRATION-PLAN.md Phase 3**
 
 ### RBAC (`src/lib/security/rbac.ts`)
-- READ(1), EXECUTE(2), ADMIN(3) hijerarhija
-- `checkSkillAccess(agentId, skillId, level)` — postoji ali se NE POZIVA u handler-ima
-- **Problem: RBAC je implementiran ali nije enforced — videti SAAS-MIGRATION-PLAN.md Faza 0**
+- READ(1), EXECUTE(2), ADMIN(3) hierarchy
+- `checkSkillAccess(agentId, skillId, level)` — exists but is NOT CALLED in the handlers
+- **Problem: RBAC is implemented but not enforced — see SAAS-MIGRATION-PLAN.md Phase 0**
 
 ### Safety middleware (`src/lib/safety/`)
-- Pre-AI: prompt injection detekcija (pattern matching)
-- Post-AI: PII redakcija (email, telefon, SSN, kreditna kartica, IP)
-- Content moderation via Azure Content Safety (opcionalno)
-- AuditLog za safety evente
+- Pre-AI: prompt injection detection (pattern matching)
+- Post-AI: PII redaction (email, phone, SSN, credit card, IP)
+- Content moderation via Azure Content Safety (optional)
+- AuditLog for safety events
 
 ---
 
 ## 21. OBSERVABILITY
 
-**Lokacija:** `src/lib/observability/`, `src/instrumentation.ts`
+**Location:** `src/lib/observability/`, `src/instrumentation.ts`
 
-- **OpenTelemetry:** custom implementacija (ne @opentelemetry/sdk-node)
+- **OpenTelemetry:** custom implementation (not @opentelemetry/sdk-node)
 - `tracer.ts` — startSpan(), OTLP push. gen_ai.* semantic conventions (AAIF 2026)
-- `metrics.ts` — counters/histograms. 30s flush interval ka OTLP endpoint-u
-- **Opcionalno:** radi samo ako je OTEL_EXPORTER_OTLP_ENDPOINT setovan
-- **PROBLEM: treba biti obavezan za SaaS — videti SAAS-MIGRATION-PLAN.md Faza 0**
-- `src/lib/logger.ts` — strukturirani JSON logger sa redakcijom sensitive podataka
-- `AuditLog` model u Prisma — postoji ali je nedovoljno korišćen
+- `metrics.ts` — counters/histograms. 30s flush interval to the OTLP endpoint
+- **Optional:** works only if OTEL_EXPORTER_OTLP_ENDPOINT is set
+- **PROBLEM: should be mandatory for SaaS — see SAAS-MIGRATION-PLAN.md Phase 0**
+- `src/lib/logger.ts` — structured JSON logger with redaction of sensitive data
+- `AuditLog` model in Prisma — exists but is underused
 
 ---
 
-## 22. GOOGLE WORKSPACE INTEGRACIJA
+## 22. GOOGLE WORKSPACE INTEGRATION
 
-**Lokacija:** `src/lib/google-workspace/`
+**Location:** `src/lib/google-workspace/`
 
 - OAuth 2.1 + PKCE flow
-- Podržane usluge: Sheets, Docs, Drive, Calendar, Gmail
-- `GoogleOAuthToken` model za čuvanje token-a po korisniku+emailu
-- Auto-refresh pre isteka token-a
+- Supported services: Sheets, Docs, Drive, Calendar, Gmail
+- `GoogleOAuthToken` model for storing tokens per user+email
+- Auto-refresh before token expiry
 - MCP proxy: `/api/mcp/proxy/google-workspace/[tokenId]`
 
 ---
 
-## 23. NOTION INTEGRACIJA
+## 23. NOTION INTEGRATION
 
-**Lokacija:** `src/app/api/auth/oauth/notion/`
+**Location:** `src/app/api/auth/oauth/notion/`
 
-- OAuth flow za Notion
-- Notion stranice/baze podataka kao KB sources ili agent output targeti
-
----
-
-## 24. OBSIDIAN INTEGRACIJA
-
-**Lokacija:** `src/lib/ecc/obsidian-adapter.ts`, `/api/integrations/obsidian`
-
-- **STATUS: Stub** — interface definisan, implementacija odložena
-- Plan: Obsidian vault na GitHub (Git-sync) kao persistent memory layer
+- OAuth flow for Notion
+- Notion pages/databases as KB sources or agent output targets
 
 ---
 
-## 25. REDIS INTEGRACIJA
+## 24. OBSIDIAN INTEGRATION
 
-**Lokacija:** `src/lib/redis.ts`
+**Location:** `src/lib/ecc/obsidian-adapter.ts`, `/api/integrations/obsidian`
 
-**Šta se čuva u Redis-u:**
+- **STATUS: Stub** — interface defined, implementation deferred
+- Plan: Obsidian vault on GitHub (Git-sync) as a persistent memory layer
+
+---
+
+## 25. REDIS INTEGRATION
+
+**Location:** `src/lib/redis.ts`
+
+**What is stored in Redis:**
 - Rate limiting (sliding window ZSET, 60s window)
-- Session cache (5min TTL, JWT dekodiran korisnik)
-- MCP pool koordinacija između replika (10min TTL)
+- Session cache (5min TTL, JWT-decoded user)
+- MCP pool coordination between replicas (10min TTL)
 - Embedding cache (600s TTL)
-- Embedding semaphore (max 3 concurrent poziva, Lua EVAL)
-- BullMQ queues (planiran u Fazi 1)
+- Embedding semaphore (max 3 concurrent calls, Lua EVAL)
+- BullMQ queues (planned in Phase 1)
 
-**Graceful fallback:** ako Redis nije dostupan — sve funkcioniše sa in-memory fallback-om
+**Graceful fallback:** if Redis is unavailable — everything works with an in-memory fallback
 
 ---
 
-## 26. INFRASTRUKTURA (Railway)
+## 26. INFRASTRUCTURE (Railway)
 
-**Lokacija:** `railway.toml`, `nixpacks.toml`, `services/*/railway.toml`
+**Location:** `railway.toml`, `nixpacks.toml`, `services/*/railway.toml`
 
 ### Main app
 - Next.js 15.5, Turbopack dev, standalone output
-- `numReplicas = 2` (zahteva Redis za cross-replica state)
+- `numReplicas = 2` (requires Redis for cross-replica state)
 - Health check: `/api/health`, timeout 120s
-- Restart: ON_FAILURE, max 5 pokušaja
+- Restart: ON_FAILURE, max 5 attempts
 
 ### ECC Skills MCP
 - Python FastMCP, port 8000
-- `numReplicas = 1` **← SPOF, treba → 2 (videti Faza 0)**
+- `numReplicas = 1` **← SPOF, should be → 2 (see Phase 0)**
 - Health check: `/health`, timeout 60s
 
-### Deal Flow Agent (poseban subprojekt)
+### Deal Flow Agent (separate subproject)
 - `deal-flow-agent/` — FastAPI + Uvicorn, port 8000
-- 5 M&A due diligence agenata
+- 5 M&A due diligence agents
 - Scoring model: Screening 15% + Financial 30% + Risk 25% + Competitive 20% + Legal 10%
 
 ---
 
-## 27. PODACI — SVIH 63 PRISMA MODELA
+## 27. DATA — ALL 63 PRISMA MODELS
 
-**Lokacija:** `prisma/schema.prisma`
+**Location:** `prisma/schema.prisma`
 
-| Model | Svrha |
+| Model | Purpose |
 |-------|-------|
-| User | Korisnički nalog |
+| User | User account |
 | Account | OAuth account linking (GitHub/Google) |
-| Session | NextAuth sesije |
-| VerificationToken | Email verifikacija |
-| Agent | Centralni entitet agenta |
-| Flow | Vizuelni workflow (JSON content) |
-| FlowVersion | Immutable snapshot verzije |
-| FlowDeployment | Audit log deploy-a |
+| Session | NextAuth sessions |
+| VerificationToken | Email verification |
+| Agent | Central agent entity |
+| Flow | Visual workflow (JSON content) |
+| FlowVersion | Immutable version snapshot |
+| FlowDeployment | Deployment audit log |
 | FlowTrace | Debug execution snapshot |
-| KnowledgeBase | KB konfiguracija po agentu |
-| KBSource | Izvor dokumenta (FILE/URL/SITEMAP/TEXT) |
-| KBChunk | Tekst chunk sa pgvector embedding-om |
-| Conversation | Chat sesija |
-| Message | Chat poruka |
-| AnalyticsEvent | Usage tracking (token, cost, latency) |
-| MCPServer | MCP server konfiguracija |
+| KnowledgeBase | Per-agent KB configuration |
+| KBSource | Document source (FILE/URL/SITEMAP/TEXT) |
+| KBChunk | Text chunk with pgvector embedding |
+| Conversation | Chat session |
+| Message | Chat message |
+| AnalyticsEvent | Usage tracking (tokens, cost, latency) |
+| MCPServer | MCP server configuration |
 | AgentMCPServer | Agent↔MCP server mapping |
 | GoogleOAuthToken | Google Workspace OAuth token |
 | AgentCard | A2A agent metadata |
-| HumanApprovalRequest | Human-in-the-loop zahtev |
-| AgentCallLog | A2A poziv sa distributed tracing |
-| FlowSchedule | Cron schedule konfiguracija |
-| ScheduledExecution | Execution log rasporeda |
+| HumanApprovalRequest | Human-in-the-loop request |
+| AgentCallLog | A2A call with distributed tracing |
+| FlowSchedule | Cron schedule configuration |
+| ScheduledExecution | Schedule execution log |
 | WebhookConfig | Inbound webhook endpoint |
 | WebhookExecution | Webhook trigger log |
-| EvalSuite | Test suite za agenta |
-| EvalTestCase | Jedan test case |
-| EvalRun | Jedno izvršavanje suite-a |
-| EvalResult | Rezultat jednog test case-a |
-| AgentMemory | Persistent memorija agenta sa embedding-om |
+| EvalSuite | Test suite for an agent |
+| EvalTestCase | A single test case |
+| EvalRun | A single suite execution |
+| EvalResult | Result of a single test case |
+| AgentMemory | Persistent agent memory with embedding |
 | AgentExecution | Execution trace (ECC) |
-| Skill | Skill modul (ECC) |
-| AgentSkillPermission | Agent↔Skill RBAC permisija |
-| Instinct | Naučeni pattern (ECC, confidence 0-1) |
+| Skill | Skill module (ECC) |
+| AgentSkillPermission | Agent↔Skill RBAC permission |
+| Instinct | Learned pattern (ECC, confidence 0-1) |
 | CLIGeneration | CLI generator pipeline run |
 | AuditLog | Compliance log |
-| ApiKey | Hashovan API ključ sa scope-ovima i istekom |
+| ApiKey | Hashed API key with scopes and expiry |
 | ManagedAgentTask | Async managed task (job, input/output, progress, callback) |
-| PipelineRun | SDLC pipeline run (koraci, metrike, smart routing) |
-| PipelineMemory | Memorija po pipeline run-u (kategorija, sadržaj) |
-| AgentSdkSession | Claude Agent SDK sesija (poruke, token usage, resume count) |
-| WebhookDeadLetter | Dead-letter zapis neuspelih webhook isporuka |
-| CompanyMission | Misija organizacije (vizija, vrednosti, ciljevi) |
-| Goal | Hijerarhijski cilj vezan za misiju |
-| AgentGoalLink | Veza agent↔cilj sa ulogom |
-| HeartbeatConfig | Konfiguracija heartbeat-a agenta (cron, system prompt) |
-| HeartbeatContext | Key/value kontekst za heartbeat sa TTL |
-| HeartbeatRun | Log jednog heartbeat izvršavanja |
-| Department | Organizaciona jedinica (hijerarhija, agenti) |
-| AgentPermissionGrant | Grant permisije između agenata (scope, istek) |
-| AgentBudget | Budžet agenta (hard/soft limit, tekuća potrošnja) |
-| CostEvent | Pojedinačni trošak (model, tokeni, USD) |
-| BudgetAlert | Alert pri probijanju budžeta |
-| Organization | Organizacija (plan, članovi, agenti) |
-| OrganizationMember | Članstvo korisnika u organizaciji sa ulogom |
-| Invitation | Pozivnica u organizaciju (token, istek) |
-| ModelPerformanceStat | Statistika performansi modela po fazi (uspeh, retry, tokeni) |
-| Template | Deljivi template agenta (payload, checksum, import count) |
-| ApprovalPolicy | Politika odobravanja akcija (pattern, odobravači, timeout) |
-| PolicyDecision | Odluka po approval politici (status, resolver) |
-| PipelineTemplate | Pre-built pipeline recept (agent slugs, koraci, setup guide) |
-| SomaReviewBatch | SOMA review batch (trend, ugao, status) |
-| SomaReviewPost | SOMA review post (platforma, hook, hashtag-ovi, quality flags) |
+| PipelineRun | SDLC pipeline run (steps, metrics, smart routing) |
+| PipelineMemory | Per-pipeline-run memory (category, content) |
+| AgentSdkSession | Claude Agent SDK session (messages, token usage, resume count) |
+| WebhookDeadLetter | Dead-letter record of failed webhook deliveries |
+| CompanyMission | Organization mission (vision, values, goals) |
+| Goal | Hierarchical goal tied to the mission |
+| AgentGoalLink | Agent↔goal link with a role |
+| HeartbeatConfig | Agent heartbeat configuration (cron, system prompt) |
+| HeartbeatContext | Key/value context for heartbeat with TTL |
+| HeartbeatRun | Log of a single heartbeat execution |
+| Department | Organizational unit (hierarchy, agents) |
+| AgentPermissionGrant | Permission grant between agents (scope, expiry) |
+| AgentBudget | Agent budget (hard/soft limit, current spend) |
+| CostEvent | Individual cost entry (model, tokens, USD) |
+| BudgetAlert | Alert on budget overrun |
+| Organization | Organization (plan, members, agents) |
+| OrganizationMember | User membership in an organization with a role |
+| Invitation | Invitation to an organization (token, expiry) |
+| ModelPerformanceStat | Model performance statistics per phase (success, retries, tokens) |
+| Template | Shareable agent template (payload, checksum, import count) |
+| ApprovalPolicy | Action approval policy (pattern, approvers, timeout) |
+| PolicyDecision | Decision under an approval policy (status, resolver) |
+| PipelineTemplate | Pre-built pipeline recipe (agent slugs, steps, setup guide) |
+| SomaReviewBatch | SOMA review batch (trend, angle, status) |
+| SomaReviewPost | SOMA review post (platform, hook, hashtags, quality flags) |
 
 ---
 
-## 28. SPOLJNI SERVISI I INTEGRACIJE
+## 28. EXTERNAL SERVICES & INTEGRATIONS
 
-### AI Provajderi (Vercel AI SDK — nikad direktni fetch)
-| Servis | Env var | Modeli |
+### AI Providers (Vercel AI SDK — never direct fetch)
+| Service | Env var | Models |
 |--------|---------|--------|
 | DeepSeek | DEEPSEEK_API_KEY | deepseek-chat (default), deepseek-reasoner |
 | OpenAI | OPENAI_API_KEY | gpt-4.1, gpt-4.1-mini, o3, o4-mini |
@@ -630,78 +630,78 @@
 | Mistral | MISTRAL_API_KEY | mistral-small/medium/large |
 | Moonshot (Kimi) | MOONSHOT_API_KEY | kimi-k2, kimi-k2-thinking |
 
-### Embeddings (obavezno — DeepSeek nema)
+### Embeddings (mandatory — DeepSeek has none)
 - OpenAI `text-embedding-3-small` (1536 dim) + `text-embedding-3-large` (3072 dim)
 
 ### Web search
 - Tavily (TAVILY_API_KEY), Brave Search (BRAVE_SEARCH_API_KEY)
 
-### Multimedija
-- FAL.ai (FAL_API_KEY) — slike
-- Stability AI (STABILITY_API_KEY) — slike
+### Multimedia
+- FAL.ai (FAL_API_KEY) — images
+- Stability AI (STABILITY_API_KEY) — images
 - Eleven Labs (ELEVENLABS_API_KEY) — TTS
 - Deepgram (DEEPGRAM_API_KEY) — STT
 
-### Sigurnost
+### Security
 - Azure Content Safety (AZURE_CONTENT_SAFETY_KEY + ENDPOINT)
 
 ### OAuth
 - GitHub, Google, Google Workspace, Notion
 
-### Infrastruktura
+### Infrastructure
 - PostgreSQL/Supabase (DATABASE_URL, DIRECT_URL)
 - Redis (REDIS_URL)
 - AWS S3 (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_BUCKET)
 
-### Observability (opcionalno)
+### Observability (optional)
 - OTEL_EXPORTER_OTLP_ENDPOINT → Grafana Cloud/Jaeger
 - OTEL_SERVICE_NAME (default: agent-studio)
 
 ---
 
-## 29. TESTIRANJE
+## 29. TESTING
 
-### Unit testovi
+### Unit tests
 - **Framework:** Vitest + @testing-library/react
-- **Broj:** 4000+ testova u 333 test fajla
-- **Lokacija:** `src/**/__tests__/*.test.ts`
+- **Count:** 4000+ tests in 333 test files
+- **Location:** `src/**/__tests__/*.test.ts`
 - **Coverage:** handlers, evals, webhooks, CLI generator, auth, security, safety, cache, cost
 
-### E2E testovi
-- **Framework:** Playwright (10 spec fajlova)
-- **Lokacija:** `e2e/tests/`
+### E2E tests
+- **Framework:** Playwright (10 spec files)
+- **Location:** `e2e/tests/`
 - **Coverage:** auth, dashboard, flow editor, chat streaming, KB, webhooks, import/export, eval gen, API routes
 
-### Load testovi
+### Load tests
 - **Framework:** k6
-- **Lokacija:** `k6/load-test.js`
-- **Scenariji:** smoke, skills_load, chat_load
+- **Location:** `k6/load-test.js`
+- **Scenarios:** smoke, skills_load, chat_load
 - **Thresholds:** P95 <500ms (health), P95 <100ms (skills), P95 <5000ms (chat)
 
 ### Pre-push check
 - **Script:** `scripts/pre-push-check.sh`
-- **4 provere:** TypeScript, Vitest, Lucide icon mocks, string konzistentnost
-- **Komanda:** `pnpm precheck`
+- **4 checks:** TypeScript, Vitest, Lucide icon mocks, string consistency
+- **Command:** `pnpm precheck`
 
 ---
 
-## 30. POZNATI PROBLEMI (koji su u SAAS-MIGRATION-PLAN.md)
+## 30. KNOWN ISSUES (tracked in SAAS-MIGRATION-PLAN.md)
 
-| Problem | Gde | Prioritet |
+| Problem | Where | Priority |
 |---------|-----|-----------|
-| ECC MCP numReplicas=1 (SPOF) | services/ecc-skills-mcp/railway.toml L10 | Faza 0 |
-| RBAC postoji ali nije enforced | src/lib/security/rbac.ts | Faza 0 |
-| AuditLog se gotovo nigde ne poziva | src/lib/security/audit.ts | Faza 0 |
-| OTEL je opcionalan | src/instrumentation.ts L33-43 | Faza 0 |
-| Sinhrono izvršavanje blokira HTTP | src/lib/runtime/engine.ts | Faza 1 |
-| Nema transactional email | package.json — nema email library | Faza 1.5 |
-| Nema Sentry/error monitoring | package.json — nema @sentry/nextjs | Faza 1.5 |
-| Nema Organization modela | prisma/schema.prisma | Faza 2 |
-| Nema GDPR account deletion | API routes — ne postoji DELETE /user | Faza 2.5 |
-| Nema CSP header | src/lib/api/security-headers.ts | Faza 3 |
-| Session management basic | src/lib/auth.ts — nema refresh rotation | Faza 3 |
-| Nema webhook retry logike | src/lib/webhooks/execute.ts | Faza 3.5 |
+| ECC MCP numReplicas=1 (SPOF) | services/ecc-skills-mcp/railway.toml L10 | Phase 0 |
+| RBAC exists but is not enforced | src/lib/security/rbac.ts | Phase 0 |
+| AuditLog is almost never invoked | src/lib/security/audit.ts | Phase 0 |
+| OTEL is optional | src/instrumentation.ts L33-43 | Phase 0 |
+| Synchronous execution blocks HTTP | src/lib/runtime/engine.ts | Phase 1 |
+| No transactional email | package.json — no email library | Phase 1.5 |
+| No Sentry/error monitoring | package.json — no @sentry/nextjs | Phase 1.5 |
+| No Organization model | prisma/schema.prisma | Phase 2 |
+| No GDPR account deletion | API routes — DELETE /user does not exist | Phase 2.5 |
+| No CSP header | src/lib/api/security-headers.ts | Phase 3 |
+| Session management basic | src/lib/auth.ts — no refresh rotation | Phase 3 |
+| No webhook retry logic | src/lib/webhooks/execute.ts | Phase 3.5 |
 
 ---
 
-*Dokument generisan automatskom analizom koda — april 2026. Ažuriraj kad se doda novi feature.*
+*Document generated by automated code analysis — April 2026. Update when a new feature is added.*

@@ -1,44 +1,44 @@
 # Configuration & Environment Variables
 
-> **Izvor istine:** `.env.example` (dokumentovane varijable) + `grep process.env` kroz `src/` (stvarno korišćene).
-> **Generisano:** 2026-07-18 sa grane `docs/reorg-diataxis`
+> **Source of truth:** `.env.example` (documented variables) + `grep process.env` across `src/` (variables actually read by the code).
+> **Generated:** 2026-07-18 from branch `docs/english-only`
 
-## Dokumentovane varijable (`.env.example`)
+## Documented variables (`.env.example`)
 
-Kompletan komentarisan spisak sa uputstvima je u [`.env.example`](../../.env.example). Sažetak:
+The full commented list with setup instructions lives in [`.env.example`](../../.env.example). Summary:
 
-| Varijabla | Status | Svrha |
-|-----------|--------|-------|
-| `DEEPSEEK_API_KEY` | obavezno | Default chat model (DeepSeek) |
-| `OPENAI_API_KEY` | obavezno | Embeddings (text-embedding-3-small) + OpenAI modeli |
-| `AUTH_SECRET` | obavezno | NextAuth JWT secret |
-| `AUTH_GITHUB_ID` | obavezno | GitHub OAuth App ID |
-| `AUTH_GITHUB_SECRET` | obavezno | GitHub OAuth App secret |
-| `AUTH_GOOGLE_ID` | obavezno | Google OAuth client ID |
-| `AUTH_GOOGLE_SECRET` | obavezno | Google OAuth client secret |
-| `DATABASE_URL` | obavezno | PostgreSQL konekcija |
-| `DIRECT_URL` | obavezno | Prisma direct konekcija (migracije) |
-| `REDIS_URL` | obavezno | Redis (BullMQ queue) |
-| `DATABASE_URL_APP_USER` | opciono | RLS: app rola konekcija |
-| `DATABASE_URL_ADMIN_USER` | opciono | RLS: admin rola konekcija |
-| `ANTHROPIC_API_KEY` | opciono | Claude modeli |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | opciono | Gemini modeli |
-| `GROQ_API_KEY` | opciono | Groq (Llama, Compound) |
-| `MISTRAL_API_KEY` | opciono | Mistral modeli |
-| `MOONSHOT_API_KEY` | opciono | Kimi K2 modeli |
-| `ADMIN_USER_IDS` | obavezno u produkciji | Admin pristup /api/admin/* |
-| `CRON_SECRET` | obavezno u produkciji | Auth za /api/cron/* |
-| `ECC_ENABLED` | opciono | ECC modul feature flag |
-| `ECC_MCP_URL` | opciono | ECC skills MCP endpoint |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | opciono | OpenTelemetry export |
-| `OTEL_SERVICE_NAME` | opciono | OpenTelemetry ime servisa |
-| `SENTRY_DSN` | opciono | Sentry server-side |
-| `NEXT_PUBLIC_SENTRY_DSN` | opciono | Sentry client-side |
-| `RLS_ENFORCEMENT_ENABLED` | feature flag | PostgreSQL RLS enforcement (default OFF, CI forsira ON) |
+| Variable | Status | Purpose |
+|----------|--------|---------|
+| `DEEPSEEK_API_KEY` | required | Default chat model (DeepSeek) |
+| `OPENAI_API_KEY` | required | Embeddings (text-embedding-3-small) + OpenAI models |
+| `AUTH_SECRET` | required | NextAuth JWT secret |
+| `AUTH_GITHUB_ID` | required | GitHub OAuth App ID |
+| `AUTH_GITHUB_SECRET` | required | GitHub OAuth App secret |
+| `AUTH_GOOGLE_ID` | required | Google OAuth client ID |
+| `AUTH_GOOGLE_SECRET` | required | Google OAuth client secret |
+| `DATABASE_URL` | required | PostgreSQL connection |
+| `DIRECT_URL` | required | Prisma direct connection (migrations) |
+| `REDIS_URL` | required | Redis (BullMQ queue) |
+| `DATABASE_URL_APP_USER` | optional | RLS: app-role connection |
+| `DATABASE_URL_ADMIN_USER` | optional | RLS: admin-role connection |
+| `ANTHROPIC_API_KEY` | optional | Claude models |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | optional | Gemini models |
+| `GROQ_API_KEY` | optional | Groq (Llama, Compound) |
+| `MISTRAL_API_KEY` | optional | Mistral models |
+| `MOONSHOT_API_KEY` | optional | Kimi K2 models |
+| `ADMIN_USER_IDS` | required in production | Admin access to /api/admin/* |
+| `CRON_SECRET` | required in production | Auth for /api/cron/* |
+| `ECC_ENABLED` | optional | ECC module feature flag |
+| `ECC_MCP_URL` | optional | ECC skills MCP endpoint |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | optional | OpenTelemetry export |
+| `OTEL_SERVICE_NAME` | optional | OpenTelemetry service name |
+| `SENTRY_DSN` | optional | Sentry server-side |
+| `NEXT_PUBLIC_SENTRY_DSN` | optional | Sentry client-side |
+| `RLS_ENFORCEMENT_ENABLED` | feature flag | PostgreSQL RLS enforcement (default OFF, CI forces ON) |
 
-## Varijable korišćene u kodu, a nedokumentovane u `.env.example`
+## Variables read by the code but not documented in `.env.example`
 
-Sledeće varijable `src/` kod čita kroz `process.env`, ali nisu u `.env.example` (kandidati za dokumentovanje; svrhu proveriti na mestu upotrebe):
+The following variables are read via `process.env` in `src/` but are missing from `.env.example` (candidates for documentation; verify each one's purpose at its usage site):
 
 - `API_BASE_URL`
 - `AUTH_OIDC_CLIENT_ID`

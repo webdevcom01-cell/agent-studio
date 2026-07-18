@@ -1,10 +1,10 @@
 ---
-description: Lint SOMA vault — pokreni deterministički scripts/lint-vault.mjs i prenesi izlaz VERBATIM, pa dodaj savet
+description: Lint SOMA vault — run the deterministic scripts/lint-vault.mjs, relay its output VERBATIM, then add advice
 ---
 
-PRAVILO: brojanje radi ISKLJUČIVO skript. Ti NE preračunavaš, NE re-bucket-uješ, NE izmišljaš nijedan broj ili fajl.
+RULE: counting is done EXCLUSIVELY by the script. You do NOT recount, do NOT re-bucket, do NOT invent any number or file.
 
-1. Pokreni: `node scripts/lint-vault.mjs`
-2. Prenesi stdout skripta **DOSLOVNO** (cela tabela + sekcije), bez ijedne izmene brojeva ili liste fajlova. Ako želiš, stavi ga u code blok.
-3. TEK ISPOD, u zasebnoj sekciji "## Savet", dodaj prioritizaciju i tumačenje prema system/vault-standard.md — ali ne navodi nijedan novi broj/fajl koji nije u izlazu skripta.
-4. Ako skript padne, prijavi grešku i STANI. NIŠTA ne menjaj u vault-u.
+1. Run: `node scripts/lint-vault.mjs`
+2. Relay the script's stdout **VERBATIM** (the whole table + sections), without changing a single number or file listing. You may put it in a code block.
+3. ONLY BELOW that, in a separate "## Advice" section, add prioritization and interpretation per system/vault-standard.md — but do not cite any new number/file that is not in the script output.
+4. If the script fails, report the error and STOP. Change NOTHING in the vault.
