@@ -691,7 +691,7 @@ Delete temp notes manually after recovery.
 
 ```
 "soma run — Claude Sonnet 4 released, SWE-bench +40%"
-"pokreni pipeline — https://anthropic.com/news/claude-sonnet-4"
+"pokreni pipeline — https://www.anthropic.com/news/claude-4"
 "run SOMA — samo TI"
 "pusti trend kroz pipeline: OpenAI GPT-5 Turbo announced"
 "soma-run — TI i HW samo, bez CR"
