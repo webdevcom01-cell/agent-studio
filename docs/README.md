@@ -39,6 +39,7 @@ The documentation follows the [Diátaxis](https://diataxis.fr/) standard: tutori
 
 | Document | Contents |
 |----------|----------|
+| [architecture.md](04-explanation/architecture.md) | How the system is put together and why — runtime, RAG, queue, RLS, interop |
 | [devops-swarm/ARCHITECTURE.md](04-explanation/devops-swarm/ARCHITECTURE.md) | DevOps swarm architecture |
 | [devops-swarm/SETUP.md](04-explanation/devops-swarm/SETUP.md) | DevOps swarm setup |
 

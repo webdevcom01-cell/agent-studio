@@ -8,6 +8,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Documentation (2026-07-19) — architecture explanation
+- **DOC-NEW** — `docs/04-explanation/architecture.md`: system architecture explanation (Diátaxis explanation quadrant) — deployables, flow runtime, AI provider access, RAG design, multi-tenancy/RLS, fail-open vs fail-closed decisions, interop (MCP/A2A/webhooks), deployment shape, and a key-decisions table. Every claim cites a `file:line` source; added to the `docs/README.md` nav.
+
 ### Documentation (2026-07-19) — root cleanup
 - **DOC-CLEANUP** — Moved historical working files from the repo root to `docs/_archive/`: `SPRINT-BOARD.md` (superseded tracker), `FIX-LOG.md`, `SOMA-CHANGELOG.md`, `SOMA-CONTEXT.md`, `SOMA-MARKETING.md`, plus stray artifacts `0001-fix-increase-…​.patch`, `cc-prompt-backup-2026-06-13b.txt`, `migrate-to-openai.sql`, and `railway-mcp-server/railway-mcp-analiza-i-plan.md`. Kept in root because of verified functional references: `TASKS.md` (read by `.claude/skills/agent-studio-session`), `SOMA.md` (referenced by `skills/instincts-updater`), `TECH_DEBT.md` (updated by `skills/audit-verify`), `FEATURES.md`, `CONTEXT.md`.
 
