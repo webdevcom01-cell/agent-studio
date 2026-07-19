@@ -11,6 +11,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Documentation (2026-07-19) — root cleanup
 - **DOC-CLEANUP** — Moved historical working files from the repo root to `docs/_archive/`: `SPRINT-BOARD.md` (superseded tracker), `FIX-LOG.md`, `SOMA-CHANGELOG.md`, `SOMA-CONTEXT.md`, `SOMA-MARKETING.md`, plus stray artifacts `0001-fix-increase-…​.patch`, `cc-prompt-backup-2026-06-13b.txt`, `migrate-to-openai.sql`, and `railway-mcp-server/railway-mcp-analiza-i-plan.md`. Kept in root because of verified functional references: `TASKS.md` (read by `.claude/skills/agent-studio-session`), `SOMA.md` (referenced by `skills/instincts-updater`), `TECH_DEBT.md` (updated by `skills/audit-verify`), `FEATURES.md`, `CONTEXT.md`.
 
+### Documentation (2026-07-19) — env-var reference completed
+- **DOC-NEW** — `docs/03-reference/config-env.md`: all 55 environment variables read by `src/` but absent from `.env.example` are now fully documented (purpose, behavior when unset, `file:line` usage site), grouped into 10 categories. Every entry was derived from the actual usage site in code; all 55 are optional with verified fallbacks or graceful degradation.
+
 ### Documentation (2026-07-18) — English-only pass
 - **DOC-LANG** — All live, user-facing documentation translated to English: `FEATURES.md` (full 707-line reference), `docs/README.md` index, generated reference docs (`api.md`, `data-model.md`, `config-env.md`, `glossary.md` — regenerated in English), `CLAUDE.md` "Working Rules" section, `.claude/commands/health.md` and `lint-vault.md`. Structure, counts, links, and code identifiers byte-identical.
 - Intentionally NOT translated: Serbian trigger phrases and user-facing prompt strings inside `skills/*/SKILL.md` (functional bilingual invocation triggers), and Serbian working logs slated for archival (`SPRINT-BOARD.md`, `FIX-LOG.md`, `SOMA-*`, `TASKS.md`), plus historical `docs/_archive/`.
